@@ -237,6 +237,34 @@
           "title": "Enabled",
           "type": "boolean"
         },
+        "fallback_trim_front": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trim bases from read starts when remediate_without_cycles fires.",
+          "title": "Fallback Trim Front"
+        },
+        "fallback_trim_tail": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trim bases from read tails when remediate_without_cycles fires.",
+          "title": "Fallback Trim Tail"
+        },
         "localized_max_span": {
           "default": 6,
           "minimum": 1,
@@ -291,6 +319,19 @@
           "minimum": 1,
           "title": "Recovery Cycles",
           "type": "integer"
+        },
+        "remediate_without_cycles": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When true and mean_quality_by_cycle is absent, allow REALIGN_TRIM from conversion/mapped-rate failure signals (pangenome_wgbs). Operator-set per site/profile actionConfig.alignment_qc.cycle_screening.",
+          "title": "Remediate Without Cycles"
         }
       },
       "title": "CycleScreeningConfig",

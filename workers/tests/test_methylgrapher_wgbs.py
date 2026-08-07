@@ -92,18 +92,35 @@ def test_normalize_align_engine() -> None:
         _normalize_align_engine("bam_only")
 
 
-def test_effective_align_engine_env_overlay(monkeypatch, tmp_path: Path) -> None:
+def test_align_engine_from_resolved_config_ignores_host_env(
+    monkeypatch, tmp_path: Path
+) -> None:
     from methyl_worker.methylgrapher_wgbs_runner import (
-        _effective_align_engine,
+        effective_align_engine,
+        effective_qc_bam_engine,
+        materialize_align_docker_env,
         build_align_command,
         resolve_wgbs_bundle_from_resolved,
     )
 
     cfg = _touch_bundle(tmp_path)
+    cfg["align_engine"] = "gpu_giraffe"
+    cfg["gpu_giraffe_fallback"] = "mojo"
+    cfg["giraffe_device"] = "nvidia"
+    cfg["mojo_giraffe_ready"] = True
+    cfg["mojo_segments_cache"] = "/work/cache/mojo_segments"
+    cfg["engine"] = "mojo"
+    cfg["qc_bam_engine"] = "mojo"
     bundle = resolve_wgbs_bundle_from_resolved(cfg)
-    assert bundle.align_engine == "cpu_vg"
-    monkeypatch.setenv("METHYLGRAPHER_ALIGN_ENGINE", "gpu_giraffe")
-    assert _effective_align_engine(bundle) == "gpu_giraffe"
+    monkeypatch.setenv("METHYLGRAPHER_ALIGN_ENGINE", "cpu_vg")
+    monkeypatch.setenv("METHYLGRAPHER_GPU_GIRAFFE_FALLBACK", "vg")
+    assert effective_align_engine(bundle) == "gpu_giraffe"
+    assert effective_qc_bam_engine(bundle) == "mojo"
+    env_pairs = materialize_align_docker_env(bundle)
+    assert "METHYLGRAPHER_ALIGN_ENGINE=gpu_giraffe" in env_pairs
+    assert "METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo" in env_pairs
+    assert "METHYLGRAPHER_MOJO_GIRAFFE_READY=1" in env_pairs
+    assert "METHYLGRAPHER_MOJO_SEGMENTS_CACHE=/work/cache/mojo_segments" in env_pairs
     cmd = build_align_command(
         bundle=bundle,
         work_dir=tmp_path / "work",
@@ -112,6 +129,18 @@ def test_effective_align_engine_env_overlay(monkeypatch, tmp_path: Path) -> None
         index_prefix=str(tmp_path / "hprc-d9-bs"),
     )
     assert cmd[cmd.index("-align_engine") + 1] == "gpu_giraffe"
+
+
+def test_mojo_giraffe_ready_false_materializes_zero(tmp_path: Path) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import (
+        materialize_align_docker_env,
+        resolve_wgbs_bundle_from_resolved,
+    )
+
+    cfg = _touch_bundle(tmp_path)
+    cfg["mojo_giraffe_ready"] = False
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    assert "METHYLGRAPHER_MOJO_GIRAFFE_READY=0" in materialize_align_docker_env(bundle)
 
 
 def test_resolve_bundle_requires_c2t_g2a(tmp_path: Path) -> None:

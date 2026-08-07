@@ -24,12 +24,34 @@
     },
     "methylgrapher_wgbs": {
       "alignment_mode": "pangenome_wgbs",
-      "directional": true
+      "directional": true,
+      "engine": "mojo",
+      "align_engine": "gpu_giraffe",
+      "gpu_giraffe_fallback": "mojo",
+      "giraffe_device": "nvidia",
+      "mojo_segments_cache": "/work/cache/mojo_segments",
+      "qc_bam_engine": "mojo",
+      "conversion_rate_enabled": true,
+      "read_level": {
+        "enabled": true,
+        "tile_size": 4
+      }
     },
     "methyl_extract": {
       "read_level": {
         "enabled": true,
         "tile_size": 4
+      }
+    },
+    "alignment_qc": {
+      "cycle_screening": {
+        "remediate_without_cycles": true,
+        "fallback_trim_front": 5,
+        "fallback_trim_tail": 0
+      },
+      "bisulfite_conversion": {
+        "enabled": true,
+        "source": "sidecar"
       }
     },
     "cell_deconvolution": {

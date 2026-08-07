@@ -301,6 +301,12 @@ def resolve_methylgrapher_wgbs_genome(
         "engine",
         "align_engine",
         "alignment_mode",
+        "gpu_giraffe_fallback",
+        "giraffe_device",
+        "mojo_segments_cache",
+        "modular_cache_dir",
+        "qc_bam_engine",
+        "conversion_rate_sidecar",
     ):
         if cfg.get(optional) not in (None, ""):
             resolved[optional] = str(cfg[optional])
@@ -312,6 +318,10 @@ def resolve_methylgrapher_wgbs_genome(
         resolved["batch_size"] = int(cfg["batch_size"])
     if "cg_only" in cfg and cfg["cg_only"] is not None:
         resolved["cg_only"] = bool(cfg["cg_only"])
+    if "mojo_giraffe_ready" in cfg and cfg["mojo_giraffe_ready"] is not None:
+        resolved["mojo_giraffe_ready"] = bool(cfg["mojo_giraffe_ready"])
+    if "conversion_rate_enabled" in cfg and cfg["conversion_rate_enabled"] is not None:
+        resolved["conversion_rate_enabled"] = bool(cfg["conversion_rate_enabled"])
     if isinstance(cfg.get("read_level"), Mapping):
         resolved["read_level"] = dict(cfg["read_level"])
     if isinstance(cfg.get("contexts"), list):

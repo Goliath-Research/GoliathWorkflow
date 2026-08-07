@@ -22,6 +22,24 @@ class CycleScreeningConfig(BaseModel):
     read_edge_window: int = Field(default=10, ge=1)
     broad_bad_cycle_count: int = Field(default=8, ge=1)
     localized_max_span: int = Field(default=6, ge=1)
+    remediate_without_cycles: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When true and mean_quality_by_cycle is absent, allow REALIGN_TRIM from "
+            "conversion/mapped-rate failure signals (pangenome_wgbs). Operator-set "
+            "per site/profile actionConfig.alignment_qc.cycle_screening."
+        ),
+    )
+    fallback_trim_front: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Trim bases from read starts when remediate_without_cycles fires.",
+    )
+    fallback_trim_tail: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Trim bases from read tails when remediate_without_cycles fires.",
+    )
 
 
 class CoreGuardrailsConfig(BaseModel):

@@ -37,7 +37,28 @@
       "engine": "mojo",
       "image": "epimethyl/methylgrapher:1.70-mojo",
       "align_engine": "gpu_giraffe",
-      "threads": 64
+      "gpu_giraffe_fallback": "mojo",
+      "giraffe_device": "nvidia",
+      "mojo_segments_cache": "/work/cache/mojo_segments",
+      "qc_bam_engine": "mojo",
+      "conversion_rate_enabled": true,
+      "threads": 64,
+      "read_level": {
+        "enabled": true,
+        "tile_size": 4
+      }
+    },
+    "alignment_qc": {
+      "cycle_screening": {
+        "remediate_without_cycles": true,
+        "fallback_trim_front": 5,
+        "fallback_trim_tail": 0
+      },
+      "bisulfite_conversion": {
+        "enabled": true,
+        "source": "sidecar",
+        "sidecar_filename": "bisulfite_conversion.json"
+      }
     }
   },
   "reference_selection": {

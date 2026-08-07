@@ -147,10 +147,62 @@ class MethylGrapherWgbsStepConfig(BaseModel):
         default=None,
         description=(
             "Align map backend for dual-graph GAF: 'cpu_vg' (stock vg giraffe GAF), "
-            "'mojo_giraffe' (Mojo GFA→GAF), or 'gpu_giraffe' (GH200 intent — prefers "
-            "Mojo Giraffe when usable GFA present; auto-vg for oversized/GBZ-only "
-            "indexes). METHYLGRAPHER_GPU_GIRAFFE_FALLBACK default is 'mojo' "
-            "(emergency 'vg'). Operator-set per site/profile on GPU fleets."
+            "'mojo_giraffe' (Mojo GBZ/GFA→GAF), or 'gpu_giraffe' (prefers Mojo GBZ "
+            "when packs/READY allow; else vg_autoscale). Operator-set per site/profile "
+            "via actionConfig.methylgrapher_wgbs (baked into resolvedConfig)."
+        ),
+    )
+    gpu_giraffe_fallback: Optional[str] = Field(
+        default=None,
+        description=(
+            "When align_engine=gpu_giraffe: 'mojo' (prefer Mojo GBZ) or 'vg' "
+            "(force vg_autoscale). Operator-set per site/profile."
+        ),
+    )
+    giraffe_device: Optional[str] = Field(
+        default=None,
+        description=(
+            "Mojo Giraffe device selector (e.g. nvidia, auto). Operator-set per site/profile."
+        ),
+    )
+    mojo_giraffe_ready: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When false, force vg_autoscale under gpu_giraffe. When true/omit, image "
+            "default-on Mojo GBZ path. Operator-set per site/profile."
+        ),
+    )
+    mojo_segments_cache: Optional[str] = Field(
+        default=None,
+        description=(
+            "Directory of dense Mojo segment packs (* .mojo_segments). "
+            "Operator-set per site (e.g. /work/cache/mojo_segments)."
+        ),
+    )
+    modular_cache_dir: Optional[str] = Field(
+        default=None,
+        description="Writable Mojo/MODULAR cache inside the container (e.g. /tmp/modular_cache).",
+    )
+    qc_bam_engine: Optional[str] = Field(
+        default=None,
+        description=(
+            "QC BAM remap engine: 'mojo' (MojoGiraffe→linear BAM packaging) or 'vg' "
+            "(vg giraffe -o BAM --ref-paths). When unset and engine=mojo, treat as mojo; "
+            "else vg. Operator-set per site/profile."
+        ),
+    )
+    conversion_rate_enabled: Optional[bool] = Field(
+        default=None,
+        description=(
+            "Run Mojo ConversionRate after MethylCall when lambda spike-in assets exist; "
+            "write bisulfite_conversion.json for methyl_qc. Operator-set per site/profile."
+        ),
+    )
+    conversion_rate_sidecar: Optional[str] = Field(
+        default=None,
+        description=(
+            "Basename for bisulfite conversion sidecar under sampleDir "
+            "(default bisulfite_conversion.json)."
         ),
     )
     threads: Optional[int] = Field(

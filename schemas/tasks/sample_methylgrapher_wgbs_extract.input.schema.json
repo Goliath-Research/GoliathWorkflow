@@ -109,7 +109,7 @@
             }
           ],
           "default": null,
-          "description": "Align map backend for dual-graph GAF: 'cpu_vg' (stock vg giraffe GAF), 'mojo_giraffe' (Mojo GFA\u2192GAF), or 'gpu_giraffe' (GH200 intent \u2014 prefers Mojo Giraffe when usable GFA present; auto-vg for oversized/GBZ-only indexes). METHYLGRAPHER_GPU_GIRAFFE_FALLBACK default is 'mojo' (emergency 'vg'). Operator-set per site/profile on GPU fleets.",
+          "description": "Align map backend for dual-graph GAF: 'cpu_vg' (stock vg giraffe GAF), 'mojo_giraffe' (Mojo GBZ/GFA\u2192GAF), or 'gpu_giraffe' (prefers Mojo GBZ when packs/READY allow; else vg_autoscale). Operator-set per site/profile via actionConfig.methylgrapher_wgbs (baked into resolvedConfig).",
           "title": "Align Engine"
         },
         "alignment_mode": {
@@ -180,6 +180,32 @@
           "description": "Methylation contexts to emit as {chrom}-{ctx}.h5 (e.g. CG).",
           "title": "Contexts"
         },
+        "conversion_rate_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Run Mojo ConversionRate after MethylCall when lambda spike-in assets exist; write bisulfite_conversion.json for methyl_qc. Operator-set per site/profile.",
+          "title": "Conversion Rate Enabled"
+        },
+        "conversion_rate_sidecar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Basename for bisulfite conversion sidecar under sampleDir (default bisulfite_conversion.json).",
+          "title": "Conversion Rate Sidecar"
+        },
         "cpg_tsv": {
           "anyOf": [
             {
@@ -230,6 +256,32 @@
           ],
           "default": null,
           "description": "G-to-A converted graph Giraffe indexes."
+        },
+        "giraffe_device": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mojo Giraffe device selector (e.g. nvidia, auto). Operator-set per site/profile.",
+          "title": "Giraffe Device"
+        },
+        "gpu_giraffe_fallback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When align_engine=gpu_giraffe: 'mojo' (prefer Mojo GBZ) or 'vg' (force vg_autoscale). Operator-set per site/profile.",
+          "title": "Gpu Giraffe Fallback"
         },
         "image": {
           "anyOf": [
@@ -309,6 +361,45 @@
           "description": "Pinned methylGrapher version string for provenance / CAAS.",
           "title": "Methylgrapher Version"
         },
+        "modular_cache_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Writable Mojo/MODULAR cache inside the container (e.g. /tmp/modular_cache).",
+          "title": "Modular Cache Dir"
+        },
+        "mojo_giraffe_ready": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When false, force vg_autoscale under gpu_giraffe. When true/omit, image default-on Mojo GBZ path. Operator-set per site/profile.",
+          "title": "Mojo Giraffe Ready"
+        },
+        "mojo_segments_cache": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Directory of dense Mojo segment packs (* .mojo_segments). Operator-set per site (e.g. /work/cache/mojo_segments).",
+          "title": "Mojo Segments Cache"
+        },
         "node_replacement_json": {
           "anyOf": [
             {
@@ -334,6 +425,19 @@
           "default": null,
           "description": "Unconverted graph GBZ used for MethylCall / coordinate provenance.",
           "title": "Original Gbz"
+        },
+        "qc_bam_engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "QC BAM remap engine: 'mojo' (MojoGiraffe\u2192linear BAM packaging) or 'vg' (vg giraffe -o BAM --ref-paths). When unset and engine=mojo, treat as mojo; else vg. Operator-set per site/profile.",
+          "title": "Qc Bam Engine"
         },
         "read_level": {
           "anyOf": [

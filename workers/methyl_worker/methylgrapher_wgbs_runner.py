@@ -54,6 +54,14 @@ class MethylGrapherWgbsBundle:
     vg_version: Optional[str] = None
     engine: str = "python"
     align_engine: str = "cpu_vg"
+    gpu_giraffe_fallback: Optional[str] = None
+    giraffe_device: Optional[str] = None
+    mojo_giraffe_ready: Optional[bool] = None
+    mojo_segments_cache: Optional[str] = None
+    modular_cache_dir: Optional[str] = None
+    qc_bam_engine: Optional[str] = None
+    conversion_rate_enabled: bool = False
+    conversion_rate_sidecar: str = "bisulfite_conversion.json"
     cg_only: bool = True
     contexts: Tuple[str, ...] = ("CG",)
     read_level_enabled: bool = True
@@ -179,6 +187,41 @@ def resolve_wgbs_bundle_from_resolved(
         vg_version=str(raw["vg_version"]) if raw.get("vg_version") else None,
         engine=_normalize_engine(raw.get("engine")),
         align_engine=_normalize_align_engine(raw.get("align_engine")),
+        gpu_giraffe_fallback=(
+            str(raw["gpu_giraffe_fallback"]).strip().lower()
+            if raw.get("gpu_giraffe_fallback") not in (None, "")
+            else None
+        ),
+        giraffe_device=(
+            str(raw["giraffe_device"]).strip()
+            if raw.get("giraffe_device") not in (None, "")
+            else None
+        ),
+        mojo_giraffe_ready=(
+            bool(raw["mojo_giraffe_ready"])
+            if "mojo_giraffe_ready" in raw and raw["mojo_giraffe_ready"] is not None
+            else None
+        ),
+        mojo_segments_cache=(
+            str(raw["mojo_segments_cache"]).strip()
+            if raw.get("mojo_segments_cache") not in (None, "")
+            else None
+        ),
+        modular_cache_dir=(
+            str(raw["modular_cache_dir"]).strip()
+            if raw.get("modular_cache_dir") not in (None, "")
+            else None
+        ),
+        qc_bam_engine=(
+            str(raw["qc_bam_engine"]).strip().lower()
+            if raw.get("qc_bam_engine") not in (None, "")
+            else None
+        ),
+        conversion_rate_enabled=_pick_bool(raw, "conversion_rate_enabled", False),
+        conversion_rate_sidecar=(
+            str(raw.get("conversion_rate_sidecar") or "bisulfite_conversion.json").strip()
+            or "bisulfite_conversion.json"
+        ),
         cg_only=_pick_bool(raw, "cg_only", True),
         contexts=contexts,
         read_level_enabled=_pick_bool(rl, "enabled", True),
@@ -348,16 +391,45 @@ def _run(
         )
 
 
-def _effective_align_engine(bundle: MethylGrapherWgbsBundle) -> str:
-    """Bundle align_engine, overridable by worker ``METHYLGRAPHER_ALIGN_ENGINE``.
-
-    Fleet cutover: site/instance may still say ``cpu_vg`` while the host env
-    pins ``gpu_giraffe`` / ``mojo_giraffe`` after publishing ``:1.70-mojo``.
-    """
-    env = os.environ.get("METHYLGRAPHER_ALIGN_ENGINE", "").strip()
-    if env:
-        return _normalize_align_engine(env)
+def effective_align_engine(bundle: MethylGrapherWgbsBundle) -> str:
+    """Align engine from baked ``resolvedConfig`` only (no host env override)."""
     return bundle.align_engine
+
+
+def effective_qc_bam_engine(bundle: MethylGrapherWgbsBundle) -> str:
+    """QC BAM engine: explicit ``qc_bam_engine``, else mojo when engine=mojo, else vg."""
+    raw = (bundle.qc_bam_engine or "").strip().lower()
+    if raw in {"mojo", "mojo_giraffe", "gpu_giraffe"}:
+        return "mojo"
+    if raw in {"vg", "cpu_vg"}:
+        return "vg"
+    return "mojo" if bundle.engine == "mojo" else "vg"
+
+
+def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
+    """Map resolvedConfig Mojo/GPU knobs to container ``-e KEY=VAL`` pairs.
+
+    Host ``METHYLGRAPHER_*`` is intentionally ignored on the worker path so fleet
+    control stays in DB-backed ``resolvedConfig``.
+    """
+    fallback = (bundle.gpu_giraffe_fallback or "mojo").strip() or "mojo"
+    device = (bundle.giraffe_device or "nvidia").strip() or "nvidia"
+    if bundle.mojo_giraffe_ready is None:
+        ready = "1"
+    else:
+        ready = "1" if bundle.mojo_giraffe_ready else "0"
+    segments = (
+        (bundle.mojo_segments_cache or "").strip() or "/work/cache/mojo_segments"
+    )
+    modular = (bundle.modular_cache_dir or "").strip() or "/tmp/modular_cache"
+    return [
+        f"METHYLGRAPHER_ALIGN_ENGINE={effective_align_engine(bundle)}",
+        f"METHYLGRAPHER_GPU_GIRAFFE_FALLBACK={fallback}",
+        f"METHYLGRAPHER_GIRAFFE_DEVICE={device}",
+        f"METHYLGRAPHER_MOJO_GIRAFFE_READY={ready}",
+        f"MODULAR_CACHE_DIR={modular}",
+        f"METHYLGRAPHER_MOJO_SEGMENTS_CACHE={segments}",
+    ]
 
 
 def build_align_command(
@@ -386,7 +458,7 @@ def build_align_command(
         "-directional",
         "Y" if bundle.directional else "N",
         "-align_engine",
-        _effective_align_engine(bundle),
+        effective_align_engine(bundle),
     ]
     return cmd
 
@@ -433,15 +505,9 @@ def build_qc_bam_command(
 ) -> List[str]:
     """Build ``vg giraffe`` argv emitting a GRCh38-surjected BAM on **stdout**.
 
-    The QC BAM must not be produced by surjecting methylGrapher's GAF.
-    methylGrapher aligns with ``vg giraffe --named-coordinates``, so the GAF path
-    column holds GFA *segment* names, while ``vg surject -G`` reads that column as
-    vg *node* IDs; the node lengths disagree and vg aborts on the first record
-    (``cur_offset < cur_len`` assertion in ``gaf_to_alignment``). Re-mapping the
-    converted reads with ``-o BAM --ref-paths`` keeps node space internal to vg.
-
-    Only the primary R1-C2T / R2-G2A pass against the C2T graph is mapped: QC
-    needs one best alignment per read, not methylGrapher's multi-graph output.
+    The QC BAM must not be produced by surjecting methylGrapher's science GAF
+    (named-coordinates ≠ vg surject node IDs). Re-map converted reads with
+    ``-o BAM --ref-paths``. Rollback path when ``qc_bam_engine=vg``.
     """
     vg = os.environ.get(VG_BIN_ENV, "").strip() or "vg"
     n_threads = threads if threads is not None else max(1, (os.cpu_count() or 4) // 2)
@@ -468,6 +534,177 @@ def build_qc_bam_command(
         "-f",
         str(fq2_g2a),
     ]
+
+
+def build_qc_bam_mojo_gaf_command(
+    *,
+    bundle: MethylGrapherWgbsBundle,
+    fq1_c2t: Path,
+    fq2_g2a: Path,
+    out_gaf: Path,
+) -> List[str]:
+    """MojoGiraffe QC remap → GAF (then packaged to linear BAM on the host)."""
+    mg = os.environ.get(METHYLGRAPHER_BIN_ENV, "").strip() or "methylGrapher"
+    device = (bundle.giraffe_device or "nvidia").strip() or "nvidia"
+    return [
+        mg,
+        "MojoGiraffe",
+        "-gbz",
+        str(bundle.c2t_gbz),
+        "-dist",
+        str(bundle.c2t_dist),
+        "-min",
+        str(bundle.c2t_min),
+        "-zipcodes",
+        str(bundle.c2t_zipcodes),
+        "-fq1",
+        str(fq1_c2t),
+        "-fq2",
+        str(fq2_g2a),
+        "-out_gaf",
+        str(out_gaf),
+        "-device",
+        device,
+    ]
+
+
+def package_mojo_qc_gaf_to_bam(
+    *,
+    gaf_path: Path,
+    fq1_c2t: Path,
+    fq2_g2a: Path,
+    ref_fasta: Path,
+    wl_gfa: Path,
+    out_bam: Path,
+    log_path: Path,
+) -> int:
+    """Project Mojo named-coordinate QC GAF onto GRCh38 and write an unsorted BAM.
+
+    Uses ``wl.gfa`` GRCh38 path offsets (same as CpG projection). Sequence comes from
+    GAF ``os:Z`` when present, else from the converted FASTQ by qname. Returns the
+    number of mapped records written. Raises when the GAF is empty.
+    """
+    import pysam
+
+    if not gaf_path.is_file() or gaf_path.stat().st_size == 0:
+        raise RuntimeError(f"Mojo QC GAF missing or empty: {gaf_path}")
+    offsets = build_grch38_segment_offsets_from_gfa(wl_gfa)
+    if not offsets:
+        raise RuntimeError(f"No GRCh38 segment offsets in {wl_gfa}; cannot pack Mojo QC BAM")
+
+    # Optional qname → sequence from converted FASTQs (os:Z preferred).
+    seq_by_qname: Dict[str, str] = {}
+
+    def _ingest_fq(path: Path) -> None:
+        opener = gzip.open if str(path).endswith(".gz") else open
+        with opener(path, "rt", encoding="utf-8", errors="replace") as fh:  # type: ignore[arg-type]
+            while True:
+                h = fh.readline()
+                if not h:
+                    break
+                seq = fh.readline().rstrip("\n")
+                fh.readline()
+                fh.readline()
+                if not h.startswith("@"):
+                    continue
+                qn = h[1:].split()[0]
+                # Strip common methylGrapher suffixes if present.
+                for suf in ("_C2T", "_G2A"):
+                    if qn.endswith(suf):
+                        qn = qn[: -len(suf)]
+                seq_by_qname[qn] = seq
+
+    _ingest_fq(fq1_c2t)
+    _ingest_fq(fq2_g2a)
+
+    # Header from linear FASTA chrom lengths.
+    header = {"HD": {"VN": "1.6", "SO": "unsorted"}, "SQ": []}
+    with pysam.FastaFile(str(ref_fasta)) as fa:
+        for chrom in fa.references:
+            norm = _normalize_grch38_chrom(chrom) or chrom
+            header["SQ"].append({"SN": norm, "LN": int(fa.get_reference_length(chrom))})
+
+    import re
+
+    seg_re = re.compile(r"([><])([^><]+)")
+    n_mapped = 0
+    out_bam.parent.mkdir(parents=True, exist_ok=True)
+    with pysam.AlignmentFile(str(out_bam), "wb", header=header) as bam_out:
+        with gaf_path.open("r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) < 12:
+                    continue
+                qname, _qlen, qstart_s, qend_s, strand, path = parts[:6]
+                try:
+                    qstart, qend = int(qstart_s), int(qend_s)
+                except ValueError:
+                    continue
+                tags = {}
+                for tok in parts[12:]:
+                    if len(tok) > 5 and tok[2:5] == ":Z:":
+                        tags[tok[:2]] = tok[5:]
+                    elif len(tok) > 5 and tok[2:5] == ":i:":
+                        try:
+                            tags[tok[:2]] = int(tok[5:])
+                        except ValueError:
+                            pass
+                # First GRCh38 segment on the path anchors the alignment.
+                chrom = None
+                ref_pos0 = None
+                path_cursor = 0
+                try:
+                    pstart = int(parts[7])
+                except ValueError:
+                    pstart = 0
+                for m in seg_re.finditer(path):
+                    orient, seg_id = m.group(1), m.group(2)
+                    info = offsets.get(seg_id)
+                    seg_len = int(info[2]) if info else 0
+                    if info is not None and chrom is None:
+                        # Alignment start on this segment ≈ pstart within path.
+                        # Approximate: place at segment genomic start + max(0, pstart - path_cursor).
+                        chrom, seg_genomic0, seg_len, _seg_or = info
+                        within = max(0, pstart - path_cursor)
+                        if within < seg_len:
+                            ref_pos0 = seg_genomic0 + within
+                    path_cursor += seg_len
+                if chrom is None or ref_pos0 is None:
+                    continue
+                seq = str(tags.get("os") or seq_by_qname.get(qname.split()[0], ""))
+                if not seq:
+                    continue
+                # Clip to aligned query interval when possible.
+                if 0 <= qstart < qend <= len(seq):
+                    seq = seq[qstart:qend]
+                aln = pysam.AlignedSegment()
+                aln.query_name = qname
+                aln.query_sequence = seq
+                aln.flag = 0 if strand == "+" else 16
+                aln.reference_id = bam_out.get_tid(str(chrom))
+                if aln.reference_id < 0:
+                    # try chr-prefixed
+                    aln.reference_id = bam_out.get_tid(f"chr{chrom}")
+                if aln.reference_id < 0:
+                    continue
+                aln.reference_start = int(ref_pos0)
+                aln.mapping_quality = int(parts[11]) if parts[11].isdigit() else 60
+                aln.cigar = [(0, len(seq))]  # match Op
+                aln.next_reference_id = -1
+                aln.next_reference_start = -1
+                aln.template_length = 0
+                aln.query_qualities = pysam.qualitystring_to_array("I" * len(seq))
+                bam_out.write(aln)
+                n_mapped += 1
+    _append_log(
+        log_path,
+        f"Mojo QC GAF→BAM packed {n_mapped} mapped records → {out_bam}",
+    )
+    if n_mapped <= 0:
+        raise RuntimeError(f"Mojo QC GAF→BAM wrote 0 mapped records from {gaf_path}")
+    return n_mapped
 
 
 def _write_bs_converted_fastq(
@@ -1058,6 +1295,9 @@ def run_methylgrapher_wgbs_align(
         "directional": bundle.directional,
         "asset_fingerprints": fingerprint_wgbs_assets(bundle),
         "align_command": align_cmd,
+        "align_engine": effective_align_engine(bundle),
+        "qc_bam_engine": effective_qc_bam_engine(bundle),
+        "engine": bundle.engine,
     }
 
     if dry:
@@ -1091,38 +1331,11 @@ def run_methylgrapher_wgbs_align(
                 "--rm",
                 "--user",
                 f"{os.getuid()}:{os.getgid()}",
-                "-e",
-                f"METHYLGRAPHER_ALIGN_ENGINE={_effective_align_engine(bundle)}",
-                "-e",
-                "METHYLGRAPHER_GPU_GIRAFFE_FALLBACK="
-                + (
-                    os.environ.get("METHYLGRAPHER_GPU_GIRAFFE_FALLBACK", "mojo").strip()
-                    or "mojo"
-                ),
-                "-e",
-                "METHYLGRAPHER_GIRAFFE_DEVICE="
-                + (os.environ.get("METHYLGRAPHER_GIRAFFE_DEVICE", "auto").strip() or "auto"),
-                # Mojo GBZ default-on; set READY=0 on the worker to force vg_autoscale.
-                "-e",
-                "METHYLGRAPHER_MOJO_GIRAFFE_READY="
-                + (
-                    os.environ.get("METHYLGRAPHER_MOJO_GIRAFFE_READY", "1").strip()
-                    or "1"
-                ),
-                # Mojo runtime cache must be writable under --user (image /opt is root-owned).
-                "-e",
-                "MODULAR_CACHE_DIR="
-                + (os.environ.get("MODULAR_CACHE_DIR", "").strip() or "/tmp/modular_cache"),
-                "-e",
-                "METHYLGRAPHER_MOJO_SEGMENTS_CACHE="
-                + (
-                    os.environ.get("METHYLGRAPHER_MOJO_SEGMENTS_CACHE", "").strip()
-                    or "/work/cache/mojo_segments"
-                ),
             ]
+            for env_pair in materialize_align_docker_env(bundle):
+                docker_cmd.extend(["-e", env_pair])
             cache_root = Path(
-                os.environ.get("METHYLGRAPHER_MOJO_SEGMENTS_CACHE", "").strip()
-                or "/work/cache/mojo_segments"
+                (bundle.mojo_segments_cache or "").strip() or "/work/cache/mojo_segments"
             )
             mount_roots.add(cache_root)
             # Also mount /work/cache parent when present so shared segment packs resolve.
@@ -1182,28 +1395,77 @@ def run_methylgrapher_wgbs_align(
                 _write_bs_converted_fastq(
                     fq2, g2a_r2, base_from="G", base_to="A", log_path=log_path
                 )
-                qc_bam_cmd = build_qc_bam_command(
-                    bundle=bundle,
-                    fq1_c2t=c2t_r1,
-                    fq2_g2a=g2a_r2,
-                    threads=bundle.threads,
-                )
-                docker_qc_bam = [
-                    _docker_bin(),
-                    "run",
-                    "--rm",
-                    "--user",
-                    f"{os.getuid()}:{os.getgid()}",
-                ]
-                for root in sorted(
-                    mount_roots | {bundle.ref_paths.parent.resolve()}, key=str
-                ):
-                    docker_qc_bam.extend(["-v", f"{root}:{root}"])
-                docker_qc_bam.extend([image, *qc_bam_cmd])
-                # giraffe -o BAM writes to stdout; redirect as binary.
-                _run(
-                    docker_qc_bam, log_path, step="vg.giraffe_qc_bam", stdout_path=qc_bam
-                )
+                qc_engine = effective_qc_bam_engine(bundle)
+                provenance["qc_bam_engine"] = qc_engine
+                used_vg_fallback = False
+                if qc_engine == "mojo":
+                    qc_gaf = work_dir / f"{sample_id}.qc_mojo.gaf"
+                    mojo_qc_cmd = build_qc_bam_mojo_gaf_command(
+                        bundle=bundle,
+                        fq1_c2t=c2t_r1,
+                        fq2_g2a=g2a_r2,
+                        out_gaf=qc_gaf,
+                    )
+                    docker_mojo_qc = [
+                        _docker_bin(),
+                        "run",
+                        "--rm",
+                        "--user",
+                        f"{os.getuid()}:{os.getgid()}",
+                    ]
+                    for env_pair in materialize_align_docker_env(bundle):
+                        docker_mojo_qc.extend(["-e", env_pair])
+                    for root in sorted(
+                        mount_roots | {bundle.ref_paths.parent.resolve()}, key=str
+                    ):
+                        docker_mojo_qc.extend(["-v", f"{root}:{root}"])
+                    docker_mojo_qc.extend([image, *mojo_qc_cmd])
+                    try:
+                        _run(docker_mojo_qc, log_path, step="mojo.qc_gaf")
+                        index_prefix_qc = resolve_index_prefix(bundle)
+                        wl_for_qc = resolve_wl_gfa_path(bundle, index_prefix_qc)
+                        package_mojo_qc_gaf_to_bam(
+                            gaf_path=qc_gaf,
+                            fq1_c2t=c2t_r1,
+                            fq2_g2a=g2a_r2,
+                            ref_fasta=bundle.linear_ref_fasta,
+                            wl_gfa=wl_for_qc,
+                            out_bam=qc_bam,
+                            log_path=log_path,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Mojo QC BAM failed for %s (%s); falling back to vg giraffe BAM",
+                            sample_id,
+                            exc,
+                        )
+                        _append_log(log_path, f"Mojo QC BAM fallback to vg: {exc}")
+                        used_vg_fallback = True
+                if qc_engine == "vg" or used_vg_fallback:
+                    qc_bam_cmd = build_qc_bam_command(
+                        bundle=bundle,
+                        fq1_c2t=c2t_r1,
+                        fq2_g2a=g2a_r2,
+                        threads=bundle.threads,
+                    )
+                    docker_qc_bam = [
+                        _docker_bin(),
+                        "run",
+                        "--rm",
+                        "--user",
+                        f"{os.getuid()}:{os.getgid()}",
+                    ]
+                    for root in sorted(
+                        mount_roots | {bundle.ref_paths.parent.resolve()}, key=str
+                    ):
+                        docker_qc_bam.extend(["-v", f"{root}:{root}"])
+                    docker_qc_bam.extend([image, *qc_bam_cmd])
+                    _run(
+                        docker_qc_bam,
+                        log_path,
+                        step="vg.giraffe_qc_bam",
+                        stdout_path=qc_bam,
+                    )
                 for converted in (c2t_r1, g2a_r2):
                     converted.unlink(missing_ok=True)
 
@@ -1729,6 +1991,285 @@ def _write_empty_patterns(
     return written
 
 
+def _maybe_run_conversion_rate(
+    *,
+    bundle: MethylGrapherWgbsBundle,
+    sample_path: Path,
+    work_dir: Path,
+    index_prefix: str,
+    image: str,
+    mount_roots: set,
+    log_path: Path,
+) -> bool:
+    """Invoke Mojo ConversionRate when lambda spike-in + graph.methyl exist.
+
+    Writes ``{sampleDir}/{conversion_rate_sidecar}`` for methyl_qc. Returns True
+    when a sidecar was written; False on graceful skip (no spike-in / no methyl).
+    """
+    graph_methyl = work_dir / "graph.methyl"
+    report = Path(f"{index_prefix}.prepare.genome.report.txt")
+    if not graph_methyl.is_file() or graph_methyl.stat().st_size == 0:
+        _append_log(log_path, "ConversionRate skip: graph.methyl missing")
+        return False
+    if not report.is_file():
+        _append_log(
+            log_path,
+            "ConversionRate skip: PrepareGenome report missing (no lambda spike-in)",
+        )
+        return False
+    report_txt = report.read_text(encoding="utf-8", errors="replace")
+    if "lambda phage" not in report_txt.lower():
+        _append_log(log_path, "ConversionRate skip: no lambda phage segment in report")
+        return False
+    conv_cmd = [
+        os.environ.get(METHYLGRAPHER_BIN_ENV, "").strip() or "methylGrapher",
+        "ConversionRate",
+        "-work_dir",
+        str(work_dir),
+        "-index_prefix",
+        index_prefix,
+    ]
+    docker_conv = [
+        _docker_bin(),
+        "run",
+        "--rm",
+        "--user",
+        f"{os.getuid()}:{os.getgid()}",
+    ]
+    for root in sorted(mount_roots | {report.parent.resolve()}, key=str):
+        docker_conv.extend(["-v", f"{root}:{root}"])
+    docker_conv.extend([image, *conv_cmd])
+    try:
+        proc = subprocess.run(
+            docker_conv, capture_output=True, text=True, check=False
+        )
+    except Exception as exc:
+        _append_log(log_path, f"ConversionRate failed: {exc}")
+        return False
+    _append_log(log_path, f"[{'ConversionRate'}] stdout:\n{proc.stdout or ''}")
+    if proc.stderr:
+        _append_log(log_path, f"[ConversionRate] stderr:\n{proc.stderr}")
+    if proc.returncode != 0:
+        _append_log(log_path, f"ConversionRate rc={proc.returncode}; skip sidecar")
+        return False
+    # Parse "context\trate" lines or JSON-ish output for a CG rate.
+    rate_pct: Optional[float] = None
+    for line in (proc.stdout or "").splitlines():
+        parts = line.strip().split()
+        if len(parts) >= 2 and parts[0].upper() in {"CG", "CHH", "CHG", "ALL"}:
+            try:
+                val = float(parts[1])
+            except ValueError:
+                continue
+            rate_pct = val * 100.0 if val <= 1.0 else val
+            if parts[0].upper() == "CG":
+                break
+    if rate_pct is None:
+        # Fallback: look for conversion_rate in work_dir reports
+        for cand in work_dir.glob("*conversion*"):
+            if cand.is_file():
+                txt = cand.read_text(encoding="utf-8", errors="replace")
+                for line in txt.splitlines():
+                    if "conversion" in line.lower():
+                        for tok in line.replace("=", " ").split():
+                            try:
+                                val = float(tok)
+                                rate_pct = val * 100.0 if val <= 1.0 else val
+                                break
+                            except ValueError:
+                                continue
+            if rate_pct is not None:
+                break
+    if rate_pct is None:
+        _append_log(log_path, "ConversionRate produced no parseable rate; skip sidecar")
+        return False
+    sidecar = sample_path / bundle.conversion_rate_sidecar
+    sidecar.write_text(
+        json.dumps(
+            {
+                "conversion_rate_pct": float(rate_pct),
+                "source": "methylGrapher.ConversionRate",
+                "engine": bundle.engine,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _append_log(log_path, f"Wrote bisulfite sidecar {sidecar} rate={rate_pct}")
+    return True
+
+
+def _build_patterns_from_gaf(
+    sample_dir: Path,
+    gaf_path: Path,
+    by_chrom: Mapping[str, Mapping[str, Any]],
+    contexts: Sequence[str],
+    *,
+    tile_size: int,
+    segment_offsets: Mapping[str, Tuple[str, int, int, str]] | None = None,
+) -> List[str]:
+    """Build true per-read tile patterns from science GAF + linear CpG coordinates.
+
+    For each GAF alignment that anchors on a GRCh38 segment, CpGs covered by the
+    query interval contribute a methylation bit from ``os:Z`` (C=meth, T=unmeth
+    on OT/C2T) or from converted query sequence tags. Falls back to empty list
+    when the GAF cannot yield any fully-covered tiles (caller may use surrogate).
+    """
+    import re
+    from collections import defaultdict
+
+    from methyl_utils.core.read_level_io import ReadLevelPatterns, write_read_level_patterns
+
+    if not gaf_path.is_file() or gaf_path.stat().st_size == 0:
+        return []
+    # chrom → sorted unique CpG positions
+    cpg_pos: Dict[str, np.ndarray] = {
+        chrom: np.asarray(arrays["pos"], dtype=np.uint32)
+        for chrom, arrays in by_chrom.items()
+    }
+    # tile aggregation: (chrom, tile_idx) → Counter of pattern_id
+    from collections import Counter
+
+    tile_meta: Dict[Tuple[str, int], Tuple[int, np.ndarray]] = {}
+    tile_patterns: Dict[Tuple[str, int], Counter] = defaultdict(Counter)
+    tile_n_reads: Dict[Tuple[str, int], int] = defaultdict(int)
+
+    def _tile_for(chrom: str, pos: int) -> Optional[Tuple[int, np.ndarray]]:
+        arr = cpg_pos.get(chrom)
+        if arr is None or arr.size == 0:
+            return None
+        # index of first CpG >= pos via searchsorted; tile by index // tile_size
+        idx = int(np.searchsorted(arr, pos))
+        if idx >= arr.size or int(arr[idx]) != int(pos):
+            # exact match only
+            found = np.where(arr == pos)[0]
+            if found.size == 0:
+                return None
+            idx = int(found[0])
+        t = idx // tile_size
+        sl = slice(t * tile_size, min((t + 1) * tile_size, arr.size))
+        positions = arr[sl]
+        if positions.size < tile_size:
+            return None
+        return t, positions
+
+    seg_re = re.compile(r"([><])([^><]+)")
+    offsets = dict(segment_offsets or {})
+
+    with gaf_path.open("r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 12:
+                continue
+            path = parts[5]
+            tags = {}
+            for tok in parts[12:]:
+                if len(tok) > 5 and tok[2:5] == ":Z:":
+                    tags[tok[:2]] = tok[5:]
+            seq = str(tags.get("os") or tags.get("rq") or "")
+            if not seq:
+                continue
+            try:
+                pstart = int(parts[7])
+            except ValueError:
+                pstart = 0
+            # Collect GRCh38 CpG positions covered by this alignment (approx: each
+            # GRCh38 segment fully covered contributes its genomic span CpGs).
+            covered: List[Tuple[str, int, str]] = []  # chrom, pos, base_at_query
+            path_cursor = 0
+            q_cursor = 0
+            for m in seg_re.finditer(path):
+                _orient, seg_id = m.group(1), m.group(2)
+                info = offsets.get(seg_id)
+                seg_len = int(info[2]) if info else 0
+                if info is not None:
+                    chrom, seg_genomic0, seg_len, _o = info
+                    # Query bases advancing with path (gapless approximation).
+                    for off in range(seg_len):
+                        gpos1 = seg_genomic0 + off + 1  # 1-based CpG coords in TSV
+                        if q_cursor < len(seq):
+                            base = seq[q_cursor]
+                        else:
+                            base = "N"
+                        covered.append((chrom, gpos1, base))
+                        q_cursor += 1
+                else:
+                    q_cursor += seg_len
+                path_cursor += seg_len
+                _ = pstart  # reserved for finer path-start alignment
+            # Group covered CpGs by tile; require all k CpGs observed.
+            by_tile_bases: Dict[Tuple[str, int], Dict[int, str]] = defaultdict(dict)
+            for chrom, gpos1, base in covered:
+                tile = _tile_for(chrom, gpos1)
+                if tile is None:
+                    continue
+                t_idx, positions = tile
+                key = (chrom, t_idx)
+                tile_meta[key] = (int(positions[0]), positions)
+                by_tile_bases[key][int(gpos1)] = base
+            for key, bases in by_tile_bases.items():
+                _chrom, t_idx = key
+                _start, positions = tile_meta[key]
+                if any(int(p) not in bases for p in positions):
+                    continue
+                bits = 0
+                for i, p in enumerate(positions):
+                    b = bases[int(p)].upper()
+                    # C (or G on opposite) = methylated after restore; T/A = unmeth
+                    if b in {"C", "G"}:
+                        bits |= 1 << (tile_size - 1 - i)
+                tile_patterns[key][bits] += 1
+                tile_n_reads[key] += 1
+
+    if not tile_meta:
+        return []
+
+    written: List[str] = []
+    chroms = sorted({c for c, _t in tile_meta})
+    for chrom in chroms:
+        tiles = sorted(t for c, t in tile_meta if c == chrom)
+        tile_start = []
+        tile_cpg = []
+        tile_n = []
+        pattern_tile_id = []
+        pattern_id = []
+        pattern_count = []
+        for local_i, t_idx in enumerate(tiles):
+            key = (chrom, t_idx)
+            start, positions = tile_meta[key]
+            pad = np.zeros(tile_size, dtype=np.uint32)
+            pad[: positions.size] = positions
+            tile_start.append(start)
+            tile_cpg.append(pad)
+            tile_n.append(int(tile_n_reads[key]))
+            for pid, cnt in sorted(tile_patterns[key].items()):
+                pattern_tile_id.append(local_i)
+                pattern_id.append(int(pid))
+                pattern_count.append(int(cnt))
+        for ctx in contexts:
+            path = sample_dir / f"{chrom}-{ctx}.patterns.h5"
+            data = ReadLevelPatterns(
+                context=str(ctx),
+                tile_size=int(tile_size),
+                tile_start_pos=np.asarray(tile_start, dtype=np.uint32),
+                tile_cpg_positions=np.asarray(tile_cpg, dtype=np.uint32).reshape(
+                    -1, tile_size
+                )
+                if tile_cpg
+                else np.zeros((0, tile_size), dtype=np.uint32),
+                tile_n_reads=np.asarray(tile_n, dtype=np.uint32),
+                pattern_tile_id=np.asarray(pattern_tile_id, dtype=np.uint32),
+                pattern_id=np.asarray(pattern_id, dtype=np.uint16),
+                pattern_count=np.asarray(pattern_count, dtype=np.uint32),
+            )
+            write_read_level_patterns(path, data)
+            written.append(str(path))
+    return written
+
+
 def _build_patterns_from_linear_calls(
     sample_dir: Path,
     by_chrom: Mapping[str, Mapping[str, Any]],
@@ -1736,7 +2277,7 @@ def _build_patterns_from_linear_calls(
     *,
     tile_size: int,
 ) -> List[str]:
-    """Construct minimal tile pattern sidecars from marginal calls (informME-compatible)."""
+    """Surrogate tile patterns from marginal calls (fallback when GAF patterns empty)."""
     from methyl_utils.core.read_level_io import ReadLevelPatterns, write_read_level_patterns
 
     written: List[str] = []
@@ -1891,6 +2432,17 @@ def run_methylgrapher_wgbs_extract(
         docker_merge.extend([image, *merge_cmd])
         _run(docker_merge, log_path, step="methylGrapher.MergeCpG")
 
+        if bundle.conversion_rate_enabled:
+            _maybe_run_conversion_rate(
+                bundle=bundle,
+                sample_path=sample_path,
+                work_dir=work_dir,
+                index_prefix=index_prefix,
+                image=image,
+                mount_roots=mount_roots,
+                log_path=log_path,
+            )
+
         # Prefer an operator/pre-projected linear TSV if present; else project MergeCpG.
         projected = resolved.get("linear_cpg_tsv") or (
             str(bundle.linear_cpg_tsv) if bundle.linear_cpg_tsv else None
@@ -1943,14 +2495,36 @@ def run_methylgrapher_wgbs_extract(
 
     h5_files = _write_marginal_h5(sample_path, by_chrom, contexts)
     pattern_files: List[str] = []
+    patterns_source = "none"
     if bundle.read_level_enabled:
-        pattern_files = _build_patterns_from_linear_calls(
-            sample_path, by_chrom, contexts, tile_size=bundle.tile_size
-        )
+        offsets = None
+        try:
+            wl_path = resolve_wl_gfa_path(bundle, index_prefix)
+            if wl_path.is_file():
+                offsets = build_grch38_segment_offsets_from_gfa(wl_path)
+        except Exception as exc:
+            logger.warning("GAF pattern offsets unavailable: %s", exc)
+        if gaf_path.is_file() and offsets:
+            pattern_files = _build_patterns_from_gaf(
+                sample_path,
+                gaf_path,
+                by_chrom,
+                contexts,
+                tile_size=bundle.tile_size,
+                segment_offsets=offsets,
+            )
+            if pattern_files:
+                patterns_source = "gaf"
+        if not pattern_files:
+            pattern_files = _build_patterns_from_linear_calls(
+                sample_path, by_chrom, contexts, tile_size=bundle.tile_size
+            )
+            patterns_source = "marginal_surrogate"
     else:
         pattern_files = _write_empty_patterns(
             sample_path, list(by_chrom.keys()), contexts, tile_size=bundle.tile_size
         )
+        patterns_source = "empty"
 
     manifest = build_canonical_extraction_manifest(
         sample_id=sample_id,
@@ -1970,5 +2544,6 @@ def run_methylgrapher_wgbs_extract(
         "h5Files": h5_files,
         "n_h5_files": len(h5_files),
         "patternFiles": pattern_files,
+        "patternsSource": patterns_source,
         "manifestPath": str(manifest_path),
     }

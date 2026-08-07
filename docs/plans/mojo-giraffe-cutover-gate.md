@@ -20,8 +20,8 @@ Companion to [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md),
 | Production dense G2A pack | **PASS** 144 993 543 nodes |
 | Buffy dual-map baseline (CPU `vg giraffe`) | **~6.2 h / sample** (instance 59 via `gpu_giraffe+vg_autoscale`) |
 | DS20M / Buffy-subset `graph.methyl` vs `cpu_vg` | **PENDING** operator |
-| Full Buffy dual-map Align ≤ ~2 h on GH200 | **IN PROGRESS** — measuring on `192-222-50-58` (task 896) |
-| Site “Mojo map done” claim | **DEFAULT-ON** on worker 1; sisters load NFS tar then restore caps |
+| Full Buffy dual-map Align ≤ ~2 h on GH200 | **IN PROGRESS** — measuring on `192-222-50-58` (task 896); see [`full-mojo-pangenome-wgbs-gates.md`](full-mojo-pangenome-wgbs-gates.md) |
+| Site “Mojo map done” claim | **actionConfig** (not worker.env); sisters load NFS tar then restore caps |
 
 ## Cutover knobs (`pangenome_wgbs` only)
 
@@ -35,15 +35,12 @@ python /opt/methylgrapher-mojo/scripts/build_mojo_segment_pack.py --from-gbz \
   --gbz /work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.giraffe.gbz \
   --out /work/cache/mojo_segments/hprc-d9-bs.wl.G2A.giraffe.gbz.mojo_segments
 
-export METHYLGRAPHER_ALIGN_ENGINE=gpu_giraffe
-export METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo
-export METHYLGRAPHER_GIRAFFE_DEVICE=nvidia
-export METHYLGRAPHER_MOJO_SEGMENTS_CACHE=/work/cache/mojo_segments
-# Default-on in `:1.70-mojo`; set 0 to force vg_autoscale:
-# export METHYLGRAPHER_MOJO_GIRAFFE_READY=0
+# Prefer site / instance actionConfig.methylgrapher_wgbs (baked into resolvedConfig):
+#   align_engine, gpu_giraffe_fallback, giraffe_device, mojo_segments_cache,
+#   mojo_giraffe_ready, qc_bam_engine, conversion_rate_enabled
 ```
 
-Rollback: `METHYLGRAPHER_MOJO_GIRAFFE_READY=0`, or `align_engine=cpu_vg`, or `METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=vg`.
+Rollback via actionConfig: `mojo_giraffe_ready=false`, or `align_engine=cpu_vg`, or `gpu_giraffe_fallback=vg`.
 
 ## Site flip (after Buffy + parity gates)
 

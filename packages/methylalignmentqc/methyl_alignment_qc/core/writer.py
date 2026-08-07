@@ -421,23 +421,66 @@ def _apply_screening_and_audit(
         guardrails["screening"] = screening
         apply_screening_recommendations(guardrails, screening)
     elif cfg.enabled and not has_cycles:
-        # pangenome_wgbs (and any path without cycle series): do not invent REALIGN_TRIM
-        screening = {
-            "disposition": "USE_CURRENT_ALIGNMENT",
-            "quality_pattern": "NO_CYCLE_METRICS",
-            "read_length": 0,
-            "r2_start_cycle": 0,
-            "trim_front1": 0,
-            "trim_tail1": 0,
-            "trim_front2": 0,
-            "trim_tail2": 0,
-            "trim_spec": None,
-            "r2_start_mean_quality": None,
-            "r2_recovery_mean_quality": None,
-            "dip_regions": [],
-            "message": "Cycle quality screening skipped: no mean_quality_by_cycle metrics.",
-        }
-        guardrails["screening"] = screening
+        # Default: no invented REALIGN_TRIM. Optional Mojo/WGBS path: conversion or
+        # mapped-rate failures can request trim→realign when operator enables it.
+        tf = int(cfg.fallback_trim_front or 0)
+        tt = int(cfg.fallback_trim_tail or 0)
+        conv = payload.get("bisulfite_conversion_metrics") or {}
+        conv_fail = False
+        details = (guardrails.get("details") or {}) if isinstance(guardrails, dict) else {}
+        bis_gr = details.get("bisulfite_conversion") if isinstance(details, dict) else None
+        if isinstance(bis_gr, dict) and bis_gr.get("pass") is False:
+            conv_fail = True
+        mapped_fail = False
+        bam_rate = details.get("wgbs_bam_mapped_rate") if isinstance(details, dict) else None
+        if isinstance(bam_rate, dict) and bam_rate.get("pass") is False:
+            mapped_fail = True
+        want_remediate = bool(cfg.remediate_without_cycles) and (conv_fail or mapped_fail)
+        has_trim = (tf + tt) > 0
+        if want_remediate and has_trim:
+            screening = {
+                "disposition": "REALIGN_TRIM",
+                "quality_pattern": "NO_CYCLE_METRICS_SIGNAL",
+                "read_length": 0,
+                "r2_start_cycle": 0,
+                "trim_front1": tf,
+                "trim_tail1": tt,
+                "trim_front2": tf,
+                "trim_tail2": tt,
+                "trim_spec": {
+                    "trimFront1": tf,
+                    "trimTail1": tt,
+                    "trimFront2": tf,
+                    "trimTail2": tt,
+                },
+                "r2_start_mean_quality": None,
+                "r2_recovery_mean_quality": None,
+                "dip_regions": [],
+                "message": (
+                    "No cycle metrics; REALIGN_TRIM from conversion/mapped-rate "
+                    f"signals (conversion_fail={conv_fail}, mapped_fail={mapped_fail})."
+                ),
+                "conversion_rate_pct": conv.get("conversion_rate_pct"),
+            }
+            guardrails["screening"] = screening
+            apply_screening_recommendations(guardrails, screening)
+        else:
+            screening = {
+                "disposition": "USE_CURRENT_ALIGNMENT",
+                "quality_pattern": "NO_CYCLE_METRICS",
+                "read_length": 0,
+                "r2_start_cycle": 0,
+                "trim_front1": 0,
+                "trim_tail1": 0,
+                "trim_front2": 0,
+                "trim_tail2": 0,
+                "trim_spec": None,
+                "r2_start_mean_quality": None,
+                "r2_recovery_mean_quality": None,
+                "dip_regions": [],
+                "message": "Cycle quality screening skipped: no mean_quality_by_cycle metrics.",
+            }
+            guardrails["screening"] = screening
 
     ctx = write_ctx or QcWriteContext()
     prior_history = ctx.prior_qc_history or _load_prior_qc_history(output_path)
