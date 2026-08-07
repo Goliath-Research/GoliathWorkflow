@@ -55,7 +55,11 @@ BEGIN
     DECLARE @enroll_id bigint;
     DECLARE @allow_ip nvarchar(64);
     DECLARE @enroll_status varchar(32);
-    DECLARE @caps nvarchar(max) = COALESCE(NULLIF(LTRIM(RTRIM(@capabilities_json)), N''), N'[]');
+    -- Require probed / explicit capabilities. Empty [] previously defaulted here and
+    -- was mis-treated as omnibus, letting half-enrolled VMs claim GPU Align tasks.
+    DECLARE @caps nvarchar(max) = NULLIF(LTRIM(RTRIM(@capabilities_json)), N'');
+    IF @caps IS NULL OR @caps = N'[]'
+        THROW 50056, N'capabilities_json is required (non-empty). Run methyl-worker enroll so it probes NVIDIA capabilities, or pass --capabilities-json.', 1;
 
     SELECT @cluster_id = id
     FROM wf.cluster

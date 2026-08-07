@@ -112,7 +112,10 @@ class EnrollCliTests(unittest.TestCase):
                 token_file=str(token_path),
                 env_file="",
             )
-            with patch("methyl_worker.__main__.WorkflowRestClient") as cls:
+            with patch("methyl_worker.__main__.WorkflowRestClient") as cls, patch(
+                "methyl_worker.__main__.resolve_worker_capabilities",
+                return_value=["methylgrapher.wgbs_align", "parabricks.fq2bam"],
+            ) as resolve:
                 cls.return_value.enroll.return_value = {
                     "worker_id": 3,
                     "worker_token": "secret",
@@ -121,6 +124,12 @@ class EnrollCliTests(unittest.TestCase):
                 }
                 rc = _run_enroll_cli(args)
             self.assertEqual(rc, 0)
+            resolve.assert_called_once_with()
+            cls.return_value.enroll.assert_called_once_with(
+                "lambda",
+                "vm-1",
+                capabilities=["methylgrapher.wgbs_align", "parabricks.fq2bam"],
+            )
             self.assertEqual(
                 token_path.read_text(encoding="utf-8"),
                 "WORKER_ID=3\nWORKER_TOKEN=secret\n",

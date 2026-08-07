@@ -1948,8 +1948,9 @@ CREATE OR ALTER FUNCTION wf.wf_worker_is_omnibus(@capabilities NVARCHAR(MAX))
 RETURNS BIT
 AS
 BEGIN
+    -- Only explicit ["*"] is omnibus. NULL / '' / [] mean "no capabilities".
     IF @capabilities IS NULL OR LTRIM(RTRIM(@capabilities)) = N'' OR @capabilities = N'[]'
-        RETURN 1;
+        RETURN 0;
     IF EXISTS (
         SELECT 1
         FROM OPENJSON(@capabilities) WITH (value NVARCHAR(128) '$') AS caps

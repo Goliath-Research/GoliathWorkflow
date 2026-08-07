@@ -120,10 +120,14 @@ bash /work/epimethyl/current/runtime-bundle/scripts/write_worker_env.sh \
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
 bash /work/epimethyl/current/runtime-bundle/scripts/verify_arc_prereqs.sh
+# Source worker.env first so NVIDIA image pins are visible to capability probes.
+set -a; source /work/epimethyl/env/worker.env; source /work/epimethyl/env/parabricks.env; set +a
 methyl-worker enroll \
   --api-base "$WORKER_API_BASE" \
   --cluster gpu-west \
   --key "$(hostname -s)"
+# Default: probes this NVIDIA GPU host (Parabricks, methylgrapher.wgbs_align, …).
+# Do not enroll with empty capabilities. This fleet is NVIDIA-only (no AMD ROCm).
 # writes /etc/methyl/worker-token (mode 600)
 ```
 

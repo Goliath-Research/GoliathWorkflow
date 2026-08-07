@@ -145,10 +145,22 @@ if [[ "$REGISTER" -eq 1 ]]; then
     fi
   done
   if [[ -n "$API_BASE" && -n "$VENV_PY" ]]; then
+    # Omnibus NVIDIA fleet: omit --capabilities-json so enroll probes this host
+    # (resolve_worker_capabilities). Single-capability pin still supported.
     ENROLL_ARGS=(enroll --api-base "$API_BASE" --cluster "$CLUSTER" --key "$WORKER_KEY")
-    [[ -n "$CAPABILITY" ]] && ENROLL_ARGS+=(--capabilities-json "[\"$CAPABILITY\"]")
+    if [[ -n "$CAPABILITY" ]]; then
+      ENROLL_ARGS+=(--capabilities-json "[\"$CAPABILITY\"]")
+    fi
     [[ "$REQUIRE_ARC" -eq 1 ]] && run bash "$SCRIPTS/verify_arc_prereqs.sh"
-    run "$VENV_PY" -m methyl_worker "${ENROLL_ARGS[@]}"
+    # Load worker/parabricks env so probes see METHYL_* image pins (NVIDIA, not ROCm).
+    set -a
+    # shellcheck disable=SC1091
+    source "$ROOT/env/worker.env" 2>/dev/null || true
+    # shellcheck disable=SC1091
+    source "$ROOT/env/parabricks.env" 2>/dev/null || true
+    set +a
+    run env PYTHONPATH="${REPO_ROOT}/workers${PYTHONPATH:+:$PYTHONPATH}" \
+      "$VENV_PY" -m methyl_worker "${ENROLL_ARGS[@]}"
   else
     echo "WARN: WORKER_API_BASE unset or venv missing — falling back to register_worker.sh (dev/bootstrap)." >&2
     REG_ARGS=(--cluster "$CLUSTER" --key "$WORKER_KEY")

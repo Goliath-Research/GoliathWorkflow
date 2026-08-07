@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from .capabilities import assert_node_can_serve_capability
+from .capabilities import assert_node_can_serve_capability, resolve_worker_capabilities
 from .client import WorkflowRestClient
 from .runner import WorkerRunner
 
@@ -71,7 +71,10 @@ def main(argv: list[str] | None = None) -> int:
     enroll.add_argument(
         "--capabilities-json",
         default="",
-        help="Optional JSON array of capabilities",
+        help=(
+            "JSON array of capabilities. Default: probe this NVIDIA GPU host. "
+            "Pass '[\"*\"]' only for explicit omnibus. Never enroll with []."
+        ),
     )
     enroll.add_argument(
         "--token-file",
@@ -179,9 +182,25 @@ def _run_enroll_cli(args: argparse.Namespace) -> int:
         print("Set --cluster and --key (or CLUSTER_KEY / WORKER_KEY)", file=sys.stderr)
         return 2
 
-    capabilities: Optional[list[Any]] = None
     if args.capabilities_json.strip():
-        capabilities = json.loads(args.capabilities_json)
+        capabilities: list[Any] = json.loads(args.capabilities_json)
+        if not isinstance(capabilities, list) or not capabilities:
+            print(
+                "--capabilities-json must be a non-empty JSON array "
+                "(or omit it to probe NVIDIA capabilities on this host)",
+                file=sys.stderr,
+            )
+            return 2
+    else:
+        # GH200 / NVIDIA cluster: probe installed CLIs + GPU; never enroll with [].
+        capabilities = resolve_worker_capabilities()
+        if not capabilities:
+            print(
+                "resolve_worker_capabilities() returned empty; "
+                "refusing enroll (no AMD/ROCm fallback on this fleet)",
+                file=sys.stderr,
+            )
+            return 2
 
     client = WorkflowRestClient(args.api_base)
     result = client.enroll(
