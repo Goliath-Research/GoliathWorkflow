@@ -90,6 +90,10 @@ log "staging trimmed Mojo runtime from pixi env"
 rm -rf "${DOCKER_DIR}/mojo-env"
 mkdir -p "${DOCKER_DIR}/mojo-env/bin" "${DOCKER_DIR}/mojo-env/lib/mojo" "${DOCKER_DIR}/mojo-env/share/max"
 cp -a "${PIXI_ENV}/bin/mojo" "${DOCKER_DIR}/mojo-env/bin/"
+# Crashpad handler required by Mojo 1.0 when running as non-root (uid 1000).
+if [[ -x "${PIXI_ENV}/bin/modular-crashpad-handler" ]]; then
+  cp -a "${PIXI_ENV}/bin/modular-crashpad-handler" "${DOCKER_DIR}/mojo-env/bin/"
+fi
 # CPython used by Mojo std.python interop (must match libpython major.minor).
 if [[ -x "${PIXI_ENV}/bin/python3" ]]; then
   cp -a "${PIXI_ENV}/bin/python3" "${DOCKER_DIR}/mojo-env/bin/" || true
@@ -130,6 +134,10 @@ sed \
   -e "s|${MOJO_ROOT}/.pixi/envs/default|/opt/methylgrapher-mojo/mojo-env|g" \
   "${PIXI_ENV}/share/max/modular.cfg" \
   > "${DOCKER_DIR}/mojo-env/share/max/modular.cfg"
+# Non-root workers (docker --user 1000:1000) must be able to write crashdb/cache.
+mkdir -p "${DOCKER_DIR}/mojo-env/share/max/crashdb" \
+         "${DOCKER_DIR}/mojo-env/share/max/.max_cache"
+chmod -R a+rwX "${DOCKER_DIR}/mojo-env/share/max"
 
 chmod +x "${DOCKER_DIR}/methylGrapher.mojo.sh"
 
