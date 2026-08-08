@@ -143,6 +143,39 @@ def test_mojo_giraffe_ready_false_materializes_zero(tmp_path: Path) -> None:
     assert "METHYLGRAPHER_MOJO_GIRAFFE_READY=0" in materialize_align_docker_env(bundle)
 
 
+def test_resolve_giraffe_device_and_gpu_flags(tmp_path: Path, monkeypatch) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import (
+        align_docker_gpu_flags,
+        materialize_align_docker_env,
+        resolve_giraffe_device,
+        resolve_wgbs_bundle_from_resolved,
+    )
+
+    cfg = _touch_bundle(tmp_path)
+    cfg["giraffe_device"] = "nvidia"
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    assert resolve_giraffe_device(bundle) == "nvidia"
+    assert align_docker_gpu_flags("nvidia") == ["--gpus", "all"]
+    assert align_docker_gpu_flags("cpu") == []
+    assert "METHYLGRAPHER_GIRAFFE_DEVICE=nvidia" in materialize_align_docker_env(bundle)
+
+    cfg["giraffe_device"] = "auto"
+    bundle_auto = resolve_wgbs_bundle_from_resolved(cfg)
+    monkeypatch.setattr(
+        "methyl_worker.methylgrapher_wgbs_runner.shutil.which",
+        lambda name: "/usr/bin/nvidia-smi" if name == "nvidia-smi" else None,
+    )
+    monkeypatch.setattr(
+        "methyl_worker.methylgrapher_wgbs_runner.subprocess.run",
+        lambda *a, **k: type("R", (), {"returncode": 0})(),
+    )
+    assert resolve_giraffe_device(bundle_auto) == "nvidia"
+    # Container env must be concrete (not auto) after host probe.
+    assert "METHYLGRAPHER_GIRAFFE_DEVICE=nvidia" in materialize_align_docker_env(
+        bundle_auto
+    )
+
+
 def test_resolve_bundle_requires_c2t_g2a(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="missing"):
         resolve_methylgrapher_wgbs_genome(resolved_config={"ref_paths": str(tmp_path / "x")})

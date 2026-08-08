@@ -410,14 +410,80 @@ def effective_qc_bam_engine(bundle: MethylGrapherWgbsBundle) -> str:
     return "mojo" if bundle.engine == "mojo" else "vg"
 
 
+def resolve_giraffe_device(bundle: MethylGrapherWgbsBundle) -> str:
+    """Resolve ``auto|nvidia|amd|cpu`` for the container.
+
+    Probe on the **host** when config says ``auto`` so the container never runs
+    ``nvidia-smi`` without ``--gpus`` (FileNotFoundError fail-fast).
+    """
+    raw = (bundle.giraffe_device or "auto").strip().lower() or "auto"
+    if raw in {"cuda"}:
+        return "nvidia"
+    if raw in {"hip", "rocm"}:
+        return "amd"
+    if raw in {"cpu", "nvidia", "amd"}:
+        return raw
+    # auto — host probe
+    if shutil.which("nvidia-smi"):
+        try:
+            proc = subprocess.run(
+                ["nvidia-smi", "-L"],
+                capture_output=True,
+                check=False,
+            )
+            if proc.returncode == 0:
+                return "nvidia"
+        except OSError:
+            pass
+    if shutil.which("rocm-smi"):
+        try:
+            proc = subprocess.run(
+                ["rocm-smi", "--showproductname"],
+                capture_output=True,
+                check=False,
+            )
+            if proc.returncode == 0:
+                return "amd"
+        except OSError:
+            pass
+    if shutil.which("rocminfo"):
+        try:
+            proc = subprocess.run(
+                ["rocminfo"],
+                capture_output=True,
+                check=False,
+            )
+            if proc.returncode == 0:
+                return "amd"
+        except OSError:
+            pass
+    return "cpu"
+
+
+def align_docker_gpu_flags(device: str) -> List[str]:
+    """Docker device flags for Mojo Align / MojoGiraffe QC."""
+    dev = (device or "cpu").strip().lower()
+    if dev == "nvidia":
+        return ["--gpus", "all"]
+    if dev == "amd":
+        return [
+            "--device=/dev/kfd",
+            "--device=/dev/dri",
+            "--group-add",
+            "video",
+        ]
+    return []
+
+
 def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
     """Map resolvedConfig Mojo/GPU knobs to container ``-e KEY=VAL`` pairs.
 
     Host ``METHYLGRAPHER_*`` is intentionally ignored on the worker path so fleet
-    control stays in DB-backed ``resolvedConfig``.
+    control stays in DB-backed ``resolvedConfig``. Device ``auto`` is resolved on
+    the host before baking env so in-container probes are not required.
     """
     fallback = (bundle.gpu_giraffe_fallback or "mojo").strip() or "mojo"
-    device = (bundle.giraffe_device or "auto").strip() or "auto"
+    device = resolve_giraffe_device(bundle)
     if bundle.mojo_giraffe_ready is None:
         ready = "1"
     else:
@@ -1330,12 +1396,14 @@ def run_methylgrapher_wgbs_align(
             logger.info("Reusing existing methylGrapher GAF for %s", sample_id)
             _append_log(log_path, f"REUSE: existing GAF {gaf_path}")
         else:
+            align_device = resolve_giraffe_device(bundle)
             docker_cmd = [
                 _docker_bin(),
                 "run",
                 "--rm",
                 "--user",
                 f"{os.getuid()}:{os.getgid()}",
+                *align_docker_gpu_flags(align_device),
             ]
             for env_pair in materialize_align_docker_env(bundle):
                 docker_cmd.extend(["-e", env_pair])
@@ -1417,6 +1485,7 @@ def run_methylgrapher_wgbs_align(
                         "--rm",
                         "--user",
                         f"{os.getuid()}:{os.getgid()}",
+                        *align_docker_gpu_flags(resolve_giraffe_device(bundle)),
                     ]
                     for env_pair in materialize_align_docker_env(bundle):
                         docker_mojo_qc.extend(["-e", env_pair])
