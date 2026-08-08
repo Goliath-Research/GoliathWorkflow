@@ -492,7 +492,7 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
         (bundle.mojo_segments_cache or "").strip() or "/work/cache/mojo_segments"
     )
     modular = (bundle.modular_cache_dir or "").strip() or "/tmp/modular_cache"
-    return [
+    env = [
         f"METHYLGRAPHER_ALIGN_ENGINE={effective_align_engine(bundle)}",
         f"METHYLGRAPHER_GPU_GIRAFFE_FALLBACK={fallback}",
         f"METHYLGRAPHER_GIRAFFE_DEVICE={device}",
@@ -500,7 +500,16 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
         f"METHYLGRAPHER_MOJO_GIRAFFE_READY={ready}",
         f"MODULAR_CACHE_DIR={modular}",
         f"METHYLGRAPHER_MOJO_SEGMENTS_CACHE={segments}",
+        # Fail closed when nvidia/amd DeviceContext cannot be created (no silent CPU).
+        "METHYLGRAPHER_GPU_REQUIRE=1",
     ]
+    # Older NVIDIA drivers (<580) need system ptxas for Mojo CUDA create.
+    ptxas = (
+        os.environ.get("MODULAR_NVPTX_COMPILER_PATH", "").strip()
+        or "/opt/methylgrapher-mojo/cuda/bin/ptxas"
+    )
+    env.append(f"MODULAR_NVPTX_COMPILER_PATH={ptxas}")
+    return env
 
 
 def build_align_command(

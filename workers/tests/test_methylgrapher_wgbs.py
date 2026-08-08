@@ -121,6 +121,8 @@ def test_align_engine_from_resolved_config_ignores_host_env(
     assert "METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo" in env_pairs
     assert "METHYLGRAPHER_MOJO_GIRAFFE_READY=1" in env_pairs
     assert "METHYLGRAPHER_MOJO_SEGMENTS_CACHE=/work/cache/mojo_segments" in env_pairs
+    assert "METHYLGRAPHER_GPU_REQUIRE=1" in env_pairs
+    assert any(p.startswith("MODULAR_NVPTX_COMPILER_PATH=") for p in env_pairs)
     cmd = build_align_command(
         bundle=bundle,
         work_dir=tmp_path / "work",

@@ -77,14 +77,44 @@ rm -rf "${DOCKER_DIR}/src"
 mkdir -p "${DOCKER_DIR}/src"
 # Skip legacy scaffold stubs in the image.
 cp -a "${MOJO_ROOT}/src/"*.mojo "${DOCKER_DIR}/src/"
+# Optional DeviceContext smoke probe (used by smoke_64k.sh with --gpus).
+mkdir -p "${DOCKER_DIR}/tests"
+if [[ -f "${MOJO_ROOT}/tests/probe_devicecontext_cuda.mojo" ]]; then
+  cp -a "${MOJO_ROOT}/tests/probe_devicecontext_cuda.mojo" "${DOCKER_DIR}/tests/"
+fi
 
 log "staging scripts/ (Giraffe GPU + GBZ helpers)"
 rm -rf "${DOCKER_DIR}/scripts"
 mkdir -p "${DOCKER_DIR}/scripts"
 cp -a "${MOJO_ROOT}/scripts/giraffe_gpu_minimizer.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
+cp -a "${MOJO_ROOT}/scripts/gpu_seed_worker.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
 cp -a "${MOJO_ROOT}/scripts/giraffe_gaf_parity.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
 cp -a "${MOJO_ROOT}/scripts/build_mojo_gbz_cache.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
 cp -a "${MOJO_ROOT}/scripts/build_mojo_segment_pack.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
+
+log "staging ptxas for Mojo CUDA create (driver <580 workaround)"
+rm -rf "${DOCKER_DIR}/cuda"
+mkdir -p "${DOCKER_DIR}/cuda/bin"
+PTXAS_SRC=""
+for cand in \
+  "${MODULAR_NVPTX_COMPILER_PATH:-}" \
+  /usr/bin/ptxas \
+  /usr/lib/cuda/bin/ptxas \
+  /usr/local/cuda/bin/ptxas
+do
+  if [[ -n "${cand}" && -x "${cand}" ]]; then
+    PTXAS_SRC="${cand}"
+    break
+  fi
+done
+if [[ -z "${PTXAS_SRC}" ]]; then
+  echo "ERROR: ptxas not found on build host; required for Mojo DeviceContext(api=cuda)" >&2
+  echo "Install CUDA toolkit or set MODULAR_NVPTX_COMPILER_PATH" >&2
+  exit 1
+fi
+cp -a "${PTXAS_SRC}" "${DOCKER_DIR}/cuda/bin/ptxas"
+chmod +x "${DOCKER_DIR}/cuda/bin/ptxas"
+log "ptxas staged from ${PTXAS_SRC}"
 
 log "staging trimmed Mojo runtime from pixi env"
 rm -rf "${DOCKER_DIR}/mojo-env"

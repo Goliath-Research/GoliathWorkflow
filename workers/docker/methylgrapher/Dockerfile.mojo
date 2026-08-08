@@ -18,11 +18,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git python3 python3-pip python3-venv \
         samtools tabix pigz bwa \
         libcairo2 libatomic1 libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+        libopenblas0 libgfortran5 libblas3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf libopenblas.so.0 /usr/lib/aarch64-linux-gnu/libcblas.so.3 \
+    && ln -sf libopenblas.so.0 /usr/lib/aarch64-linux-gnu/libblas.so.3 \
+    && ldconfig
 
 # cuda | rocm — same userspace binary; host runtime + site image tag select the GPU.
 ARG GPU_VARIANT=cuda
 ENV METHYLGRAPHER_GPU_VARIANT=${GPU_VARIANT}
+
+# Mojo 1.0 CUDA create on driver <580 needs system ptxas (staged by build script).
+COPY cuda/bin/ptxas /opt/methylgrapher-mojo/cuda/bin/ptxas
+RUN chmod +x /opt/methylgrapher-mojo/cuda/bin/ptxas \
+    && ln -sf /opt/methylgrapher-mojo/cuda/bin/ptxas /usr/local/bin/ptxas
+ENV MODULAR_NVPTX_COMPILER_PATH=/opt/methylgrapher-mojo/cuda/bin/ptxas
 
 ARG VG_VERSION=1.70.0
 ARG VG_PREBUILT=vg.arm64
@@ -38,17 +48,42 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     || pip3 install --no-cache-dir --break-system-packages \
       "git+https://github.com/twlab/methylGrapher.git@v${METHYLGRAPHER_VERSION}"
 
+# System CuPy (tooling / non-Mojo probes).
+RUN if [ "${GPU_VARIANT}" = "cuda" ]; then \
+      pip3 install --no-cache-dir --break-system-packages "cupy-cuda12x[ctk]>=13.0" \
+        || pip3 install --no-cache-dir --break-system-packages "cupy-cuda12x[ctk]" \
+        || echo "WARN: system cupy-cuda12x not installed"; \
+    fi
+
 # Patched engine + native Mojo CLI / MethylCall hot path + Giraffe GPU helper.
 COPY engine /opt/methylgrapher-mojo/engine
 COPY src /opt/methylgrapher-mojo/src
 COPY scripts /opt/methylgrapher-mojo/scripts
+COPY tests /opt/methylgrapher-mojo/tests
 COPY mojo-env /opt/methylgrapher-mojo/mojo-env
 COPY methylGrapher.mojo.sh /usr/local/bin/methylGrapher
 ENV METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo \
-    METHYLGRAPHER_GIRAFFE_DEVICE=auto
+    METHYLGRAPHER_GIRAFFE_DEVICE=auto \
+    METHYLGRAPHER_GPU_REQUIRE=1 \
+    PYTHONPATH=/opt/methylgrapher-mojo/scripts:/opt/methylgrapher-mojo
+# CuPy into mojo-env CPython 3.13 — Align quartet_map runs under PYTHONHOME.
+# Trimmed pixi env has no pip; bootstrap via ensurepip / get-pip.
+RUN if [ "${GPU_VARIANT}" = "cuda" ] && [ -x /opt/methylgrapher-mojo/mojo-env/bin/python3 ]; then \
+      /opt/methylgrapher-mojo/mojo-env/bin/python3 -m ensurepip --upgrade \
+        || curl -fsSL https://bootstrap.pypa.io/get-pip.py \
+           | /opt/methylgrapher-mojo/mojo-env/bin/python3 \
+        || true; \
+      /opt/methylgrapher-mojo/mojo-env/bin/python3 -m pip install --no-cache-dir \
+        "cupy-cuda12x[ctk]>=13.0" \
+        || /opt/methylgrapher-mojo/mojo-env/bin/python3 -m pip install --no-cache-dir \
+          "cupy-cuda12x[ctk]" \
+        || echo "WARN: mojo-env cupy not installed; GPU seed will host-fallback"; \
+    fi
+# Validate Python engine at build time. Mojo help/Align JIT needs a visible GPU
+# arch (use smoke_64k.sh with --gpus); do not invoke Mojo here in the builder.
 RUN chmod +x /usr/local/bin/methylGrapher /opt/methylgrapher-mojo/mojo-env/bin/mojo \
     && python3 -c "import sys; sys.path.insert(0,'/opt/methylgrapher-mojo'); from engine import cli; from engine.align_backends import normalize_align_engine; assert normalize_align_engine('mojo_giraffe')=='mojo_giraffe'; print('engine ok')" \
-    && methylGrapher help | head -5
+    && METHYLGRAPHER_MCALL_ENGINE=python methylGrapher help | head -5
 
 LABEL org.opencontainers.image.title="methylGrapher-mojo WGBS worker" \
       org.opencontainers.image.description="Native Mojo MethylCall + MojoGiraffe GAF + MojoFq2bamMeth + patched engine + vg for dual Align" \

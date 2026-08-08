@@ -25,6 +25,26 @@ if [[ -x "${MOJO_BIN}" ]]; then
   export MODULAR_HOME="${ROOT}/mojo-env/share/max"
   export LD_LIBRARY_PATH="${ROOT}/mojo-env/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   export PATH="${ROOT}/mojo-env/bin:${PATH}"
+  # Mojo 1.0 CUDA create requires driver ≥580 OR a system ptxas path.
+  # Image bake stages ptxas at /opt/methylgrapher-mojo/cuda/bin/ptxas.
+  if [[ -z "${MODULAR_NVPTX_COMPILER_PATH:-}" ]]; then
+    for _ptx in \
+      "${ROOT}/cuda/bin/ptxas" \
+      /usr/local/cuda/bin/ptxas \
+      /usr/lib/cuda/bin/ptxas \
+      /usr/bin/ptxas
+    do
+      if [[ -x "${_ptx}" ]]; then
+        export MODULAR_NVPTX_COMPILER_PATH="${_ptx}"
+        break
+      fi
+    done
+  fi
+  # Writable Modular cache for non-root workers (kernel compile artifacts).
+  export MODULAR_CACHE_DIR="${MODULAR_CACHE_DIR:-/tmp/modular_cache}"
+  mkdir -p "${MODULAR_CACHE_DIR}" 2>/dev/null || true
+  # Scripts on PYTHONPATH for CuPy/GPU minimizer seed (quartet_map).
+  export PYTHONPATH="${ROOT}/scripts:${ROOT}${PYTHONPATH:+:$PYTHONPATH}"
   # Mojo std.python needs pixi CPython symbols globally (dlopen alone misses
   # Py_Initialize in the trimmed runtime-bundle layout).
   if [[ -e "${ROOT}/mojo-env/lib/libpython3.13.so.1.0" ]]; then
