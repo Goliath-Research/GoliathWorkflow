@@ -32,6 +32,8 @@
       "align_device": "auto",
       "mojo_segments_cache": "/work/cache/mojo_segments",
       "qc_bam_engine": "mojo",
+      "qc_bam_fallback": "error",
+      "dual_graph_parallel": false,
       "conversion_rate_enabled": true,
       "read_level": {
         "enabled": true,

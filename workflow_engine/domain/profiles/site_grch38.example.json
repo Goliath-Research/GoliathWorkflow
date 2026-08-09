@@ -18,6 +18,9 @@
       "giraffe_device": "auto",
       "gpu_giraffe_fallback": "mojo",
       "mojo_segments_cache": "/work/cache/mojo_segments",
+      "qc_bam_engine": "mojo",
+      "qc_bam_fallback": "error",
+      "dual_graph_parallel": false,
       "image": "epimethyl/methylgrapher:1.70-mojo"
     },
     "parabricks": {

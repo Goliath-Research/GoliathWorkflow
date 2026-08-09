@@ -307,6 +307,7 @@ def resolve_methylgrapher_wgbs_genome(
         "mojo_segments_cache",
         "modular_cache_dir",
         "qc_bam_engine",
+        "qc_bam_fallback",
         "conversion_rate_sidecar",
     ):
         if cfg.get(optional) not in (None, ""):
@@ -321,6 +322,8 @@ def resolve_methylgrapher_wgbs_genome(
         resolved["cg_only"] = bool(cfg["cg_only"])
     if "mojo_giraffe_ready" in cfg and cfg["mojo_giraffe_ready"] is not None:
         resolved["mojo_giraffe_ready"] = bool(cfg["mojo_giraffe_ready"])
+    if "dual_graph_parallel" in cfg and cfg["dual_graph_parallel"] is not None:
+        resolved["dual_graph_parallel"] = bool(cfg["dual_graph_parallel"])
     if "conversion_rate_enabled" in cfg and cfg["conversion_rate_enabled"] is not None:
         resolved["conversion_rate_enabled"] = bool(cfg["conversion_rate_enabled"])
     if isinstance(cfg.get("read_level"), Mapping):

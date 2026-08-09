@@ -116,11 +116,15 @@ def test_align_engine_from_resolved_config_ignores_host_env(
     monkeypatch.setenv("METHYLGRAPHER_GPU_GIRAFFE_FALLBACK", "vg")
     assert effective_align_engine(bundle) == "gpu_giraffe"
     assert effective_qc_bam_engine(bundle) == "mojo"
+    from methyl_worker.methylgrapher_wgbs_runner import effective_qc_bam_fallback
+
+    assert effective_qc_bam_fallback(bundle) == "error"
     env_pairs = materialize_align_docker_env(bundle)
     assert "METHYLGRAPHER_ALIGN_ENGINE=gpu_giraffe" in env_pairs
     assert "METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo" in env_pairs
     assert "METHYLGRAPHER_MOJO_GIRAFFE_READY=1" in env_pairs
     assert "METHYLGRAPHER_MOJO_SEGMENTS_CACHE=/work/cache/mojo_segments" in env_pairs
+    assert "METHYLGRAPHER_DUAL_GRAPH_PARALLEL=0" in env_pairs
     assert "METHYLGRAPHER_GPU_REQUIRE=1" in env_pairs
     assert any(p.startswith("MODULAR_NVPTX_COMPILER_PATH=") for p in env_pairs)
     cmd = build_align_command(
@@ -143,6 +147,28 @@ def test_mojo_giraffe_ready_false_materializes_zero(tmp_path: Path) -> None:
     cfg["mojo_giraffe_ready"] = False
     bundle = resolve_wgbs_bundle_from_resolved(cfg)
     assert "METHYLGRAPHER_MOJO_GIRAFFE_READY=0" in materialize_align_docker_env(bundle)
+
+
+def test_qc_bam_fallback_error_default_and_vg_opt_in(tmp_path: Path) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import (
+        effective_qc_bam_fallback,
+        materialize_align_docker_env,
+        resolve_wgbs_bundle_from_resolved,
+    )
+
+    cfg = _touch_bundle(tmp_path)
+    cfg["engine"] = "mojo"
+    cfg["qc_bam_engine"] = "mojo"
+    cfg["giraffe_device"] = "nvidia"
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    assert effective_qc_bam_fallback(bundle) == "error"
+    assert "METHYLGRAPHER_DUAL_GRAPH_PARALLEL=0" in materialize_align_docker_env(bundle)
+
+    cfg["qc_bam_fallback"] = "vg"
+    cfg["dual_graph_parallel"] = True
+    bundle2 = resolve_wgbs_bundle_from_resolved(cfg)
+    assert effective_qc_bam_fallback(bundle2) == "vg"
+    assert "METHYLGRAPHER_DUAL_GRAPH_PARALLEL=1" in materialize_align_docker_env(bundle2)
 
 
 def test_resolve_giraffe_device_and_gpu_flags(tmp_path: Path, monkeypatch) -> None:

@@ -60,6 +60,8 @@ class MethylGrapherWgbsBundle:
     mojo_segments_cache: Optional[str] = None
     modular_cache_dir: Optional[str] = None
     qc_bam_engine: Optional[str] = None
+    qc_bam_fallback: Optional[str] = None
+    dual_graph_parallel: Optional[bool] = None
     conversion_rate_enabled: bool = False
     conversion_rate_sidecar: str = "bisulfite_conversion.json"
     cg_only: bool = True
@@ -219,6 +221,16 @@ def resolve_wgbs_bundle_from_resolved(
         qc_bam_engine=(
             str(raw["qc_bam_engine"]).strip().lower()
             if raw.get("qc_bam_engine") not in (None, "")
+            else None
+        ),
+        qc_bam_fallback=(
+            str(raw["qc_bam_fallback"]).strip().lower()
+            if raw.get("qc_bam_fallback") not in (None, "")
+            else None
+        ),
+        dual_graph_parallel=(
+            bool(raw["dual_graph_parallel"])
+            if "dual_graph_parallel" in raw and raw["dual_graph_parallel"] is not None
             else None
         ),
         conversion_rate_enabled=_pick_bool(raw, "conversion_rate_enabled", False),
@@ -410,6 +422,22 @@ def effective_qc_bam_engine(bundle: MethylGrapherWgbsBundle) -> str:
     return "mojo" if bundle.engine == "mojo" else "vg"
 
 
+def effective_qc_bam_fallback(bundle: MethylGrapherWgbsBundle) -> str:
+    """QC BAM failure policy: ``error`` (fail closed) or ``vg``.
+
+    When unset: ``error`` for mojo QC / mojo engine (keep QC off multi-hour vg);
+    ``vg`` only when QC engine is already vg.
+    """
+    raw = (bundle.qc_bam_fallback or "").strip().lower()
+    if raw in {"error", "fail", "fail_closed", "none", "off"}:
+        return "error"
+    if raw in {"vg", "cpu_vg", "giraffe"}:
+        return "vg"
+    if effective_qc_bam_engine(bundle) == "mojo" or bundle.engine == "mojo":
+        return "error"
+    return "vg"
+
+
 def resolve_giraffe_device(bundle: MethylGrapherWgbsBundle) -> str:
     """Resolve ``auto|nvidia|amd|cpu`` for the container.
 
@@ -492,6 +520,15 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
         (bundle.mojo_segments_cache or "").strip() or "/work/cache/mojo_segments"
     )
     modular = (bundle.modular_cache_dir or "").strip() or "/tmp/modular_cache"
+    # Serialize C2T/G2A on GPU DeviceContext unless operator explicitly opts in.
+    if bundle.dual_graph_parallel is True:
+        dual_parallel = "1"
+    elif bundle.dual_graph_parallel is False:
+        dual_parallel = "0"
+    elif device in {"nvidia", "amd"}:
+        dual_parallel = "0"
+    else:
+        dual_parallel = "1"
     env = [
         f"METHYLGRAPHER_ALIGN_ENGINE={effective_align_engine(bundle)}",
         f"METHYLGRAPHER_GPU_GIRAFFE_FALLBACK={fallback}",
@@ -500,6 +537,7 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
         f"METHYLGRAPHER_MOJO_GIRAFFE_READY={ready}",
         f"MODULAR_CACHE_DIR={modular}",
         f"METHYLGRAPHER_MOJO_SEGMENTS_CACHE={segments}",
+        f"METHYLGRAPHER_DUAL_GRAPH_PARALLEL={dual_parallel}",
         # Fail closed when nvidia/amd DeviceContext cannot be created (no silent CPU).
         "METHYLGRAPHER_GPU_REQUIRE=1",
     ]
@@ -1478,7 +1516,9 @@ def run_methylgrapher_wgbs_align(
                     fq2, g2a_r2, base_from="G", base_to="A", log_path=log_path
                 )
                 qc_engine = effective_qc_bam_engine(bundle)
+                qc_fallback = effective_qc_bam_fallback(bundle)
                 provenance["qc_bam_engine"] = qc_engine
+                provenance["qc_bam_fallback"] = qc_fallback
                 used_vg_fallback = False
                 if qc_engine == "mojo":
                     qc_gaf = work_dir / f"{sample_id}.qc_mojo.gaf"
@@ -1517,6 +1557,12 @@ def run_methylgrapher_wgbs_align(
                             log_path=log_path,
                         )
                     except Exception as exc:
+                        if qc_fallback == "error":
+                            _append_log(
+                                log_path,
+                                f"Mojo QC BAM failed (qc_bam_fallback=error, no vg): {exc}",
+                            )
+                            raise
                         logger.warning(
                             "Mojo QC BAM failed for %s (%s); falling back to vg giraffe BAM",
                             sample_id,

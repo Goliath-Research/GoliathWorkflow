@@ -255,6 +255,22 @@ class MethylGrapherWgbsStepConfig(BaseModel):
             "else vg. Operator-set per site/profile."
         ),
     )
+    qc_bam_fallback: Optional[str] = Field(
+        default=None,
+        description=(
+            "When qc_bam_engine=mojo and Mojo QC fails: 'error' (fail closed, no vg) "
+            "or 'vg' (legacy multi-hour vg giraffe BAM). When unset and engine is mojo, "
+            "treat as 'error'. Operator-set per site/profile."
+        ),
+    )
+    dual_graph_parallel: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When true, run C2T∥G2A Align maps concurrently. When false/unset on "
+            "nvidia|amd DeviceContext engines, serialize haplotypes (avoids dual "
+            "CUDA context crashes). Operator-set per site/profile."
+        ),
+    )
     conversion_rate_enabled: Optional[bool] = Field(
         default=None,
         description=(
