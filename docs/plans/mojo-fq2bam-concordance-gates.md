@@ -4,7 +4,7 @@
 |------|-----|------|
 | Flagstat mapped-rate | Same sample, Clara vs Mojo | \|Δ\| ≤ 0.02 |
 | MethylExtract CpG | Top-N CpG β / coverage Spearman | ≥ 0.95 |
-| Wall time | Same SKU class (NVIDIA or AMD) | Mojo ≤ Clara × 1.25 (or absolute SLA) |
+| Wall time | Same SKU class (NVIDIA or AMD) | Mojo wall **&lt; Clara** (strict; no ×1.25 slack) |
 | QC overall_pass | `methyl-qc` on Mojo metrics JSON | Pass with site thresholds |
 | AMD + NVIDIA | Both green on same sample | Required before fleet cutover |
 
