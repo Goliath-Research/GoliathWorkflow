@@ -166,7 +166,9 @@ class WorkflowRestClient:
 
         body = self._post_json("/workers/tasks/request", payload)
         control = _control_from_body(body)
-        if not body.get("has_task"):
+        # Empty polls may omit has_task or return null node_execution_id with a
+        # desired_state ACK row — treat as idle, not a crash.
+        if not body.get("has_task") or body.get("node_execution_id") in (None, ""):
             return TaskPollResult(claim=None, control=control)
 
         inp = body.get("input_json") or {}
