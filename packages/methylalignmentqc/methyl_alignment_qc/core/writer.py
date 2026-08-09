@@ -438,6 +438,12 @@ def _apply_screening_and_audit(
         want_remediate = bool(cfg.remediate_without_cycles) and (conv_fail or mapped_fail)
         has_trim = (tf + tt) > 0
         if want_remediate and has_trim:
+            # TrimSpec is (read, end, bases) — same contract as cycle screening.
+            # Per-read fronts/tails live in trim_front1/…; trim_spec names the primary cut.
+            if tf > 0:
+                primary_spec = {"read": 1, "end": "start", "bases": tf}
+            else:
+                primary_spec = {"read": 1, "end": "end", "bases": tt}
             screening = {
                 "disposition": "REALIGN_TRIM",
                 "quality_pattern": "NO_CYCLE_METRICS_SIGNAL",
@@ -447,20 +453,15 @@ def _apply_screening_and_audit(
                 "trim_tail1": tt,
                 "trim_front2": tf,
                 "trim_tail2": tt,
-                "trim_spec": {
-                    "trimFront1": tf,
-                    "trimTail1": tt,
-                    "trimFront2": tf,
-                    "trimTail2": tt,
-                },
+                "trim_spec": primary_spec,
                 "r2_start_mean_quality": None,
                 "r2_recovery_mean_quality": None,
                 "dip_regions": [],
                 "message": (
                     "No cycle metrics; REALIGN_TRIM from conversion/mapped-rate "
-                    f"signals (conversion_fail={conv_fail}, mapped_fail={mapped_fail})."
+                    f"signals (conversion_fail={conv_fail}, mapped_fail={mapped_fail}"
+                    f", conversion_rate_pct={conv.get('conversion_rate_pct')})."
                 ),
-                "conversion_rate_pct": conv.get("conversion_rate_pct"),
             }
             guardrails["screening"] = screening
             apply_screening_recommendations(guardrails, screening)

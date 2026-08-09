@@ -37,6 +37,11 @@ def test_remediate_without_cycles_emits_realign_trim(tmp_path: Path) -> None:
     screening = payload["guardrails"]["screening"]
     assert screening["disposition"] == "REALIGN_TRIM"
     assert screening["trim_front1"] == 5
+    assert screening["trim_spec"] == {"read": 1, "end": "start", "bases": 5}
+    # Must validate as ExportedSampleQCPayload TrimSpec (node 942 regression).
+    from methyl_alignment_qc.models.sample_qc import QcScreeningReport
+
+    QcScreeningReport.model_validate(screening)
 
 
 def test_no_cycle_default_stays_use_current(tmp_path: Path) -> None:
