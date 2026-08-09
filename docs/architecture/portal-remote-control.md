@@ -101,6 +101,7 @@ Bayesian remain out of scope).
 
 ## See also
 
+- [Portal information architecture](portal-ia.md) — nav hierarchy, RBAC floors, screen → `portal.sp_*`
 - [Config registry (cfg)](config-registry.md)
 - [Component boundaries](component-boundaries.md)
 - [Pipeline architecture — execution scopes and CAAS](../../workflow_engine/docs/pipeline_architecture.md)
