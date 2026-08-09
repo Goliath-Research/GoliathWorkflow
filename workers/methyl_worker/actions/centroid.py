@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-import subprocess
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 from ..action_execution import ActionExecutionResult, execution_result_from_output, validate_input
+from ..execution_handle import ExecutionHandle, WorkerStoppedError, bind_execution_handle, run_cancellable
 from .base import CliAction, ExecutionTimer, finalize_output
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,12 @@ logger = logging.getLogger(__name__)
 class CentroidCliAction(CliAction):
     """Copy ``centroidSeedDir`` into ``outputDir`` before incremental methyl-centroid runs."""
 
-    def execute(self, input_json: Mapping[str, Any]) -> ActionExecutionResult:
+    def execute(
+        self,
+        input_json: Mapping[str, Any],
+        *,
+        handle: Optional[ExecutionHandle] = None,
+    ) -> ActionExecutionResult:
         from ..task_validation import extract_runtime_input, strip_runtime_input
 
         payload = dict(input_json)
@@ -40,7 +45,11 @@ class CentroidCliAction(CliAction):
         timer = ExecutionTimer()
         cmd = self.build_argv(argv_payload)
         logger.info("Running: %s", " ".join(cmd))
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        with bind_execution_handle(handle):
+            try:
+                proc = run_cancellable(cmd, handle=handle)
+            except WorkerStoppedError:
+                raise
         finished_at, duration_ms = timer.finish()
         if proc.returncode != 0:
             raise RuntimeError(self._format_subprocess_failure(cmd, proc))

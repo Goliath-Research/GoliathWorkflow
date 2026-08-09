@@ -18,6 +18,7 @@ import shlex
 import shutil
 import subprocess
 import tarfile
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -401,19 +402,38 @@ def _run(
 
     When ``stdout_path`` is set (e.g. ``vg surject -b`` BAM), stdout is written
     as raw bytes and must not use ``text=True`` / ``capture_output``.
+    Honors the bound :class:`~methyl_worker.execution_handle.ExecutionHandle` for STOP.
     """
+    from methyl_worker.execution_handle import (
+        WorkerStoppedError,
+        current_handle,
+        run_cancellable,
+    )
+
     logger.info("%s: %s", step, " ".join(shlex.quote(c) for c in cmd))
     _append_log(log_path, "COMMAND: " + " ".join(shlex.quote(c) for c in cmd))
+    handle = current_handle()
     if stdout_path is not None:
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
         with stdout_path.open("wb") as out_fh:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 list(cmd),
                 stdout=out_fh,
                 stderr=subprocess.PIPE,
-                check=False,
+                start_new_session=True,
             )
-        stderr_text = (proc.stderr or b"").decode("utf-8", errors="replace")
+            if handle is not None:
+                handle.register_process(proc)
+            while proc.poll() is None:
+                if handle is not None and handle.is_cancelled:
+                    handle.kill_children()
+                    raise WorkerStoppedError(f"Stopped during {step}")
+                if handle is not None:
+                    handle.cancel.wait(0.5)
+                else:
+                    time.sleep(0.5)
+            stderr_raw = proc.stderr.read() if proc.stderr else b""
+        stderr_text = (stderr_raw or b"").decode("utf-8", errors="replace")
         if stderr_text:
             _append_log(log_path, f"[{step}] stderr:\n{stderr_text}")
         if proc.returncode != 0:
@@ -425,7 +445,10 @@ def _run(
             raise RuntimeError(f"{step} produced empty stdout file: {stdout_path}")
         return
 
-    proc = subprocess.run(list(cmd), capture_output=True, text=True, check=False)
+    try:
+        proc = run_cancellable(list(cmd), handle=handle)
+    except WorkerStoppedError:
+        raise
     if proc.stdout:
         _append_log(log_path, f"[{step}] stdout:\n{proc.stdout}")
     if proc.stderr:

@@ -37,7 +37,9 @@ objects:
           - { name: attempt_no, type: int }
           - { name: input_json, type: json }
           - { name: iteration_no, type: int }
-        cardinality: zero_or_one
+          - { name: desired_state, type: text }
+          - { name: command, type: text }
+        cardinality: exactly_one
     - name: wf.sp_worker_submit_result
       kind: procedure
       required: true
@@ -64,6 +66,8 @@ objects:
       result_set:
         columns:
           - { name: rows_updated, type: int }
+          - { name: desired_state, type: text }
+          - { name: command, type: text }
         cardinality: exactly_one
     - name: wf.sp_worker_fail_task
       kind: procedure

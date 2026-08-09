@@ -148,6 +148,34 @@ class DomainEffects:
     template_group_side_defaults: Tuple[TemplateGroupSideDefault, ...] = ()
 
 
+@dataclass(frozen=True)
+class ActionControl:
+    """In-flight task control contract for agnostic WorkerRunner / portal UX.
+
+    Worker-level drain/continue is always available via ``wf.worker.desired_state``.
+    These flags describe what the runner may do to the **current** task.
+    """
+
+    can_pause: bool = False
+    can_continue: bool = False
+    can_stop: bool = True
+
+    def to_dict(self) -> Dict[str, bool]:
+        return {
+            "can_pause": self.can_pause,
+            "can_continue": self.can_continue,
+            "can_stop": self.can_stop,
+        }
+
+
+# Default: stoppable abort; no cooperative pause/continue until handlers checkpoint.
+DEFAULT_ACTION_CONTROL = ActionControl()
+# Long GPU / Align / extract work — explicit stoppable (same as default; documented).
+CONTROL_STOPPABLE = ActionControl(can_pause=False, can_continue=False, can_stop=True)
+# Abort unsafe (e.g. destructive finalize) — drain only.
+CONTROL_DRAIN_ONLY = ActionControl(can_pause=False, can_continue=False, can_stop=False)
+
+
 class ActionCatalogExport(TypedDict, total=False):
     action_name: str
     capability: str
@@ -165,6 +193,7 @@ class ActionCatalogExport(TypedDict, total=False):
     cli_tool: str
     tool: str
     domain_effects: Dict[str, Any]
+    control: Dict[str, bool]
     idempotency_enabled: bool
     idempotency_opt_out_reason: str
 
@@ -193,6 +222,7 @@ class ActionCatalogEntry:
     idempotency_opt_out_reason: Optional[str] = None
     internal: bool = False
     domain_effects: Optional[DomainEffects] = None
+    control: ActionControl = DEFAULT_ACTION_CONTROL
 
     def __post_init__(self) -> None:
         errors = list(_entry_invariant_errors(self))
@@ -276,6 +306,7 @@ class ActionCatalogEntry:
                     for t in de.template_group_side_defaults
                 ],
             }
+        payload["control"] = self.control.to_dict()
         # Effective eligibility (default-on with explicit opt-outs).
         payload["idempotency_enabled"] = idempotency_enabled_for(self)
         reason = idempotency_opt_out_reason_for(self)
@@ -489,6 +520,7 @@ def _entry(
     idempotency_enabled: bool = False,
     idempotency_opt_out_reason: Optional[str] = None,
     domain_effects: Optional[DomainEffects] = None,
+    control: ActionControl = DEFAULT_ACTION_CONTROL,
     internal: bool = False,
 ) -> ActionCatalogEntry:
     return ActionCatalogEntry(
@@ -511,6 +543,7 @@ def _entry(
         idempotency_enabled=idempotency_enabled,
         idempotency_opt_out_reason=idempotency_opt_out_reason,
         domain_effects=domain_effects,
+        control=control,
         internal=internal,
     )
 
@@ -532,6 +565,7 @@ def _cli(
     context_vars: ContextVars = (),
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     domain_effects: Optional[DomainEffects] = None,
+    control: ActionControl = DEFAULT_ACTION_CONTROL,
     idempotency_enabled: bool = False,
     idempotency_opt_out_reason: Optional[str] = None,
     internal: bool = False,
@@ -553,6 +587,7 @@ def _cli(
         context_vars=context_vars,
         argv_map=argv_map,
         domain_effects=domain_effects,
+        control=control,
         idempotency_enabled=idempotency_enabled,
         idempotency_opt_out_reason=idempotency_opt_out_reason,
         internal=internal,
@@ -576,6 +611,7 @@ def _in_process(
     action_config_key: Optional[ActionConfigKey] = None,
     context_vars: ContextVars = (),
     domain_effects: Optional[DomainEffects] = None,
+    control: ActionControl = DEFAULT_ACTION_CONTROL,
     idempotency_enabled: bool = False,
     idempotency_opt_out_reason: Optional[str] = None,
     internal: bool = False,
@@ -598,6 +634,7 @@ def _in_process(
         context_vars=context_vars,
         argv_map=(),
         domain_effects=domain_effects,
+        control=control,
         idempotency_enabled=idempotency_enabled,
         idempotency_opt_out_reason=idempotency_opt_out_reason,
         internal=internal,
@@ -884,6 +921,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_PARABRICKS,
         action_config_key="docker_align",
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.parabricks_fq2bam",
@@ -900,6 +938,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_PARABRICKS,
         action_config_key="parabricks",
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.parabricks_giraffe",
@@ -916,6 +955,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_PARABRICKS,
         action_config_key="parabricks",
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.methylgrapher_wgbs_align",
@@ -932,6 +972,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_PARABRICKS,
         action_config_key="methylgrapher_wgbs",
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.parabricks_rna_fq2bam",
@@ -947,6 +988,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="ParabricksRnaFq2Bam",
         context_vars=("sampleId", "sampleDir", "projectPath"),
         action_config_key="rna_align",
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.kallisto",
@@ -962,6 +1004,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="ParabricksKallisto",
         context_vars=("sampleId", "sampleDir", "projectPath"),
         action_config_key="rna_align",
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.rna_qc",
@@ -1163,6 +1206,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         in_process_handler="_handle_delete_fastqs",
         tool="SampleDeleteFastqs",
         context_vars=("sampleId", "sampleDir"),
+        control=CONTROL_DRAIN_ONLY,
     ),
     _in_process(
         "sample.trim_fastq",
@@ -1202,6 +1246,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         action_config_key="alignment_qc",
         context_vars=("projectPath", "sampleId", "sampleDir", "primaryAnalyte"),
         domain_effects=_DE_METHYL_QC,
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.fragmentomics",
@@ -1219,6 +1264,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         action_config_key="fragmentomics",
         context_vars=("projectPath", "sampleId", "sampleDir"),
         domain_effects=_DE_FRAGMENTOMICS,
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.methyl_extract",
@@ -1235,6 +1281,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         action_config_key="methyl_extract",
         context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_METHYL_EXTRACT,
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.methylgrapher_wgbs_extract",
@@ -1251,6 +1298,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         action_config_key="methylgrapher_wgbs",
         context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_METHYL_EXTRACT,
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.extraction_qc",
@@ -1268,6 +1316,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         action_config_key="extraction_qc",
         context_vars=("projectPath", "sampleId", "sampleDir"),
         domain_effects=_DE_EXTRACTION_QC,
+        control=CONTROL_STOPPABLE,
     ),
     _in_process(
         "sample.archive_sample",
@@ -1292,6 +1341,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
             "qcPath",
         ),
         domain_effects=_DE_ARCHIVE_SAMPLE,
+        control=CONTROL_DRAIN_ONLY,
     ),
     _in_process(
         "sample.delete_bam",
@@ -1306,6 +1356,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         in_process_handler="_handle_delete_bam",
         tool="SampleDeleteBam",
         context_vars=("sampleId", "sampleDir"),
+        control=CONTROL_DRAIN_ONLY,
     ),
     _in_process(
         "sample.qc_failed",
@@ -1321,6 +1372,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="SampleMarkFailed",
         context_vars=("sampleId", "sampleDir", "reason"),
         domain_effects=_DE_QC_FAILED,
+        control=CONTROL_DRAIN_ONLY,
     ),
     _in_process(
         "validation.plan_iterations",
@@ -1721,6 +1773,14 @@ def find_catalog_entry(action_name: str) -> Optional[ActionCatalogEntry]:
         if entry.action_name == action_name:
             return entry
     return None
+
+
+def control_for(action_name: str) -> ActionControl:
+    """Return in-flight control flags for ``action_name`` (defaults if unknown)."""
+    entry = find_catalog_entry(action_name)
+    if entry is None:
+        return DEFAULT_ACTION_CONTROL
+    return entry.control
 
 
 def find_catalog_entry_by_capability(capability: str) -> Optional[ActionCatalogEntry]:

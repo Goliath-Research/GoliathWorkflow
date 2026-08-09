@@ -39,12 +39,29 @@ DomainProgram compiler would couple orchestration to process-pack types.
    rows from `ACTION_CATALOG` (CLI on PATH, Parabricks, extractor, always-on
    in-process).
 
+## Worker control metadata (`control`)
+
+Each catalog entry exports a `control` object (defaults: no pause/continue,
+`can_stop=true`):
+
+```json
+"control": { "can_pause": false, "can_continue": false, "can_stop": true }
+```
+
+`WorkerRunner` is process-agnostic: on claim/heartbeat it reads
+`control_for(action_name)` and applies portal `wf.worker.desired_state`
+(`DRAINING` / `STOPPING` / `ACTIVE`) without branching on science action names.
+Destructive finalize actions use `CONTROL_DRAIN_ONLY` (`can_stop=false`).
+See [constrained-worker-ops-actions.md](constrained-worker-ops-actions.md).
+
 ## Adding a new process action
 
-1. Add Pydantic task I/O models and an `ACTION_CATALOG` entry.
+1. Add Pydantic task I/O models and an `ACTION_CATALOG` entry (set `control=` when
+   abort/pause differs from the default).
 2. For CLI: implement/register a provider (or use generic `CliAction` + `argv_map`).
 3. For in-process: add `_handle_*` in the appropriate `handlers/` module and set
-   `in_process_handler`.
+   `in_process_handler`; register nested subprocesses on
+   `execution_handle.current_handle()` when `can_stop` should kill children.
 4. Export: `methyl-export-action-catalog` / task schema export; seed DB.
 5. Optional: template rules on `domain_effects` if the compiler must bind scope
    vars beyond `with` / `context_vars`.

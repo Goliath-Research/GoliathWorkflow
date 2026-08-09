@@ -79,11 +79,12 @@ explicit `--capability` / `--omnibus`.
 | Object | Kind | Purpose |
 |--------|------|---------|
 | `wf.wf_worker_authenticate` | procedure | Validate worker id + token |
-| `wf.sp_worker_request_task` | procedure | Claim one READY action; quietly reclaims expired leases first; returns task row or empty |
+| `wf.sp_worker_request_task` | procedure | Claim one READY action (or empty task fields); quietly reclaims expired leases; always returns `desired_state` + `command` |
 | `wf.sp_reclaim_expired_leases` | procedure | Reset expired/`RUNNING`-without-lease nodes to `READY` (`@quiet` for claim path) |
 | `portal.sp_reclaim_expired_leases` | procedure | Portal/ops wrapper for reclaim |
+| `portal.sp_set_worker_desired_state` | procedure | Set `wf.worker.desired_state` (`ACTIVE`/`DRAINING`/`STOPPING`) for one worker or cluster |
 | `wf.sp_worker_submit_result` | procedure | Complete action; returns ack row |
-| `wf.sp_worker_heartbeat` | procedure | Extend lease; returns `rows_updated` |
+| `wf.sp_worker_heartbeat` | procedure | Extend lease; returns `rows_updated` + `desired_state` + `command` |
 | `wf.sp_worker_fail_task` | procedure | Fail task and instance |
 | `wf.sp_start_workflow_instance` | procedure | Start instance and activate root |
 

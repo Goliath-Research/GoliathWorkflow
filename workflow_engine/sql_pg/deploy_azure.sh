@@ -58,6 +58,7 @@ SCRIPTS=(
   07_scope_encoding_parity.sql
   08_foreach_support.sql
   wf_reclaim_expired_leases.sql
+  wf_worker_desired_state.sql
   01_worker_api.sql
   wf_cluster_security_columns.sql
   wf_worker_enrollment.sql

@@ -208,10 +208,13 @@ CREATE TABLE IF NOT EXISTS wf.worker (
   hostname text NULL,
   capabilities jsonb NULL,
   status varchar(32) NOT NULL DEFAULT 'REGISTERED',
+  -- Operator fleet control (portal.sp_set_worker_desired_state); distinct from enrollment status.
+  desired_state varchar(32) NOT NULL DEFAULT 'ACTIVE',
   last_seen_at_utc timestamptz NULL,
   created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at_utc timestamptz NULL,
-  CHECK (status IN ('REGISTERED','DISABLED'))
+  CHECK (status IN ('REGISTERED','DISABLED')),
+  CHECK (desired_state IN ('ACTIVE','DRAINING','STOPPING'))
 );
 
 CREATE TABLE IF NOT EXISTS wf.worker_token (

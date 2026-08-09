@@ -95,7 +95,7 @@ class GatewayDb(Protocol):
         worker_id: int,
         worker_token: str,
         extend_seconds: int,
-    ) -> dict[str, int]: ...
+    ) -> dict[str, Any]: ...
 
     def worker_fail_task(
         self,
@@ -120,7 +120,7 @@ class GatewayDb(Protocol):
         self,
         name: str,
         delete_instances: bool,
-    ) -> dict[str, int]: ...
+    ) -> dict[str, Any]: ...
 
     def apply_validation_plan(
         self,
@@ -301,7 +301,7 @@ class GatewayDbBase(ABC):
         worker_id: int,
         worker_token: str,
         extend_seconds: int,
-    ) -> dict[str, int]: ...
+    ) -> dict[str, Any]: ...
 
     @abstractmethod
     def worker_fail_task(
@@ -331,7 +331,7 @@ class GatewayDbBase(ABC):
         self,
         name: str,
         delete_instances: bool,
-    ) -> dict[str, int]: ...
+    ) -> dict[str, Any]: ...
 
     @abstractmethod
     def apply_validation_plan(
@@ -376,8 +376,17 @@ class GatewayDbBase(ABC):
     def get_worker_cluster_security(self, worker_id: int) -> Optional[dict[str, Any]]: ...
 
     def _format_task_claim(self, row: Optional[dict[str, Any]]) -> dict[str, Any]:
-        if not row:
-            return {"has_task": False}
+        desired = "ACTIVE"
+        command = "NONE"
+        if row:
+            desired = str(row.get("desired_state") or "ACTIVE")
+            command = str(row.get("command") or "NONE")
+        if not row or row.get("node_execution_id") is None:
+            return {
+                "has_task": False,
+                "desired_state": desired,
+                "command": command,
+            }
         return {
             "has_task": True,
             "node_execution_id": row["node_execution_id"],
@@ -388,6 +397,8 @@ class GatewayDbBase(ABC):
             "attempt_no": row["attempt_no"],
             "input_json": parse_json_value(row.get("input_json")) or {},
             "iteration_no": row["iteration_no"],
+            "desired_state": desired,
+            "command": command,
         }
 
     def _format_action_row(self, row: dict[str, Any]) -> dict[str, Any]:

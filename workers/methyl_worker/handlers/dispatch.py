@@ -70,13 +70,22 @@ def _attach_domain_sample_ref(
         return result
 
 
-def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) -> ActionExecutionResult:
+def execute_task(
+    capability: str,
+    action_name: str,
+    input_json: Dict[str, Any],
+    *,
+    handle: Optional[Any] = None,
+) -> ActionExecutionResult:
     """Run one ACTION and return typed output + branch result_code for sp_worker_submit_result.
 
     CAAS is on by default: idempotent actions commit product artifacts to
     ``{project_root}/.caas/`` and reuse entries keyed by ``content_key`` via
     ``maybe_skip_action`` / ``record_action_execution``. Opt out with
     ``caasEnabled: false`` or ``METHYL_CAAS_ENABLED=0``.
+
+    Optional ``handle`` is an :class:`~methyl_worker.execution_handle.ExecutionHandle`
+    for agnostic STOP (catalog ``control.can_stop``).
     """
     entry = find_catalog_entry(action_name) or find_catalog_entry_by_capability(capability)
     if entry is None:
@@ -138,7 +147,7 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
         import methyl_worker.handlers as handlers_pkg
 
         action = handlers_pkg.build_action_from_catalog(entry, handlers_pkg)
-        result = action.execute(skip_input)
+        result = action.execute(skip_input, handle=handle)
 
     record_action_execution(entry, skip_input, input_model, result, skipped=False)
     if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:

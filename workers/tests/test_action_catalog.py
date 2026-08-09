@@ -62,6 +62,13 @@ def test_catalog_entries_have_execution_mode() -> None:
             assert entry.action_config_key in PROJECT_ACTION_CONFIG_KEYS
 
 
+def test_catalog_entries_export_control() -> None:
+    for entry in ACTION_CATALOG:
+        ctrl = entry.to_catalog_dict()["control"]
+        assert set(ctrl) == {"can_pause", "can_continue", "can_stop"}
+        assert isinstance(ctrl["can_stop"], bool)
+
+
 def test_committed_action_catalog_matches_repo() -> None:
     """Committed schemas/actions/catalog.json must match in-code catalog."""
     drift = check_action_catalog_drift()

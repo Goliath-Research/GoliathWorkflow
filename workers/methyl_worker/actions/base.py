@@ -68,7 +68,12 @@ class ActionBase(Protocol):
     execution_mode: str
     entry: ActionCatalogEntry
 
-    def execute(self, input_json: Mapping[str, Any]) -> ActionExecutionResult: ...
+    def execute(
+        self,
+        input_json: Mapping[str, Any],
+        *,
+        handle: Any = None,
+    ) -> ActionExecutionResult: ...
 
 
 class CliAction:
@@ -187,7 +192,13 @@ class CliAction:
             parts.append("no stderr/stdout captured")
         return "\n".join(parts)
 
-    def execute(self, input_json: Mapping[str, Any]) -> ActionExecutionResult:
+    def execute(
+        self,
+        input_json: Mapping[str, Any],
+        *,
+        handle: Any = None,
+    ) -> ActionExecutionResult:
+        from ..execution_handle import WorkerStoppedError, bind_execution_handle, run_cancellable
         from ..task_validation import extract_runtime_input, strip_runtime_input
 
         payload = dict(input_json)
@@ -199,7 +210,11 @@ class CliAction:
         timer = ExecutionTimer()
         cmd = self.build_argv(argv_payload)
         logger.info("Running: %s", " ".join(cmd))
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        with bind_execution_handle(handle):
+            try:
+                proc = run_cancellable(cmd, handle=handle)
+            except WorkerStoppedError:
+                raise
         try:
             from methyl_utils.gpu_detection import cleanup_gpu_memory
 
@@ -243,7 +258,13 @@ class InProcessAction:
         self.handler = handler
         self.entry = entry
 
-    def execute(self, input_json: Mapping[str, Any]) -> ActionExecutionResult:
+    def execute(
+        self,
+        input_json: Mapping[str, Any],
+        *,
+        handle: Any = None,
+    ) -> ActionExecutionResult:
+        from ..execution_handle import WorkerStoppedError, bind_execution_handle
         from ..task_validation import parse_task_envelope
 
         input_model, runtime = parse_task_envelope(
@@ -251,14 +272,19 @@ class InProcessAction:
             self.entry.capability,
             input_json,
         )
+        if handle is not None and handle.is_cancelled:
+            raise WorkerStoppedError()
         timer = ExecutionTimer()
-        raw = _call_in_process_handler(
-            self.handler,
-            self.entry.capability,
-            self.entry.action_name,
-            input_model,
-            runtime,
-        )
+        with bind_execution_handle(handle):
+            raw = _call_in_process_handler(
+                self.handler,
+                self.entry.capability,
+                self.entry.action_name,
+                input_model,
+                runtime,
+            )
+        if handle is not None and handle.is_cancelled:
+            raise WorkerStoppedError()
         finished_at, duration_ms = timer.finish()
         if not isinstance(raw, BaseModel):
             raise TypeError(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,8 +29,15 @@ def test_request_task_sends_arc_header(tmp_path) -> None:
 
 def test_request_task_empty() -> None:
     client = WorkflowRestClient("http://test/v1")
-    with patch.object(client, "_post_json", return_value={"has_task": False}):
-        assert client.request_task(1, "tok", "methyl-centroid") is None
+    with patch.object(
+        client,
+        "_post_json",
+        return_value={"has_task": False, "desired_state": "DRAINING", "command": "DRAIN"},
+    ):
+        poll = client.request_task(1, "tok", "methyl-centroid")
+    assert poll.claim is None
+    assert poll.control.desired_state == "DRAINING"
+    assert poll.control.command == "DRAIN"
 
 
 def test_request_task_claim() -> None:
@@ -44,12 +50,27 @@ def test_request_task_claim() -> None:
         "capability": "methyl-centroid",
         "node_key": "centroid_g1",
         "input_json": {"project": "/p.json", "tool": "MethylCentroid"},
+        "desired_state": "ACTIVE",
+        "command": "NONE",
     }
     with patch.object(client, "_post_json", return_value=body):
-        claim = client.request_task(1, "tok")
-    assert claim is not None
-    assert claim.node_execution_id == 42
-    assert claim.input_json["project"] == "/p.json"
+        poll = client.request_task(1, "tok")
+    assert poll.claim is not None
+    assert poll.claim.node_execution_id == 42
+    assert poll.claim.input_json["project"] == "/p.json"
+    assert poll.control.command == "NONE"
+
+
+def test_heartbeat_ack() -> None:
+    client = WorkflowRestClient("http://test/v1")
+    with patch.object(
+        client,
+        "_post_json",
+        return_value={"rows_updated": 1, "desired_state": "STOPPING", "command": "STOP"},
+    ):
+        ack = client.heartbeat(42, 1, "tok")
+    assert ack.rows_updated == 1
+    assert ack.control.command == "STOP"
 
 
 def test_submit_result() -> None:

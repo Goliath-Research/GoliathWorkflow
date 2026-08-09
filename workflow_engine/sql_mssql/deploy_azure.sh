@@ -85,6 +85,8 @@ SCRIPTS=(
   wf_worker_api_contract.sql
   wf_cluster_security_columns.sql
   wf_worker_enrollment.sql
+  wf_worker_capability_dispatch.sql
+  wf_worker_desired_state.sql
   portal_worker_enrollment_api.sql
   wf_action_schema.sql
   wf_repo_upsert_workflow_action.sql

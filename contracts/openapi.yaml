@@ -140,14 +140,11 @@ paths:
               $ref: '#/components/schemas/WorkerHeartbeatRequest'
       responses:
         '200':
-          description: Rows updated
+          description: Lease renew + worker desired_state ACK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  rows_updated:
-                    type: integer
+                $ref: '#/components/schemas/WorkerHeartbeatResponse'
   /workers/tasks/{nodeExecutionId}/fail:
     post:
       tags:
@@ -267,6 +264,12 @@ components:
           additionalProperties: true
         iteration_no:
           type: integer
+        desired_state:
+          type: string
+          description: ACTIVE | DRAINING | STOPPING
+        command:
+          type: string
+          description: NONE | DRAIN | STOP
     WorkerSubmitResultRequest:
       type: object
       required:
@@ -308,6 +311,19 @@ components:
         extend_seconds:
           type: integer
           default: 300
+    WorkerHeartbeatResponse:
+      type: object
+      required:
+      - rows_updated
+      properties:
+        rows_updated:
+          type: integer
+        desired_state:
+          type: string
+          description: ACTIVE | DRAINING | STOPPING
+        command:
+          type: string
+          description: NONE | DRAIN | STOP
     WorkerFailTaskRequest:
       type: object
       required:

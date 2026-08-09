@@ -76,8 +76,9 @@ Log root resolution: explicit `monteCarloRunsRoot`, any path under `monte_carlo_
    `POST /workers/enroll` (`methyl-worker enroll --api-base … --cluster … --key …`) and stores
    `/etc/methyl/worker-token` (mode 600). **Dev only:** `scripts/register_worker.py` with DB env.
 3. Poll `POST /workers/tasks/request` with `worker_id`, `worker_token`, optional `capability` **narrowing filter**
-4. Parse `input_json` from the claim response
-5. Execute domain logic
+4. Honor `desired_state` / `command` on the response (`DRAIN`/`STOP` → no new claims; while running, heartbeat echoes the same and may abort if catalog `control.can_stop`)
+5. Parse `input_json` from the claim response when `has_task`
+6. Execute domain logic
 6. `POST /workers/tasks/{nodeExecutionId}/submit` with `output_json`
 7. Optionally heartbeat during long jobs
 

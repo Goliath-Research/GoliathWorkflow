@@ -225,12 +225,18 @@ class PostgresGatewayDb(GatewayDbBase):
         worker_id: int,
         worker_token: str,
         extend_seconds: int,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         row = self._fetch_one(
             f"SELECT * FROM {self._qual('sp_worker_heartbeat')}(%s, %s, %s, %s)",
             (node_execution_id, worker_id, worker_token, extend_seconds),
         )
-        return {"rows_updated": int(row["rows_updated"]) if row else 0}
+        if not row:
+            return {"rows_updated": 0, "desired_state": "ACTIVE", "command": "NONE"}
+        return {
+            "rows_updated": int(row["rows_updated"] or 0),
+            "desired_state": str(row.get("desired_state") or "ACTIVE"),
+            "command": str(row.get("command") or "NONE"),
+        }
 
     def worker_fail_task(
         self,

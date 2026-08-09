@@ -74,6 +74,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`di_action-agnostic_assessment_0d376284.plan.md`](di_action-agnostic_assessment_0d376284.plan.md) | **AB#664** | DI action-agnostic assessment | (see plan frontmatter) |
 | [`methylit-standalone-doc.plan.md`](methylit-standalone-doc.plan.md) | **AB#668** | MethylIT Standalone Doc | (see plan frontmatter) |
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |
+| [`action-catalog-worker-control.plan.md`](action-catalog-worker-control.plan.md) | _(pending ADO)_ | Action catalog worker control (drain/stop) | `catalog-control`, `db-desired-state`, `runner-agnostic`, `execution-handle`, `tests-docs-plan` |
 | [`ado-boards-traceability.plan.md`](ado-boards-traceability.plan.md) | _(meta)_ | ADO Boards Traceability (seed tooling) | `manifest`, `seed-script`, `ado-create`, `backfill-docs`, `promote-plan` |
 | [`ci-dev-deploy-sync.plan.md`](ci-dev-deploy-sync.plan.md) | _(pending ADO)_ | CI / Dev / Deploy synchronization contracts | `immediate-ci-fixes`, `sync-matrix`, `install-contract`, `catalog-fixture-contract`, `local-mirrors-ci`, `precommit-expand`, `editable-hygiene`, `promote-plan-docs` |
 | [`sync-genomes-to-qnap.plan.md`](sync-genomes-to-qnap.plan.md) | _(ops)_ | Sync /work/genomes to myQNAPcloud | `sync-script`, `doc-note` |

@@ -89,6 +89,9 @@ AS $$
     );
 $$;
 
+-- Return shape includes desired_state/command (worker fleet control).
+DROP FUNCTION IF EXISTS wf.sp_worker_request_task(bigint, text, text, int);
+
 CREATE OR REPLACE FUNCTION wf.sp_worker_request_task(
   p_worker_id bigint,
   p_worker_token text,
@@ -103,7 +106,9 @@ RETURNS TABLE (
   capability text,
   attempt_no int,
   input_json jsonb,
-  iteration_no int
+  iteration_no int,
+  desired_state text,
+  command text
 )
 LANGUAGE plpgsql
 AS $$
@@ -115,6 +120,8 @@ DECLARE
   v_worker_capabilities jsonb;
   v_is_omnibus boolean;
   v_reclaim_cutoff timestamptz := v_now - make_interval(secs => 60);
+  v_desired_state text := 'ACTIVE';
+  v_command text := 'NONE';
 BEGIN
   CALL wf.wf_worker_authenticate(p_worker_id, p_worker_token);
 
@@ -132,16 +139,33 @@ BEGIN
     PERFORM * FROM wf.sp_reclaim_expired_leases(NULL::bigint, 60, true);
   END IF;
 
-  SELECT w.capabilities
-  INTO v_worker_capabilities
+  SELECT w.capabilities, coalesce(w.desired_state, 'ACTIVE')
+  INTO v_worker_capabilities, v_desired_state
   FROM wf.worker w
   WHERE w.id = p_worker_id;
+
+  v_command := CASE v_desired_state
+    WHEN 'DRAINING' THEN 'DRAIN'
+    WHEN 'STOPPING' THEN 'STOP'
+    ELSE 'NONE'
+  END;
+
+  -- Drain/stop: echo control, do not claim new work.
+  IF v_desired_state IN ('DRAINING', 'STOPPING') THEN
+    RETURN QUERY SELECT
+      NULL::bigint, NULL::bigint, NULL::text, NULL::text, NULL::text,
+      NULL::int, NULL::jsonb, NULL::int, v_desired_state, v_command;
+    RETURN;
+  END IF;
 
   v_is_omnibus := wf.wf_worker_is_omnibus(v_worker_capabilities);
 
   IF p_capability IS NOT NULL
      AND NOT v_is_omnibus
      AND NOT wf.wf_worker_capability_allowed(v_worker_capabilities, p_capability) THEN
+    RETURN QUERY SELECT
+      NULL::bigint, NULL::bigint, NULL::text, NULL::text, NULL::text,
+      NULL::int, NULL::jsonb, NULL::int, v_desired_state, v_command;
     RETURN;
   END IF;
 
@@ -173,6 +197,9 @@ BEGIN
   RETURNING ne.id INTO v_picked;
 
   IF v_picked IS NULL THEN
+    RETURN QUERY SELECT
+      NULL::bigint, NULL::bigint, NULL::text, NULL::text, NULL::text,
+      NULL::int, NULL::jsonb, NULL::int, v_desired_state, v_command;
     RETURN;
   END IF;
 
@@ -192,7 +219,9 @@ BEGIN
     wa.capability,
     ne.attempt_no,
     ne.input_json,
-    ne.iteration_no
+    ne.iteration_no,
+    v_desired_state,
+    v_command
   FROM wf.node_execution ne
   INNER JOIN wf.workflow_node wn ON wn.id = ne.workflow_node_id
   INNER JOIN wf.workflow_action wa ON wa.id = wn.workflow_action_id
@@ -256,18 +285,22 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS wf.sp_worker_heartbeat(bigint, bigint, text, int);
+
 CREATE OR REPLACE FUNCTION wf.sp_worker_heartbeat(
   p_node_execution_id bigint,
   p_worker_id bigint,
   p_worker_token text,
   p_extend_seconds int DEFAULT 300
 )
-RETURNS TABLE (rows_updated int)
+RETURNS TABLE (rows_updated int, desired_state text, command text)
 LANGUAGE plpgsql
 AS $$
 DECLARE
   v_now timestamptz := (now() AT TIME ZONE 'utc');
   v_rows int;
+  v_desired_state text := 'ACTIVE';
+  v_command text := 'NONE';
 BEGIN
   CALL wf.wf_worker_authenticate(p_worker_id, p_worker_token);
 
@@ -278,7 +311,19 @@ BEGIN
     AND tl.worker_id = p_worker_id;
 
   GET DIAGNOSTICS v_rows = ROW_COUNT;
-  RETURN QUERY SELECT v_rows;
+
+  SELECT coalesce(w.desired_state, 'ACTIVE')
+  INTO v_desired_state
+  FROM wf.worker w
+  WHERE w.id = p_worker_id;
+
+  v_command := CASE v_desired_state
+    WHEN 'DRAINING' THEN 'DRAIN'
+    WHEN 'STOPPING' THEN 'STOP'
+    ELSE 'NONE'
+  END;
+
+  RETURN QUERY SELECT v_rows, v_desired_state, v_command;
 END;
 $$;
 

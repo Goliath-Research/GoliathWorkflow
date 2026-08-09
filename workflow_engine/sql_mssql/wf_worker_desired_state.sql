@@ -1,64 +1,105 @@
--- Capability-authoritative worker claim + enroll hygiene (NVIDIA GH200 fleet).
--- Contracts stay native JSON (MSSQL json / PG jsonb), not NVARCHAR string bags.
--- Empty capabilities [] must NOT be treated as omnibus. Enroll requires a
--- non-empty capabilities payload from the worker (methyl-worker enroll probes).
--- Claim result includes desired_state/command (see wf_worker_desired_state.sql).
-
+/*
+  Additive: wf.worker.desired_state + claim/heartbeat control ACK + portal SP.
+*/
 SET NOCOUNT ON;
 GO
 
--- Parameter type change NVARCHAR→json: recreate (CREATE OR ALTER cannot retarget types).
--- Drop dependents first (request_task references these functions).
-IF OBJECT_ID(N'wf.sp_worker_request_task', N'P') IS NOT NULL
-    DROP PROCEDURE wf.sp_worker_request_task;
-IF OBJECT_ID(N'wf.wf_worker_capability_allowed', N'FN') IS NOT NULL
-    DROP FUNCTION wf.wf_worker_capability_allowed;
-IF OBJECT_ID(N'wf.wf_worker_is_omnibus', N'FN') IS NOT NULL
-    DROP FUNCTION wf.wf_worker_is_omnibus;
-GO
-
-CREATE FUNCTION wf.wf_worker_is_omnibus(@capabilities json)
-RETURNS BIT
-AS
+IF COL_LENGTH('wf.worker', 'desired_state') IS NULL
 BEGIN
-    -- Only explicit ["*"] is omnibus. NULL / [] mean "no capabilities".
-    IF @capabilities IS NULL
-        RETURN 0;
-    IF NOT EXISTS (SELECT 1 FROM OPENJSON(@capabilities))
-        RETURN 0;
-    IF EXISTS (
-        SELECT 1
-        FROM OPENJSON(@capabilities) WITH (value NVARCHAR(128) '$') AS caps
-        WHERE caps.value = N'*'
-    )
-        RETURN 1;
-    RETURN 0;
-END;
+    ALTER TABLE wf.worker ADD desired_state varchar(32) NOT NULL
+        CONSTRAINT DF_worker_desired_state DEFAULT ('ACTIVE');
+END
 GO
 
-CREATE FUNCTION wf.wf_worker_capability_allowed(
-    @worker_capabilities json,
-    @task_capability NVARCHAR(128)
+IF NOT EXISTS (
+    SELECT 1 FROM sys.check_constraints
+    WHERE name = N'CK_worker_desired_state' AND parent_object_id = OBJECT_ID(N'wf.worker')
 )
-RETURNS BIT
-AS
 BEGIN
-    IF @task_capability IS NULL
-        RETURN 1;
-    IF wf.wf_worker_is_omnibus(@worker_capabilities) = 1
-        RETURN 1;
-    IF EXISTS (
-        SELECT 1
-        FROM OPENJSON(@worker_capabilities) WITH (value NVARCHAR(128) '$') AS caps
-        WHERE caps.value = @task_capability
-    )
-        RETURN 1;
-    RETURN 0;
-END;
+    ALTER TABLE wf.worker WITH CHECK
+    ADD CONSTRAINT CK_worker_desired_state
+    CHECK (desired_state IN ('ACTIVE', 'DRAINING', 'STOPPING'));
+END
 GO
 
--- Full body lives in wf_worker_desired_state.sql (desired_state ACK). Re-apply that script
--- after this file if both are deployed, or deploy wf_worker_desired_state.sql last.
+CREATE OR ALTER PROCEDURE portal.sp_set_worker_desired_state
+    @worker_id BIGINT = NULL,
+    @desired_state VARCHAR(32),
+    @cluster_id BIGINT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @state VARCHAR(32) = UPPER(LTRIM(RTRIM(@desired_state)));
+    IF @state NOT IN ('ACTIVE', 'DRAINING', 'STOPPING')
+        THROW 50201, N'desired_state must be ACTIVE, DRAINING, or STOPPING', 1;
+
+    IF @worker_id IS NOT NULL
+    BEGIN
+        UPDATE wf.worker
+        SET desired_state = @state,
+            updated_at_utc = SYSUTCDATETIME()
+        WHERE id = @worker_id
+          AND (@cluster_id IS NULL OR cluster_id = @cluster_id);
+
+        SELECT id AS worker_id, desired_state, @@ROWCOUNT AS rows_updated
+        FROM wf.worker
+        WHERE id = @worker_id;
+        RETURN;
+    END
+
+    IF @cluster_id IS NULL
+        THROW 50202, N'worker_id or cluster_id is required', 1;
+
+    UPDATE wf.worker
+    SET desired_state = @state,
+        updated_at_utc = SYSUTCDATETIME()
+    WHERE cluster_id = @cluster_id;
+
+    SELECT id AS worker_id, desired_state, @@ROWCOUNT AS rows_updated
+    FROM wf.worker
+    WHERE cluster_id = @cluster_id
+    ORDER BY id;
+END
+GO
+
+CREATE OR ALTER PROCEDURE wf.sp_worker_heartbeat
+    @node_execution_id BIGINT,
+    @worker_id BIGINT,
+    @worker_token NVARCHAR(4000),
+    @extend_seconds INT = 300
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    EXEC wf.wf_worker_authenticate @worker_id = @worker_id, @worker_token = @worker_token;
+
+    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
+    DECLARE @desired_state VARCHAR(32) = N'ACTIVE';
+    DECLARE @command VARCHAR(32) = N'NONE';
+
+    UPDATE tl
+    SET lease_expires_at_utc = DATEADD(SECOND, @extend_seconds, @now),
+        heartbeat_at_utc = @now
+    FROM wf.task_lease AS tl
+    WHERE tl.node_execution_id = @node_execution_id AND tl.worker_id = @worker_id;
+
+    DECLARE @rows INT = @@ROWCOUNT;
+
+    SELECT @desired_state = COALESCE(w.desired_state, N'ACTIVE')
+    FROM wf.worker AS w
+    WHERE w.id = @worker_id;
+
+    SET @command = CASE @desired_state
+        WHEN N'DRAINING' THEN N'DRAIN'
+        WHEN N'STOPPING' THEN N'STOP'
+        ELSE N'NONE'
+    END;
+
+    SELECT @rows AS rows_updated, @desired_state AS desired_state, @command AS command;
+END
+GO
+
 CREATE OR ALTER PROCEDURE wf.sp_worker_request_task
     @worker_id BIGINT,
     @worker_token NVARCHAR(4000),

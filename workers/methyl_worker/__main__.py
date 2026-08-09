@@ -169,8 +169,18 @@ def _run_poll_cli(args: argparse.Namespace) -> int:
         client.authenticate(args.worker_id, args.worker_token)
 
     if args.once:
-        claim = client.request_task(args.worker_id, args.worker_token, args.capability)
-        print(json.dumps({"has_task": claim is not None, "claim": _claim_dict(claim)}, indent=2))
+        poll = client.request_task(args.worker_id, args.worker_token, args.capability)
+        print(
+            json.dumps(
+                {
+                    "has_task": poll.claim is not None,
+                    "claim": _claim_dict(poll.claim),
+                    "desired_state": poll.control.desired_state,
+                    "command": poll.control.command,
+                },
+                indent=2,
+            )
+        )
         return 0
 
     runner = WorkerRunner(

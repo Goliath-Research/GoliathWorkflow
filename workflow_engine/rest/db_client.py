@@ -103,7 +103,7 @@ def worker_heartbeat(
     worker_id: int,
     worker_token: str,
     extend_seconds: int,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     with _use_db(db_or_dsn) as db:
         return db.worker_heartbeat(
             node_execution_id, worker_id, worker_token, extend_seconds

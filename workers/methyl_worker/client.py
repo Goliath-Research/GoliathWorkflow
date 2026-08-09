@@ -26,6 +26,28 @@ class TaskClaim:
 
 
 @dataclass(frozen=True)
+class WorkerControlAck:
+    """Fleet control echoed from claim/heartbeat (wf.worker.desired_state)."""
+
+    desired_state: str = "ACTIVE"
+    command: str = "NONE"  # NONE | DRAIN | STOP
+
+
+@dataclass(frozen=True)
+class TaskPollResult:
+    """Idle or claimed poll from POST /workers/tasks/request."""
+
+    claim: Optional[TaskClaim]
+    control: WorkerControlAck = WorkerControlAck()
+
+
+@dataclass(frozen=True)
+class HeartbeatAck:
+    rows_updated: int
+    control: WorkerControlAck = WorkerControlAck()
+
+
+@dataclass(frozen=True)
 class SubmitAck:
     accepted: bool
     instance_status: str
@@ -44,6 +66,13 @@ def _load_arc_resource_id() -> Optional[str]:
             val = line.split("=", 1)[1].strip().strip('"').strip("'")
             return val or None
     return None
+
+
+def _control_from_body(body: Dict[str, Any]) -> WorkerControlAck:
+    return WorkerControlAck(
+        desired_state=str(body.get("desired_state") or "ACTIVE"),
+        command=str(body.get("command") or "NONE"),
+    )
 
 
 class WorkflowRestClient:
@@ -125,7 +154,7 @@ class WorkflowRestClient:
         capability: Optional[str] = None,
         *,
         max_lease_seconds: Optional[int] = None,
-    ) -> Optional[TaskClaim]:
+    ) -> TaskPollResult:
         payload: Dict[str, Any] = {
             "worker_id": worker_id,
             "worker_token": worker_token,
@@ -136,14 +165,15 @@ class WorkflowRestClient:
             payload["capability"] = capability
 
         body = self._post_json("/workers/tasks/request", payload)
+        control = _control_from_body(body)
         if not body.get("has_task"):
-            return None
+            return TaskPollResult(claim=None, control=control)
 
         inp = body.get("input_json") or {}
         if isinstance(inp, str):
             inp = json.loads(inp) if inp else {}
 
-        return TaskClaim(
+        claim = TaskClaim(
             node_execution_id=int(body["node_execution_id"]),
             workflow_instance_id=int(body.get("workflow_instance_id") or 0),
             action_name=str(body.get("action_name") or ""),
@@ -153,6 +183,7 @@ class WorkflowRestClient:
             attempt_no=int(body.get("attempt_no") or 1),
             iteration_no=int(body.get("iteration_no") or 0),
         )
+        return TaskPollResult(claim=claim, control=control)
 
     def submit_result(
         self,
@@ -184,7 +215,7 @@ class WorkflowRestClient:
         worker_token: str,
         *,
         extend_seconds: Optional[int] = None,
-    ) -> int:
+    ) -> HeartbeatAck:
         body = self._post_json(
             f"/workers/tasks/{node_execution_id}/heartbeat",
             {
@@ -194,7 +225,10 @@ class WorkflowRestClient:
                 or int(os.environ.get("WORKER_LEASE_SECONDS", "300")),
             },
         )
-        return int(body.get("rows_updated") or 0)
+        return HeartbeatAck(
+            rows_updated=int(body.get("rows_updated") or 0),
+            control=_control_from_body(body),
+        )
 
     def fail_task(
         self,

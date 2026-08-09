@@ -29,6 +29,11 @@
         "removeSamples",
         "centroidSeedDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Build per-group methylation centroids (chr\u00d7context HDF5 aggregates).",
       "domain_effects": {
@@ -82,6 +87,11 @@
         "fixedDmpPanel",
         "stepOverride"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Detect differentially methylated positions between cohort pairs.",
       "domain_effects": {
@@ -154,6 +164,11 @@
         "outputDir",
         "stepOverride"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Select minimal discriminatory DMP panel from discovery exports (FeatureCuts / elbow).",
       "domain_effects": {
@@ -196,6 +211,11 @@
       "category": "modeling",
       "cli_tool": "methyl-mapper",
       "context_vars": [],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Map DMPs to genes and genomic features.",
       "execution_mode": "cli",
@@ -225,6 +245,11 @@
       "category": "modeling",
       "cli_tool": "methyl-derived-measures",
       "context_vars": [],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Genome-wide per-sample derived methylation measures (sidecar CSV).",
       "execution_mode": "cli",
@@ -254,6 +279,11 @@
       "category": "modeling",
       "cli_tool": "methyl-cell-deconv",
       "context_vars": [],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Cell-type deconvolution (Houseman or HiTIMED) from a path-configured atlas JSON; plant_tissue requires an operator-supplied seed/hierarchy basis (no blood fallback).",
       "execution_mode": "cli",
@@ -283,6 +313,11 @@
       "category": "modeling",
       "cli_tool": "methyl-infotheory",
       "context_vars": [],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Read-level information-theoretic methylation measures (entropy, JSD, confirmation).",
       "execution_mode": "cli",
@@ -309,6 +344,11 @@
         "runDir",
         "biomarkerFilter"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Validation-driven gene panel selection (ECDF OvR FeatureCuts).",
       "execution_mode": "cli",
@@ -332,6 +372,11 @@
         "mapperDir",
         "outputDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Select structural gene \u00d7 region features for tabular structural_scored backends.",
       "execution_mode": "cli",
@@ -361,6 +406,11 @@
       "category": "modeling",
       "cli_tool": "methyl-enricher",
       "context_vars": [],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Functional enrichment on mapped gene sets.",
       "execution_mode": "cli",
@@ -390,6 +440,11 @@
       "category": "modeling",
       "cli_tool": "methyl-disease-progression",
       "context_vars": [],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Ordered disease-stage progression analysis across comparisons.",
       "execution_mode": "cli",
@@ -419,6 +474,11 @@
       "category": "modeling",
       "cli_tool": "methyl-classifier",
       "context_vars": [],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Train production classifier from frozen centroids and DMP panel.",
       "execution_mode": "cli",
@@ -448,6 +508,11 @@
       "category": "modeling",
       "cli_tool": "methyl-predictor",
       "context_vars": [],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Run predictor on holdout samples using trained classifier.",
       "execution_mode": "cli",
@@ -467,6 +532,11 @@
         "monteCarloRunsRoot",
         "cohortPathsList"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Materialize study manifest paths and cohorts into a typed ResolvedProject.",
       "domain_effects": {
@@ -505,6 +575,11 @@
         "sampleDir",
         "fastqSource"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Download sample FASTQ files from external object storage.",
       "domain_effects": {
@@ -545,6 +620,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Demultiplex barcode-tagged PE FASTQs (epi-GBS / reduced-rep); barcode table via resolvedConfig.",
       "execution_mode": "in_process",
@@ -567,6 +647,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Align bisulfite FASTQs with a config-described Docker image (epi-GBS / alternate aligners).",
       "domain_effects": {
@@ -617,6 +702,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Align bisulfite FASTQs to BAM using NVIDIA Clara Parabricks fq2bam_meth (Docker).",
       "domain_effects": {
@@ -667,6 +757,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Align FASTQs with Parabricks vg Giraffe (HPRC pangenome, GRCh38 surjection) + collectmultiplemetrics QC.",
       "domain_effects": {
@@ -717,6 +812,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Align WGBS FASTQs with methylGrapher dual C2T/G2A graphs and emit QC-compatible GRCh38 BAM.",
       "domain_effects": {
@@ -767,6 +867,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Align RNA-Seq FASTQs and quantify gene counts using NVIDIA Clara Parabricks rna_fq2bam (STAR, Docker).",
       "execution_mode": "in_process",
@@ -789,6 +894,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Quantify RNA-Seq FASTQs with NVIDIA Clara Parabricks kallisto pseudo-alignment (Docker).",
       "execution_mode": "in_process",
@@ -812,6 +922,11 @@
         "sampleId",
         "sampleDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "RNA-Seq alignment/quantification QC guardrails (mapping/pseudoalignment rate, genes detected).",
       "domain_effects": {
@@ -852,6 +967,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Normalize STAR gene counts or kallisto transcript abundances into a canonical expression.h5.",
       "execution_mode": "in_process",
@@ -886,6 +1006,11 @@
         "comparison",
         "outputDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "RNA-Seq differential-expression gene panel selection + tabular classification (replaces methylation centroid/detector).",
       "execution_mode": "cli",
@@ -905,6 +1030,11 @@
         "sampleDir",
         "fastqSource"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Download proteomics MS data files (.raw/.mzML/.d) from external object storage.",
       "execution_mode": "in_process",
@@ -927,6 +1057,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Quantify DIA mass-spec data with GPU DIA-NN (Docker; own image env, not Parabricks).",
       "execution_mode": "in_process",
@@ -949,6 +1084,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "DDA database search + LFQ quantification with Sage (Apache-2.0 Rust; CPU, open MSFragger alternative).",
       "execution_mode": "in_process",
@@ -971,6 +1111,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Ingest an affinity/aptamer panel matrix (Olink NPX / SomaScan RFU / open) to the abundance contract (CPU).",
       "execution_mode": "in_process",
@@ -993,6 +1138,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Prosit deep-learning rescoring of a DIA-NN report (GPU Docker) to lift IDs at fixed FDR.",
       "execution_mode": "in_process",
@@ -1015,6 +1165,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Casanovo de novo peptide sequencing (GPU Docker) for novel/variant peptides.",
       "execution_mode": "in_process",
@@ -1038,6 +1193,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Normalize DIA-NN / panel proteomics output into a canonical abundance.h5.",
       "execution_mode": "in_process",
@@ -1061,6 +1221,11 @@
         "sampleId",
         "sampleDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Proteomics QC guardrails (proteins identified, missingness).",
       "domain_effects": {
@@ -1112,6 +1277,11 @@
         "comparison",
         "outputDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Proteomics differential-abundance protein panel selection + tabular classification.",
       "execution_mode": "cli",
@@ -1130,6 +1300,11 @@
         "sampleId",
         "sampleDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": false
+      },
       "default_node_type": "ACTION",
       "description": "Delete FASTQ files after final QC (pass or final fail) to reclaim storage.",
       "execution_mode": "in_process",
@@ -1155,6 +1330,11 @@
         "trimTail2",
         "remediationReason"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Trim Read 1/2 start or end bases with fastp before forced realign.",
       "execution_mode": "in_process",
@@ -1179,6 +1359,11 @@
         "sampleDir",
         "primaryAnalyte"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Alignment QC metrics (Picard-style) with guardrails JSON export.",
       "domain_effects": {
@@ -1261,6 +1446,11 @@
         "sampleId",
         "sampleDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "cfDNA fragmentomic analysis (WPS, end motifs) when analyte is cfDNA.",
       "domain_effects": {
@@ -1301,6 +1491,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Extract BAM to per-chromosome HDF5 via native MethylExtractor (resolvedConfig.methyl_extract).",
       "domain_effects": {
@@ -1341,6 +1536,11 @@
         "sampleDir",
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Graph-aware methylGrapher extraction into {chrom}-{context}.h5 and patterns.h5 contracts.",
       "domain_effects": {
@@ -1382,6 +1582,11 @@
         "sampleId",
         "sampleDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Evaluate MethylExtractor manifest guardrails and write extraction QC JSON.",
       "domain_effects": {
@@ -1431,6 +1636,11 @@
         "rejectReason",
         "qcPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": false
+      },
       "default_node_type": "ACTION",
       "description": "Archive sample bundle (FASTQs, QC JSON, HDF5) or QC-only reject record to durable storage.",
       "domain_effects": {
@@ -1474,6 +1684,11 @@
         "sampleId",
         "sampleDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": false
+      },
       "default_node_type": "ACTION",
       "description": "Delete BAM after methylation extraction to reclaim storage.",
       "execution_mode": "in_process",
@@ -1495,6 +1710,11 @@
         "sampleDir",
         "reason"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": false
+      },
       "default_node_type": "ACTION",
       "description": "Mark sample QC_FAILED and skip downstream steps when guardrails fail.",
       "domain_effects": {
@@ -1535,6 +1755,11 @@
         "featureIterations",
         "qualityIterations"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Monte Carlo planner: stratified per-cohort subsamples and materialize run projects.",
       "domain_effects": {
@@ -1577,6 +1802,11 @@
         "monteCarloRunsRoot",
         "outputDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Aggregate Monte Carlo DMP/gene stability and write production-ready panels.",
       "domain_effects": {
@@ -1608,6 +1838,11 @@
         "projectPath",
         "runDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "In-process disease CSV + PPI hub biomarker gene pool filter (MC stability).",
       "execution_mode": "in_process",
@@ -1628,6 +1863,11 @@
         "stableDmpCsv",
         "productionOutputDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Write production/project.json with fixed_dmp_panel for granular freeze workflows.",
       "domain_effects": {
@@ -1680,6 +1920,11 @@
         "projectPath",
         "productionOutputDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "After freeze mapper: write mapper_dmp_annotations + frozen gene panel and wire production project.json.",
       "domain_effects": {
@@ -1710,6 +1955,11 @@
       "context_vars": [
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Audit stability, freeze, and progression artifacts before model training.",
       "domain_effects": {
@@ -1741,6 +1991,11 @@
         "targetRunDir",
         "runDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Symlink centroids/detections from a source MC run into a model-mc iteration dir.",
       "domain_effects": {
@@ -1771,6 +2026,11 @@
         "projectPath",
         "bundleDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Build model feature bundle (tabular/generative) from frozen detections.",
       "domain_effects": {
@@ -1804,6 +2064,11 @@
         "bundleH5",
         "outputDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Train tabular or generative backend model for one MC model iteration.",
       "domain_effects": {
@@ -1835,6 +2100,11 @@
         "backend",
         "runDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Predict with tabular or generative backend for one MC model iteration.",
       "domain_effects": {
@@ -1869,6 +2139,11 @@
         "selectionMetric",
         "selectionStat"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Rank model-mc backends and build final production model on all data.",
       "domain_effects": {
@@ -1907,6 +2182,11 @@
         "backends",
         "productionOutputDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Monte Carlo model training across backends, optionally requiring strict reuse of primary centroid/detector artifacts.",
       "domain_effects": {
@@ -1939,6 +2219,11 @@
         "outputDir",
         "productionOutputDir"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Holdout evaluation with frozen production artifacts (predictor-only / frozen inference).",
       "domain_effects": {
@@ -1968,6 +2253,11 @@
       "context_vars": [
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Publish a boolean constant into scope (typed assign helper).",
       "domain_effects": {
@@ -1994,6 +2284,11 @@
       "context_vars": [
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Publish an integer constant into scope (typed assign helper).",
       "domain_effects": {
@@ -2020,6 +2315,11 @@
       "context_vars": [
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Publish a string constant into scope (typed assign helper).",
       "domain_effects": {
@@ -2046,6 +2346,11 @@
       "context_vars": [
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Publish a filesystem path string into scope (typed assign helper).",
       "domain_effects": {
@@ -2072,6 +2377,11 @@
       "context_vars": [
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Extract a boolean from a JSON file via dotted path (typed assign helper).",
       "domain_effects": {
@@ -2098,6 +2408,11 @@
       "context_vars": [
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Extract an integer from a JSON file via dotted path (typed assign helper).",
       "domain_effects": {
@@ -2124,6 +2439,11 @@
       "context_vars": [
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Extract a string from a JSON file via dotted path (typed assign helper).",
       "domain_effects": {
@@ -2150,6 +2470,11 @@
       "context_vars": [
         "projectPath"
       ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
       "default_node_type": "ACTION",
       "description": "Stat a filesystem path; value=exists (mtime included \u2014 CAAS skip may be inappropriate).",
       "domain_effects": {
