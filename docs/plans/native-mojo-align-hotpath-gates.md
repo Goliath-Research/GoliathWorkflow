@@ -1,36 +1,30 @@
 # Native Mojo Align Hotpath — gate status
 
-Companion to [`native-mojo-align-hotpath.plan.md`](native-mojo-align-hotpath.plan.md).
+Companion to [`native-mojo-align-hotpath.plan.md`](native-mojo-align-hotpath.plan.md) and superseding GPU work in [`gpu-native-mojo-giraffe.plan.md`](gpu-native-mojo-giraffe.plan.md).
 
-> **Docs note (2026-08-09):** Pending operator rows below are fleet measurement gates. Living docs already describe native-Mojo GPU Align as the SamplePrep contract (not CPU-only). Clara remains an explicit comparator mode for linear, not an automatic Mojo failure path.
+> **Correction (2026-08-09):** The earlier “native Mojo GPU stream map” cutover was **seed-only DeviceContext** (host window-reduce / mmap HT / gapless). Live Buffy showed ~20 k pairs/s at 0% GPU util. Production now requires **`gpu_ht+gpu_gapless`** ([`gpu-native-mojo-giraffe.plan.md`](gpu-native-mojo-giraffe.plan.md)).
 
 | Gate | Status | Evidence |
 |------|--------|----------|
-| Toy GBZ PE stream map | **PASS** | `tests/test_mojo_stream_map.py`; container MojoGiraffe → `mojo_stream_map` |
-| Mojo dense pack get + cluster | **PASS** | `scripts/smoke_mojo_pack_cluster.mojo` in image `35f97b0f…` (`dense_pack mojo_mmap`) |
-| Dual-map DeviceContext safe | **PASS** (serialized) | `METHYLGRAPHER_DUAL_GRAPH_PARALLEL=0` baked for nvidia/amd; Align prints `parallel_workers=1` |
-| QC BAM off vg fallback | **PASS** | `qc_bam_fallback=error` default for mojo QC; procedure pin |
-| Image `:1.70-mojo` | **PASS** (50-58) | config `sha256:35f97b0f6f2be377dfa46d5fb845a15b3a06d557008684272064d1bf7231f7e4` |
-| Fleet sisters load | **PENDING** operator | sisters cannot SSH from 50-58; run `sister_reload_mojo_align.sh` on each |
-| Full Buffy dual-map ≤ ~2 h | **PENDING** operator | requeue after fleet on `35f97b0f…`; expect `…+mojo_pack+mojo_cluster+mojo_stream` |
+| Toy GBZ PE stream map (CPU) | **PASS** | `device=cpu` → 6 GAF lines + `ri`/`os`/`rc` |
+| Toy GBZ PE GPU-native banner | **PASS** | `device=nvidia` → `seed_backend=…+gpu_ht+gpu_gapless+mojo_stream`; short-read fixture 6 lines |
+| GPU stage timers on longer reads | **PASS** | non-zero `gpu_seed` / `locate` / `cluster_extend` with 80 bp toy FASTQ |
+| Prior seed-only stream map as fleet path | **FAIL / retired** | host-bound; operator-aborted 2026-08-09 |
+| Dual-map DeviceContext safe | **PASS** (serialized) | `METHYLGRAPHER_DUAL_GRAPH_PARALLEL=0` |
+| QC BAM off vg fallback | **PASS** | `qc_bam_fallback=error` |
+| Image `:1.70-mojo` with GPU-native tree | **PASS** (50-58) | config `sha256:520bc5b7c06d9a5e84b02391d35c2400e84b86ba1ad410ee5d8c3b9a4d935fd2`; NFS tar updated |
+| Fleet sisters load | **PENDING** operator | after new digest; Align caps still stripped |
+| Full Buffy dual-map ≤ ~2 h | **PENDING** operator | require `gpu_ht+gpu_gapless` banner + GPU util ≫ 0 |
 | DS20M `graph.methyl` vs `cpu_vg` | **PENDING** operator | `scripts/parity_compare.py` |
 
-## Do not start the +500 sample wave until
+## Do not restore Align caps / ACTIVE until
 
-1. Sisters confirm image id `sha256:35f97b0f…` via `verify_fleet_mojo_image.sh`.
-2. At least one Buffy dual-map finishes ≤ ~2 h with `mojo_stream_map` + `mojo_pack` banners and `parallel_workers=1`.
-3. No Align log shows `host-nvidia-fallback` or `vg.giraffe_qc_bam`.
+1. New image digest on all four GH200s with `gpu_ht+gpu_gapless` path.
+2. At least one Buffy dual-map ≤ ~2 h.
+3. No Align log shows host mmap locate as the GPU production path or `host-nvidia-fallback`.
 
-## Sister verify
+## Kill / hold (ops)
 
-```bash
-bash /work/epimethyl/images/sister_reload_mojo_align.sh
-# expect:
-#   [verify] <host>: OK sha256:35f97b0f6f2be377dfa46d5fb845a15b3a06d557008684272064d1bf7231f7e4
-```
-
-## Ops notes (2026-08-09)
-
-- Killed leftover Align container still on digest `8924a5db…` on 50-58 after cutover.
-- NFS marker: `/work/epimethyl/images/fleet-reload-requested`
-- Urgent note: `/work/epimethyl/images/URGENT_RELOAD_35f97b0f.md`
+- `/work/epimethyl/images/URGENT_KILL_HOST_MOJO.md`
+- `/work/epimethyl/images/fleet-kill-host-mojo-align.sh`
+- Workers 1–4: Align caps stripped; `desired_state=STOPPING` until gates pass.
