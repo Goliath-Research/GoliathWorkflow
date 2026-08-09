@@ -284,7 +284,7 @@ sudo bash …/provision_worker_node.sh \
 | Prerequisite | Script / artifact | Needed for |
 |--------------|-------------------|------------|
 | NVIDIA driver | `nvidia-smi` / [gpu_worker_runbook.md](gpu_worker_runbook.md) | Parabricks, GPU centroids |
-| Host tools | `setup_host.sh --system-deps --gpu` | bedtools (mapper), samtools (QC), fastp (trim), NVRTC |
+| Host tools (per VM, not `/work`) | `install_host_tools_gpu_vm.sh` / `setup_host.sh --system-deps --gpu` + `verify_host_tools.sh` | bedtools (mapper), samtools (WGBS BAM + flagstat), fastp (trim), NVRTC; optional `TMPDIR` on local disk for samtools spill |
 | Docker + NVIDIA Container Toolkit | `setup_gpu_node.sh --docker-data-root /work/epimethyl/docker` | Clara Parabricks container |
 | Parabricks image | Shared layers under `/work/epimethyl/docker`; `env/parabricks.env` | `sample.parabricks_fq2bam` / giraffe |
 | MethylExtractor | `/work/epimethyl/methyl-extractor-<arch>/` | `sample.methyl_extract` |

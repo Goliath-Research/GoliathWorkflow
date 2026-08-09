@@ -37,6 +37,22 @@ GPU_REQUIRED_CAPABILITIES: FrozenSet[str] = frozenset(
     }
 )
 
+# Host OS packages (setup_host.sh --system-deps) — not on shared /work NFS.
+# Align packaging calls samtools on the worker host after Mojo dual-map / QC.
+HOST_SAMTOOLS_CAPABILITIES: FrozenSet[str] = frozenset(
+    {
+        "methylgrapher.wgbs_align",
+        "methylgrapher.wgbs_gpu_align",
+        "methyl-qc",  # optional flagstat path
+    }
+)
+
+HOST_BEDTOOLS_CAPABILITIES: FrozenSet[str] = frozenset(
+    {
+        "methyl-mapper",
+    }
+)
+
 # Probe kinds for catalog-derived auto-detection (not tunable science parameters).
 _PROBE_ALWAYS = "always"
 _PROBE_CLI = "cli"
@@ -147,6 +163,23 @@ def _cli_on_path(binary: str) -> bool:
     return shutil.which(binary) is not None
 
 
+def _host_tools_ok_for(capability: str) -> bool:
+    """True when per-VM apt CLIs required by ``capability`` are on PATH."""
+    if capability in HOST_SAMTOOLS_CAPABILITIES and not _cli_on_path("samtools"):
+        logger.warning(
+            "Omitting %s: samtools not on PATH (run setup_host.sh --system-deps)",
+            capability,
+        )
+        return False
+    if capability in HOST_BEDTOOLS_CAPABILITIES and not _cli_on_path("bedtools"):
+        logger.warning(
+            "Omitting %s: bedtools not on PATH (run setup_host.sh --system-deps)",
+            capability,
+        )
+        return False
+    return True
+
+
 def resolve_worker_capabilities(
     *,
     explicit: Optional[Sequence[str]] = None,
@@ -157,7 +190,8 @@ def resolve_worker_capabilities(
     When ``explicit`` is provided, returns that set (deduplicated). A single ``*`` entry
     means omnibus (matches any task capability at dispatch).
 
-    Otherwise probes GPU, Parabricks, extractor, and installed CLIs from the action catalog.
+    Otherwise probes GPU, Parabricks, extractor, host tools, and installed CLIs from
+    the action catalog.
     """
     if explicit:
         normalized = [str(c).strip() for c in explicit if str(c).strip()]
@@ -172,13 +206,16 @@ def resolve_worker_capabilities(
 
     for capability, kind, cli_tool in _catalog_capability_rows():
         if kind == _PROBE_ALWAYS:
-            caps.add(capability)
+            if _host_tools_ok_for(capability):
+                caps.add(capability)
             continue
         if kind == _PROBE_CLI:
             if not cli_tool or not _cli_on_path(cli_tool):
                 continue
             if capability in GPU_REQUIRED_CAPABILITIES and not gpu:
                 logger.debug("Skipping %s: GPU required but not available", capability)
+                continue
+            if not _host_tools_ok_for(capability):
                 continue
             caps.add(capability)
             continue
@@ -212,7 +249,7 @@ def resolve_worker_capabilities(
 
     # Fleet marker for GH200 dual-graph Align (not a separate action capability).
     # Operators filter enroll / pools by this string when using align_engine=gpu_giraffe.
-    if gpu:
+    if gpu and _host_tools_ok_for("methylgrapher.wgbs_gpu_align"):
         caps.add("methylgrapher.wgbs_gpu_align")
 
     if not caps:
@@ -265,6 +302,17 @@ def assert_node_can_serve_capability(capability: str) -> None:
             "Worker configured for methyl-extract but MethylExtractor is not on PATH. "
             "Set METHYL_EXTRACTOR_BIN or install MethylExtractor."
         )
+    if capability in HOST_SAMTOOLS_CAPABILITIES and not _cli_on_path("samtools"):
+        raise RuntimeError(
+            f"Worker configured for capability {capability!r} but samtools is not on PATH. "
+            "Install per-VM host deps: setup_host.sh --system-deps (or "
+            "install_host_tools_gpu_vm.sh). Shared /work does not provide samtools."
+        )
+    if capability in HOST_BEDTOOLS_CAPABILITIES and not _cli_on_path("bedtools"):
+        raise RuntimeError(
+            f"Worker configured for capability {capability!r} but bedtools is not on PATH. "
+            "Install per-VM host deps: setup_host.sh --system-deps."
+        )
 
 
 def assert_execute_gpu_prereqs(capability: str, action_name: str) -> None:
@@ -277,3 +325,18 @@ def assert_execute_gpu_prereqs(capability: str, action_name: str) -> None:
         f"Action {action_name!r} (capability {capability!r}) requires a GPU but none is available. "
         "Re-register this worker with detected capabilities or move the task to a GPU pool."
     )
+
+
+def assert_execute_host_tool_prereqs(capability: str, action_name: str) -> None:
+    """Execute-time guard for per-VM apt CLIs (samtools/bedtools)."""
+    if capability in HOST_SAMTOOLS_CAPABILITIES and not _cli_on_path("samtools"):
+        raise RuntimeError(
+            f"Action {action_name!r} (capability {capability!r}) requires host samtools. "
+            "Install on this VM: bash …/install_host_tools_gpu_vm.sh "
+            "(setup_host.sh --system-deps). Shared /work does not ship samtools."
+        )
+    if capability in HOST_BEDTOOLS_CAPABILITIES and not _cli_on_path("bedtools"):
+        raise RuntimeError(
+            f"Action {action_name!r} (capability {capability!r}) requires host bedtools. "
+            "Install on this VM: setup_host.sh --system-deps."
+        )

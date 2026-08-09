@@ -135,12 +135,17 @@ def execute_task(
         )
         result = execution_result_from_output(output)
     else:
-        from ..capabilities import assert_execute_gpu_prereqs
+        from ..capabilities import (
+            assert_execute_gpu_prereqs,
+            assert_execute_host_tool_prereqs,
+        )
 
         # Parabricks runners assert GPU after their product-level output short-circuit
         # so idempotent re-entry works on CPU agents. Other GPU actions guard here.
         if not str(capability).startswith("parabricks."):
             assert_execute_gpu_prereqs(capability, action_name)
+        # Per-VM apt CLIs (samtools/bedtools) — shared /work does not provide them.
+        assert_execute_host_tool_prereqs(capability, action_name)
 
         # Resolve via package attribute so tests can monkeypatch
         # ``methyl_worker.handlers.build_action_from_catalog``.

@@ -11,7 +11,8 @@ Related: [production_release.md](production_release.md), [worker_provision.md](w
 | Shared `/work` mounted | `ls /work/epimethyl/current/manifest.json` |
 | NVIDIA driver | `nvidia-smi` |
 | Architecture | `uname -m` → `aarch64` or `x86_64` |
-| Host samtools | `samtools --version` (alignment QC flagstat; from `setup_host.sh --system-deps`) |
+| Host tools (per VM) | `bash …/verify_host_tools.sh` — **samtools**, **bedtools**, **fastp** via `install_host_tools_gpu_vm.sh` / `setup_host.sh --system-deps` (not on `/work` NFS) |
+| samtools TMPDIR | Prefer local disk e.g. `TMPDIR=/var/tmp/methyl-samtools` (faster than NFS spill) |
 
 ## Driver and CUDA matrix (per architecture)
 

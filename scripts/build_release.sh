@@ -145,7 +145,8 @@ build_runtime_bundle() {
   cp -f "$REPO_ROOT/scripts/detect_platform.sh" "$RUNTIME_DIR/scripts/"
   cp -f "$REPO_ROOT/scripts/platform_matrix.env" "$RUNTIME_DIR/scripts/"
   for s in install_release.sh promote_release.sh write_worker_env.sh setup_gpu_node.sh \
-           verify_e2e_node.sh verify_setup.sh verify_parabricks.sh verify_methyl_extractor.sh \
+           verify_e2e_node.sh verify_setup.sh verify_host_tools.sh verify_parabricks.sh verify_methyl_extractor.sh \
+           install_host_tools_gpu_vm.sh \
            register_worker.sh build_release.sh package_methyl_extractor.sh \
            download_methyl_extractor_artifacts.sh assemble_release.sh bootstrap_epimethyl.sh \
            install_gateway_systemd.sh install_worker_systemd.sh \

@@ -42,6 +42,9 @@ run_check() {
 
 run_check "verify_setup" bash "$REPO_ROOT/scripts/verify_setup.sh"
 
+# Per-VM apt tools (samtools/bedtools/fastp) — not provided by shared /work.
+run_check "verify_host_tools" bash "$REPO_ROOT/scripts/verify_host_tools.sh"
+
 if command -v nvidia-smi >/dev/null 2>&1 && [[ -n "${METHYL_PARABRICKS_IMAGE:-}" ]]; then
   run_check "verify_parabricks" bash "$REPO_ROOT/scripts/verify_parabricks.sh"
 else

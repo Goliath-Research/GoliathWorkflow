@@ -69,17 +69,32 @@ Install or upgrade driver per [gpu_worker_runbook.md](gpu_worker_runbook.md) bef
 
 ### 3. Host system dependencies (once per VM)
 
+**`/work` is cluster-once NFS** (epimethyl releases, site, samples, genomes, docker layers).
+It does **not** install OS packages onto each VM. Sisters that only reload a Mojo image
+still need this step or Align fails after dual-map with `FileNotFoundError: samtools`.
+
 ```bash
+# Preferred short path when /work is already promoted:
+sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_host_tools_gpu_vm.sh
+# (also mirrored at /work/epimethyl/images/install_host_tools_gpu_vm.sh)
+
+# Equivalent long form:
 RUNTIME="$(readlink -f /work/epimethyl/current/runtime-bundle)"
 bash "$RUNTIME/scripts/setup_host.sh" \
   --system-deps --gpu \
   --venv /work/epimethyl/venv-$(source "$RUNTIME/scripts/detect_platform.sh" && platform_arch_key) \
   --no-venv
+bash "$RUNTIME/scripts/verify_host_tools.sh"
 ```
 
 Use `--no-venv` if venv already exists on shared storage from promote. Omit `--no-venv` only on first environment bootstrap.
 
-This installs host tools including **bedtools** (MethylMapper), **samtools** (alignment QC flagstat on GPU workers), and **fastp** (SamplePrep trim remediation).
+This installs host tools including **bedtools** (MethylMapper), **samtools** (WGBS BAM
+fixmate/sort/markdup + alignment QC flagstat), and **fastp** (SamplePrep trim remediation).
+
+**Local disk for samtools spill:** sort/markdup are faster on VM HDD/SSD than NFS.
+`install_host_tools_gpu_vm.sh` creates `/var/tmp/methyl-samtools`; set `TMPDIR` to that
+path in `worker.env` (or the systemd unit) so spill files stay off `/work`.
 
 ### 4. Docker + shared data-root (once per VM)
 

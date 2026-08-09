@@ -8,8 +8,10 @@ import pytest
 
 from methyl_worker.capabilities import (
     GPU_REQUIRED_CAPABILITIES,
+    HOST_SAMTOOLS_CAPABILITIES,
     OMNIBUS_WILDCARD,
     assert_execute_gpu_prereqs,
+    assert_execute_host_tool_prereqs,
     assert_node_can_serve_capability,
     capability_requires_gpu,
     resolve_worker_capabilities,
@@ -66,3 +68,32 @@ def test_auto_detect_empty_does_not_become_omnibus() -> None:
         caps = resolve_worker_capabilities()
     assert caps == []
     assert OMNIBUS_WILDCARD not in caps
+
+
+def test_wgbs_align_omitted_without_samtools() -> None:
+    assert "methylgrapher.wgbs_align" in HOST_SAMTOOLS_CAPABILITIES
+
+    def _which(name: str):
+        return None if name == "samtools" else f"/usr/bin/{name}"
+
+    with patch("methyl_worker.capabilities._gpu_available", return_value=True), patch(
+        "methyl_worker.capabilities.shutil.which", side_effect=_which
+    ), patch(
+        "methyl_worker.capabilities._catalog_capability_rows",
+        return_value=[
+            ("methylgrapher.wgbs_align", "always", None),
+            ("validation.plan-iterations", "always", None),
+        ],
+    ):
+        caps = resolve_worker_capabilities()
+    assert "methylgrapher.wgbs_align" not in caps
+    assert "methylgrapher.wgbs_gpu_align" not in caps
+    assert "validation.plan-iterations" in caps
+
+
+def test_assert_execute_host_tool_prereqs_samtools() -> None:
+    with patch("methyl_worker.capabilities._cli_on_path", return_value=False):
+        with pytest.raises(RuntimeError, match="samtools"):
+            assert_execute_host_tool_prereqs(
+                "methylgrapher.wgbs_align", "sample.methylgrapher_wgbs_align"
+            )

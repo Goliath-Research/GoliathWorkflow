@@ -13,14 +13,17 @@ Options:
   --gpu             Install GPU requirements (CUDA 12 profile)
   --no-gpu          Skip GPU requirements (override auto-detect)
   --venv PATH       Create/use a virtualenv at PATH (default: .venv)
-  --no-venv         Do not create or activate a virtualenv
+  --no-venv         Apt/NVRTC only — skip all pip (use when venv already on /work)
+  --with-odbc       Also install msodbcsql18 (dev/bootstrap hosts with Azure SQL only)
   --with-deps       Allow pip to resolve package deps (override --no-deps)
   -h, --help        Show this help
 
 Notes:
   - This script is intended for host installs (not inside Docker).
-  - Most Python dependencies are installed from requirements-pipeline.txt.
-  - Use --gpu to install GPU packages from requirements-gpu-cuda12.txt.
+  - --no-venv is the per-VM join path: install samtools/bedtools/fastp (+ NVRTC)
+    then stop. Do not pip into Debian system Python (breaks on distro wheel/pip).
+  - Shared venv lives under /work/epimethyl/venv-<arch>/ (promote / bootstrap).
+  - Without --no-venv, Python deps come from requirements-pipeline.txt (+ GPU file).
   - If Python headers/build tools are missing, hdbscan is installed only
     when a prebuilt wheel is available; otherwise it is skipped with a warning.
 
@@ -30,9 +33,9 @@ Libraries in use (for verification):
   - Visualization: dash and dash-cytoscape (for optional Cytoscape-style interactive views).
   - GPU: requirements-gpu-cuda12.txt (cupy-cuda12x, cudf-cu12, pylibcudf-cu12, rmm-cu12).
   - System (--system-deps): Python dev, build-essential, hdf5-tools, libhdf5-dev,
-    libzstd-dev, ODBC, bedtools (for MethylMapper), samtools (for alignment QC flagstat),
-    fastp (for SamplePrep trim remediation), librsvg2-bin (rsvg-convert, for Quarto
-    SVG->PDF docs rendering); with GPU, libnvrtc{N} for NVRTC.
+    libzstd-dev, unixodbc-dev, bedtools, samtools, fastp, librsvg2-bin; with GPU,
+    libnvrtc{N}. Production GPU workers do NOT need msodbcsql18 (no SQL on workers);
+    pass --with-odbc only on bootstrap/dev hosts that talk to Azure SQL.
 EOF
 }
 
@@ -47,6 +50,7 @@ SYSTEM_DEPS=0
 GPU_DEPS=0
 NO_GPU=0
 NO_VENV=0
+WITH_ODBC=0
 VENV_DIR=""
 WITH_DEPS=0
 
@@ -57,6 +61,7 @@ while [[ $# -gt 0 ]]; do
     --no-gpu) NO_GPU=1; shift ;;
     --venv) VENV_DIR="${2:-}"; shift 2 ;;
     --no-venv) NO_VENV=1; shift ;;
+    --with-odbc) WITH_ODBC=1; shift ;;
     --with-deps) WITH_DEPS=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown option: $1" ;;
@@ -187,9 +192,13 @@ install_system_deps() {
     fi
   fi
 
+  # Fully noninteractive — never prompt on existing configs/keyrings.
+  export DEBIAN_FRONTEND=noninteractive
+  local apt_i=(apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold")
+
   info "Installing system dependencies (Ubuntu/Debian)..."
   $sudo_cmd apt-get update
-  $sudo_cmd apt-get install -y \
+  $sudo_cmd "${apt_i[@]}" \
     "${python_packages[@]}" \
     python3-pip \
     build-essential \
@@ -206,16 +215,29 @@ install_system_deps() {
     fastp \
     librsvg2-bin
 
-  if ! dpkg -s msodbcsql18 >/dev/null 2>&1; then
-    info "Installing Microsoft ODBC Driver 18..."
-    $sudo_cmd curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | \
-      $sudo_cmd gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/22.04/prod jammy main" | \
-      $sudo_cmd tee /etc/apt/sources.list.d/mssql-release.list >/dev/null
-    $sudo_cmd apt-get update
-    $sudo_cmd ACCEPT_EULA=Y apt-get install -y msodbcsql18
+  # msodbcsql18 is opt-in (--with-odbc). Production GPU workers use gateway HTTPS
+  # and must not need SQL drivers; installing it rewrites Microsoft apt keyrings.
+  if [ "${WITH_ODBC:-0}" -eq 1 ]; then
+    if dpkg -s msodbcsql18 >/dev/null 2>&1; then
+      info "msodbcsql18 already installed."
+    else
+      info "Installing Microsoft ODBC Driver 18 (--with-odbc)..."
+      local keyring=/usr/share/keyrings/microsoft-prod.gpg
+      if [ ! -f "$keyring" ]; then
+        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | \
+          gpg --batch --yes --dearmor | $sudo_cmd tee "$keyring" >/dev/null
+      else
+        info "Leaving existing $keyring unchanged."
+      fi
+      if [ ! -f /etc/apt/sources.list.d/mssql-release.list ]; then
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=$keyring] https://packages.microsoft.com/ubuntu/22.04/prod jammy main" | \
+          $sudo_cmd tee /etc/apt/sources.list.d/mssql-release.list >/dev/null
+      fi
+      $sudo_cmd apt-get update
+      $sudo_cmd env ACCEPT_EULA=Y DEBIAN_FRONTEND=noninteractive "${apt_i[@]}" msodbcsql18
+    fi
   else
-    info "msodbcsql18 already installed."
+    info "Skipping msodbcsql18 (GPU workers: no SQL). Pass --with-odbc on bootstrap/dev hosts only."
   fi
 }
 
@@ -239,6 +261,19 @@ if [ "$GPU_DEPS" -eq 1 ] && [ -z "$CUDA_MAJOR" ]; then
   CUDA_MAJOR="$(detect_cuda_version)" || true
   if [ -z "$CUDA_MAJOR" ]; then CUDA_MAJOR="12"; fi
   info "Using CUDA ${CUDA_MAJOR}.x for GPU requirements."
+fi
+
+# Per-VM join / install_host_tools_gpu_vm.sh: apt packages only. Shared venv is on NFS.
+if [ "$NO_VENV" -eq 1 ]; then
+  if [ "$GPU_DEPS" -eq 1 ]; then
+    CUDA_MAJOR="${CUDA_MAJOR:-12}"
+    if ! install_nvrtc_system_deps "$CUDA_MAJOR"; then
+      warn "libnvrtc.so.${CUDA_MAJOR} not installed; centroid GPU paths may fail until NVRTC is present."
+    fi
+  fi
+  info "Host OS packages done (--no-venv: skipping pip / editable installs)."
+  info "Python worker env: /work/epimethyl/venv-<arch>/ (not system site-packages)."
+  exit 0
 fi
 
 choose_python() {
