@@ -191,4 +191,19 @@ bash "${DOCKER_DIR}/smoke_64k.sh" "${IMAGE}"
 log "done: ${IMAGE}"
 log "Pin via actionConfig.methylgrapher_wgbs.engine=mojo image=${IMAGE}"
 log "ROCm twin: METHYLGRAPHER_MOJO_GPU_VARIANT=rocm METHYLGRAPHER_MOJO_IMAGE_TAG=1.70-mojo-rocm $0"
+
+# Fleet NFS publish: writes tar + BOTH pin files (config Id and OCI manifest Id).
+# Sisters on containerd report the OCI manifest digest as docker image Id; forgetting
+# .image_id.oci is what made enable_fleet_mojo_align.sh refuse a good load.
+if [[ "${METHYL_PUBLISH_FLEET_IMAGE:-0}" == "1" ]]; then
+  PUBLISH_IMAGE="${IMAGE}"
+  if [[ "${GPU_VARIANT}" == "cuda" ]]; then
+    PUBLISH_IMAGE="${METHYL_METHYLGRAPHER_MOJO_IMAGE:-epimethyl/methylgrapher:1.70-mojo}"
+  fi
+  log "METHYL_PUBLISH_FLEET_IMAGE=1 → publishing ${PUBLISH_IMAGE} to NFS"
+  METHYL_METHYLGRAPHER_MOJO_IMAGE="${PUBLISH_IMAGE}" \
+    bash "${SCRIPT_DIR}/publish_methylgrapher_mojo_fleet_image.sh"
+else
+  log "fleet publish skipped (set METHYL_PUBLISH_FLEET_IMAGE=1 to write NFS tar + .image_id[.oci])"
+fi
 # Leave staged engine for inspect; CI may clean.
