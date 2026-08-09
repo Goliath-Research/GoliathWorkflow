@@ -202,6 +202,8 @@ class GatewayDb(Protocol):
         cli_tool: Optional[str] = None,
         in_process_handler: Optional[str] = None,
         argv_map: Optional[dict[str, Any]] = None,
+        max_per_worker: Optional[int] = None,
+        exclusive_worker: bool = False,
     ) -> None: ...
 
     def upsert_action_schema(
@@ -359,6 +361,8 @@ class GatewayDbBase(ABC):
         cli_tool: Optional[str] = None,
         in_process_handler: Optional[str] = None,
         argv_map: Optional[dict[str, Any]] = None,
+        max_per_worker: Optional[int] = None,
+        exclusive_worker: bool = False,
     ) -> None: ...
 
     @abstractmethod

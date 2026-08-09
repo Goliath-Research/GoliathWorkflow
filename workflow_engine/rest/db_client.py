@@ -212,6 +212,8 @@ def upsert_workflow_action(
     cli_tool: Optional[str] = None,
     in_process_handler: Optional[str] = None,
     argv_map: Optional[dict[str, Any]] = None,
+    max_per_worker: Optional[int] = None,
+    exclusive_worker: bool = False,
 ) -> None:
     with _use_db(db_or_dsn) as db:
         db.upsert_workflow_action(
@@ -222,6 +224,8 @@ def upsert_workflow_action(
             cli_tool=cli_tool,
             in_process_handler=in_process_handler,
             argv_map=argv_map,
+            max_per_worker=max_per_worker,
+            exclusive_worker=exclusive_worker,
         )
 
 

@@ -54,6 +54,24 @@ Each catalog entry exports a `control` object (defaults: no pause/continue,
 Destructive finalize actions use `CONTROL_DRAIN_ONLY` (`can_stop=false`).
 See [constrained-worker-ops-actions.md](constrained-worker-ops-actions.md).
 
+## Claim concurrency metadata (`dispatch`)
+
+Full-node / scarce-resource actions declare claim constraints on the catalog
+(not in DomainPrograms and not as hard-wired engine policy):
+
+```json
+"dispatch": { "max_per_worker": 1, "exclusive_worker": true }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `max_per_worker` | Max concurrent live leases of **this** action on one worker (`null` = unlimited) |
+| `exclusive_worker` | While leased, the worker accepts **no** other claim |
+
+Seeded onto `wf.workflow_action` (`wf_action_dispatch_concurrency.sql`).
+`sp_worker_request_task` enforces these columns generically. Example:
+`sample.methylgrapher_wgbs_align` uses `DISPATCH_EXCLUSIVE_ONE`.
+
 ## Adding a new process action
 
 1. Add Pydantic task I/O models and an `ACTION_CATALOG` entry (set `control=` when

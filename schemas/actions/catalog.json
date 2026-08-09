@@ -819,6 +819,10 @@
       },
       "default_node_type": "ACTION",
       "description": "Align WGBS FASTQs with methylGrapher dual C2T/G2A graphs and emit QC-compatible GRCh38 BAM.",
+      "dispatch": {
+        "exclusive_worker": true,
+        "max_per_worker": 1
+      },
       "domain_effects": {
         "output_bindings": [
           {

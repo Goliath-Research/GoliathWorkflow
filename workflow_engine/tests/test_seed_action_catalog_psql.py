@@ -15,7 +15,7 @@ seed_mod = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(seed_mod)
 
 
-def test_upsert_action_psql_emits_seven_arg_call() -> None:
+def test_upsert_action_psql_emits_nine_arg_call() -> None:
     captured: list[str] = []
 
     def fake_exec(dsn: str, sql: str) -> None:
@@ -31,6 +31,8 @@ def test_upsert_action_psql_emits_seven_arg_call() -> None:
             cli_tool="methyl-centroid",
             in_process_handler=None,
             argv_map={"project": "--project", "outputDir": "--output-dir"},
+            max_per_worker=None,
+            exclusive_worker=False,
         )
 
     assert len(captured) == 1
@@ -39,9 +41,32 @@ def test_upsert_action_psql_emits_seven_arg_call() -> None:
     assert "'pipeline.centroid'" in sql
     assert "'methyl-centroid'" in sql
     assert "'cli'" in sql
-    assert "NULL" in sql  # in_process_handler
+    assert "NULL" in sql  # in_process_handler / max_per_worker
     assert "::jsonb" in sql
-    assert sql.count(",") >= 6
+    assert sql.rstrip().endswith("false);")
+    assert sql.count(",") >= 8
+
+
+def test_upsert_action_psql_exclusive_dispatch() -> None:
+    captured: list[str] = []
+
+    with patch.object(seed_mod, "_exec_psql", side_effect=lambda dsn, sql: captured.append(sql)):
+        seed_mod._upsert_action_psql(
+            "postgresql://localhost/test",
+            "sample.methylgrapher_wgbs_align",
+            "methylgrapher.wgbs_align",
+            "sample.methylgrapher_wgbs_align",
+            execution_mode="in_process",
+            cli_tool=None,
+            in_process_handler="_handle_methylgrapher_wgbs_align",
+            argv_map=None,
+            max_per_worker=1,
+            exclusive_worker=True,
+        )
+
+    sql = captured[0]
+    assert "'_handle_methylgrapher_wgbs_align'" in sql
+    assert ", 1, true);" in sql
 
 
 def test_upsert_action_psql_null_dispatch_fields() -> None:
@@ -62,4 +87,4 @@ def test_upsert_action_psql_null_dispatch_fields() -> None:
     sql = captured[0]
     assert "'_handle_validation_biomarker_filter'" in sql
     assert "'in_process'" in sql
-    assert sql.rstrip().endswith("NULL);")
+    assert sql.rstrip().endswith("false);")

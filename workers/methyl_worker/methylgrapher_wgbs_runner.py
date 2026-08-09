@@ -367,6 +367,9 @@ def _gpu_align_lock(device: str) -> Iterator[None]:
 
     Host flock path is local (not NFS) so sisters do not block each other.
     CPU Align skips the lock.
+
+    Catalog ``dispatch.exclusive_worker`` / ``max_per_worker`` gate claims in
+    ``wf.sp_worker_request_task``; this flock covers local races / orphans.
     """
     dev = (device or "").strip().lower()
     if dev not in {"nvidia", "cuda", "amd", "hip", "rocm"}:
@@ -381,6 +384,42 @@ def _gpu_align_lock(device: str) -> Iterator[None]:
         logger.info("Acquiring GPU Align flock %s (device=%s)", lock_path, dev)
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
         try:
+            # Fail closed if another Align container is already on this GPU.
+            # (Restart orphans can outlive the previous worker process.)
+            try:
+                import subprocess
+
+                ps = subprocess.run(
+                    [
+                        _docker_bin(),
+                        "ps",
+                        "--format",
+                        "{{.ID}}\t{{.Image}}\t{{.Command}}",
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                others = []
+                for ln in (ps.stdout or "").splitlines():
+                    parts = ln.split("\t", 2)
+                    if len(parts) < 3:
+                        continue
+                    image, cmd = parts[1], parts[2]
+                    if "methylgrapher" in image.lower() and "Align" in cmd:
+                        others.append(ln.strip())
+                if others:
+                    raise RuntimeError(
+                        "GPU Align flock held but another methylgrapher Align "
+                        f"container is already running on this host: {others[0]!r}. "
+                        "Kill the orphan container before retrying "
+                        "(one Align per GH200)."
+                    )
+            except RuntimeError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — best-effort orphan probe
+                logger.warning("GPU Align orphan probe skipped: %s", exc)
             fh.seek(0)
             fh.truncate()
             fh.write(f"pid={os.getpid()}\ndevice={dev}\n")

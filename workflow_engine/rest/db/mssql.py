@@ -552,13 +552,16 @@ SELECT @deleted_instance_count AS deleted_instance_count,
         cli_tool: Optional[str] = None,
         in_process_handler: Optional[str] = None,
         argv_map: Optional[dict[str, Any]] = None,
+        max_per_worker: Optional[int] = None,
+        exclusive_worker: bool = False,
     ) -> None:
         self._exec_proc(
             f"{_declare_json('argv')}"
             f"EXEC {self._qual('wf_repo_upsert_workflow_action')} "
             "@action_name=?, @capability=?, @payload_schema_ref=?, "
             "@execution_mode=?, @cli_tool=?, @in_process_handler=?, "
-            f"@argv_map={_json_var('argv')}",
+            f"@argv_map={_json_var('argv')}, "
+            "@max_per_worker=?, @exclusive_worker=?",
             (
                 _json_text(argv_map),
                 action_name,
@@ -567,6 +570,8 @@ SELECT @deleted_instance_count AS deleted_instance_count,
                 execution_mode,
                 cli_tool,
                 in_process_handler,
+                max_per_worker,
+                1 if exclusive_worker else 0,
             ),
         )
 

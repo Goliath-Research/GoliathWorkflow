@@ -59,17 +59,18 @@ SCRIPTS=(
   08_foreach_support.sql
   wf_reclaim_expired_leases.sql
   wf_worker_desired_state.sql
+  02_repository_api.sql
+  wf_action_schema.sql
+  wf_repo_upsert_workflow_action.sql
+  wf_action_dispatch_metadata.sql
+  wf_action_dispatch_concurrency.sql
   01_worker_api.sql
   wf_cluster_security_columns.sql
   wf_worker_enrollment.sql
   portal_worker_enrollment_api.sql
-  02_repository_api.sql
   wf_apply_validation_plan.sql
   wf_execution_scope.sql
   04_admin.sql
-  wf_action_schema.sql
-  wf_repo_upsert_workflow_action.sql
-  wf_action_dispatch_metadata.sql
   wf_repo_create_workflow_graph.sql
   wf_sql_collection_bindings.sql
   portal_workflow_api.sql

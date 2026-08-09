@@ -162,6 +162,32 @@ BEGIN
         RETURN;
     END
 
+    -- Catalog dispatch: exclusive_worker action already leased → no further claims.
+    IF EXISTS (
+        SELECT 1
+        FROM wf.task_lease AS tl
+        INNER JOIN wf.node_execution AS ne ON ne.id = tl.node_execution_id
+        INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
+        INNER JOIN wf.workflow_action AS wa ON wa.id = wn.workflow_action_id
+        WHERE tl.worker_id = @worker_id
+          AND tl.lease_expires_at_utc > @now
+          AND ISNULL(wa.exclusive_worker, 0) = 1
+    )
+    BEGIN
+        SELECT
+            CAST(NULL AS BIGINT) AS node_execution_id,
+            CAST(NULL AS BIGINT) AS workflow_instance_id,
+            CAST(NULL AS NVARCHAR(256)) AS node_key,
+            CAST(NULL AS NVARCHAR(256)) AS action_name,
+            CAST(NULL AS NVARCHAR(128)) AS capability,
+            CAST(NULL AS INT) AS attempt_no,
+            CAST(NULL AS json) AS input_json,
+            CAST(NULL AS INT) AS iteration_no,
+            @desired_state AS desired_state,
+            @command AS command;
+        RETURN;
+    END
+
     SET @is_omnibus = wf.wf_worker_is_omnibus(@worker_capabilities);
 
     IF @capability IS NOT NULL
@@ -201,6 +227,29 @@ BEGIN
               @capability IS NULL
               OR wa.capability = @capability
               OR wa.capability IS NULL
+          )
+          -- exclusive_worker candidate requires an idle worker (no live leases).
+          AND (
+              ISNULL(wa.exclusive_worker, 0) = 0
+              OR NOT EXISTS (
+                  SELECT 1
+                  FROM wf.task_lease AS tl_idle
+                  WHERE tl_idle.worker_id = @worker_id
+                    AND tl_idle.lease_expires_at_utc > @now
+              )
+          )
+          -- max_per_worker: cap concurrent leases of this action on the worker.
+          AND (
+              wa.max_per_worker IS NULL
+              OR (
+                  SELECT COUNT(*)
+                  FROM wf.task_lease AS tl_cap
+                  INNER JOIN wf.node_execution AS ne_cap ON ne_cap.id = tl_cap.node_execution_id
+                  INNER JOIN wf.workflow_node AS wn_cap ON wn_cap.id = ne_cap.workflow_node_id
+                  WHERE tl_cap.worker_id = @worker_id
+                    AND tl_cap.lease_expires_at_utc > @now
+                    AND wn_cap.workflow_action_id = wa.id
+              ) < wa.max_per_worker
           )
         ORDER BY ne.available_at_utc ASC, ne.id ASC
     )

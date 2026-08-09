@@ -7,11 +7,15 @@ from typing import Any, Callable, Dict, List
 
 def _dispatch_fields(action: dict[str, Any]) -> dict[str, Any]:
     argv_map = action.get("argv_map")
+    dispatch = action.get("dispatch") if isinstance(action.get("dispatch"), dict) else {}
+    max_per_worker = dispatch.get("max_per_worker")
     return {
         "execution_mode": action.get("execution_mode"),
         "cli_tool": action.get("cli_tool"),
         "in_process_handler": action.get("in_process_handler"),
         "argv_map": dict(argv_map) if isinstance(argv_map, dict) else None,
+        "max_per_worker": int(max_per_worker) if max_per_worker is not None else None,
+        "exclusive_worker": bool(dispatch.get("exclusive_worker", False)),
     }
 
 

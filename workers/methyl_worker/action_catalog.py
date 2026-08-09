@@ -176,6 +176,32 @@ CONTROL_STOPPABLE = ActionControl(can_pause=False, can_continue=False, can_stop=
 CONTROL_DRAIN_ONLY = ActionControl(can_pause=False, can_continue=False, can_stop=False)
 
 
+@dataclass(frozen=True)
+class ActionDispatch:
+    """Claim-time scheduling constraints (catalog SoT → ``wf.workflow_action``).
+
+    The workflow engine enforces these generically; it does not interpret
+    science/action names. Seeded via ``dispatch`` on the action catalog.
+    """
+
+    max_per_worker: Optional[int] = None
+    exclusive_worker: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        out: Dict[str, Any] = {}
+        if self.max_per_worker is not None:
+            out["max_per_worker"] = int(self.max_per_worker)
+        if self.exclusive_worker:
+            out["exclusive_worker"] = True
+        return out
+
+
+DEFAULT_ACTION_DISPATCH = ActionDispatch()
+# Full-worker actions (e.g. single-GPU Align): at most one on a worker, and no
+# concurrent sibling claims while leased.
+DISPATCH_EXCLUSIVE_ONE = ActionDispatch(max_per_worker=1, exclusive_worker=True)
+
+
 class ActionCatalogExport(TypedDict, total=False):
     action_name: str
     capability: str
@@ -194,6 +220,7 @@ class ActionCatalogExport(TypedDict, total=False):
     tool: str
     domain_effects: Dict[str, Any]
     control: Dict[str, bool]
+    dispatch: Dict[str, Any]
     idempotency_enabled: bool
     idempotency_opt_out_reason: str
 
@@ -223,6 +250,7 @@ class ActionCatalogEntry:
     internal: bool = False
     domain_effects: Optional[DomainEffects] = None
     control: ActionControl = DEFAULT_ACTION_CONTROL
+    dispatch: ActionDispatch = DEFAULT_ACTION_DISPATCH
 
     def __post_init__(self) -> None:
         errors = list(_entry_invariant_errors(self))
@@ -307,6 +335,9 @@ class ActionCatalogEntry:
                 ],
             }
         payload["control"] = self.control.to_dict()
+        dispatch_payload = self.dispatch.to_dict()
+        if dispatch_payload:
+            payload["dispatch"] = dispatch_payload
         # Effective eligibility (default-on with explicit opt-outs).
         payload["idempotency_enabled"] = idempotency_enabled_for(self)
         reason = idempotency_opt_out_reason_for(self)
@@ -521,6 +552,7 @@ def _entry(
     idempotency_opt_out_reason: Optional[str] = None,
     domain_effects: Optional[DomainEffects] = None,
     control: ActionControl = DEFAULT_ACTION_CONTROL,
+    dispatch: ActionDispatch = DEFAULT_ACTION_DISPATCH,
     internal: bool = False,
 ) -> ActionCatalogEntry:
     return ActionCatalogEntry(
@@ -544,6 +576,7 @@ def _entry(
         idempotency_opt_out_reason=idempotency_opt_out_reason,
         domain_effects=domain_effects,
         control=control,
+        dispatch=dispatch,
         internal=internal,
     )
 
@@ -566,6 +599,7 @@ def _cli(
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     domain_effects: Optional[DomainEffects] = None,
     control: ActionControl = DEFAULT_ACTION_CONTROL,
+    dispatch: ActionDispatch = DEFAULT_ACTION_DISPATCH,
     idempotency_enabled: bool = False,
     idempotency_opt_out_reason: Optional[str] = None,
     internal: bool = False,
@@ -588,6 +622,7 @@ def _cli(
         argv_map=argv_map,
         domain_effects=domain_effects,
         control=control,
+        dispatch=dispatch,
         idempotency_enabled=idempotency_enabled,
         idempotency_opt_out_reason=idempotency_opt_out_reason,
         internal=internal,
@@ -612,6 +647,7 @@ def _in_process(
     context_vars: ContextVars = (),
     domain_effects: Optional[DomainEffects] = None,
     control: ActionControl = DEFAULT_ACTION_CONTROL,
+    dispatch: ActionDispatch = DEFAULT_ACTION_DISPATCH,
     idempotency_enabled: bool = False,
     idempotency_opt_out_reason: Optional[str] = None,
     internal: bool = False,
@@ -635,6 +671,7 @@ def _in_process(
         argv_map=(),
         domain_effects=domain_effects,
         control=control,
+        dispatch=dispatch,
         idempotency_enabled=idempotency_enabled,
         idempotency_opt_out_reason=idempotency_opt_out_reason,
         internal=internal,
@@ -973,6 +1010,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         domain_effects=_DE_PARABRICKS,
         action_config_key="methylgrapher_wgbs",
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_EXCLUSIVE_ONE,
     ),
     _in_process(
         "sample.parabricks_rna_fq2bam",

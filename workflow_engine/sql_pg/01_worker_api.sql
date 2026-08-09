@@ -158,6 +158,23 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Catalog dispatch: exclusive_worker action already leased → no further claims.
+  IF EXISTS (
+    SELECT 1
+    FROM wf.task_lease AS tl
+    INNER JOIN wf.node_execution AS ne ON ne.id = tl.node_execution_id
+    INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
+    INNER JOIN wf.workflow_action AS wa ON wa.id = wn.workflow_action_id
+    WHERE tl.worker_id = p_worker_id
+      AND tl.lease_expires_at_utc > v_now
+      AND coalesce(wa.exclusive_worker, false)
+  ) THEN
+    RETURN QUERY SELECT
+      NULL::bigint, NULL::bigint, NULL::text, NULL::text, NULL::text,
+      NULL::int, NULL::jsonb, NULL::int, v_desired_state, v_command;
+    RETURN;
+  END IF;
+
   v_is_omnibus := wf.wf_worker_is_omnibus(v_worker_capabilities);
 
   IF p_capability IS NOT NULL
@@ -184,6 +201,29 @@ BEGIN
         p_capability IS NULL
         OR wa.capability = p_capability
         OR wa.capability IS NULL
+      )
+      -- exclusive_worker candidate requires an idle worker (no live leases).
+      AND (
+        NOT coalesce(wa.exclusive_worker, false)
+        OR NOT EXISTS (
+          SELECT 1
+          FROM wf.task_lease AS tl_idle
+          WHERE tl_idle.worker_id = p_worker_id
+            AND tl_idle.lease_expires_at_utc > v_now
+        )
+      )
+      -- max_per_worker: cap concurrent leases of this action on the worker.
+      AND (
+        wa.max_per_worker IS NULL
+        OR (
+          SELECT COUNT(*)
+          FROM wf.task_lease AS tl_cap
+          INNER JOIN wf.node_execution AS ne_cap ON ne_cap.id = tl_cap.node_execution_id
+          INNER JOIN wf.workflow_node AS wn_cap ON wn_cap.id = ne_cap.workflow_node_id
+          WHERE tl_cap.worker_id = p_worker_id
+            AND tl_cap.lease_expires_at_utc > v_now
+            AND wn_cap.workflow_action_id = wa.id
+        ) < wa.max_per_worker
       )
     ORDER BY ne.available_at_utc ASC NULLS FIRST, ne.id ASC
     LIMIT 1

@@ -79,18 +79,23 @@ def _upsert_action_psql(
     cli_tool: str | None = None,
     in_process_handler: str | None = None,
     argv_map: dict | None = None,
+    max_per_worker: int | None = None,
+    exclusive_worker: bool = False,
 ) -> None:
-    """Upsert via 7-arg ``wf_repo_upsert_workflow_action`` (dispatch metadata)."""
+    """Upsert via 9-arg ``wf_repo_upsert_workflow_action`` (dispatch metadata + concurrency)."""
     cap = _sql_literal(capability) if capability else "NULL"
     ref = _sql_literal(payload_schema_ref) if payload_schema_ref else "NULL"
     mode = _sql_literal(execution_mode) if execution_mode else "NULL"
     tool = _sql_literal(cli_tool) if cli_tool else "NULL"
     handler = _sql_literal(in_process_handler) if in_process_handler else "NULL"
     argv = _json_literal(argv_map) if isinstance(argv_map, dict) else "NULL"
+    max_pw = str(int(max_per_worker)) if max_per_worker is not None else "NULL"
+    excl = "true" if exclusive_worker else "false"
     _exec_psql(
         dsn,
         "CALL wf.wf_repo_upsert_workflow_action("
-        f"{_sql_literal(action_name)}, {cap}, {ref}, {mode}, {tool}, {handler}, {argv});",
+        f"{_sql_literal(action_name)}, {cap}, {ref}, {mode}, {tool}, {handler}, {argv}, "
+        f"{max_pw}, {excl});",
     )
 
 
@@ -123,6 +128,8 @@ def _seed_via_db() -> tuple[int, int]:
 
         action_count = 0
         for action in actions:
+            dispatch = action.get("dispatch") if isinstance(action.get("dispatch"), dict) else {}
+            max_per_worker = dispatch.get("max_per_worker")
             upsert_workflow_action(
                 db,
                 str(action["action_name"]),
@@ -132,6 +139,8 @@ def _seed_via_db() -> tuple[int, int]:
                 cli_tool=action.get("cli_tool"),
                 in_process_handler=action.get("in_process_handler"),
                 argv_map=action.get("argv_map") if isinstance(action.get("argv_map"), dict) else None,
+                max_per_worker=int(max_per_worker) if max_per_worker is not None else None,
+                exclusive_worker=bool(dispatch.get("exclusive_worker", False)),
             )
             action_count += 1
             print(f"Upserted action {action['action_name']}")
@@ -168,6 +177,8 @@ def _seed_via_psql(dsn: str) -> tuple[int, int]:
 
     action_count = 0
     for action in actions:
+        dispatch = action.get("dispatch") if isinstance(action.get("dispatch"), dict) else {}
+        max_per_worker = dispatch.get("max_per_worker")
         _upsert_action_psql(
             dsn,
             str(action["action_name"]),
@@ -177,6 +188,8 @@ def _seed_via_psql(dsn: str) -> tuple[int, int]:
             cli_tool=action.get("cli_tool"),
             in_process_handler=action.get("in_process_handler"),
             argv_map=action.get("argv_map") if isinstance(action.get("argv_map"), dict) else None,
+            max_per_worker=int(max_per_worker) if max_per_worker is not None else None,
+            exclusive_worker=bool(dispatch.get("exclusive_worker", False)),
         )
         action_count += 1
         print(f"Upserted action {action['action_name']}")
@@ -211,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "PostgreSQL DSN only (skip gateway env; uses psql). "
-            "Requires wf_action_dispatch_metadata.sql so the 7-arg upsert exists."
+            "Requires wf_action_dispatch_concurrency.sql so the 9-arg upsert exists."
         ),
     )
     parser.add_argument(

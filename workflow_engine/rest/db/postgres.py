@@ -464,9 +464,12 @@ class PostgresGatewayDb(GatewayDbBase):
         cli_tool: Optional[str] = None,
         in_process_handler: Optional[str] = None,
         argv_map: Optional[dict[str, Any]] = None,
+        max_per_worker: Optional[int] = None,
+        exclusive_worker: bool = False,
     ) -> None:
         self._exec_proc(
-            f"CALL {self._qual('wf_repo_upsert_workflow_action')}(%s, %s, %s, %s, %s, %s, %s::jsonb)",
+            f"CALL {self._qual('wf_repo_upsert_workflow_action')}"
+            "(%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)",
             (
                 action_name,
                 capability,
@@ -475,6 +478,8 @@ class PostgresGatewayDb(GatewayDbBase):
                 cli_tool,
                 in_process_handler,
                 json.dumps(argv_map) if argv_map is not None else None,
+                max_per_worker,
+                exclusive_worker,
             ),
         )
 

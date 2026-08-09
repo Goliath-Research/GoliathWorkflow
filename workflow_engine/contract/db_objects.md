@@ -96,8 +96,8 @@ Dialect-neutral wrappers used by the REST gateway — see `db_objects.yaml` `rep
 |--------|---------|
 | `wf.wf_repo_upsert_action_schema` | Upsert input/output JSON Schema for a workflow action |
 | `wf.wf_repo_get_action_schema` | Fetch one schema document by action name + direction |
-| `wf.wf_repo_list_actions` | List actions with schema availability + dispatch metadata (`execution_mode`, `cli_tool`, `in_process_handler`, `argv_map`) |
-| `wf.wf_repo_upsert_workflow_action` | Upsert `wf.workflow_action` row from action catalog (7-arg after `wf_action_dispatch_metadata.sql`) |
+| `wf.wf_repo_list_actions` | List actions with schema availability + dispatch metadata (`execution_mode`, `cli_tool`, `in_process_handler`, `argv_map`, `max_per_worker`, `exclusive_worker`) |
+| `wf.wf_repo_upsert_workflow_action` | Upsert `wf.workflow_action` row from action catalog (9-arg after `wf_action_dispatch_concurrency.sql`) |
 | `wf.wf_repo_create_workflow_graph` | Create workflow def/version/nodes/edges from JSON spec |
 | `wf.wf_repo_get_workflow_instance` | Fetch instance id, version, and status by instance id |
 | `wf.wf_repo_create_workflow_instance` | Insert instance row; returns `id` |

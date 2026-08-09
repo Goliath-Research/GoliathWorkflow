@@ -86,11 +86,12 @@ SCRIPTS=(
   wf_cluster_security_columns.sql
   wf_worker_enrollment.sql
   wf_worker_capability_dispatch.sql
-  wf_worker_desired_state.sql
-  portal_worker_enrollment_api.sql
   wf_action_schema.sql
   wf_repo_upsert_workflow_action.sql
   wf_action_dispatch_metadata.sql
+  wf_action_dispatch_concurrency.sql
+  wf_worker_desired_state.sql
+  portal_worker_enrollment_api.sql
   wf_repo_create_workflow_graph.sql
   wf_apply_validation_plan.sql
   wf_execution_scope.sql

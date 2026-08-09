@@ -51,7 +51,7 @@ Applies parity scripts in dependency order, including:
 - Portal DDL (`portal_workflow_api.sql`, `portal_resource_profile.sql` after `cfg` tables — seeds archive endpoint refs)
 - Config registry (`cfg_*`, including `cfg_portal_api.sql` storage/credential procs)
 
-`wf_repo_upsert_workflow_action.sql` is a 3-arg bootstrap; `wf_action_dispatch_metadata.sql` (applied next) replaces it with the 7-arg upsert that stores `execution_mode` / `cli_tool` / `in_process_handler` / `argv_map`.
+`wf_repo_upsert_workflow_action.sql` is a 3-arg bootstrap; `wf_action_dispatch_metadata.sql` widens it to 7-arg (`execution_mode` / `cli_tool` / `in_process_handler` / `argv_map`); `wf_action_dispatch_concurrency.sql` widens to 9-arg (`max_per_worker` / `exclusive_worker` from catalog `dispatch`).
 
 ## Lightweight action seed (legacy)
 
