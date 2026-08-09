@@ -16,30 +16,32 @@ footer: "Confidential · Sales briefing"
 <p class="kicker">Commercial briefing</p>
 <p class="big">From discovery scripts to auditor-ready evidence — without rebuilding your stack for every assay.</p>
 
-<!-- Open with the pain: FDA path is slow, leaky, and documentation-heavy. -->
-
 ---
 
 <!-- _class: invert -->
 
 ## The problem buyers already feel
 
-- Biomarker → authorization (**510(k)** / **De Novo** / **PMA**, plus **CLIA**/LDT) is historically **slow**.
-- Validation fails quietly: train/holdout **leakage**, ad hoc notebooks, unreproducible “final” runs.
-- Audits bottleneck on **documentation**, not just science.
-- Every new omics modality or indication tends to become a **new product stack**.
+| Failure mode | What happens today |
+|--------------|-------------------|
+| Slow path to market | Biomarker → **510(k)** / **De Novo** / **PMA** (+ **CLIA**) stalls on process, not only science |
+| Quiet validation failure | Train/holdout **leakage**, notebooks, unreproducible “final” runs |
+| Audit bottleneck | Documentation debt — not missing compute |
+| Modality sprawl | Each omics or indication becomes a **new product stack** |
 
-> MethylPipeline is built to shrink those failure modes — with config-first science, partition discipline, and submission scaffolds.
+> MethylPipeline shrinks those modes with config-first science, partition discipline, and submission scaffolds.
 
 ---
 
-## Claim boundary (say this early)
+## Claim boundary
 
-> The platform **enforces process and configuration controls** and **assembles evidence packages**. Architecture, SaMD profiles, and filled feasibility packages are **not** FDA clearance or approval.
+> The platform **enforces process and configuration controls** and **assembles evidence packages**. Architecture and SaMD profiles are **not** FDA clearance or approval.
 
-- Novel diagnostics may need **De Novo** or **PMA**, not only a predicate **510(k)**.
-- Laboratory deployment may also implicate **CLIA**.
-- We shorten the **software + validation process** path — we do **not** choose or guarantee the regulatory pathway.
+| We do | We do not |
+|-------|-----------|
+| Shorten the software + validation process path | Choose or guarantee the regulatory pathway |
+| Lock partitions, configs, and provenance | Replace clinical judgment or predicate strategy |
+| Stage clinical-performance claim gates | Imply every assay is a simple 510(k) |
 
 ---
 
@@ -47,7 +49,7 @@ footer: "Confidential · Sales briefing"
 
 # Positioning
 
-## Regulatory-Ready Platform for Multiomics Diagnostics
+## Control plane + process packs + application packs
 
 Bridges **bioinformatics R&D engineering** and **regulatory / quality readiness**.
 
@@ -58,15 +60,15 @@ Bridges **bioinformatics R&D engineering** and **regulatory / quality readiness*
 <div class="cards">
   <div class="card">
     <h3>1. R&amp;D agility</h3>
-    <p>New cohorts, modeling backends (ECDF, tabular sklearn, covariates), and cell-type estimation (Houseman / HiTIMED) via <strong>configuration</strong> — not ad hoc scripts.</p>
+    <p>Cohorts, ECDF / tabular models, covariates, Houseman / HiTIMED — via <strong>configuration</strong>, not ad hoc scripts.</p>
   </div>
   <div class="card sky">
     <h3>2. Cloud efficiency</h3>
-    <p>Cluster-parallel workers + <strong>CAAS</strong> skip redundant alignment/extraction when only downstream science changes — lower VM cost on large cohorts.</p>
+    <p>Capability-matched workers + <strong>CAAS</strong> skip alignment when only downstream science changes.</p>
   </div>
   <div class="card amber">
     <h3>3. SaMD controls</h3>
-    <p>Guard against statistical contamination, stage clinical-performance claims, and auto-assemble regulatory <strong>evidence scaffolds</strong>.</p>
+    <p>Partition discipline, staged clinical-performance claims, and auto-assembled <strong>evidence scaffolds</strong>.</p>
   </div>
 </div>
 
@@ -74,45 +76,60 @@ Bridges **bioinformatics R&D engineering** and **regulatory / quality readiness*
 
 <!-- _class: invert -->
 
-## The product is a control plane — not one assay
+## What buyers actually purchase
 
-Buyers purchase:
+| Layer | What it is |
+|-------|------------|
+| **1. Execution platform** | DomainProgram IR, typed actions, cfg/wf registry, portal, gateway, CAAS, fleet control |
+| **2. Process packs** | Modality science — methylation WGBS, RNA-Seq, proteomics |
+| **3. Application packs** | Indication / trait overlays as **config** on an existing process |
 
-1. **Execution platform** — DomainProgram language, typed actions, cfg/wf registry, portal, gateway workers, CAAS
-2. **Process packs** — omics modalities (methylation, RNA-Seq, proteomics)
-3. **Application packs** — indication/trait overlays as **config** on an existing process
-
-<span class="pill">Disease-agnostic</span> <span class="pill">Analyte-extensible</span> <span class="pill">Operator-configurable</span>
+<span class="pill">Disease-agnostic</span>
+<span class="pill">Analyte-extensible</span>
+<span class="pill">Operator-configurable</span>
+<span class="pill">Config not code</span>
 
 ---
 
 ## DomainProgram: declare the science once
 
-<p class="kicker">Language power</p>
+```mermaid
+%% mp:interactive
+flowchart LR
+  DP["DomainProgram<br/>versioned typed IR"] --> COMP["Compiler"]
+  COMP --> LOCAL["Local engine"]
+  COMP --> DB["wf.workflow_def<br/>Azure SQL / PostgreSQL"]
+  DB --> GW["Gateway"]
+  GW --> W["Workers claim tasks"]
+  CFG["Site · Profile · Instance<br/>actionConfig"] --> BAKE["resolvedConfig<br/>baked at start"]
+  BAKE --> W
+```
 
-- A **DomainProgram** is a versioned, typed workflow IR — not a shell script farm.
-- Compiles into schedulable graphs for **local** or **distributed** workers.
-- Same language expresses SamplePrep, Monte Carlo stability, freeze, model selection, and holdout gates.
-- Operators change **topology and parameters through config layers** — workers execute baked `resolvedConfig`.
-
-> Flexibility without coding chaos: new modalities add programs + typed actions on the **same** scheduler, QC gates, and database structures.
+| Strength | Detail |
+|----------|--------|
+| One language | SamplePrep, MC stability, freeze, model selection, holdouts |
+| Config layers | Operators tune parameters without editing Python |
+| Worker contract | Tasks carry baked `resolvedConfig` — no profile re-read on the node |
 
 ---
 
-## DomainProgram topology (methylation process)
+## Methylation process pack (production path)
 
 ```mermaid
 %% mp:interactive
 flowchart TB
-  subgraph prep["SamplePrepPipeline · per sample · parallel workers"]
-    DL["download_fastq"] --> ALN["GPU align<br/>fq2bam_meth / giraffe"]
-    ALN --> AQC["alignment QC"]
+  subgraph prep["SamplePrep · per sample · parallel workers"]
+    DL["download_fastq"] --> MODE{"alignmentMode"}
+    MODE -->|linear| PB["Parabricks<br/>fq2bam_meth"]
+    MODE -->|pangenome_wgbs| MG["Mojo Giraffe<br/>dual C2T∥G2A GAF"]
+    PB --> AQC["alignment QC"]
+    MG --> AQC
     AQC -->|pass| EXT["extract H5"]
     AQC -->|remediate| REM["trim → realign → QC"]
     REM --> EXT
     EXT --> ARC["archive curated bundle"]
   end
-  subgraph study["Study validation lifecycle · cohort"]
+  subgraph study["Study lifecycle · cohort"]
     MC["MC centroid + detector"] --> STAB["stability / readiness"]
     STAB --> FRZ["freeze panel + mapper"]
     FRZ --> COV["deconv + info measures"]
@@ -122,70 +139,85 @@ flowchart TB
   ARC --> MC
 ```
 
-<!-- Emphasize remediation branches and cohort stages are declarative — workers claim tasks. -->
+---
+
+## GPU pangenome WGBS (current engineering)
+
+| Capability | Production contract |
+|------------|---------------------|
+| Dual-graph Align | C2T ∥ G2A → science **GAF** for MethylCall |
+| Engine knobs | `actionConfig.methylgrapher_wgbs` → task `resolvedConfig` |
+| Backends | `gpu_giraffe` / `mojo_giraffe` / `cpu_vg` (operator-set) |
+| Image | `epimethyl/methylgrapher:1.70-mojo` on GH200-class fleet |
+| QC path | Mojo QC BAM + conversion-rate sidecars when enabled |
+
+> Linear `fq2bam_meth` remains the comparator; **pangenome_wgbs** is the graph science path — not a separate product.
 
 ---
 
-## Same language, different modality (RNA-Seq process pack)
+## Same language, RNA-Seq process pack
 
 ```mermaid
 flowchart LR
   FQ["FASTQ"] --> Q["Parabricks RNA quant<br/>STAR rna_fq2bam OR kallisto"]
   Q --> RQC["RNA QC"]
-  RQC --> EXP["expression contract<br/>samples × features"]
-  EXP --> DE["rna_de_select<br/>gene panel"]
+  RQC --> EXP["expression<br/>samples × features"]
+  EXP --> DE["rna_de_select"]
   DE --> TAB["tabular classifier<br/>+ covariates + MC"]
 ```
 
-- Selects quant mode via `actionConfig.rna_align.quant_mode`.
-- Reuses scheduler, cfg/wf, CAAS, and the shared feature seam — **not** a separate product stack.
-- Remaining gate: representative cohort data + validation evidence (not aligner R&D).
+| Shared | Pack-specific |
+|--------|---------------|
+| Scheduler, cfg/wf, CAAS, feature seam | `actionConfig.rna_align.quant_mode` |
+| Portal / gateway / workers | RNA QC thresholds |
+| Tabular model MC | STAR vs kallisto branch |
 
 ---
 
-## Distributed execution: portal → gateway → workers
+## Distributed execution
 
 ```mermaid
 %% mp:interactive
 flowchart TB
   subgraph control["Control plane"]
-    UI["EpiPortal UI"] --> CFG["cfg registry"]
+    UI["EpiPortal"] --> CFG["cfg registry"]
     CFG --> WF["DomainProgram → workflow_def"]
-    WF --> INST["workflow_instance + actionConfig"]
-    INST --> GW["methyl-gateway REST"]
+    WF --> INST["instance + actionConfig"]
+    INST --> GW["methyl-gateway"]
   end
-  subgraph compute["Customer / site compute"]
-    W1["GPU SamplePrep workers"]
-    W2["CPU science workers"]
-    W3["Enricher / model workers"]
+  subgraph compute["Site compute"]
+    W1["GPU SamplePrep"]
+    W2["CPU science"]
+    W3["Enricher / models"]
   end
-  STORE[("Shared /work<br/>samples · projects · caches")]
-  GW --> W1 & W2 & W3
+  STORE[("/work<br/>samples · projects · caches")]
+  GW -->|"claim · heartbeat · submit"| W1 & W2 & W3
   W1 & W2 & W3 --> STORE
   CFG -->|"materialize non-secrets"| STORE
 ```
 
-- Workers are **stateless claimants** — capability-matched, TLS task payloads.
-- Secrets stay in `cfg.credential`; never plain files under `/work`.
+Workers are **stateless claimants**. Credentials stay in `cfg.credential` — never plain files under `/work`.
 
 ---
 
-## Config layers (highest wins) — tune without redeploying science code
+## Config layers — tune without redeploying science code
 
 ```mermaid
 flowchart LR
-  SITE["Site<br/>deployment defaults"] --> PROF["Profile<br/>samd_* procedure"]
-  PROF --> PROG["DomainProgram<br/>topology"]
-  PROG --> INST["Instance / study<br/>overlays"]
+  SITE["Site"] --> PROF["Profile"]
+  PROF --> PROG["DomainProgram"]
+  PROG --> INST["Instance"]
   INST --> RES["resolvedConfig<br/>on each task"]
 ```
 
 | Layer | Who edits | Examples |
 |-------|-----------|----------|
-| Site | Operators / cluster | genomes, caches, site action caps |
-| Profile | Release / procedure pack | `samd_research`, MC knobs |
-| DomainProgram | Platform / pack authors | node graph, typed actions |
+| Site | Operators / cluster | genomes, caches, Align image, fleet caps |
+| Profile | Release / procedure | `samd_research`, MC knobs, gene FeatureCuts |
+| DomainProgram | Pack authors | topology, typed actions |
 | Study / instance | Study team | cohorts, partitions, claim gates |
+
+**Merge:** site → profile → program/instance overlay → analyte fill-missing → *(no Python fallback for tunable knobs)*.
 
 ---
 
@@ -214,7 +246,7 @@ DomainPrograms, typed actions, QC, profiles on the shared control plane.
 <div>
 
 **Application pack** = config overlay  
-Study manifest, cohorts, partitions, disease/trait overlay — **no new aligner**.
+Study manifest, cohorts, partitions, disease/trait — **no new aligner**.
 
 </div>
 </div>
@@ -225,15 +257,15 @@ Study manifest, cohorts, partitions, disease/trait overlay — **no new aligner*
 
 | Process / analyte | Status | What ships |
 |-------------------|--------|------------|
-| Methylation — buffy / cfDNA (oncology) | **In production** | SamplePrep → MC stability → freeze → model; SaMD ladder |
-| RNA-Seq | **Research process pack** | STAR/kallisto, RNA QC, DE panel → tabular classifier |
-| Proteomics | **Research process pack** | GPU DIA-NN, Sage DDA, panel ingest; Prosit / Casanovo |
-| Alzheimer cfDNA | **Research application pack** | Methylation + disease overlay (`neuro-core`); config only |
-| Plant abiotic stress | **Research application pack** | Control vs Drought WGBS; multi-crop sites; `plant-stress-core` |
+| Methylation — buffy / cfDNA | **Production** | SamplePrep → MC → freeze → model; SaMD ladder; Mojo pangenome_wgbs |
+| RNA-Seq | **Research pack** | STAR/kallisto, RNA QC, DE panel → tabular classifier |
+| Proteomics | **Research pack** | GPU DIA-NN, Sage DDA, panel ingest; Prosit / Casanovo |
+| Alzheimer cfDNA | **Research app pack** | Methylation + `neuro-core` overlay — config only |
+| Plant abiotic stress | **Research app pack** | Control vs Drought WGBS; multi-crop sites |
 
 ---
 
-## Multiomics on one plane (why this is flexible)
+## Multiomics on one plane
 
 ```mermaid
 %% mp:interactive
@@ -241,53 +273,80 @@ flowchart TB
   subgraph shared["Shared control plane"]
     DP["DomainProgram + typed actions"]
     SCH["Scheduler / gateway / CAAS"]
+    CTL["Fleet desired_state<br/>catalog control"]
     FEAT["samples × features seam"]
   end
-  METH["Methylation<br/>centroid / DMP science"] --> FEAT
-  RNA["RNA-Seq<br/>DE gene selection"] --> FEAT
-  PROT["Proteomics<br/>DIA-NN / Sage / panels"] --> FEAT
-  FEAT --> CLF["Tabular classifier + covariates + MC stability"]
+  METH["Methylation<br/>centroid / DMP"] --> FEAT
+  RNA["RNA-Seq<br/>DE genes"] --> FEAT
+  PROT["Proteomics<br/>DIA-NN / Sage"] --> FEAT
+  FEAT --> CLF["Tabular classifier + covariates + MC"]
   DP --- SCH
+  SCH --- CTL
   SCH --> METH & RNA & PROT
 ```
 
-- **Proteomics** adds GPU mass-spec on the same GH200-class workers.
-- **Alzheimer** / **plant** prove application packs: indication or trait without forking the platform.
+---
+
+## Fleet control without SSH
+
+Operators set worker state from the portal / SQL — workers honor it on claim and heartbeat.
+
+```mermaid
+flowchart LR
+  OP["Operator"] --> SP["portal.sp_set_worker_desired_state"]
+  SP --> ROW["wf.worker.desired_state"]
+  ROW --> HB["claim / heartbeat ACK"]
+  HB --> RUN["WorkerRunner"]
+  CAT["Action catalog<br/>control.can_stop"] --> RUN
+  RUN -->|DRAIN| IDLE["No new claims"]
+  RUN -->|STOP + can_stop| ABORT["Abort in-flight"]
+  RUN -->|ACTIVE| WORK["Claim & execute"]
+```
+
+| `desired_state` | Idle | In-flight |
+|-----------------|------|-----------|
+| **ACTIVE** | Claim | Continue |
+| **DRAINING** | Skip claims | Finish current (pause only if `can_pause`) |
+| **STOPPING** | Skip claims | Abort if catalog `can_stop` |
+
+Science knobs stay on `actionConfig`. Fleet control stays on worker state + catalog `control`.
 
 ---
 
-## Application pack pattern (config, not code)
+## Application pack pattern
 
 <div class="cards two">
   <div class="card">
     <h3>Alzheimer cfDNA</h3>
     <p><code>primary_analyte: cfdna</code></p>
-    <p>Patient-disjoint partitions; <code>mapper.disease_term</code> = Alzheimer's; <code>neuro-core</code> enrichment; Control → MCI → AD progression.</p>
+    <p>Patient-disjoint partitions; Alzheimer's disease term; <code>neuro-core</code>; Control → MCI → AD.</p>
     <p><strong>No new actions or aligners.</strong></p>
   </div>
   <div class="card amber">
     <h3>Plant abiotic stress</h3>
     <p><code>primary_analyte: plant_tissue</code></p>
-    <p>Binary Control vs Drought across CG/CHG/CHH; Ensembl Plants sites; optional deconv lifecycle; offline <code>plant_traits</code> prior.</p>
+    <p>Control vs Drought across CG/CHG/CHH; Ensembl Plants sites; offline trait priors.</p>
     <p>epi-GBS isolated via separate SamplePrep program.</p>
   </div>
 </div>
 
 ---
 
-## SaMD profile ladder (research → pivotal)
+## SaMD profile ladder
 
 ```mermaid
 flowchart LR
   INIT["methyl-study-init"] --> R["samd_research"]
-  R -->|"lock HPs + require locked_test"| H["samd_holdout_enrichment"]
-  H -->|"freeze + open pivotal cohort"| P["samd_pivotal"]
+  R -->|"lock HPs + locked_test"| H["samd_holdout_enrichment"]
+  H -->|"freeze + pivotal cohort"| P["samd_pivotal"]
   R -.-> HP["hyperparam search<br/>+ early-stop"]
 ```
 
-- **Research:** discover stable panels under partition discipline.
-- **Holdout enrichment:** locked hyperparameters + locked test patients.
-- **Pivotal:** claim-gated clinical-performance evidence packaging.
+| Profile | Intent |
+|---------|--------|
+| **samd_research** | Discover stable panels under partition discipline |
+| **samd_holdout_enrichment** | Locked hyperparameters + locked test patients |
+| **samd_pivotal** | Claim-gated clinical-performance evidence packaging |
 
 ---
 
@@ -298,13 +357,15 @@ flowchart LR
   A["Align + extract<br/>content-addressed"] --> B["Centroid / detector"]
   B --> C["Classifier / model MC"]
   C -->|"edit downstream only"| C2["New model config"]
-  A -.->|"CAAS hit · skip recompute"| C2
+  A -.->|"CAAS hit · skip"| C2
   B -.->|"reuse artifacts"| C2
 ```
 
-- `.action_results` bind input/output hashes, CLI versions, environment signatures.
-- Large-cohort VM cost drops when science iteration stays **downstream**.
-- Provenance chain is ready for quality review — not a slideware promise.
+| Mechanism | Why it matters |
+|-----------|----------------|
+| Input / output signatures | Skip recomputation when science is unchanged |
+| CLI + environment binding | Provenance for quality review |
+| FOREACH bundle keys | Whole MC iteration short-circuit when safe |
 
 ---
 
@@ -349,7 +410,7 @@ graph TD
     <ul>
       <li>Evidence index + traceability packaging</li>
       <li>Pivotal ladder unlocks</li>
-      <li>EpiPortal multi-tenant ops</li>
+      <li>EpiPortal multi-tenant ops + fleet control</li>
       <li>Zero-trust credentials + GPU SamplePrep support</li>
     </ul>
   </div>
@@ -357,7 +418,7 @@ graph TD
 
 ---
 
-## Hybrid cloud (BYOC) for sensitive genomics
+## Hybrid cloud (BYOC)
 
 <div class="columns">
 <div>
@@ -371,22 +432,24 @@ graph TD
 <div>
 
 **Customer keeps**
-- Stateless workers on AWS / Azure / on-prem
+- Stateless workers (AWS / Azure / on-prem)
 - `/work` + samples in their boundary
 - HIPAA / GDPR data residency
 
 </div>
 </div>
 
-> Bring Your Own Cloud: regulated data never has to leave the customer’s estate.
+> Regulated data never has to leave the customer’s estate.
 
 ---
 
 ## Who buys — and why
 
-1. **Biotech / diagnostic startups (primary)** — liquid biopsy & multiomics programs that need QA + regulatory framework without building a platform.
-2. **Pharma / trial sponsors** — multi-year locked, reproducible workflows for methylation (and other packs) as endpoints.
-3. **Reference labs / CROs** — upsell FASTQs into curated classification + evidence packages (oncology, Alzheimer cfDNA, …).
+| Buyer | Why MethylPipeline |
+|-------|-------------------|
+| **Biotech / diagnostic startups** | Liquid biopsy & multiomics without building a platform |
+| **Pharma / trial sponsors** | Locked, reproducible workflows as trial endpoints |
+| **Reference labs / CROs** | FASTQs → curated classification + evidence packages |
 
 ---
 
@@ -395,12 +458,14 @@ graph TD
 ```mermaid
 flowchart LR
   CE["Community / samd_research<br/>discover stable panels"] --> CHASM["FDA chasm<br/>locked pipeline + holdouts + evidence"]
-  CHASM --> ENT["Enterprise SaMD<br/>portal · pivotal ladder · packaging"]
+  CHASM --> ENT["Enterprise SaMD<br/>portal · pivotal · packaging"]
 ```
 
-- **Hook:** free/low-cost research feasibility.
-- **Trigger:** promising marker must survive internal + pivotal validation under audit.
-- **Upgrade:** pivotal ladder support, portal operations, regulatory packaging.
+| Stage | Motion |
+|-------|--------|
+| **Hook** | Research feasibility at low friction |
+| **Trigger** | Marker must survive locked + pivotal validation under audit |
+| **Upgrade** | Portal ops, pivotal ladder, regulatory packaging |
 
 ---
 
@@ -408,10 +473,14 @@ flowchart LR
 
 ## Why technical buyers say yes
 
-- **Audit trails with low overhead** — hashes, versions, environment signatures in action results.
-- **CAAS economics** — skip alignment/extraction across large cohorts when iterating models.
-- **Multiomics extensibility** — process packs add DomainPrograms; application packs are config-only overlays.
-- **Partition discipline** — development vs locked holdout patients enforced by profiles, not heroics.
+| Capability | Outcome |
+|------------|---------|
+| Audit trails with low overhead | Hashes, versions, environment signatures in action results |
+| CAAS economics | Skip alignment across large cohorts when iterating models |
+| Multiomics extensibility | Process packs add programs; application packs are config-only |
+| Partition discipline | Development vs locked holdout enforced by profiles |
+| Fleet control | Drain / stop workers from portal — no SSH to GPU nodes |
+| Config not code | Science knobs in site/profile/instance — never magic numbers in Python |
 
 ---
 
@@ -424,5 +493,3 @@ flowchart LR
 **Control plane + packs** — not a single hard-coded assay.
 
 **Next step:** live DomainProgram demo · SaMD ladder walkthrough · evidence-scaffold review
-
-<!-- Offer a 30-min technical deep-dive on one modality the prospect cares about. -->
