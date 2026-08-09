@@ -9,7 +9,7 @@ Companion to [`native-mojo-align-hotpath.plan.md`](native-mojo-align-hotpath.pla
 | Image `:1.70-mojo` | **PASS** | config `sha256:3b0b063d…`; OCI `sha256:8ca56896…`; NFS tar refreshed 2026-08-09 |
 | Fleet sisters load | **PENDING** operator | run `bash /work/epimethyl/images/enable_fleet_mojo_align.sh` on `51-118`, `51-168`, `57-3` |
 | DS20M `graph.methyl` vs `cpu_vg` | **PENDING** operator | `scripts/parity_compare.py` |
-| Full Buffy dual-map ≤ ~2 h | **PENDING** operator | measure on GH200 with new digest (`mojo_stream_map` in logs; no `quartet_map device=`) |
+| Full Buffy dual-map ≤ ~2 h | **PENDING** operator | digest `8e42fec3…` — live seed backend must be `devicecontext-cuda+mojo_min` (not `host-nvidia-fallback` / CuPy) |
 | Linear Mojo wall &lt; Clara | **PENDING** operator | `pbrun` not on 50-58; use `benchmark_clara_fq2bam_meth.sh` + `compare_mojo_fq2bam_vs_clara.py` |
 | methyl_qc on Mojo QC BAM | **PENDING** operator | after first full Align succeeds |
 
