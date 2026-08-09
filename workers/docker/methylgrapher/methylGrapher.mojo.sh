@@ -24,19 +24,9 @@ MOJO_BIN="${ROOT}/mojo-env/bin/mojo"
 if [[ -x "${MOJO_BIN}" ]]; then
   export MODULAR_HOME="${ROOT}/mojo-env/share/max"
   export LD_LIBRARY_PATH="${ROOT}/mojo-env/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-  # CUDA runtime for engine.gpu_h2d index H2D (pip nvidia-cuda-runtime).
-  for _cudart_dir in \
-    /usr/local/lib/python3.12/dist-packages/nvidia/cuda_runtime/lib \
-    /usr/local/lib/python3.11/dist-packages/nvidia/cuda_runtime/lib \
-    /usr/local/cuda/lib64
-  do
-    if [[ -d "${_cudart_dir}" ]]; then
-      export LD_LIBRARY_PATH="${_cudart_dir}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-      break
-    fi
-  done
   export PATH="${ROOT}/mojo-env/bin:${PATH}"
-  # Mojo 1.0 CUDA create requires driver ≥580 OR a system ptxas path.
+  # Mojo NVIDIA DeviceContext compile needs driver ≥580 OR a ptxas path.
+  # (App code does not call CUDA Runtime; index H2D is Mojo enqueue_copy.)
   # Image bake stages ptxas at /opt/methylgrapher-mojo/cuda/bin/ptxas.
   if [[ -z "${MODULAR_NVPTX_COMPILER_PATH:-}" ]]; then
     for _ptx in \

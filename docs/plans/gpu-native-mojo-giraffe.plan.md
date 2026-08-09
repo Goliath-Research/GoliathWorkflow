@@ -37,7 +37,7 @@ Code lives in [`/home/ubuntu/methylGrapher-mojo`](/home/ubuntu/methylGrapher-moj
 | Module | Role |
 |--------|------|
 | `src/giraffe_gpu_index.mojo` | Upload metadata + H2D fill |
-| `engine/gpu_h2d.py` | Chunked `cudaMemcpy` for multi-GB `.min` |
+| Index H2D | Mojo `upload_mmap_to_device` (HostBuffer + `enqueue_copy`; no app cudart) |
 | `src/giraffe_gpu_map_kernels.mojo` | Device window / HT / cluster / gapless session |
 | `src/giraffe_stream_map.mojo` | GPU session dispatch + fail-closed |
 
