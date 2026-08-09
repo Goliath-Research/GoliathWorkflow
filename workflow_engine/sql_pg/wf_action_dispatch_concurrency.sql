@@ -9,14 +9,24 @@
   wf_action_dispatch_metadata.sql (replaces 7-arg upsert with 9-arg).
 */
 
+-- The dispatch columns are repeated from wf_action_dispatch_metadata.sql so this
+-- script also applies standalone: wf_repo_list_actions is LANGUAGE sql and its body
+-- is column-checked at CREATE time, which raises 42703 if they are absent.
 ALTER TABLE wf.workflow_action
+  ADD COLUMN IF NOT EXISTS execution_mode text NULL,
+  ADD COLUMN IF NOT EXISTS cli_tool text NULL,
+  ADD COLUMN IF NOT EXISTS in_process_handler text NULL,
+  ADD COLUMN IF NOT EXISTS argv_map jsonb NULL,
   ADD COLUMN IF NOT EXISTS max_per_worker integer NULL,
   ADD COLUMN IF NOT EXISTS exclusive_worker boolean NOT NULL DEFAULT false;
 
--- Supersede the 7-arg overload from wf_action_dispatch_metadata.sql.
+-- Supersede the 7-arg overload from wf_action_dispatch_metadata.sql, and the 3-arg
+-- bootstrap when this script runs without it (leftover overloads make 3-arg calls
+-- ambiguous against the all-defaults 9-arg signature).
 DROP PROCEDURE IF EXISTS wf.wf_repo_upsert_workflow_action(
   text, text, text, text, text, text, jsonb
 );
+DROP PROCEDURE IF EXISTS wf.wf_repo_upsert_workflow_action(text, text, text);
 
 CREATE OR REPLACE PROCEDURE wf.wf_repo_upsert_workflow_action(
   IN p_action_name text,

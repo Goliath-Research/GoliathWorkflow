@@ -13,6 +13,21 @@ SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
 
+-- Repeated from wf_action_dispatch_metadata.sql so this script also applies standalone
+-- (the procedure and function below reference these columns at CREATE time).
+IF COL_LENGTH('wf.workflow_action', 'execution_mode') IS NULL
+    ALTER TABLE wf.workflow_action ADD execution_mode nvarchar(32) NULL;
+GO
+IF COL_LENGTH('wf.workflow_action', 'cli_tool') IS NULL
+    ALTER TABLE wf.workflow_action ADD cli_tool nvarchar(256) NULL;
+GO
+IF COL_LENGTH('wf.workflow_action', 'in_process_handler') IS NULL
+    ALTER TABLE wf.workflow_action ADD in_process_handler nvarchar(256) NULL;
+GO
+IF COL_LENGTH('wf.workflow_action', 'argv_map') IS NULL
+    ALTER TABLE wf.workflow_action ADD argv_map json NULL;
+GO
+
 IF COL_LENGTH('wf.workflow_action', 'max_per_worker') IS NULL
     ALTER TABLE wf.workflow_action ADD max_per_worker INT NULL;
 GO
