@@ -71,25 +71,28 @@ Each backend run writes `train_metrics.json` for diagnostics and
 compatibility aliases. Tabular and generative backends use the same
 `evaluation_partition` contract as ECDF (not legacy predictor `test_*` cohort
 lists), so shared-run train/test membership stays comparable across backends.
-Tabular **train-time** `test_dataset.parquet` export uses the same rule:
+Tabular **train-time** `test_dataset.h5` export uses the same rule:
 `evaluation_partition="test"` → `test_groups.json` only (fail closed if missing).
 Misnamed predictor `test_control_paths` / `test_disease_paths` must never fill
-the holdout Parquet.
+the holdout design matrix.
 
-Every sum-to-1 feature set (a simplex) is encoded by additive log-ratio (ALR),
-which drops the redundant reference part. The first-stage ECDF class
-probabilities are always ALR-encoded (binary gives one coordinate, the clipped
-class-1 log-odds); cell-type fractions and any other declared composition group
-give `K - 1` coordinates. For ECDF with leukocyte covariates the second-stage LR
-therefore uses six independent features: the class-probability ALR coordinate
+Every sum-to-1 feature set (a simplex) is encoded as: binary (\(K=2\)) → closed
+non-reference probability \(p\); multiclass (\(K>2\)) → additive log-ratio (ALR)
+vs the reference (drops the redundant part). First-stage ECDF class
+probabilities follow the same rule (binary stacks readable `prob_class1` in
+\([0,1]\); multiclass uses ALR and requires
+`ecdf_second_stage_probability_epsilon`). Cell-type fractions and other declared
+composition groups emit one \(p_*\) column when \(K=2\), or \(K-1\) `alr_*`
+coordinates when \(K>2\). For ECDF with six-part leukocyte covariates the
+second-stage LR therefore uses six independent features: binary `prob_class1`
 plus five standardized Neu-referenced ALR fractions (`CD8T`, `CD4T`, `NK`,
 `Bcell`, `Mono`). Declare composition groups with
 `covariate_composition_groups` (see the covariate contract in the
 [MethylValidation usage guide](../../packages/methylvalidation/docs/USAGE.md)).
 The exact matrices are saved under each run's `model_bundle/` as
-`train_dataset.parquet` / `test_dataset.parquet` (plus `dataset_manifest.json`);
-the manifest records transform parameters and verifies zero train/test sample
-overlap.
+`train_dataset.h5` / `test_dataset.h5` (float32 features, plus
+`dataset_manifest.json`); the manifest records transform parameters and verifies
+zero train/test sample overlap.
 
 ## Backend behavior
 

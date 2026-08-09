@@ -6,6 +6,7 @@ import json
 
 import numpy as np
 import pandas as pd
+from methyl_validation.model_datasets import read_dataset_frame
 import pytest
 
 from methyl_validation import generative_backend, model_bundle, pipeline_runner
@@ -454,7 +455,7 @@ def test_generative_composition_alr_uses_canonical_feature_names(
     assert report["composition_transform"] == "alr"
     assert report["composition_output_columns"] == expected_alr
     model_bundle_dir = tmp_path / "model_bundle"
-    train_ds = pd.read_parquet(model_bundle_dir / "train_dataset.parquet")
+    train_ds = read_dataset_frame(model_bundle_dir / "train_dataset.h5")
     assert list(train_ds.columns[:3]) == ["sample_id", "class_index", "class_label"]
     assert train_ds.columns.tolist()[-5:] == expected_alr
     assert (model_bundle_dir / "dataset_manifest.json").is_file()

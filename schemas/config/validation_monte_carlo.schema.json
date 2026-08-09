@@ -407,7 +407,7 @@
             }
           ],
           "default": null,
-          "description": "ALR pseudocount for first-stage class probabilities in the ECDF second stage. Required when the stacker runs; set in profile/site actionConfig (no code default).",
+          "description": "ALR pseudocount for multiclass (K>2) first-stage class probabilities in the ECDF second stage. Not required for binary (K=2). Set in profile/site actionConfig (no code default).",
           "title": "Ecdf Second Stage Probability Epsilon"
         },
         "ecdf_second_stage_probability_transform": {
@@ -997,7 +997,7 @@
             }
           ],
           "default": null,
-          "description": "ALR pseudocount for first-stage class probabilities in the ECDF second stage. Required when the stacker runs; set in profile/site actionConfig (no code default).",
+          "description": "ALR pseudocount for multiclass (K>2) first-stage class probabilities in the ECDF second stage. Not required for binary (K=2). Set in profile/site actionConfig (no code default).",
           "title": "Ecdf Second Stage Probability Epsilon"
         },
         "ecdf_second_stage_probability_transform": {
@@ -1910,7 +1910,7 @@
             }
           ],
           "default": null,
-          "description": "ALR pseudocount for first-stage class probabilities in the ECDF second stage. Required when the stacker runs; set in profile/site actionConfig (no code default).",
+          "description": "ALR pseudocount for multiclass (K>2) first-stage class probabilities in the ECDF second stage. Not required for binary (K=2). Set in profile/site actionConfig (no code default).",
           "title": "Ecdf Second Stage Probability Epsilon"
         },
         "ecdf_second_stage_probability_transform": {

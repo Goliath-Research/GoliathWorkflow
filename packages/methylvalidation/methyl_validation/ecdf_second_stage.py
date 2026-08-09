@@ -24,7 +24,6 @@ from methyl_utils import load_project
 from .classification_metrics import compute_validation_metrics
 from .covariate_preprocessor import (
     CompositionGroupSpec,
-    _alr_transform,
     fit_covariates,
     normalize_composition_groups,
     transform_covariates,
@@ -111,9 +110,10 @@ class EcdfSecondStageParams(BaseModel):
         gt=0.0,
         lt=0.5,
         description=(
-            "ALR pseudocount for first-stage class probabilities. Required when the "
-            "second-stage stacker runs; set via ecdf_second_stage_probability_epsilon "
-            "in profile/site actionConfig (no code default)."
+            "ALR pseudocount for multiclass (K>2) first-stage class probabilities. "
+            "Not required for binary (K=2), which stacks closed prob_class1. Set via "
+            "ecdf_second_stage_probability_epsilon in profile/site actionConfig "
+            "(no code default)."
         ),
     )
     composition_transform: Optional[str] = Field(default=None)
@@ -385,14 +385,19 @@ def _probability_design(
     transform: Optional[str],
     epsilon: Optional[float],
 ) -> Tuple[np.ndarray, List[str]]:
-    """Encode the first-stage class-probability simplex as ALR coordinates.
+    """Encode first-stage class probabilities for the second-stage stacker.
 
-    ECDF class probabilities sum to 1, so one part is redundant. We always drop
-    the reference (``prob_class0``) via additive log-ratios, yielding ``K - 1``
-    coordinates. For binary this is the clipped class-1 logit within ``epsilon``.
-    The legacy ``logit_class1`` value is accepted as an alias; ``None`` now means
-    the same ALR default (raw dual-probability stacking is no longer produced).
+    ECDF class probabilities sum to 1. Encoding:
+
+    - binary (K=2): closed non-reference probability ``prob_class1`` (reference
+      ``prob_class0``); no ALR and no epsilon required
+    - multiclass (K>2): ALR vs ``prob_class0``; requires
+      ``ecdf_second_stage_probability_epsilon``
+
+    Legacy ``logit_class1`` / ``None`` both mean this default simplex encode.
     """
+    from methyl_validation.covariate_preprocessor import _simplex_encode
+
     if transform is not None and str(transform).strip().lower() != "logit_class1":
         raise ValueError(f"Unsupported ECDF probability transform: {transform!r}")
     probability_columns = _prob_columns(predictions)
@@ -402,39 +407,57 @@ def _probability_design(
     row_sums = values.to_numpy(dtype=np.float64).sum(axis=1)
     if not np.allclose(row_sums, 1.0, atol=1e-6):
         raise ValueError("ECDF class probabilities do not sum to one.")
-    if epsilon is None:
-        raise ValueError(
-            "ecdf_second_stage_probability_epsilon is required for ALR-encoding "
-            "class probabilities (set in profile/site actionConfig; no code default)."
-        )
-    pseudocount = float(epsilon)
-    if pseudocount <= 0.0:
-        raise ValueError("ecdf_second_stage_probability_epsilon must be > 0.")
     reference = probability_columns[0]
-    alr_frame, alr_names = _alr_transform(
-        values,
-        probability_columns,
-        reference,
-        pseudocount,
-    )
-    for name in alr_names:
-        predictions[name] = alr_frame[name].to_numpy(dtype=np.float64)
-    return alr_frame.to_numpy(dtype=np.float32), alr_names
+    if len(probability_columns) == 2:
+        # Prefer readable probability name for binary ECDF (not p_prob_class1).
+        closed = values.to_numpy(dtype=np.float64)
+        closed = closed / closed.sum(axis=1, keepdims=True)
+        non_ref = probability_columns[1]
+        name = non_ref  # typically prob_class1
+        encoded = pd.DataFrame(
+            {name: closed[:, 1].astype(np.float32)},
+            index=values.index,
+        )
+        encoded_names = [name]
+    else:
+        if epsilon is None:
+            raise ValueError(
+                "ecdf_second_stage_probability_epsilon is required for ALR-encoding "
+                "multiclass probabilities (set in profile/site actionConfig; no code default)."
+            )
+        pseudocount = float(epsilon)
+        if pseudocount <= 0.0:
+            raise ValueError("ecdf_second_stage_probability_epsilon must be > 0.")
+        encoded, encoded_names = _simplex_encode(
+            values,
+            probability_columns,
+            reference,
+            pseudocount,
+        )
+    for name in encoded_names:
+        predictions[name] = encoded[name].to_numpy(dtype=np.float32)
+    return encoded.to_numpy(dtype=np.float32), encoded_names
 
 
 def _composition_alr_export_names(preprocessor: Any) -> set[str]:
-    """Canonical ALR names from frozen composition groups (same as tabular_sklearn)."""
+    """Canonical composition feature names from frozen groups (binary p_* or ALR)."""
+    from methyl_validation.covariate_preprocessor import _binary_probability_name
+
     names: set[str] = set()
     for group in getattr(preprocessor, "composition_groups", []) or []:
         columns = [str(c) for c in (group.get("columns") or [])]
         if not columns:
             continue
         reference = str(group.get("reference") or columns[-1])
-        names.update(
-            f"alr_{column}_vs_{reference}"
-            for column in columns
-            if column != reference
-        )
+        if len(columns) == 2:
+            non_ref = next(c for c in columns if c != reference)
+            names.add(_binary_probability_name(non_ref))
+        else:
+            names.update(
+                f"alr_{column}_vs_{reference}"
+                for column in columns
+                if column != reference
+            )
     return names
 
 
@@ -464,10 +487,8 @@ def _second_stage_dataset_frame(
         "class_label": class_labels,
     }
     for column in probability_columns:
-        data[column] = (
-            pd.to_numeric(predictions[column], errors="coerce")
-            .to_numpy(dtype=np.float32)
-            .astype(float)
+        data[column] = pd.to_numeric(predictions[column], errors="coerce").to_numpy(
+            dtype=np.float32
         )
 
     if transformed_covariates is not None:
@@ -485,12 +506,12 @@ def _second_stage_dataset_frame(
         no_standardize = set(
             getattr(preprocessor, "composition_no_standardize_columns", []) or []
         )
-        composition_alr = _composition_alr_export_names(preprocessor)
+        composition_feats = _composition_alr_export_names(preprocessor)
         standardized = bool(getattr(preprocessor, "standardize_numeric", False))
         for index, name in enumerate(output_columns):
-            # Keep composition ALR names canonical (alr_<part>_vs_<ref>) so they
+            # Keep composition names canonical (p_* or alr_*_vs_*) so they
             # match tabular_sklearn / covariate-preprocessor output_columns.
-            if name in composition_alr:
+            if name in composition_feats:
                 export_name = name
             else:
                 is_std = (
@@ -500,7 +521,7 @@ def _second_stage_dataset_frame(
                 )
                 prefix = "standardized_" if is_std else "transformed_"
                 export_name = f"{prefix}{name}"
-            data[export_name] = covariates[:, index].astype(float)
+            data[export_name] = np.asarray(covariates[:, index], dtype=np.float32)
 
     return pd.DataFrame(data).loc[np.asarray(valid_rows, dtype=bool)].reset_index(drop=True)
 
@@ -1104,7 +1125,10 @@ def train_and_apply_ecdf_second_stage(
     )
     dataset_manifest.update(
         {
-            "probability_transform": "alr",
+            # Binary: closed non-reference probability; multiclass: ALR.
+            "probability_transform": (
+                "probability" if len(prob_cols) == 1 else "alr"
+            ),
             "probability_epsilon": params.probability_epsilon,
             "composition_groups": [
                 {

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from methyl_validation.model_datasets import read_dataset_frame
 import pytest
 
 from methyl_validation.config import MonteCarloConfig
@@ -117,9 +118,9 @@ def test_ecdf_second_stage_covariates_only(tmp_path: Path):
     meta = json.loads((clf_dir / "ecdf-second-stage-metadata.json").read_text(encoding="utf-8"))
     assert meta["include_covariates"] is True
     assert meta["include_observed_hybrid"] is False
-    # ECDF class probs are ALR-encoded: binary -> one coordinate (K-1).
+    # ECDF class probs: binary -> closed non-reference probability.
     assert meta["n_prob_features"] == 1
-    assert meta["prob_feature_names"] == ["alr_prob_class1_vs_prob_class0"]
+    assert meta["prob_feature_names"] == ["prob_class1"]
     assert meta["n_covariate_features"] == 2
     assert meta["n_features"] == 3
     pred = pd.read_csv(pred_dir / "predictions.csv")
@@ -171,13 +172,13 @@ def test_ecdf_second_stage_fits_train_and_scores_disjoint_test(tmp_path: Path):
         pred_dir / "test_metrics.json"
     ).read_text(encoding="utf-8")
     dataset_dir = tmp_path / "model_bundle"
-    train_dataset = pd.read_parquet(dataset_dir / "train_dataset.parquet")
-    test_dataset = pd.read_parquet(dataset_dir / "test_dataset.parquet")
+    train_dataset = read_dataset_frame(dataset_dir / "train_dataset.h5")
+    test_dataset = read_dataset_frame(dataset_dir / "test_dataset.h5")
     expected_columns = [
         "sample_id",
         "class_index",
         "class_label",
-        "alr_prob_class1_vs_prob_class0",
+        "prob_class1",
         "standardized_age",
         "standardized_bmi",
     ]
@@ -277,10 +278,10 @@ def test_ecdf_second_stage_uses_one_logit_and_five_alr_features(
     )
 
     dataset_dir = tmp_path / "model_bundle"
-    train_dataset = pd.read_parquet(dataset_dir / "train_dataset.parquet")
-    test_dataset = pd.read_parquet(dataset_dir / "test_dataset.parquet")
+    train_dataset = read_dataset_frame(dataset_dir / "train_dataset.h5")
+    test_dataset = read_dataset_frame(dataset_dir / "test_dataset.h5")
     feature_columns = [
-        "alr_prob_class1_vs_prob_class0",
+        "prob_class1",
         "alr_CD8T_vs_Neu",
         "alr_CD4T_vs_Neu",
         "alr_NK_vs_Neu",
@@ -301,16 +302,14 @@ def test_ecdf_second_stage_uses_one_logit_and_five_alr_features(
     ]
     assert np.isfinite(train_dataset[feature_columns].to_numpy()).all()
     assert np.isfinite(test_dataset[feature_columns].to_numpy()).all()
-    # Binary ALR of the class-probability simplex equals the class-1 logit within epsilon.
-    expected_logit = np.log((0.2 + 1e-6) / (0.8 + 1e-6))
-    assert train_dataset.loc[0, "alr_prob_class1_vs_prob_class0"] == pytest.approx(
-        expected_logit, abs=1e-4
-    )
+    # Binary simplex: closed non-reference probability (class1), not ALR.
+    assert train_dataset.loc[0, "prob_class1"] == pytest.approx(0.2, abs=1e-4)
+    assert train_dataset["prob_class1"].dtype == np.float32
     manifest = json.loads(
         (dataset_dir / "dataset_manifest.json").read_text(encoding="utf-8")
     )
     assert manifest["feature_columns"] == feature_columns
-    assert manifest["probability_transform"] == "alr"
+    assert manifest["probability_transform"] == "probability"
     assert manifest["composition_groups"][0]["name"] == "cell_fractions"
     assert manifest["composition_groups"][0]["reference"] == "Neu"
     assert manifest["train_test_overlap_count"] == 0
@@ -352,23 +351,58 @@ def test_ecdf_second_stage_requires_stack_components():
         params.validate_stack_components()
 
 
-def test_ecdf_second_stage_requires_probability_epsilon(tmp_path: Path):
+def test_ecdf_second_stage_binary_allows_missing_probability_epsilon(tmp_path: Path):
+    """Binary class probs use raw p; epsilon is not required."""
     project = _minimal_project(tmp_path)
     pred_dir = tmp_path / "predictors"
     clf_dir = tmp_path / "classifiers"
     _write_predictions(pred_dir / "predictions.csv", n=8)
     cov_csv = tmp_path / "covariates.csv"
     _write_covariates(cov_csv, [f"S{i}" for i in range(8)])
+    out = train_and_apply_ecdf_second_stage(
+        project_json=project,
+        predictor_output_dir=pred_dir,
+        classifier_output_dir=clf_dir,
+        params=EcdfSecondStageParams(
+            include_observed_hybrid=False,
+            covariates_path=str(cov_csv),
+            covariate_numeric_columns=["age", "bmi"],
+            covariates_strict_join=True,
+        ),
+    )
+    assert Path(out["model_path"]).is_file()
+
+
+def test_ecdf_second_stage_multiclass_requires_probability_epsilon(tmp_path: Path):
+    project = _minimal_project(tmp_path)
+    pred_dir = tmp_path / "predictors"
+    clf_dir = tmp_path / "classifiers"
+    path = pred_dir / "predictions.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for i in range(9):
+        y = i % 3
+        probs = [0.1, 0.1, 0.1]
+        probs[y] = 0.8
+        rows.append(
+            {
+                "sample": f"S{i}",
+                "sample_path": str(tmp_path / f"S{i}"),
+                "expected_class": y,
+                "prob_class0": probs[0],
+                "prob_class1": probs[1],
+                "prob_class2": probs[2],
+            }
+        )
+    pd.DataFrame(rows).to_csv(path, index=False)
     with pytest.raises(ValueError, match="ecdf_second_stage_probability_epsilon is required"):
         train_and_apply_ecdf_second_stage(
             project_json=project,
             predictor_output_dir=pred_dir,
             classifier_output_dir=clf_dir,
             params=EcdfSecondStageParams(
-                include_observed_hybrid=False,
-                covariates_path=str(cov_csv),
-                covariate_numeric_columns=["age", "bmi"],
-                covariates_strict_join=True,
+                include_observed_hybrid=True,
+                covariates_path=None,
             ),
         )
 

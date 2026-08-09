@@ -118,12 +118,12 @@ def test_two_disjoint_groups_produce_alr_and_drop_reference(tmp_path: Path):
     assert X.shape == (6, 4)
     names = prep.output_columns
     assert "alr_CD8T_vs_Neu" in names
-    assert "alr_compartA_vs_compartB" in names
+    assert "p_compartA" in names
     assert not any(n in names for n in ("CD8T", "CD4T", "Neu", "compartA", "compartB"))
     assert set(report["composition_output_columns"]) == {
         "alr_CD8T_vs_Neu",
         "alr_CD4T_vs_Neu",
-        "alr_compartA_vs_compartB",
+        "p_compartA",
     }
 
 

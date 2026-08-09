@@ -2,7 +2,7 @@
 name: Unify Model Bundle Datasets
 overview: Always write flat Parquet train/test design matrices under each run’s isolated `model_bundle/` (`train_dataset.parquet`, `test_dataset.parquet`, plus a small manifest) for tabular, ECDF second-stage, and generative backends—replacing the current CSV/Parquet split and tabular-prefixed filenames.
 
-> **Status: IMPLEMENTED.** Flat `train_dataset.parquet` / `test_dataset.parquet` / `dataset_manifest.json` under each backend run’s `model_bundle/`; shared helper in `packages/methylvalidation/methyl_validation/model_datasets.py`.
+> **Status: IMPLEMENTED (Parquet era).** Flat train/test design matrices + `dataset_manifest.json` under each backend run’s `model_bundle/`; shared helper in `packages/methylvalidation/methyl_validation/model_datasets.py`. **Superseded for on-disk format:** [`ecdf-h5-binary-p.plan.md`](ecdf-h5-binary-p.plan.md) moves canonical artifacts to `train_dataset.h5` / `test_dataset.h5` (float32) and binary raw \(p\) (ALR only for \(K>2\)). Legacy `.parquet` remains readable for migration.
 
 azure_devops:
   type: Feature

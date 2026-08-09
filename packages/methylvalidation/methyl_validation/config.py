@@ -372,9 +372,9 @@ class BackendSharedParams(BaseModel):
         gt=0.0,
         lt=0.5,
         description=(
-            "ALR pseudocount for first-stage class probabilities in the ECDF second "
-            "stage. Required when the stacker runs; set in profile/site actionConfig "
-            "(no code default)."
+            "ALR pseudocount for multiclass (K>2) first-stage class probabilities in "
+            "the ECDF second stage. Not required for binary (K=2). Set in "
+            "profile/site actionConfig (no code default)."
         ),
     )
     covariate_composition_transform: Optional[Literal["alr"]] = Field(default=None)

@@ -90,23 +90,25 @@ $$
 yielding $K-1$ unbounded coordinates and dropping the reference. A small
 pseudocount $\varepsilon$ guards against $\log 0$.
 
-Two simplex sources use this uniformly:
+Two simplex sources use the same encode rule:
 
-- **First-stage ECDF class probabilities.** They sum to one, so they are always
-  ALR-encoded. For the binary case ($K=2$) the single coordinate
-  $\log\frac{p_1+\varepsilon}{p_0+\varepsilon}$ is the clipped class-1 log-odds;
-  raw dual probabilities are never stacked.
-- **Cell-type fractions and other declared groups.** Operators declare each
-  composition with `covariate_composition_groups` (name, ordered columns,
-  reference defaulting to the last column, pseudocount, and whether the ALR
-  coordinates are standardized). Parts must be disjoint from each other and from
-  numeric/ordinal/categorical roles, so raw proportions never enter the design
-  matrix. Deconvolution outputs (Houseman or HiTIMED, see @sec-methyldeconv) are
-  the primary example.
+- **Binary ($K=2$).** Emit the closed non-reference probability $p$ (ECDF:
+  `prob_class1`; composition groups: `p_<nonref>`). No log-ratio and no
+  $\varepsilon$ are required. Dual raw columns are never stacked.
+- **Multiclass ($K>2$).** ALR vs the reference as above (ECDF requires
+  `ecdf_second_stage_probability_epsilon`; composition groups require
+  `pseudocount`).
+
+**Cell-type fractions and other declared groups.** Operators declare each
+composition with `covariate_composition_groups` (name, ordered columns,
+reference defaulting to the last column, optional `pseudocount` for $K=2$,
+required for $K>2$, and whether encoded coordinates are standardized). Parts
+must be disjoint from each other and from numeric/ordinal/categorical roles, so
+raw multi-part proportions never enter the design matrix. Deconvolution outputs
+(Houseman or HiTIMED, see @sec-methyldeconv) are the primary example.
 
 ALR coordinates live on $\mathbb{R}$, so standardizing them (the default) is
-meaningful; probabilities and their ALR coordinate are left on their natural
-scale.
+meaningful; binary probabilities stay on $[0,1]$ and are not ALR-transformed.
 
 ---
 

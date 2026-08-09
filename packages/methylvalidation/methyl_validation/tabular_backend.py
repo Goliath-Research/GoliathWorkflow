@@ -130,7 +130,7 @@ def _require_non_empty_training_matrix(
         f"tabular training matrix has zero feature columns "
         f"(feature_mode={feature_mode}, feature_family_set={feature_family_set}). "
         "For feature_family_set=structural_scored, rebuild frozen_gene_features.csv and ensure "
-        "structural column specs resolve; delete any cached train_dataset.parquet that "
+        "structural column specs resolve; delete any cached train_dataset.h5 that "
         "was written with zero features."
     )
 
@@ -157,7 +157,7 @@ def _derive_test_dataset_path(
     if explicit_test_dataset_path:
         return Path(explicit_test_dataset_path).expanduser().resolve()
     if train_dataset_out_path is not None:
-        ext = train_dataset_out_path.suffix or ".parquet"
+        ext = train_dataset_out_path.suffix or ".h5"
         return train_dataset_out_path.with_name(f"test_dataset{ext}")
     if bundle_dir is not None:
         return bundle_dir / TEST_DATASET_NAME

@@ -273,30 +273,40 @@ def _ordered_covariate_rows(
     return aligned, missing
 
 
+def _close_simplex(
+    frame: pd.DataFrame,
+    columns: Sequence[str],
+    reference: str,
+) -> Tuple[np.ndarray, List[str], int]:
+    """Validate and close a composition to the unit simplex."""
+    ordered = [str(column) for column in columns]
+    if reference not in ordered:
+        raise ValueError("Composition reference must be included in composition columns.")
+    missing = sorted(set(ordered) - set(frame.columns))
+    if missing:
+        raise ValueError(f"Composition columns are missing: {missing}")
+    values = frame[ordered].apply(pd.to_numeric, errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    if not np.isfinite(values).all():
+        raise ValueError("Composition contains missing or non-finite values.")
+    if np.any(values < 0.0):
+        raise ValueError("Composition contains negative values.")
+    row_sums = np.sum(values, axis=1)
+    if np.any(row_sums <= 0.0):
+        raise ValueError("Composition contains a row with zero total mass.")
+    closed = values / row_sums[:, None]
+    ref_index = ordered.index(reference)
+    return closed, ordered, ref_index
+
+
 def _alr_transform(
     frame: pd.DataFrame,
     columns: Sequence[str],
     reference: str,
     pseudocount: float,
 ) -> Tuple[pd.DataFrame, List[str]]:
-    ordered = [str(column) for column in columns]
-    if reference not in ordered:
-        raise ValueError("ALR reference must be included in composition columns.")
-    missing = sorted(set(ordered) - set(frame.columns))
-    if missing:
-        raise ValueError(f"ALR composition columns are missing: {missing}")
-    values = frame[ordered].apply(pd.to_numeric, errors="coerce").to_numpy(
-        dtype=np.float64
-    )
-    if not np.isfinite(values).all():
-        raise ValueError("ALR composition contains missing or non-finite values.")
-    if np.any(values < 0.0):
-        raise ValueError("ALR composition contains negative values.")
-    row_sums = np.sum(values, axis=1)
-    if np.any(row_sums <= 0.0):
-        raise ValueError("ALR composition contains a row with zero total mass.")
-    closed = values / row_sums[:, None]
-    ref_index = ordered.index(reference)
+    closed, ordered, ref_index = _close_simplex(frame, columns, reference)
     output_names = [
         f"alr_{column}_vs_{reference}" for column in ordered if column != reference
     ]
@@ -313,24 +323,66 @@ def _alr_transform(
     return pd.DataFrame(transformed, index=frame.index, columns=output_names), output_names
 
 
+def _binary_probability_name(non_reference: str) -> str:
+    """Canonical export/stack name for a 2-part simplex non-reference part."""
+    return f"p_{non_reference}"
+
+
+def _simplex_encode(
+    frame: pd.DataFrame,
+    columns: Sequence[str],
+    reference: str,
+    pseudocount: Optional[float],
+) -> Tuple[pd.DataFrame, List[str]]:
+    """Encode a simplex: raw closed non-reference ``p`` when K=2, else ALR (K>2).
+
+    Binary path does not use a log-ratio and does not require ``pseudocount``.
+    """
+    closed, ordered, ref_index = _close_simplex(frame, columns, reference)
+    if len(ordered) == 2:
+        non_ref = ordered[1 - ref_index]
+        name = _binary_probability_name(non_ref)
+        values = closed[:, ordered.index(non_ref)].astype(np.float32)
+        return pd.DataFrame({name: values}, index=frame.index), [name]
+    if pseudocount is None:
+        raise ValueError(
+            "ALR composition (K>2) requires pseudocount > 0 "
+            "(set per group in profile/site actionConfig; no code default)."
+        )
+    pc = float(pseudocount)
+    if pc <= 0.0:
+        raise ValueError("ALR composition pseudocount must be > 0.")
+    return _alr_transform(frame, ordered, reference, pc)
+
+
 @dataclass(frozen=True)
 class CompositionGroupSpec:
-    """One simplex (sum-to-1) feature set encoded by additive log-ratio (ALR).
+    """One simplex (sum-to-1) feature set.
 
-    ``columns`` are the parts (K >= 2); ``reference`` is the ALR denominator part
-    (defaults to the last column). The transform drops the reference and emits
-    ``K - 1`` log-ratio coordinates named ``alr_<part>_vs_<reference>``.
+    ``columns`` are the parts (K >= 2); ``reference`` is the dropped/denominator
+    part (defaults to the last column). Encoding:
+
+    - K=2: closed non-reference probability ``p_<nonref>`` (no ALR, no ε)
+    - K>2: ALR coordinates ``alr_<part>_vs_<reference>`` (ε required)
+
     ``standardize`` controls whether those coordinates are z-scored downstream.
     """
 
     name: str
     columns: Tuple[str, ...]
     reference: str
-    pseudocount: float
+    pseudocount: Optional[float]
     standardize: bool
 
-    def alr_names(self) -> List[str]:
+    def encoded_names(self) -> List[str]:
+        if len(self.columns) == 2:
+            non_ref = next(c for c in self.columns if c != self.reference)
+            return [_binary_probability_name(non_ref)]
         return [f"alr_{c}_vs_{self.reference}" for c in self.columns if c != self.reference]
+
+    def alr_names(self) -> List[str]:
+        """Backward-compatible alias for :meth:`encoded_names`."""
+        return self.encoded_names()
 
 
 def normalize_composition_groups(
@@ -368,14 +420,24 @@ def normalize_composition_groups(
             raise ValueError(
                 f"composition group '{name}' reference '{ref}' is not one of its columns."
             )
-        if pseudocount is None:
-            raise ValueError(
-                f"composition group '{name}' requires pseudocount > 0 "
-                "(set per group in profile/site actionConfig; no code default)."
-            )
-        pc = float(pseudocount)
-        if pc <= 0.0:
-            raise ValueError(f"composition group '{name}' pseudocount must be > 0.")
+        pc: Optional[float]
+        if len(cols) == 2:
+            # Binary simplex uses closed non-reference p; ε unused.
+            if pseudocount is None:
+                pc = None
+            else:
+                pc = float(pseudocount)
+                if pc <= 0.0:
+                    raise ValueError(f"composition group '{name}' pseudocount must be > 0.")
+        else:
+            if pseudocount is None:
+                raise ValueError(
+                    f"composition group '{name}' requires pseudocount > 0 for ALR (K>2) "
+                    "(set per group in profile/site actionConfig; no code default)."
+                )
+            pc = float(pseudocount)
+            if pc <= 0.0:
+                raise ValueError(f"composition group '{name}' pseudocount must be > 0.")
         std = True if standardize is None else bool(standardize)
         if name in seen_names:
             raise ValueError(f"duplicate composition group name '{name}'.")
@@ -588,18 +650,18 @@ def fit_covariates(
     composition_no_standardize: List[str] = []
     composition_output_names: List[str] = []
     for spec in composition_specs:
-        alr_frame, alr_names = _alr_transform(
+        encoded_frame, encoded_names = _simplex_encode(
             aligned,
             list(spec.columns),
             spec.reference,
             spec.pseudocount,
         )
-        aligned = aligned.drop(columns=list(spec.columns)).join(alr_frame)
+        aligned = aligned.drop(columns=list(spec.columns)).join(encoded_frame)
         numeric = [column for column in numeric if column not in set(spec.columns)]
-        numeric.extend(alr_names)
-        composition_output_names.extend(alr_names)
+        numeric.extend(encoded_names)
+        composition_output_names.extend(encoded_names)
         if not spec.standardize:
-            composition_no_standardize.extend(alr_names)
+            composition_no_standardize.extend(encoded_names)
 
     no_standardize_set = set(composition_no_standardize)
 
@@ -787,15 +849,17 @@ def transform_covariates(
         columns = [str(c) for c in group.get("columns", [])]
         reference = group.get("reference")
         pseudocount = group.get("pseudocount")
-        if not columns or not reference or pseudocount is None:
-            raise ValueError("Frozen ALR composition group metadata is incomplete.")
-        alr_frame, _ = _alr_transform(
+        if not columns or not reference:
+            raise ValueError("Frozen composition group metadata is incomplete.")
+        if len(columns) > 2 and pseudocount is None:
+            raise ValueError("Frozen ALR composition group (K>2) is missing pseudocount.")
+        encoded_frame, _ = _simplex_encode(
             aligned,
             columns,
             str(reference),
-            float(pseudocount),
+            float(pseudocount) if pseudocount is not None else None,
         )
-        aligned = aligned.drop(columns=columns).join(alr_frame)
+        aligned = aligned.drop(columns=columns).join(encoded_frame)
 
     no_standardize_set = set(preprocessor.composition_no_standardize_columns)
     out_parts: List[np.ndarray] = []
