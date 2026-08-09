@@ -18,7 +18,6 @@ import shlex
 import shutil
 import subprocess
 import tarfile
-import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -414,6 +413,8 @@ def _run(
     _append_log(log_path, "COMMAND: " + " ".join(shlex.quote(c) for c in cmd))
     handle = current_handle()
     if stdout_path is not None:
+        # stdout goes to a file; still drain stderr via communicate(timeout=…)
+        # so a chatty child cannot fill the stderr pipe and deadlock.
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
         with stdout_path.open("wb") as out_fh:
             proc = subprocess.Popen(
@@ -424,15 +425,19 @@ def _run(
             )
             if handle is not None:
                 handle.register_process(proc)
-            while proc.poll() is None:
-                if handle is not None and handle.is_cancelled:
-                    handle.kill_children()
-                    raise WorkerStoppedError(f"Stopped during {step}")
-                if handle is not None:
-                    handle.cancel.wait(0.5)
-                else:
-                    time.sleep(0.5)
-            stderr_raw = proc.stderr.read() if proc.stderr else b""
+            stderr_raw = b""
+            while True:
+                try:
+                    _out, stderr_raw = proc.communicate(timeout=0.5)
+                    break
+                except subprocess.TimeoutExpired:
+                    if handle is not None and handle.is_cancelled:
+                        handle.kill_children()
+                        try:
+                            proc.communicate(timeout=5)
+                        except Exception:
+                            pass
+                        raise WorkerStoppedError(f"Stopped during {step}") from None
         stderr_text = (stderr_raw or b"").decode("utf-8", errors="replace")
         if stderr_text:
             _append_log(log_path, f"[{step}] stderr:\n{stderr_text}")

@@ -58,6 +58,19 @@ def test_run_cancellable_stop() -> None:
         pass
 
 
+def test_run_cancellable_large_stdout_no_deadlock() -> None:
+    """Pipe buffers are ~64 KiB; draining via communicate must not hang."""
+    import sys
+
+    blob = "x" * 200_000
+    completed = run_cancellable(
+        [sys.executable, "-c", f"import sys; sys.stdout.write({blob!r})"],
+        poll_seconds=0.1,
+    )
+    assert completed.returncode == 0
+    assert len(completed.stdout) >= 200_000
+
+
 def test_runner_drain_skips_claim() -> None:
     client = MagicMock()
     client.request_task.return_value = TaskPollResult(

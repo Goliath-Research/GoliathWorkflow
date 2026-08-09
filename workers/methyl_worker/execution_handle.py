@@ -108,7 +108,12 @@ def run_cancellable(
     handle: Optional[ExecutionHandle] = None,
     poll_seconds: float = 0.25,
 ) -> subprocess.CompletedProcess[str]:
-    """Popen + process-group wait; honors ``handle.cancel`` when set."""
+    """Popen + process-group wait; honors ``handle.cancel`` when set.
+
+    Uses ``communicate(timeout=…)`` so stdout/stderr pipes are drained while
+    waiting. A bare ``poll()`` loop with ``PIPE`` deadlocks once the child fills
+    the OS pipe buffer (~64 KiB) — never use that pattern here.
+    """
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -120,16 +125,24 @@ def run_cancellable(
     if active is not None:
         active.register_process(proc)
     try:
-        while proc.poll() is None:
-            if active is not None and active.is_cancelled:
-                active.kill_children()
-                raise WorkerStoppedError(f"Stopped while running: {cmd[0]}")
-            if active is not None:
-                active.cancel.wait(poll_seconds)
-            else:
-                threading.Event().wait(poll_seconds)
-        stdout, stderr = proc.communicate()
-        return subprocess.CompletedProcess(cmd, proc.returncode or 0, stdout, stderr)
+        while True:
+            try:
+                stdout, stderr = proc.communicate(timeout=poll_seconds)
+                # Cancel may kill the child while communicate() is waiting; that
+                # completes the wait without TimeoutExpired — still treat as stop.
+                if active is not None and active.is_cancelled:
+                    raise WorkerStoppedError(f"Stopped while running: {cmd[0]}")
+                return subprocess.CompletedProcess(
+                    cmd, int(proc.returncode or 0), stdout or "", stderr or ""
+                )
+            except subprocess.TimeoutExpired:
+                if active is not None and active.is_cancelled:
+                    active.kill_children()
+                    try:
+                        proc.communicate(timeout=5)
+                    except Exception:
+                        ExecutionHandle._kill_one(proc)
+                    raise WorkerStoppedError(f"Stopped while running: {cmd[0]}") from None
     finally:
         if proc.poll() is None:
             ExecutionHandle._kill_one(proc)
