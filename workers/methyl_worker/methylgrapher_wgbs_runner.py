@@ -375,23 +375,45 @@ def _align_docker_user() -> str:
 
 
 def _ensure_align_workdir_writable(work_dir: Path) -> None:
-    """Drop root-owned Align stubs that block uid 1000 from resuming."""
+    """Drop Align stubs that uid 1000 cannot rewrite.
+
+    Sisters often run the worker as root while Align docker uses ``1000:1000``.
+    ``os.access(..., W_OK)`` as root is a false green light on root-owned files,
+    so we always clear rewrite targets and prefer ownership by the docker uid.
+    """
     work_dir.mkdir(parents=True, exist_ok=True)
-    patterns = (
+    docker_uid = 1000
+    try:
+        docker_uid = int(_align_docker_user().split(":", 1)[0])
+    except ValueError:
+        pass
+    # Always clear log/report stubs — Align reopens them with mode "w".
+    always_clear = (
         "alignment.Ref_*.log",
-        "alignment.mojo.Ref_*.gaf",
         "report.txt",
         "MojoGiraffe*.log",
     )
-    for pattern in patterns:
+    for pattern in always_clear:
         for path in work_dir.glob(pattern):
             try:
-                if os.access(path, os.W_OK):
-                    continue
                 path.unlink(missing_ok=True)
-                logger.info("Removed non-writable Align stub %s", path)
+                logger.info("Cleared Align stub %s", path)
             except OSError as exc:
                 logger.warning("Could not clear Align stub %s: %s", path, exc)
+    # Incomplete Mojo GAF shards: drop if not owned by docker uid.
+    for path in work_dir.glob("alignment.mojo.Ref_*.gaf"):
+        try:
+            if path.stat().st_uid == docker_uid:
+                continue
+            path.unlink(missing_ok=True)
+            logger.info("Removed foreign-owned Mojo GAF stub %s", path)
+        except OSError as exc:
+            logger.warning("Could not clear Mojo GAF stub %s: %s", path, exc)
+    try:
+        if work_dir.stat().st_uid != docker_uid:
+            os.chown(work_dir, docker_uid, docker_uid)
+    except OSError:
+        pass
 
 
 def _nvidia_hbm_free_gib() -> float | None:
