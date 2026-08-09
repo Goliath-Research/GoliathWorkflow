@@ -751,6 +751,10 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
         f"METHYLGRAPHER_DUAL_GRAPH_PARALLEL={dual_parallel}",
         # Fail closed when nvidia/amd DeviceContext cannot be created (no silent CPU).
         "METHYLGRAPHER_GPU_REQUIRE=1",
+        # Align orchestration prints progress to stdout; worker capture is often ascii.
+        "PYTHONIOENCODING=utf-8",
+        "PYTHONUTF8=1",
+        "LANG=C.UTF-8",
     ]
     # Older NVIDIA drivers (<580) need system ptxas for Mojo CUDA create.
     ptxas = (
