@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Atomically publish epimethyl/methylgrapher:1.70-mojo to NFS for the GH200 fleet.
 #
-# Always writes BOTH pin files (this is what broke sisters before):
+# Pin files (stale .image_id.oci is what broke sisters before):
 #   methylgrapher-1.70-mojo.image_id      — docker config digest (classic graph driver)
 #   methylgrapher-1.70-mojo.image_id.oci  — OCI image manifest digest (containerd hosts)
+# When the tar is legacy docker-archive (no OCI index), .image_id.oci is removed so a
+# previous publish's digest cannot pass enable_fleet / verify against the new tar.
 #
 # Usage (on 50-58 after build):
 #   bash scripts/publish_methylgrapher_mojo_fleet_image.sh
@@ -66,18 +68,15 @@ with tarfile.open(path) as tf:
             if dig.startswith("sha256:"):
                 print(dig)
                 raise SystemExit(0)
-    # Legacy docker-archive: Config path basename is the config digest only.
+    # Legacy docker-archive: no OCI manifest digest — caller must drop .image_id.oci.
     if "manifest.json" in names:
-        man = json.load(tf.extractfile("manifest.json"))
-        cfg = (man[0].get("Config") or "") if man else ""
-        # Not an OCI manifest id — leave empty so caller keeps config-only pin.
         raise SystemExit(0)
 raise SystemExit("no OCI index.json in tar")
 PY
 )"
 
 if [[ -z "${OCI_ID}" ]]; then
-  log "WARN: tar has no OCI index manifest digest; sisters on containerd may fail pin checks"
+  log "WARN: tar has no OCI index manifest digest; removing stale ${OCI_FILE} if present"
 else
   log "oci_manifest=${OCI_ID}"
 fi
@@ -91,6 +90,10 @@ chmod 600 "${TAR}" || true
 printf '%s\n' "${CONFIG_ID}" > "${ID_FILE}"
 if [[ -n "${OCI_ID}" ]]; then
   printf '%s\n' "${OCI_ID}" > "${OCI_FILE}"
+else
+  # Must not leave a prior publish's OCI pin — containerd sisters would accept it
+  # against a tar that no longer contains that manifest.
+  rm -f "${OCI_FILE}"
 fi
 
 date -u +%Y-%m-%dT%H:%M:%SZ > "${RELOAD_MARKER}"
@@ -105,7 +108,11 @@ fi
 
 log "published ${TAR}"
 log "pin config: ${ID_FILE} -> ${CONFIG_ID}"
-[[ -n "${OCI_ID}" ]] && log "pin oci:    ${OCI_FILE} -> ${OCI_ID}"
+if [[ -n "${OCI_ID}" ]]; then
+  log "pin oci:    ${OCI_FILE} -> ${OCI_ID}"
+else
+  log "pin oci:    removed (legacy docker-archive; no manifest digest)"
+fi
 log "reload marker: ${RELOAD_MARKER}"
 log "sisters: bash /work/epimethyl/images/sister_reload_mojo_align.sh"
 log "then on 50-58: python3 /work/epimethyl/images/restore_wgbs_capabilities.py"
