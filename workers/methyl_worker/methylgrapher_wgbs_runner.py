@@ -8,6 +8,7 @@ worker path (no site/profile re-read for science knobs).
 
 from __future__ import annotations
 
+import fcntl
 import gzip
 import hashlib
 import json
@@ -17,9 +18,10 @@ import shlex
 import shutil
 import subprocess
 import tarfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -357,6 +359,35 @@ def _append_log(log_path: Path, text: str) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as fh:
         fh.write(text.rstrip() + "\n")
+
+
+@contextmanager
+def _gpu_align_lock(device: str) -> Iterator[None]:
+    """Serialize GPU Align docker on a node (one GH200 Align ≈ full HBM).
+
+    Host flock path is local (not NFS) so sisters do not block each other.
+    CPU Align skips the lock.
+    """
+    dev = (device or "").strip().lower()
+    if dev not in {"nvidia", "cuda", "amd", "hip", "rocm"}:
+        yield
+        return
+    lock_dir = Path(
+        os.environ.get("METHYL_GPU_ALIGN_LOCK_DIR", "/tmp/methyl-gpu-align")
+    )
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_dir / "align.lock"
+    with lock_path.open("a+", encoding="utf-8") as fh:
+        logger.info("Acquiring GPU Align flock %s (device=%s)", lock_path, dev)
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            fh.seek(0)
+            fh.truncate()
+            fh.write(f"pid={os.getpid()}\ndevice={dev}\n")
+            fh.flush()
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
 
 def _run(
@@ -1465,7 +1496,8 @@ def run_methylgrapher_wgbs_align(
             for root in sorted(mount_roots, key=str):
                 docker_cmd.extend(["-v", f"{root}:{root}"])
             docker_cmd.extend([image, *align_cmd])
-            _run(docker_cmd, log_path, step="methylGrapher.Align")
+            with _gpu_align_lock(align_device):
+                _run(docker_cmd, log_path, step="methylGrapher.Align")
 
             # methylGrapher merges to work_dir/alignment.gaf; ignore empty shard files
             # left behind by a failed prior attempt (alignment.0.gaf …).
@@ -1498,15 +1530,38 @@ def run_methylgrapher_wgbs_align(
 
         qc_bam = work_dir / f"{sample_id}.giraffe.bam"
         restored = work_dir / f"{sample_id}.restored.bam"
-        if restored.is_file() and restored.stat().st_size > 0:
+
+        def _bam_reusable(path: Path) -> bool:
+            """Reject truncated/corrupt BAM leftovers from killed Aligns."""
+            if not path.is_file() or path.stat().st_size <= 0:
+                return False
+            try:
+                proc = subprocess.run(
+                    ["samtools", "quickcheck", "-v", str(path)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                return proc.returncode == 0
+            except FileNotFoundError:
+                # No samtools on PATH: fall back to non-empty only.
+                return path.stat().st_size > 1_000_000
+
+        if restored.is_file() and restored.stat().st_size > 0 and _bam_reusable(restored):
             # Resume after a failed fixmate/markdup: keep the name-ordered BAM.
             logger.info("Reusing restored QC BAM for %s", sample_id)
             _append_log(log_path, f"REUSE: existing restored BAM {restored}")
         else:
-            if qc_bam.is_file() and qc_bam.stat().st_size > 0:
+            if restored.is_file() and not _bam_reusable(restored):
+                _append_log(log_path, f"DISCARD: truncated restored BAM {restored}")
+                restored.unlink(missing_ok=True)
+            if qc_bam.is_file() and _bam_reusable(qc_bam):
                 logger.info("Reusing giraffe QC BAM for %s", sample_id)
                 _append_log(log_path, f"REUSE: existing giraffe BAM {qc_bam}")
             else:
+                if qc_bam.is_file() and not _bam_reusable(qc_bam):
+                    _append_log(log_path, f"DISCARD: truncated giraffe BAM {qc_bam}")
+                    qc_bam.unlink(missing_ok=True)
                 c2t_r1 = work_dir / f"{sample_id}.C2T.R1.fastq"
                 g2a_r2 = work_dir / f"{sample_id}.G2A.R2.fastq"
                 _write_bs_converted_fastq(
