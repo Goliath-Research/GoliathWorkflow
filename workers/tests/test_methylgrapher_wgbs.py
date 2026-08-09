@@ -149,6 +149,23 @@ def test_mojo_giraffe_ready_false_materializes_zero(tmp_path: Path) -> None:
     assert "METHYLGRAPHER_MOJO_GIRAFFE_READY=0" in materialize_align_docker_env(bundle)
 
 
+def test_mojo_segment_cache_mounts_always_added_for_qc_reuse(tmp_path: Path) -> None:
+    """GAF reuse must still mount segment pack cache for QC MojoGiraffe."""
+    from methyl_worker.methylgrapher_wgbs_runner import (
+        add_mojo_segment_cache_mounts,
+        mojo_segments_cache_path,
+        resolve_wgbs_bundle_from_resolved,
+    )
+
+    cfg = _touch_bundle(tmp_path)
+    cfg["mojo_segments_cache"] = str(tmp_path / "mojo_segments")
+    (tmp_path / "mojo_segments").mkdir()
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    roots: set = {tmp_path / "sample"}
+    add_mojo_segment_cache_mounts(roots, bundle)
+    assert mojo_segments_cache_path(bundle).resolve() in roots
+
+
 def test_qc_bam_fallback_error_default_and_vg_opt_in(tmp_path: Path) -> None:
     from methyl_worker.methylgrapher_wgbs_runner import (
         effective_qc_bam_fallback,

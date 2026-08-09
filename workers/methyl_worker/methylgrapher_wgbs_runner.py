@@ -714,6 +714,36 @@ def align_docker_gpu_flags(device: str) -> List[str]:
     return []
 
 
+def mojo_segments_cache_path(bundle: MethylGrapherWgbsBundle) -> Path:
+    """Resolved Mojo segment-pack cache dir (site/profile ``mojo_segments_cache``)."""
+    return Path(
+        (bundle.mojo_segments_cache or "").strip() or "/work/cache/mojo_segments"
+    )
+
+
+def add_mojo_segment_cache_mounts(
+    mount_roots: set, bundle: MethylGrapherWgbsBundle
+) -> None:
+    """Ensure MojoGiraffe can read/build segment packs inside Docker.
+
+    Must run for **both** science Align and QC MojoGiraffe. When science GAF is
+    reused, Align's docker block is skipped — without this, QC still sets
+    ``METHYLGRAPHER_MOJO_SEGMENTS_CACHE`` but never mounts it, and Mojo fails with
+    ``Permission denied: '/work'`` (node 890).
+    """
+    cache_root = mojo_segments_cache_path(bundle)
+    try:
+        mount_roots.add(cache_root.resolve())
+    except OSError:
+        mount_roots.add(cache_root)
+    for extra in (Path("/work/cache"), Path("/lambda/nfs/Work/cache")):
+        if extra.is_dir():
+            try:
+                mount_roots.add(extra.resolve())
+            except OSError:
+                mount_roots.add(extra)
+
+
 def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
     """Map resolvedConfig Mojo/GPU knobs to container ``-e KEY=VAL`` pairs.
 
@@ -1652,6 +1682,8 @@ def run_methylgrapher_wgbs_align(
             fq1.parent.resolve(),
             Path(index_prefix).parent,
         }
+        # Align + QC MojoGiraffe both need segment packs (even when science GAF is reused).
+        add_mojo_segment_cache_mounts(mount_roots, bundle)
         if gaf_path.is_file() and gaf_path.stat().st_size > 0:
             # Resume: alignment is the longest step and the GAF only lands here
             # after methylGrapher succeeded, so never re-map it.
@@ -1670,14 +1702,6 @@ def run_methylgrapher_wgbs_align(
             ]
             for env_pair in materialize_align_docker_env(bundle):
                 docker_cmd.extend(["-e", env_pair])
-            cache_root = Path(
-                (bundle.mojo_segments_cache or "").strip() or "/work/cache/mojo_segments"
-            )
-            mount_roots.add(cache_root)
-            # Also mount /work/cache parent when present so shared segment packs resolve.
-            for extra in (Path("/work/cache"), Path("/lambda/nfs/Work/cache")):
-                if extra.is_dir():
-                    mount_roots.add(extra.resolve())
             for root in sorted(mount_roots, key=str):
                 docker_cmd.extend(["-v", f"{root}:{root}"])
             docker_cmd.extend([image, *align_cmd])
