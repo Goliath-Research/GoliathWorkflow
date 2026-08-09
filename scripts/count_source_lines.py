@@ -90,7 +90,6 @@ def main():
         os.path.normpath("packages/methylmapper/methyl_mapper/sample_genes.sql"): "mssql",
         os.path.normpath("packages/methylmapper/methyl_mapper/spMapDMP2Genes.sql"): "mssql",
         os.path.normpath("workflow_engine/delphi/db-designer/TransferObjsFromBatches.sql"): "mssql",
-        os.path.normpath("workflow_engine/sql/wf_action_dispatch_metadata.sql"): "mssql",
     }
     
     for root, dirs, files in os.walk(WORKSPACE_DIR):

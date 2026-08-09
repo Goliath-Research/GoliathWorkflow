@@ -361,6 +361,124 @@ def _append_log(log_path: Path, text: str) -> None:
         fh.write(text.rstrip() + "\n")
 
 
+def _align_docker_user() -> str:
+    """Docker ``--user`` for Align writes on shared NFS.
+
+    Always prefer ``1000:1000`` (ubuntu) so a sister that runs the worker as
+    root does not leave root-owned logs that the next worker cannot reopen.
+    Override with ``METHYL_ALIGN_DOCKER_USER=uid:gid`` when needed.
+    """
+    explicit = (os.environ.get("METHYL_ALIGN_DOCKER_USER") or "").strip()
+    if explicit:
+        return explicit
+    return "1000:1000"
+
+
+def _ensure_align_workdir_writable(work_dir: Path) -> None:
+    """Drop root-owned Align stubs that block uid 1000 from resuming."""
+    work_dir.mkdir(parents=True, exist_ok=True)
+    patterns = (
+        "alignment.Ref_*.log",
+        "alignment.mojo.Ref_*.gaf",
+        "report.txt",
+        "MojoGiraffe*.log",
+    )
+    for pattern in patterns:
+        for path in work_dir.glob(pattern):
+            try:
+                if os.access(path, os.W_OK):
+                    continue
+                path.unlink(missing_ok=True)
+                logger.info("Removed non-writable Align stub %s", path)
+            except OSError as exc:
+                logger.warning("Could not clear Align stub %s: %s", path, exc)
+
+
+def _nvidia_hbm_free_gib() -> float | None:
+    import subprocess
+
+    try:
+        ps = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=memory.free",
+                "--format=csv,noheader,nounits",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if ps.returncode != 0 or not (ps.stdout or "").strip():
+        return None
+    try:
+        return float((ps.stdout or "").strip().splitlines()[0].split(",")[0].strip()) / 1024.0
+    except ValueError:
+        return None
+
+
+def _kill_orphan_align_containers() -> list[str]:
+    """Kill leftover methylgrapher Align containers on this host."""
+    import subprocess
+
+    ps = subprocess.run(
+        [
+            _docker_bin(),
+            "ps",
+            "--format",
+            "{{.ID}}\t{{.Image}}\t{{.Command}}",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    killed: list[str] = []
+    for ln in (ps.stdout or "").splitlines():
+        parts = ln.split("\t", 2)
+        if len(parts) < 3:
+            continue
+        cid, image, cmd = parts[0], parts[1], parts[2]
+        if "methylgrapher" in image.lower() and "Align" in cmd:
+            subprocess.run(
+                [_docker_bin(), "kill", cid],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            killed.append(cid)
+    return killed
+
+
+def _wait_host_gpu_hbm(device: str, *, min_free_gib: float, timeout_s: float) -> None:
+    """Block until local GPU HBM is free enough for a full Align residency."""
+    import time
+
+    dev = (device or "").strip().lower()
+    if dev not in {"nvidia", "cuda"}:
+        return
+    deadline = time.monotonic() + timeout_s
+    while True:
+        free = _nvidia_hbm_free_gib()
+        if free is not None and free >= min_free_gib:
+            logger.info(
+                "GPU HBM ready for Align: free=%.1f GiB (need ≥%.1f)",
+                free,
+                min_free_gib,
+            )
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                f"GPU HBM not reclaimed for Align: need ≥{min_free_gib:.1f} GiB free, "
+                f"have {free if free is not None else 'unknown'} GiB after "
+                f"{timeout_s:.0f}s. Kill leftover Mojo/Align on this host."
+            )
+        time.sleep(2.0)
+
+
 @contextmanager
 def _gpu_align_lock(device: str) -> Iterator[None]:
     """Serialize GPU Align docker on a node (one GH200 Align ≈ full HBM).
@@ -371,6 +489,8 @@ def _gpu_align_lock(device: str) -> Iterator[None]:
     Catalog ``dispatch.exclusive_worker`` / ``max_per_worker`` gate claims in
     ``wf.sp_worker_request_task``; this flock covers local races / orphans.
     """
+    import time
+
     dev = (device or "").strip().lower()
     if dev not in {"nvidia", "cuda", "amd", "hip", "rocm"}:
         yield
@@ -380,46 +500,17 @@ def _gpu_align_lock(device: str) -> Iterator[None]:
     )
     lock_dir.mkdir(parents=True, exist_ok=True)
     lock_path = lock_dir / "align.lock"
+    min_free = float(os.environ.get("METHYL_GPU_ALIGN_MIN_FREE_GIB", "90"))
+    wait_s = float(os.environ.get("METHYL_GPU_ALIGN_HBM_WAIT_S", "180"))
     with lock_path.open("a+", encoding="utf-8") as fh:
         logger.info("Acquiring GPU Align flock %s (device=%s)", lock_path, dev)
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
         try:
-            # Fail closed if another Align container is already on this GPU.
-            # (Restart orphans can outlive the previous worker process.)
-            try:
-                import subprocess
-
-                ps = subprocess.run(
-                    [
-                        _docker_bin(),
-                        "ps",
-                        "--format",
-                        "{{.ID}}\t{{.Image}}\t{{.Command}}",
-                    ],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-                others = []
-                for ln in (ps.stdout or "").splitlines():
-                    parts = ln.split("\t", 2)
-                    if len(parts) < 3:
-                        continue
-                    image, cmd = parts[1], parts[2]
-                    if "methylgrapher" in image.lower() and "Align" in cmd:
-                        others.append(ln.strip())
-                if others:
-                    raise RuntimeError(
-                        "GPU Align flock held but another methylgrapher Align "
-                        f"container is already running on this host: {others[0]!r}. "
-                        "Kill the orphan container before retrying "
-                        "(one Align per GH200)."
-                    )
-            except RuntimeError:
-                raise
-            except Exception as exc:  # noqa: BLE001 — best-effort orphan probe
-                logger.warning("GPU Align orphan probe skipped: %s", exc)
+            killed = _kill_orphan_align_containers()
+            if killed:
+                logger.warning("Killed orphan Align container(s): %s", killed)
+                time.sleep(3.0)
+            _wait_host_gpu_hbm(dev, min_free_gib=min_free, timeout_s=wait_s)
             fh.seek(0)
             fh.truncate()
             fh.write(f"pid={os.getpid()}\ndevice={dev}\n")
@@ -1542,12 +1633,13 @@ def run_methylgrapher_wgbs_align(
             _append_log(log_path, f"REUSE: existing GAF {gaf_path}")
         else:
             align_device = resolve_giraffe_device(bundle)
+            _ensure_align_workdir_writable(work_dir)
             docker_cmd = [
                 _docker_bin(),
                 "run",
                 "--rm",
                 "--user",
-                f"{os.getuid()}:{os.getgid()}",
+                _align_docker_user(),
                 *align_docker_gpu_flags(align_device),
             ]
             for env_pair in materialize_align_docker_env(bundle):

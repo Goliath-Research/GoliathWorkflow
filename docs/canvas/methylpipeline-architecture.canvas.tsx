@@ -641,7 +641,7 @@ export default function MethylPipelineArchitectureCanvas() {
             <Card>
               <CardHeader>Azure SQL</CardHeader>
               <CardBody>
-                <Text size="small">Production portal + gateway. See workflow_engine/sql/</Text>
+                <Text size="small">Production portal + gateway. See workflow_engine/sql_mssql/</Text>
               </CardBody>
             </Card>
             <Card>

@@ -475,7 +475,7 @@ features:
   - packages/methylvalidation/methyl_validation/planner_models.py
   - workers/.../validation_models.py
   - schemas/tasks/pipeline_centroid.input.schema.json
-  - workflow_engine/sql/seed_action_catalog.py
+  - workflow_engine/sql_mssql/seed_action_catalog.py
   - schemas/tasks/
   - scripts/deploy_workflow_definitions.sh
   stories:

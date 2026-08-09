@@ -59,6 +59,7 @@ def deploy_postgres(dsn: str) -> None:
         "wf_action_schema.sql",
         "wf_repo_upsert_workflow_action.sql",
         "wf_action_dispatch_metadata.sql",
+        "wf_action_dispatch_concurrency.sql",
         "wf_repo_create_workflow_graph.sql",
         "wf_sql_collection_bindings.sql",
     )
@@ -140,6 +141,11 @@ def seed_minimal_workflow(dsn: str) -> tuple[int, int, str]:
         )
     else:
         worker_id = int(worker_id)
+    # Registered capabilities gate every claim; seeded scenarios all use 'test-cap'.
+    _psql_query(
+        dsn,
+        f"UPDATE wf.worker SET capabilities = '[\"test-cap\"]'::jsonb WHERE id={worker_id};",
+    )
     token = "parity-test-token"
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     _psql_query(
@@ -148,6 +154,17 @@ def seed_minimal_workflow(dsn: str) -> tuple[int, int, str]:
         f"INSERT INTO wf.worker_token (worker_id, token_hash) VALUES ({worker_id}, decode('{token_hash}','hex'));",
     )
     return version_id, worker_id, token
+
+
+def start_instance(dsn: str, version_id: int) -> int:
+    instance_id = int(
+        _psql_query(
+            dsn,
+            f"SELECT id FROM wf.wf_repo_create_workflow_instance({version_id}, '{{}}'::jsonb);",
+        )
+    )
+    _psql_query(dsn, f"CALL wf.sp_start_workflow_instance({instance_id});")
+    return instance_id
 
 
 def test_worker_capability_dispatch_postgres(dsn: str) -> None:
@@ -349,11 +366,8 @@ def _run_rest_gateway_smoke(
                 return json.loads(body) if body else {}
 
         post("/workers/authenticate", {"worker_id": worker_id, "worker_token": token})
-        created = post(
-            "/workflows/instances",
-            {"workflow_version_id": version_id, "context_json": {}},
-        )
-        assert created["status"] == "RUNNING", created
+        # Instance lifecycle is not on the worker-only HTTP surface; start it via SQL.
+        start_instance(dsn, version_id)
         claim = post(
             "/workers/tasks/request",
             {"worker_id": worker_id, "worker_token": token, "capability": "test-cap"},

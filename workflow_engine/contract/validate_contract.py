@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate DB object contract parity between sql/ (T-SQL) and sql_pg/ (PL/pgSQL)."""
+"""Validate DB object contract parity between sql_mssql/ (T-SQL) and sql_pg/ (PL/pgSQL)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_YAML = Path(__file__).resolve().parent / "db_objects.yaml"
 SQL_DIRS = {
-    "mssql": ROOT / "sql",
+    "mssql": ROOT / "sql_mssql",
     "postgres": ROOT / "sql_pg",
 }
 
