@@ -1,6 +1,6 @@
 # SamplePrepPipeline — per-sample upstream workflow
 
-**SamplePrepPipeline** is the **universal entry point** for every sample entering MethylPipeline: cfDNA or buffy-coat, from any structured laboratory `fastqSource` (file / S3 / Azure Blob). It orchestrates ingest, alignment (GPU Parabricks for linear/stock Giraffe, **methylGrapher Mojo/vg** for WGBS pangenome via `actionConfig.methylgrapher_wgbs`), **alignment QC** (with optional fastp remediation), optional cfDNA fragmentomics, methylation extraction (GPU MethylExtractor or methylGrapher Mojo MethylCall), **extraction QC**, optional HDF5 archive, and cleanup **per sample** — in parallel — before **DataDrivenPipeline** consumes `{chrom}-CG.h5` files.
+**SamplePrepPipeline** is the **universal entry point** for every sample entering MethylPipeline: cfDNA or buffy-coat, from any structured laboratory `fastqSource` (file / S3 / Azure Blob). It orchestrates ingest, alignment (**native-Mojo** methylGrapher on NVIDIA/AMD for `pangenome_wgbs`, or **explicit** Clara Parabricks for `linear`/`pangenome`), **mode-aware alignment QC** (with optional fastp remediation), optional cfDNA fragmentomics, methylation extraction (GPU MethylExtractor or native-Mojo MethylCall), **extraction QC**, optional HDF5 archive, and cleanup **per sample** — in parallel — before **DataDrivenPipeline** consumes `{chrom}-CG.h5` files.
 
 **Source of truth (workflow graph):** [`../domain/fixtures/sample_prep.program.json`](../domain/fixtures/sample_prep.program.json)
 
@@ -33,11 +33,10 @@ worker_action + capabilities        ACTION nodes + two QC gates
 
 Instance (project-specific)         Performance stack
 ─────────────────────────           ─────────────────
-context_json: samples[],            Clara Parabricks (GPU: fq2bam_meth / stock Giraffe)
-  fastqStorage, projectPath           methylGrapher Docker (Mojo/vg via resolvedConfig; WGBS C2T+G2A —
-                                    no CUDA; jemalloc=off vg on 64K ARM64)
+context_json: samples[],            native-Mojo methylGrapher (pangenome_wgbs: NVIDIA CUDA / AMD HIP)
+  fastqStorage, projectPath           Clara Parabricks (explicit linear / stock Giraffe only)
                                     fastp (R2 trim remediation)
-                                    MethylExtractor (GPU) or methylGrapher extract (**CPU**)
+                                    MethylExtractor (GPU) or native-Mojo MethylCall/MergeCpG
 ```
 
 ## Workflow tree
@@ -187,8 +186,8 @@ See [pipeline architecture §0](../docs/pipeline_architecture.md).
 | `sample.download_fastq` | `sample.download-fastq` | In-process worker |
 | `sample.parabricks_fq2bam` | `parabricks.fq2bam` | External GPU (Docker Parabricks) |
 | `sample.parabricks_giraffe` | `parabricks.giraffe` | External GPU (stock HPRC pangenome) |
-| `sample.methylgrapher_wgbs_align` | `methylgrapher.wgbs_align` / `methylgrapher.wgbs_gpu_align` | External Docker methylGrapher (`engine=mojo` / `align_engine=gpu_giraffe` from resolvedConfig; Mojo + optional vg QC BAM) |
-| `sample.methylgrapher_wgbs_extract` | `methylgrapher.wgbs_extract` | External Docker **CPU** (graph-aware H5 + patterns; no CUDA) |
+| `sample.methylgrapher_wgbs_align` | `methylgrapher.wgbs_align` / `methylgrapher.wgbs_gpu_align` | External Docker native-Mojo (`engine=mojo` / `align_engine=gpu_giraffe|mojo_giraffe`; NVIDIA CUDA or AMD HIP; optional vg QC BAM) |
+| `sample.methylgrapher_wgbs_extract` | `methylgrapher.wgbs_extract` | External Docker native-Mojo MethylCall/MergeCpG (CPU-parallel; graph-aware H5 + patterns) |
 | `sample.trim_fastq` | `sample.trim-fastq` | In-process (fastp) |
 | `sample.delete_fastqs` | `sample.delete-fastqs` | In-process |
 | `sample.methyl_qc` | `methyl-qc` | In-repo methylalignmentqc |

@@ -2,7 +2,7 @@
 name: GBZ-native Mojo Giraffe
 overview: Make pangenome_wgbs (Buffy WGBS) production-efficient and science-correct by teaching Mojo Giraffe to map against PrepareGenome GBZ/dist/minimizer/zipcode indexes—removing the GFA size-cap auto-vg path—while keeping linear alignment as a comparator only and leaving other analytes on their own process packs.
 
-> **Status: IMPLEMENTED (progressive).** Toy GBZ→GAF parity PASS; `align_backends` prefers GBZ quartet (no GFA size-cap on production path); GPU seed `nvidia:sm_90`. Buffy ≤~2 h + DS20M `graph.methyl` vs `cpu_vg` remain operator gates after C2T/G2A segment caches are built. Process-pack scoped to `pangenome_wgbs` only.
+> **Status: IMPLEMENTED (progressive).** Toy GBZ→GAF parity PASS; `align_backends` prefers GBZ quartet (no GFA size-cap on production path); GPU seed `nvidia:sm_90` (+ AMD HIP twin). Buffy ≤~2 h + DS20M `graph.methyl` vs `cpu_vg` remain operator gates after C2T/G2A segment caches are built. Process-pack scoped to `pangenome_wgbs` only. Docs: [`native-mojo-sample-prep-docs.plan.md`](native-mojo-sample-prep-docs.plan.md).
 
 azure_devops:
   type: Feature

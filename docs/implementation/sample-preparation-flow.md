@@ -13,7 +13,7 @@ SamplePrepPipeline is the universal entry point for every sample (cfDNA, buffy c
 1. **Alignment QC** (`sample.methyl_qc` / `methyl-qc`) — validates linear / stock Giraffe / methylGrapher QC BAM metrics; may trigger focused FASTP trim and realign on the **same** alignment mode.
 2. **Extraction QC** (`sample.extraction_qc` / `methyl-extraction-qc`) — validates the extraction manifest (MethylExtractor or methylGrapher canonical shape) for coverage and conversion-quality signal.
 
-Without these gates, bad alignments waste GPU extraction time, and under-covered extractions pollute centroids, DMP discovery, and classifiers.
+Without these gates, bad alignments waste GPU cycles (native-Mojo Giraffe or Parabricks) and under-covered extractions pollute centroids, DMP discovery, and classifiers. Alignment QC is **mode-aware**: shared guardrails run for every mode, with tool-specific metrics for Parabricks vs methylGrapher (see [Metrics import](#metrics-import-and-structured-json)).
 
 Canonical flowchart source: [`docs/diagrams/src/sample-prep-flow.mmd`](../diagrams/src/sample-prep-flow.mmd) (pre-rendered SVG/PNG under `docs/diagrams/out/`). Do **not** maintain a second inline copy of the graph here — the three-mode align/extract routing lives only in that `.mmd` and in [`sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json).
 
@@ -260,42 +260,60 @@ Implementation: [`workers/methyl_worker/giraffe_runner.py`](../../workers/methyl
 
 **Important:** consolidated alignment QC JSON is **assembled by methyl-qc**, not always emitted directly by Parabricks. When `{sample_id}.json` is absent, `writer._build_parabricks_payload_from_qc_tar` reconstructs the payload from the qc-metrics tar.
 
-### WGBS pangenome alignment (methylGrapher dual C2T/G2A)
+### WGBS pangenome alignment (native-Mojo methylGrapher dual C2T/G2A)
 
-When instance/profile/procedure sets `alignmentMode: "pangenome_wgbs"` (scope `useWgbsPangenome: true`), SamplePrep runs **`sample.methylgrapher_wgbs_align`** then later **`sample.methylgrapher_wgbs_extract`**. Procedure pack [`buffy_wgbs_pangenome_gene_fc`](../../workflow_engine/domain/profiles/procedures/buffy_wgbs_pangenome_gene_fc.procedure.json) selects this mode. Plan: [`docs/plans/wgbs-pangenome-sample-prep.plan.md`](../plans/wgbs-pangenome-sample-prep.plan.md).
+When instance/profile/procedure sets `alignmentMode: "pangenome_wgbs"` (scope `useWgbsPangenome: true`), SamplePrep runs **`sample.methylgrapher_wgbs_align`** then later **`sample.methylgrapher_wgbs_extract`**. Procedure pack [`buffy_wgbs_pangenome_gene_fc`](../../workflow_engine/domain/profiles/procedures/buffy_wgbs_pangenome_gene_fc.procedure.json) selects this mode. Leadership brief: [`docs/architecture/mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md).
+
+**Canonical runtime:** **native-Mojo** — one portable Giraffe hot path (`giraffe_stream_map`) using `std.gpu.host.DeviceContext` on **NVIDIA** (`api="cuda"`, e.g. `sm_90` / GH200) **or AMD** (`api="hip"`, e.g. `gfx942` / MI300X). Choosing `pangenome_wgbs` implies a known NVIDIA or AMD GPU; site image tags (`epimethyl/methylgrapher:1.70-mojo-cuda` / `:1.70-mojo-rocm`) and host runtime select the API. Native-Mojo does **not** prefer NVIDIA over AMD.
+
+**Not automatic failure paths:**
+
+- NVIDIA Clara Parabricks is a **separate explicit** mode (`alignmentMode: linear|pangenome`) — never a silent consequence of Mojo failing on an NVIDIA host.
+- On known NVIDIA/AMD fleets, Mojo GPU failure is **fail-closed** (`METHYLGRAPHER_GPU_REQUIRE`). CPU (`cpu_vg` / `engine=python`) is only for **unknown GPU vendors** (e.g. Google Cloud GPUs that are neither NVIDIA nor AMD) or explicit dev/parity rollback.
 
 **Bisulfite-aware correction chain** (worker-side; assets from task `resolvedConfig` only — no stock Giraffe fallback):
 
-1. Resolve dual **C→T** and **G→A** Giraffe indexes + `cpg_tsv` / `ref_paths` / `original_gbz` from site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` (QNAP asset `pangenome-grch38-d9-bs-1.70`).
-2. **`methylGrapher Align`** (directional Y/N) against both converted indexes → merged **GAF** `{sample_id}.alignment.gaf`. Re-running the action reuses an existing non-empty GAF instead of re-mapping.
-3. **QC BAM via `vg giraffe -o BAM --ref-paths`** against the C2T index, using freshly converted reads (R1 C→T, R2 G→A). Surjection happens **inside** giraffe.
-   - **Do not surject the methylGrapher GAF.** methylGrapher maps with `vg giraffe --named-coordinates`, so the GAF path column holds GFA *segment* names, while `vg surject -G` reads that column as vg *node* IDs. The lengths disagree and vg aborts (`cur_offset < cur_len` assertion in `gaf_to_alignment`, signal 6). The GAF stays the input for `MethylCall`, which expects named coordinates.
-   - QC needs one best alignment per read, so only the primary R1-C2T/R2-G2A pass is re-mapped; methylation calls still use every methylGrapher pass.
+1. Resolve dual **C→T** and **G→A** GBZ quartet + `cpg_tsv` / `ref_paths` / `original_gbz` from site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` (QNAP asset `pangenome-grch38-d9-bs-1.70`).
+2. **`methylGrapher Align`** with `engine=mojo` and `align_engine=gpu_giraffe|mojo_giraffe` (directional Y/N) against both converted indexes → merged **GAF** `{sample_id}.alignment.gaf`. Re-running the action reuses an existing non-empty GAF instead of re-mapping.
+3. **QC BAM** — separate C2T BAM pass (Mojo QC BAM or `vg giraffe -o BAM --ref-paths` when configured), using freshly converted reads (R1 C→T, R2 G→A). Surjection happens **inside** giraffe for the vg path.
+   - **Do not surject the methylGrapher GAF.** Science GAF uses named coordinates for `MethylCall`; QC needs one best alignment per read on the C2T pass.
 4. **Restore original read sequences/qualities** on the BAM (converted bases are not suitable for downstream QC as-is).
-5. `samtools fixmate -m` (on the name-ordered restored BAM) → `sort` → `markdup` → `index`; emit Picard-like `{sample_id}.deduplicate_metrics.txt` + `{sample_id}.qc-metrics.tar` so **`sample.methyl_qc` is unchanged**. Giraffe BAMs lack the MC tag that `markdup` requires, so fixmate is mandatory.
-6. Write `{sample_id}.alignment_metrics.json` with tool/image pins and **asset fingerprints** (partial SHA256) for CAAS provenance.
+5. `samtools fixmate -m` → `sort` → `markdup` → `index`; emit Picard-like `{sample_id}.deduplicate_metrics.txt` and optional `{sample_id}.qc-metrics.tar` when Picard collectmultiplemetrics succeeds. Giraffe BAMs lack the MC tag that `markdup` requires, so fixmate is mandatory.
+6. Write `{sample_id}.alignment_metrics.json` with tool/image pins and **asset fingerprints** (partial SHA256) for CAAS provenance. This file is the **primary** input for methylGrapher-family alignment QC (not a Parabricks JSON substitute).
 
-**Extract (graph-aware):** `methylGrapher MethylCall` + `MergeCpG` → linear-coordinate CpG TSV → `{chr}-CG.h5` + optional `{chr}-CG.patterns.h5`. The extraction manifest uses the **canonical** `metadata` / `summary` / `per_chromosome` shape expected by `methyl_extraction_qc` (plus methylGrapher provenance). Read-filtering stats are omitted when unavailable so the discard-fraction guardrail reports a skipped check.
+**Extract (graph-aware, native-Mojo):** `methylGrapher MethylCall` + `MergeCpG` (+ optional `ConversionRate`) run as **native-Mojo** hot paths with Mojo `parallelize()` (CPU-parallel — **not** a CUDA/HIP GPU workload and **not** stock Python). Linear-coordinate CpG TSV → `{chr}-CG.h5` + optional `{chr}-CG.patterns.h5`. The extraction manifest uses the **canonical** `metadata` / `summary` / `per_chromosome` shape expected by `methyl_extraction_qc` (plus methylGrapher provenance). Read-filtering stats are omitted when unavailable so the discard-fraction guardrail reports a skipped check.
 
 **Operator requirements:**
 
 - Provision BS bundle under `/work/genomes/pangenome/.../d9-bs/1.70` (see [`docs/deployment/reference-inventory-qnap.md`](../deployment/reference-inventory-qnap.md)).
-- Set `METHYL_METHYLGRAPHER_IMAGE` (or pin `image` in resolvedConfig). On 64 KB-page ARM64 the image must contain `jemalloc=off` vg ([`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md)).
-- **CPU-only by design** — no CUDA acceleration; expect longer wall time than Parabricks linear on the same GPU node. Size `actionConfig.methylgrapher_wgbs.threads` for the host; compare quality vs cost with [`scripts/compare_sample_prep_linear_vs_wgbs.sh`](../../scripts/compare_sample_prep_linear_vs_wgbs.sh).
-- Gate production promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md).
+- Pin `actionConfig.methylgrapher_wgbs` (`engine=mojo`, `align_engine=gpu_giraffe` or `mojo_giraffe`, `giraffe_device=auto|nvidia|amd`, image `:1.70-mojo-cuda` or `:1.70-mojo-rocm`). See [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md) and [`docs/reference/action-parameter-contract.md`](../reference/action-parameter-contract.md).
+- On 64 KB-page ARM64 the image must contain `jemalloc=off` vg for any vg-assisted QC BAM path.
+- Compare quality vs cost with [`scripts/compare_sample_prep_linear_vs_wgbs.sh`](../../scripts/compare_sample_prep_linear_vs_wgbs.sh); gate promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md).
+
+**Code default flag:** launcher/env defaults in the sibling `methylGrapher-mojo` repo may still say `engine=python` / `align_engine=cpu_vg` for dual-ship rollback. Production site/profile config should pin Mojo GPU as above — do not treat those code defaults as the SamplePrep contract.
 
 Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py).
 
 ## Metrics import and structured JSON
 
-`methyl-qc` (`packages/methylalignmentqc`) merges two upstream metric families into one normalized export per sample.
+`methyl-qc` (`packages/methylalignmentqc`) is **mode-aware**. It detects a metrics family ([`metrics_family.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/metrics_family.py)) and merges **shared** plus **tool-specific** guardrails into one normalized V2 export per sample. Operator table: [Usage ch.03](../usage/03-sample-prep-and-qc.qmd); theory: [ch.09 methylalignmentqc](../theory/chapters/09-methylalignmentqc.qmd).
+
+### Artifacts by alignment mode
+
+| Mode | Primary metrics | Always | Optional |
+|------|-----------------|--------|----------|
+| `linear` / `pangenome` (Parabricks) | `{id}.json` or rebuild from `{id}.qc-metrics.tar` | `{id}.deduplicate_metrics.txt` | — |
+| `pangenome_wgbs` (methylGrapher) | `{id}.alignment_metrics.json` (tool, fingerprints, gaf, bam) | dedup metrics + GAF + QC BAM | Picard tar **only if** provenance `collectmultiplemetrics: true` (else a stale linear tar is ignored) |
 
 ### Import pipeline
 
-1. **Picard dedup** — `*deduplicate_metrics.txt` or `*duplication_metrics.txt` parsed by [`parser.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/parser.py) → `summary_stats` (`PERCENT_DUPLICATION`, read-pair counts, unmapped reads).
-2. **Parabricks payload** — from standalone `{sample_id}.json` or reconstructed from `{sample_id}.qc-metrics.tar`.
-3. **Guardrails** — core WGBS checks (`wgbs_parabricks_qc.py`), optional bisulfite conversion, cfDNA fragmentomics, cycle screening, config-gated duplication/PF-read checks.
-4. **Validate V1** Pydantic assembly → **convert to V2** → write `{output_base}/{project}/alignment_qc/{sample_id}.json`.
+1. **Detect metrics family** — explicit `alignmentMode` when present; otherwise infer from artifacts (see note below).
+2. **Picard dedup** — `*deduplicate_metrics.txt` or `*duplication_metrics.txt` → `summary_stats` ([`parser.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/parser.py)).
+3. **Family payload** — Parabricks: `{sample_id}.json` or tar rebuild. methylGrapher: `alignment_metrics.json` + optional Picard enrichment when `collectmultiplemetrics: true`.
+4. **Guardrails** — shared layers for all modes; Parabricks-family core/cycles/fragmentomics and/or methylGrapher-family provenance/GAF/BAM checks (see [Guardrails reference](#guardrails-reference)).
+5. **Validate V1** → **convert to V2** → write `{output_base}/{project}/alignment_qc/{sample_id}.json`.
+
+**Inference hazard (docs note only):** `alignmentMode` is seeded on instance context for align/realign branching but is **not** declared on `MethylQcTaskInput` / `sample_methyl_qc.input.schema.json`. When mode is omitted and both a Picard tar and methylGrapher provenance exist, inference can prefer the Parabricks family. Prefer passing `alignmentMode` on the methyl_qc task input when the workflow template allows it.
 
 ### Pydantic models and JSON Schema
 
@@ -324,25 +342,34 @@ Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../wor
 
 ## QC layers
 
-`methyl-qc` evaluates three complementary layers before extraction:
+`methyl-qc` evaluates complementary layers before extraction. Which sequencing/library checks run depends on the metrics family:
 
-| Layer | What it gates | Primary source |
-|-------|---------------|----------------|
-| **Sequencing / library** | Q30, cycles, GC dropout, insert size, artifacts | Parabricks `qc-metrics` |
-| **Alignment** | Mapping rate, secondary/supplementary burden, GC coverage uniformity, properly paired rate | Picard dedup + `samtools flagstat` |
-| **Methylation** | CpG depth, conversion, chromosome uniformity | `methyl-extraction-qc` (after extract) |
+| Layer | What it gates | When it runs |
+|-------|---------------|--------------|
+| **Shared alignment** | Dedup summary, optional duplication/PF, mapping / secondary-supplementary / GC uniformity, flagstat pairing | All modes (`actionConfig.alignment_qc`) |
+| **Parabricks sequencing / library** | Q30, cycles, GC dropout, insert size, artifacts, fragmentomics | `linear` / `pangenome`, or WGBS after Picard enrichment |
+| **methylGrapher provenance** | tool/fingerprints, GAF present, BAM present, BAM mapped rate | `pangenome_wgbs` baseline ([`wgbs_pangenome_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_pangenome_qc.py)) |
+| **Methylation (extract)** | CpG depth, conversion, chromosome uniformity | `methyl-extraction-qc` after extract |
 
-The workflow variable `qcPass` covers layers 1 and 2. Extraction QC (`extractionQcPass`) covers layer 3.
+The workflow variable `qcPass` covers alignment QC (shared + family-specific). Extraction QC (`extractionQcPass`) covers the methylation layer.
 
 ## Guardrails reference
 
 ### Guardrail boundary
 
-`guardrails.overall_pass` is the **logical AND** of all evaluated checks in `guardrails.details`. Optional guardrails (`duplication_rate_max`, `min_pf_reads`) are **off by default** until set in profile `actionConfig.alignment_qc.optional_guardrails`. **Alignment guardrails** are enabled by default for `cfdna` and `buffy_coat` via analyte profiles (`alignment_guardrails.enabled: true`). cfDNA fragmentomics and bisulfite conversion checks add to the AND when enabled via [`AlignmentQCConfig`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py) or [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md).
+`guardrails.overall_pass` is the **logical AND** of all **evaluated** checks in `guardrails.details` (skipped checks do not fail the sample). Optional guardrails (`duplication_rate_max`, `min_pf_reads`) are **off by default** until set in profile `actionConfig.alignment_qc.optional_guardrails`. **Alignment guardrails** are enabled by default for `cfdna` and `buffy_coat` via analyte profiles (`alignment_guardrails.enabled: true`). cfDNA fragmentomics and bisulfite conversion checks add to the AND when enabled via [`AlignmentQCConfig`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py) or [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md).
 
-Core sequencing guardrails are evaluated in [`wgbs_parabricks_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py) against operator-set thresholds ([`CoreGuardrailsConfig`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py)); the values below are the acceptance window used when a deployment sets nothing. Alignment-layer logic lives in [`alignment_derived_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/alignment_derived_qc.py) and [`bam_flagstat.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/bam_flagstat.py).
+### Shared vs tool-specific (summary)
 
-### Core sequencing / library guardrails
+| Family | Module | Checks |
+|--------|--------|--------|
+| **Shared** | `parser`, `alignment_derived_qc`, `bam_flagstat`, `bisulfite_conversion`, optional guardrails | Dedup `summary_stats`; mapping/secondary/GC uniformity; flagstat; bisulfite sidecar; optional duplication/PF |
+| **Parabricks-only** | [`wgbs_parabricks_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py), cycle screening, fragmentomics | PF%, Q30, cycle quality, GC/AT dropout, insert size, deamination/OxoG; trim dispositions; cfDNA fragmentomics |
+| **methylGrapher-only** | [`wgbs_pangenome_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_pangenome_qc.py) | `wgbs_provenance`, `wgbs_gaf_present`, `wgbs_bam_present`, `wgbs_bam_mapped_rate`. No cycle metrics by default → `NO_CYCLE_METRICS` / `USE_CURRENT_ALIGNMENT`; optional `remediate_without_cycles` |
+
+Stock Giraffe (`pangenome`) uses the **same** Parabricks guardrail set as linear (science differs; QC family does not).
+
+### Core sequencing / library guardrails (Parabricks family)
 
 Override any threshold per deployment in site `actionConfig.alignment_qc.core_guardrails` or per procedure in a pipeline profile. The reported `normal_range` on each metric always reflects the resolved threshold, so QC JSON stays self-describing.
 
@@ -429,7 +456,7 @@ Historically, alignment QC computed `min(mq[20:])` over the **combined** R1+R2 c
 2. **Classify dip patterns** — `READ1_START_LOW_QUALITY`, `READ2_START_LOW_QUALITY`, `READ2_END_LOW_QUALITY`, `LOCALIZED_INTERNAL_LOW_QUALITY`, `BROAD_LOW_QUALITY`, `MULTIPLE_LOW_QUALITY_REGIONS`.
 3. **Compute trim spec** — exact `trim_front1/tail1/front2/tail2` bases, capped at `max_trim_bases`.
 4. **Run fastp** — only the recommended `--trim_front/tail` flags; **`--disable_quality_filtering`** so no reads are discarded by Phred score ([`fastq_trim_runner.py`](../../workers/methyl_worker/fastq_trim_runner.py)).
-5. **Realign** — Parabricks with `forceRealign: true`, then `methyl_qc` retry (attempt 2 recorded in `qc_history`).
+5. **Realign** — on the **same** alignment mode as the original sample (`sample.parabricks_fq2bam`, `sample.parabricks_giraffe`, or `sample.methylgrapher_wgbs_align`) with `forceRealign: true`, then `methyl_qc` retry (attempt 2 recorded in `qc_history`). For `pangenome_wgbs` without cycle metrics, remediation may use `remediate_without_cycles` + fallback trim bases instead of cycle-derived trims.
 
 ### Why focused trim is better than generic trim
 

@@ -152,20 +152,22 @@ flowchart TD
 ```mermaid
 flowchart TD
   A["sample.download_fastq<br/>fastqSource → /work/samples/id"] --> B{"useWgbsPangenome?"}
-  B -->|yes| MG["sample.methylgrapher_wgbs_align<br/>methylGrapher C2T+G2A → QC BAM<br/>(CPU Docker; no CUDA)"]
+  B -->|yes| MG["sample.methylgrapher_wgbs_align<br/>native-Mojo C2T+G2A → GAF + QC BAM<br/>(NVIDIA CUDA or AMD HIP)"]
   B -->|no| B2{"usePangenome?"}
-  B2 -->|no| C["sample.parabricks_fq2bam<br/>pbrun fq2bam_meth (GPU)"]
-  B2 -->|yes| D["sample.parabricks_giraffe<br/>stock vg giraffe → GRCh38 (GPU)"]
-  C --> E["sample.methyl_qc"]
+  B2 -->|no| C["sample.parabricks_fq2bam<br/>pbrun fq2bam_meth (NVIDIA GPU; explicit)"]
+  B2 -->|yes| D["sample.parabricks_giraffe<br/>stock giraffe → GRCh38 (NVIDIA GPU; explicit)"]
+  C --> E["sample.methyl_qc<br/>(mode-aware: Parabricks family)"]
   D --> E
-  MG --> E
+  MG --> E2["sample.methyl_qc<br/>(mode-aware: methylGrapher family)"]
+  E2 --> F
+
   E --> F{"qcPass?"}
   F -->|yes| G{"isCfdna?"}
   G -->|yes| H["sample.fragmentomics"]
   G -->|no| I{"useWgbsPangenome?"}
   H --> I
-  I -->|yes| IX["sample.methylgrapher_wgbs_extract"]
-  I -->|no| IY["sample.methyl_extract"]
+  I -->|yes| IX["sample.methylgrapher_wgbs_extract<br/>(native-Mojo MethylCall/MergeCpG)"]
+  I -->|no| IY["sample.methyl_extract<br/>(GPU MethylExtractor)"]
   IX --> J["sample.extraction_qc"]
   IY --> J
   J --> K{"extractionQcPass?"}

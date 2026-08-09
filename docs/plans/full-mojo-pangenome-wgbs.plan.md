@@ -4,6 +4,8 @@ overview: Full Mojo-accelerated pangenome_wgbs SamplePrep→informME via actionC
 
 > **Status: IMPLEMENTED (code).** Phases 1–3 landed in repo + site bake helpers. Phase 4 gates (Buffy wall, DS20M parity, sister image load) remain operator measurement.
 
+> **Docs sync (2026-08-09):** [`native-mojo-sample-prep-docs.plan.md`](native-mojo-sample-prep-docs.plan.md) updates living docs to match this actionConfig→resolvedConfig Mojo path (NVIDIA/AMD; no auto-Parabricks).
+
 azure_devops:
   type: Feature
   title: "Full Mojo-accelerated pangenome_wgbs"

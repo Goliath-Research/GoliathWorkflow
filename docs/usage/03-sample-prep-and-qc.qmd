@@ -4,12 +4,12 @@
 
 **SamplePrepPipeline** is the per-sample upstream workflow that turns raw WGBS FASTQs into methylation HDF5 files (`{chromosome}-CG.h5`) that downstream stages consume. Every sample passes through **two automated guardrails** before it enters stability, freeze, or discovery workflows:
 
-1. **Alignment QC** (`methyl-qc`) — confirms Parabricks alignment and sequencing metrics are acceptable (or fixable via trim/realign).
-2. **Extraction QC** (`methyl-extraction-qc`) — confirms MethylExtractor produced sufficient coverage and conversion-quality signal across chromosomes.
+1. **Alignment QC** (`methyl-qc`) — mode-aware guardrails over Parabricks or methylGrapher metrics (shared checks + tool-specific); may trigger focused trim/realign on the **same** align mode.
+2. **Extraction QC** (`methyl-extraction-qc`) — confirms MethylExtractor or native-Mojo methylGrapher extract produced sufficient coverage and conversion-quality signal across chromosomes.
 
-Without these gates, bad alignments would waste GPU extraction time, and under-covered or poorly converted extractions would pollute centroids, DMP discovery, and classifiers.
+Without these gates, bad alignments would waste GPU cycles, and under-covered or poorly converted extractions would pollute centroids, DMP discovery, and classifiers.
 
-Each sample is aligned using **linear** (`fq2bam_meth`), **stock pangenome** (`vg giraffe` via Clara Parabricks), or **WGBS pangenome** (methylGrapher dual C2T/G2A), then passes through the same QC gates below. Extraction is MethylExtractor for linear/stock pangenome, or graph-aware methylGrapher extract for WGBS pangenome.
+Each sample is aligned using **linear** or **stock pangenome** (NVIDIA Clara Parabricks — **explicit** config) or **WGBS pangenome** (native-Mojo methylGrapher on NVIDIA CUDA or AMD HIP), then passes through mode-aware QC gates below. Extraction is GPU MethylExtractor for linear/stock pangenome, or native-Mojo methylGrapher extract for WGBS pangenome.
 
 **Workflow source of truth:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
 
@@ -27,13 +27,13 @@ After FASTQ download, SamplePrep chooses **one alignment path** per sample (and 
 
 | Mode | Scope flags | Worker action | Tool | Compute | Reference |
 |------|-------------|---------------|------|---------|-----------|
-| **Linear (default)** | `usePangenome: false`, `useWgbsPangenome: false` | `sample.parabricks_fq2bam` | `pbrun fq2bam_meth` | GPU (Parabricks) | Site `reference_genome.fasta` |
-| **Stock pangenome** | `usePangenome: true`, `useWgbsPangenome: false` | `sample.parabricks_giraffe` | `pbrun giraffe` + `collectmultiplemetrics` | GPU (Parabricks) | Site `pangenome_genome` |
-| **WGBS pangenome** | `usePangenome: true`, `useWgbsPangenome: true` | `sample.methylgrapher_wgbs_align` | methylGrapher Align (C2T+G2A) + `vg giraffe -o BAM` C2T pass → QC BAM | **CPU only** (no CUDA; jemalloc=off vg on 64K ARM64) | Site `actionConfig.methylgrapher_wgbs` / `pangenome_wgbs_genome` (QNAP `d9-bs/1.70`) |
+| **Linear** | `usePangenome: false`, `useWgbsPangenome: false` | `sample.parabricks_fq2bam` | `pbrun fq2bam_meth` (or MojoFq2bamMeth when `parabricks.engine=mojo`) | NVIDIA GPU (Clara **explicit**) | Site `reference_genome.fasta` |
+| **Stock pangenome** | `usePangenome: true`, `useWgbsPangenome: false` | `sample.parabricks_giraffe` | `pbrun giraffe` + `collectmultiplemetrics` | NVIDIA GPU (Clara **explicit**) | Site `pangenome_genome` |
+| **WGBS pangenome** | `usePangenome: true`, `useWgbsPangenome: true` | `sample.methylgrapher_wgbs_align` | native-Mojo Align (C2T+G2A) → GAF + QC BAM | **NVIDIA CUDA or AMD HIP** (one DeviceContext impl; fail-closed on known GPUs) | Site `actionConfig.methylgrapher_wgbs` / `pangenome_wgbs_genome` (QNAP `d9-bs/1.70`) |
 
 : Alignment modes {tbl-colwidths="[12,18,18,18,14,20]"}
 
-**Cost note:** `pangenome_wgbs` is dual-graph CPU giraffe plus surject/sort/markdup. On GPU workers it typically takes **much longer** wall time than linear Parabricks (~hours vs ~1 h on GH200-class hosts for full-depth WGBS). Measure CpG yield vs time with [`scripts/compare_sample_prep_linear_vs_wgbs.sh`](../../scripts/compare_sample_prep_linear_vs_wgbs.sh) before promoting procedure packs.
+**Cost note:** `pangenome_wgbs` is dual-graph native-Mojo Giraffe plus QC BAM / sort / markdup. Pin `:1.70-mojo-cuda` or `:1.70-mojo-rocm` and `align_engine=gpu_giraffe|mojo_giraffe`. Clara is **not** used as an automatic Mojo fallback — choose `linear` / `pangenome` explicitly when you want Parabricks. Measure CpG yield vs time with [`scripts/compare_sample_prep_linear_vs_wgbs.sh`](../../scripts/compare_sample_prep_linear_vs_wgbs.sh). Leadership brief: [`docs/architecture/mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md).
 **How to enable:**
 
 - Stock Giraffe: `alignmentMode: "pangenome"` (binds `usePangenome`).
@@ -41,9 +41,9 @@ After FASTQ download, SamplePrep chooses **one alignment path** per sample (and 
 - Buffy linear alternate: `buffy_wgbs_linear_gene_fc` when lower wall-time / GPU Parabricks path is preferred.
 - Default for unset modes is **`linear`** (except `libraryProtocol: wgbs_pangenome`, which defaults to `pangenome_wgbs`).
 
-**WGBS note:** stock HPRC graphs are **not** bisulfite-aware. Do **not** silently fall back to stock Giraffe when the BS bundle is missing — pin and provision `pangenome-grch38-d9-bs-1.70`, set `METHYL_METHYLGRAPHER_IMAGE`, and gate promotion with the canary checklist under `workers/tests/test_methylgrapher_wgbs_canary.md`.
+**WGBS note:** stock HPRC graphs are **not** bisulfite-aware. Do **not** silently fall back to stock Giraffe when the BS bundle is missing — pin and provision `pangenome-grch38-d9-bs-1.70`, set `actionConfig.methylgrapher_wgbs` (`engine=mojo`, GPU align engine, `:1.70-mojo-{cuda,rocm}` image), and gate promotion with the canary checklist under `workers/tests/test_methylgrapher_wgbs_canary.md`. CPU align is only for unknown GPU vendors (or explicit dev/parity rollback).
 
-**Extraction branch:** when `useWgbsPangenome` is true, SamplePrep runs `sample.methylgrapher_wgbs_extract` (graph-aware H5 + patterns) instead of `sample.methyl_extract`. Alignment QC still consumes the QC-compatible GRCh38 BAM / metrics tar from the align step.
+**Extraction branch:** when `useWgbsPangenome` is true, SamplePrep runs `sample.methylgrapher_wgbs_extract` (native-Mojo MethylCall/MergeCpG → graph-aware H5 + patterns) instead of `sample.methyl_extract`. Alignment QC is mode-aware: methylGrapher provenance/GAF/BAM baseline, with optional Picard enrichment when Align set `collectmultiplemetrics: true`.
 
 ## End-to-end flow
 
@@ -77,7 +77,7 @@ Per sample under `/work/samples/{sample_id}/`:
 
 ## Alignment QC: inputs and normalized JSON
 
-`methyl-qc` (`packages/methylalignmentqc`) is **mode-aware**. It prefers task `alignmentMode` (`linear` | `pangenome` | `pangenome_wgbs`), otherwise infers the metrics family from artifacts. Soft-fail still flows through `guardrails.overall_pass` → workflow `qcPass`.
+`methyl-qc` (`packages/methylalignmentqc`) is **mode-aware**. It prefers task `alignmentMode` (`linear` | `pangenome` | `pangenome_wgbs`), otherwise infers the metrics family from artifacts. Soft-fail still flows through `guardrails.overall_pass` → workflow `qcPass`. **Note:** `alignmentMode` is not yet on the methyl_qc task JSON Schema; when omitted, a co-located Picard tar can make inference prefer the Parabricks family over methylGrapher provenance — pass mode explicitly when the workflow template allows it.
 
 | Mode | Required artifacts (hard-fail if missing) | Votes on `overall_pass` |
 |------|-------------------------------------------|-------------------------|

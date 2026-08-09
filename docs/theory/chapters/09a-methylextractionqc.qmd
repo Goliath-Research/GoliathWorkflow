@@ -2,7 +2,7 @@
 
 ## Role
 
-`methylextractionqc` evaluates **MethylExtractor output** after GPU methylation extraction. Alignment QC confirms the BAM; extraction QC confirms the methylation call layer has sufficient coverage and conversion-quality signal before HDF5 files enter downstream cohort analysis.
+`methylextractionqc` evaluates the extraction manifest after methylation extraction. For linear / stock pangenome that is **GPU MethylExtractor**; for `pangenome_wgbs` it is **native-Mojo** methylGrapher `MethylCall`/`MergeCpG` (CPU-parallel Mojo hot path — not stock Python and not a CUDA/HIP GPU workload). Alignment QC confirms the QC BAM / GAF provenance; extraction QC confirms the methylation call layer has sufficient coverage and conversion-quality signal before HDF5 files enter downstream cohort analysis.
 
 Operator guide: [Usage ch.03 — Sample Prep and QC](../../usage/03-sample-prep-and-qc.qmd).
 
@@ -42,10 +42,10 @@ Override thresholds (including `max_discard_fraction`) via profile/site `actionC
 
 | Question | Answered by |
 |----------|-------------|
-| Did sequencing/alignment produce a usable BAM? | Alignment QC (`methyl-qc`) |
+| Did sequencing/alignment produce a usable BAM / GAF provenance? | Alignment QC (`methyl-qc`, mode-aware) |
 | Did extraction yield enough confident methylation signal? | Extraction QC (`methyl-extraction-qc`) |
 
-A sample may pass alignment but fail extraction (coverage collapse). Conversely, remediation after alignment QC avoids GPU extraction on BAMs that will not support stable statistics.
+A sample may pass alignment but fail extraction (coverage collapse). Conversely, remediation after alignment QC avoids extraction on alignments that will not support stable statistics.
 
 ## Publication guidance
 

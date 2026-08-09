@@ -2,6 +2,8 @@
 
 Companion to [`native-mojo-align-hotpath.plan.md`](native-mojo-align-hotpath.plan.md).
 
+> **Docs note (2026-08-09):** Pending operator rows below are fleet measurement gates. Living docs already describe native-Mojo GPU Align as the SamplePrep contract (not CPU-only). Clara remains an explicit comparator mode for linear, not an automatic Mojo failure path.
+
 | Gate | Status | Evidence |
 |------|--------|----------|
 | Toy GBZ PE stream map | **PASS** | `tests/test_mojo_stream_map.py`; container MojoGiraffe → `mojo_stream_map` |

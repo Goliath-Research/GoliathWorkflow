@@ -1,11 +1,11 @@
 # Linear WGBS Align: Clara Parabricks or MojoFq2bamMeth
 
-Sample prep alignment (`sample.parabricks_fq2bam`) runs **either**:
+This path is selected by **explicit** `alignmentMode: linear` (or stock `pangenome` for Giraffe) — never as an automatic fallback when `pangenome_wgbs` native-Mojo fails. Sample prep alignment (`sample.parabricks_fq2bam`) runs **either**:
 
 1. **NVIDIA Clara Parabricks `fq2bam_meth`** (`actionConfig.parabricks.engine=parabricks`) — NGC Docker, CUDA only  
-2. **MojoFq2bamMeth** (`engine=mojo`) — `epimethyl/methylgrapher:1.70-mojo{,-cuda,-rocm}`, portable `align_device=auto|cpu|nvidia|amd`
+2. **MojoFq2bamMeth** (`engine=mojo`) — `epimethyl/methylgrapher:1.70-mojo{,-cuda,-rocm}`, portable `align_device=auto|nvidia|amd` (`cpu` only for unknown GPU vendors)
 
-Implementation: [`methyl_worker/parabricks_runner.py`](../methyl_worker/parabricks_runner.py). Dual-Align strategy: [`docs/architecture/mojo-multi-gpu-dual-align.md`](../../docs/architecture/mojo-multi-gpu-dual-align.md).
+Implementation: [`methyl_worker/parabricks_runner.py`](../methyl_worker/parabricks_runner.py). Dual-Align strategy: [`docs/architecture/mojo-multi-gpu-dual-align.md`](../../docs/architecture/mojo-multi-gpu-dual-align.md). For WGBS pangenome see [`workers/docker/methylgrapher/README.md`](../docker/methylgrapher/README.md).
 
 ## Prerequisites
 

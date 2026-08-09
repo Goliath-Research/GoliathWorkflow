@@ -1,6 +1,6 @@
 # MethylExtractor on sample-prep workers
 
-Sample prep extraction (`sample.methyl_extract`) runs the **native MethylExtractor binary** installed on GPU/CPU worker nodes. Implementation: [`methyl_worker/extract_runner.py`](../methyl_worker/extract_runner.py).
+Sample prep extraction (`sample.methyl_extract`) runs the **native MethylExtractor binary** on the **linear / stock pangenome** path. For `pangenome_wgbs`, SamplePrep uses `sample.methylgrapher_wgbs_extract` (native-Mojo MethylCall/MergeCpG) instead — see [`workers/docker/methylgrapher/README.md`](../docker/methylgrapher/README.md). Implementation: [`methyl_worker/extract_runner.py`](../methyl_worker/extract_runner.py).
 
 ## Source and deploy
 

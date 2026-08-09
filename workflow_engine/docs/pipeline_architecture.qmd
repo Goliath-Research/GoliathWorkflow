@@ -197,13 +197,13 @@ flowchart TD
 | Download FASTQs | `sample.download-fastq` | In-process | `*.fastq.gz` in `/work/samples/{id}/` |
 | Parabricks fq2bam | `parabricks.fq2bam` | External GPU | `{id}.bam`, `{id}.json`, `*.qc-metrics.tar` |
 | Parabricks Giraffe | `parabricks.giraffe` | External GPU | Stock pangenome surjected BAM + QC tar |
-| methylGrapher WGBS align | `methylgrapher.wgbs_align` | External Docker (**CPU**; no CUDA) | QC BAM + `{id}.alignment.gaf` + metrics |
+| methylGrapher WGBS align | `methylgrapher.wgbs_align` / `wgbs_gpu_align` | External Docker (**native-Mojo GPU**; NVIDIA CUDA or AMD HIP) | QC BAM + `{id}.alignment.gaf` + `alignment_metrics.json` |
 | methyl-qc | `methyl-qc` | In-repo | V2 QC JSON; `qcPass`, remediation scope vars |
 | Trim FASTQ | `sample.trim-fastq` | In-process fastp | Trimmed FASTQs (remediation branch) |
 | Delete FASTQs | `sample.delete-fastqs` | In-process | FASTQs removed after final QC (when `deleteFastqs`) |
 | methyl-fragmentomics | `methyl-fragmentomics` | In-repo (cfDNA only) | `{project}/fragmentomics/{id}/` |
 | MethylExtractor | `methyl-extract` | External GPU | `{chrom}-{ctx}.h5`, extraction manifest |
-| methylGrapher WGBS extract | `methylgrapher.wgbs_extract` | External Docker (**CPU**; no CUDA) | Graph-aware H5 + patterns + canonical manifest |
+| methylGrapher WGBS extract | `methylgrapher.wgbs_extract` | External Docker (native-Mojo MethylCall/MergeCpG; CPU-parallel) | Graph-aware H5 + patterns + canonical manifest |
 | Extraction QC | `methyl-extraction-qc` | In-repo | `{id}.extraction_qc.json`; `extractionQcPass` |
 | Archive sample | `sample.archive-sample` | In-process | Optional remote qc/fastq/h5 bundle (`mode=full` or `qc_only`) |
 | Delete BAM | `sample.delete-bam` | In-process | BAM removed after extraction QC disposition |

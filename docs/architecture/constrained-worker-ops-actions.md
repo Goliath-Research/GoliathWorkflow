@@ -41,7 +41,10 @@ Abort uses `fail_task` with error code `4099` (`WORKER_STOPPED`).
 - Secret redaction in outputs
 - Audit via `wf.node_execution` / portal SP calls
 
-**Never** use ops env actions for Align science knobs (`align_engine`, Mojo
-packs, `qc_bam_engine`, etc.) — those belong on `actionConfig.methylgrapher_wgbs`.
+**Never** use ops env actions for Align science knobs (`align_engine`,
+`giraffe_device`, Mojo packs, `qc_bam_engine`, image tags, etc.) — those belong
+on `actionConfig.methylgrapher_wgbs` (or `actionConfig.parabricks` for the
+explicit linear/stock path). See
+[mojo-multi-gpu-dual-align.md](mojo-multi-gpu-dual-align.md).
 **Never** put pause/stop policy only in host env — declare it on the catalog
 `control` block and drive fleet state via `desired_state`.

@@ -25,23 +25,34 @@ Useful flags:
 - `--no-validation`: skip schema validation,
 - `--verbose`: print sample counts and output path.
 
+## Mode-aware metrics families
+
+`methyl-qc` detects a **metrics family** (`methyl_alignment_qc/core/metrics_family.py`) from task `alignmentMode` when present, otherwise from artifacts:
+
+| Mode | Family | Required artifacts | Family-specific guardrails |
+|------|--------|--------------------|----------------------------|
+| `linear` / `pangenome` | Parabricks | `{id}.json` or `qc-metrics.tar` with `quality_yield`; dedup metrics | `wgbs_parabricks_qc.py` + cycle screening (+ fragmentomics when enabled) |
+| `pangenome_wgbs` | methylGrapher | `{id}.alignment_metrics.json` (`tool=methylGrapher`), GAF, QC BAM, dedup | `wgbs_pangenome_qc.py` (provenance / GAF / BAM / mapped rate); Parabricks core only if provenance `collectmultiplemetrics: true` |
+
+**Shared** across modes: Picard dedup → `summary_stats`; optional duplication/PF; alignment-derived rates; optional `samtools flagstat`; bisulfite sidecar; `overall_pass` = AND of evaluated details.
+
+**Inference hazard:** when `alignmentMode` is omitted and both a Picard tar and methylGrapher provenance exist, inference can prefer Parabricks. Prefer an explicit mode on the worker task input. Operator detail: [Usage ch.03](../../../docs/usage/03-sample-prep-and-qc.qmd); theory: [ch.09](../../../docs/theory/chapters/09-methylalignmentqc.qmd).
+
 ## Typical Inputs
 
 Typical runs require:
 
 - one or more sample directories or a metrics root,
-- Picard- or Parabricks-style duplication/alignment metrics files,
-- optional WGBS Parabricks metrics JSON for initial guardrail screening via `methyl_alignment_qc/core/wgbs_parabricks_qc.py`,
+- Picard-style duplication metrics (all modes),
+- **either** Parabricks `{sample_name}.json` / `qc-metrics.tar` **or** methylGrapher `{sample_name}.alignment_metrics.json` + GAF (+ optional Picard enrichment),
 - an output directory for normalized JSON summaries.
 
 ## Typical Outputs
 
 The package writes one structured **V2** (row-oriented) JSON summary per sample and can optionally validate those files against the package schema (V1-shaped assembly is validated internally, then converted to V2 for export).
-When a sample directory contains the canonical Parabricks metrics JSON file `{sample_name}.json`, `methyl-qc` uses it for metrics and guardrails; the written output in `--output-dir` is always the V2 export shape.
+For the Parabricks family, when `{sample_name}.json` is present, `methyl-qc` uses it for metrics and guardrails; the written output in `--output-dir` is always the V2 export shape.
 
-For initial metrics extraction workflows, use the package CLI for normalized per-sample QC JSON outputs; the standalone `wgbs_parabricks_qc.py` utility can be used as an additional pre-extraction guardrail check for WGBS Parabricks JSON metrics.
-
-When `wgbs_parabricks_qc.py` runs directly, it writes a `guardrails` block into the input JSON (or into `--output` if specified). This block includes each metric's `value`, `normal_range`, pass/fail state, and a user-facing `message` that explains why the guardrail matters.
+For Parabricks-family pre-checks, the standalone `wgbs_parabricks_qc.py` utility can write a `guardrails` block into the input JSON (or into `--output` if specified). This block includes each metric's `value`, `normal_range`, pass/fail state, and a user-facing `message` that explains why the guardrail matters.
 
 ## Bisulfite conversion (automated)
 

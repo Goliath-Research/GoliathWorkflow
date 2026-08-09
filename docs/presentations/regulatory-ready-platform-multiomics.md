@@ -147,11 +147,13 @@ flowchart TB
 |------------|---------------------|
 | Dual-graph Align | C2T ∥ G2A → science **GAF** for MethylCall |
 | Engine knobs | `actionConfig.methylgrapher_wgbs` → task `resolvedConfig` |
-| Backends | `gpu_giraffe` / `mojo_giraffe` / `cpu_vg` (operator-set) |
-| Image | `epimethyl/methylgrapher:1.70-mojo` on GH200-class fleet |
-| QC path | Mojo QC BAM + conversion-rate sidecars when enabled |
+| Runtime | **Native-Mojo** — one DeviceContext impl on **NVIDIA CUDA** and **AMD HIP** |
+| Backends | `gpu_giraffe` / `mojo_giraffe` (canonical); `cpu_vg` only for unknown GPU vendors / parity |
+| Image | `epimethyl/methylgrapher:1.70-mojo-cuda` or `:1.70-mojo-rocm` |
+| QC path | Mode-aware methyl_qc (provenance/GAF/BAM + shared guardrails); Mojo QC BAM + conversion-rate when enabled |
+| Clara Parabricks | **Explicit** `alignmentMode: linear\|pangenome` only — never an automatic Mojo failure path |
 
-> Linear `fq2bam_meth` remains the comparator; **pangenome_wgbs** is the graph science path — not a separate product.
+> Linear `fq2bam_meth` remains an **explicit** comparator procedure; **pangenome_wgbs** is the graph science path — not a separate product.
 
 ---
 

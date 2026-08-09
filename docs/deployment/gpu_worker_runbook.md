@@ -25,7 +25,11 @@ Record tested combinations in release `manifest.json`:
 - `min_driver_version`
 - `parabricks_image` + `parabricks_image_digest`
 
-**Alignment** uses CUDA **inside** the Parabricks container. Host CUDA toolkit is not required for fq2bam.
+**Linear / stock pangenome alignment** uses CUDA **inside** the Clara Parabricks container when that mode is **explicitly** configured. Host CUDA toolkit is not required for fq2bam.
+
+### native-Mojo methylGrapher (`pangenome_wgbs`)
+
+Buffy default WGBS pangenome Align runs **native-Mojo** on the same NVIDIA workers via `epimethyl/methylgrapher:1.70-mojo-cuda` (`actionConfig.methylgrapher_wgbs.engine=mojo`, `align_engine=gpu_giraffe|mojo_giraffe`, `giraffe_device=auto|nvidia`). Pass `--gpus all` (or site GPU flags) into the methylGrapher container — fail-closed on DeviceContext errors; do **not** switch to Clara on Mojo failure. AMD ROCm twin: [`worker-rocm.md`](worker-rocm.md). Canonical contract: [`mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md), [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md).
 
 ## Proteomics GPU tools (DIA-NN / Prosit / Casanovo)
 

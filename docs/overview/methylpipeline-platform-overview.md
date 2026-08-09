@@ -141,8 +141,8 @@ MethylPipeline delivers two complementary surfaces: a **scientific process pack*
 
 | Area | Capability | Canonical docs |
 |------|------------|----------------|
-| Sample preparation | FASTQ ingress, Parabricks alignment, remediation, methylation extraction, archive | [Usage ch.03](../usage/03-sample-prep-and-qc.qmd) |
-| Quality control | Alignment QC, extraction QC, branchable remediation | [Usage ch.10](../usage/10-artifacts-and-qa-checks.qmd) |
+| Sample preparation | FASTQ ingress; three-mode align (native-Mojo methylGrapher pangenome_wgbs on NVIDIA/AMD, or explicit Clara Parabricks linear/stock); remediation; extract; archive | [Usage ch.03](../usage/03-sample-prep-and-qc.qmd) |
+| Quality control | Mode-aware alignment QC (shared + tool-specific), extraction QC, branchable remediation | [Usage ch.10](../usage/10-artifacts-and-qa-checks.qmd) · [Theory ch.09](../theory/chapters/09-methylalignmentqc.qmd) |
 | DMP discovery | Centroid, detector, Storey FDR, panel modes | Theory ch.02–03 |
 | Stability and freeze | Monte Carlo recurrence, stable panel, freeze readiness | [Usage ch.05–06](../usage/05-stage-stability.qmd) |
 | Interpretation | Mapper, enricher, PPI/Enrichr, progression | Theory ch.07–08 |
@@ -503,10 +503,14 @@ not fold them into research modes.
 
 ![Sample prep flow](../diagrams/out/sample-prep-flow.png)
 
-Typical path: download FASTQ → Parabricks `fq2bam_meth` → alignment QC → optional
-trim/realign → extract → extraction QC → archive to retention storage. QC actions
-emit branchable outputs so DomainPrograms can remediate without hard-coding
-biology in the engine.
+Typical path: download FASTQ → align by **configured** mode (`pangenome_wgbs`
+native-Mojo on NVIDIA/AMD, or explicit Clara Parabricks `fq2bam_meth` /
+stock Giraffe) → mode-aware alignment QC → optional trim/realign on the same
+mode → extract (MethylExtractor or native-Mojo MethylCall) → extraction QC →
+archive to retention storage. QC actions emit branchable outputs so
+DomainPrograms can remediate without hard-coding biology in the engine. See
+[sample preparation flow](../implementation/sample-preparation-flow.md) and
+[mojo-multi-gpu-dual-align](../architecture/mojo-multi-gpu-dual-align.md).
 
 ### Analyte note
 

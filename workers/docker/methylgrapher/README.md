@@ -2,41 +2,46 @@
 
 Pinned runtime for `alignmentMode: pangenome_wgbs` (`sample.methylgrapher_wgbs_*`).
 
+Canonical SamplePrep contract: [`docs/implementation/sample-preparation-flow.md`](../../../docs/implementation/sample-preparation-flow.md) · [`docs/architecture/mojo-multi-gpu-dual-align.md`](../../../docs/architecture/mojo-multi-gpu-dual-align.md).
+
 ## Engines (dual-ship)
 
-| `actionConfig.methylgrapher_wgbs.engine` | Image (default) | Notes |
+| `actionConfig.methylgrapher_wgbs.engine` | Image (typical) | Notes |
 |-----------------------------------------|-----------------|-------|
-| `python` (default) | `epimethyl/methylgrapher:1.70` | Stock methylGrapher 0.2.0 + GAF-header patch |
-| `mojo` | `epimethyl/methylgrapher:1.70-mojo` | methylGrapher-mojo patched engine (single GFA worker; CLI parity) |
+| `mojo` (**canonical**) | `epimethyl/methylgrapher:1.70-mojo-cuda` or `:1.70-mojo-rocm` | native-Mojo Align / MethylCall / MergeCpG; same userspace binary; host runtime + tag select NVIDIA vs AMD |
+| `python` (dev/parity rollback) | `epimethyl/methylgrapher:1.70` | Stock methylGrapher 0.2.0 + GAF-header patch |
 
-Build mojo image: `scripts/build_methylgrapher_mojo_image.sh` (requires `METHYLGRAPHER_MOJO_ROOT` and a prior vg bake from `build_methylgrapher_image.sh`). Plan: [`docs/plans/methylgrapher-mojo-cutover.plan.md`](../../../docs/plans/methylgrapher-mojo-cutover.plan.md).
+Build Mojo image: `scripts/build_methylgrapher_mojo_image.sh` (requires `METHYLGRAPHER_MOJO_ROOT` and a prior vg bake from `build_methylgrapher_image.sh`). Set `METHYLGRAPHER_MOJO_GPU_VARIANT=cuda|rocm` for the twin tags. Plan: [`docs/plans/methylgrapher-mojo-cutover.plan.md`](../../../docs/plans/methylgrapher-mojo-cutover.plan.md).
 
-## Compute model (CPU only — by design)
+## Compute model (native-Mojo GPU)
 
-methylGrapher and stock `vg` **do not use NVIDIA GPUs**. Baking a CUDA base image or passing
-`--gpus` to `docker run` does **not** accelerate Align / MethylCall / MergeCpG / surject.
-The worker invokes the image without GPU flags (`workers/methyl_worker/methylgrapher_wgbs_runner.py`).
+`pangenome_wgbs` Align runs **native-Mojo** Giraffe (`giraffe_stream_map`) via `std.gpu.host.DeviceContext`:
+
+| Vendor | API | Image tag | Container devices |
+|--------|-----|-----------|-------------------|
+| NVIDIA | `cuda` (e.g. `sm_90`) | `:1.70-mojo-cuda` | `--gpus all` (or site GPU flags) |
+| AMD | `hip` (e.g. `gfx942`) | `:1.70-mojo-rocm` | `/dev/kfd` + `/dev/dri` (see [`docs/deployment/worker-rocm.md`](../../../docs/deployment/worker-rocm.md)) |
 
 | Mode | Tool | Accelerator |
 |------|------|-------------|
-| `linear` | Clara Parabricks `fq2bam_meth` | GPU |
-| `pangenome` | Clara Parabricks `giraffe` | GPU |
-| `pangenome_wgbs` | methylGrapher + `vg` (this image) | **CPU threads + host RAM** |
+| `pangenome_wgbs` | native-Mojo methylGrapher Align | **NVIDIA CUDA or AMD HIP** (fail-closed on known GPUs) |
+| `linear` / `pangenome` | Clara Parabricks (explicit config) | NVIDIA GPU only |
+| Unknown GPU vendor | `align_engine=cpu_vg` / host seeds | CPU last resort |
 
-On a Grace/GH200 node, this path still benefits from many cores and large memory, but wall time
-is typically **much longer** than Parabricks linear on the same host (dual C2T/G2A giraffe plus
-surject/sort/markdup). Use site/profile `actionConfig.methylgrapher_wgbs.threads` to size
-parallelism; calibrate cost vs CpG yield with
-[`scripts/compare_sample_prep_linear_vs_wgbs.sh`](../../../scripts/compare_sample_prep_linear_vs_wgbs.sh).
+Pin `actionConfig.methylgrapher_wgbs.align_engine=gpu_giraffe|mojo_giraffe` and `giraffe_device=auto|nvidia|amd`. Clara Parabricks is **never** an automatic Mojo failure path — choose `alignmentMode: linear|pangenome` explicitly. Extract (`MethylCall`/`MergeCpG`) is native-Mojo with Mojo `parallelize()` (CPU-parallel, not a CUDA/HIP kernel).
+
+On 64 KB-page ARM64 (Grace / GH200) any vg-assisted QC BAM path needs `jemalloc=off` vg baked into the image.
+
+**Code default flag:** the sibling `methylGrapher-mojo` launcher may still default `engine=python` / `align_engine=cpu_vg` for dual-ship rollback. Production site/profile config should pin Mojo GPU as above.
 
 ## Production model (do not compile on deploy)
 
 | When | What |
 |------|------|
-| **CI / image refresh** | `scripts/build_methylgrapher_image.sh` (ADO: `ci/azure-pipelines-methylgrapher-image.yml`) builds vg once with `jemalloc=off` on arm64, installs methylGrapher, publishes a `docker save` tarball (and optionally `docker push`). |
-| **Cluster deploy** | Set `METHYL_METHYLGRAPHER_IMAGE`, then `scripts/ensure_methylgrapher_image.sh` → **pull or load only**. |
+| **CI / image refresh** | `scripts/build_methylgrapher_image.sh` (vg bake) then `scripts/build_methylgrapher_mojo_image.sh` (Mojo stage + CUDA/ROCm twin). |
+| **Cluster deploy** | Set `METHYL_METHYLGRAPHER_IMAGE` (or site `actionConfig.methylgrapher_wgbs.image`), then `scripts/ensure_methylgrapher_image.sh` → **pull or load only**. |
 
-Rebuild the image only when **vg**, **methylGrapher**, or this Dockerfile changes — not on every study or release promote.
+Rebuild the image only when **vg**, **methylGrapher-mojo**, or this Dockerfile changes — not on every study or release promote.
 
 ## Why arm64 builds vg from source
 
@@ -48,21 +53,19 @@ Amd64 uses the stock vg release binary.
 
 ```bash
 ./scripts/build_methylgrapher_image.sh
-# optional: METHYLGRAPHER_IMAGE_TAR=/tmp/mg.tar.gz ./scripts/build_methylgrapher_image.sh
+METHYLGRAPHER_MOJO_GPU_VARIANT=cuda ./scripts/build_methylgrapher_mojo_image.sh
+# optional: METHYLGRAPHER_IMAGE_TAR=/tmp/mg.tar.gz
 bash workers/docker/methylgrapher/smoke_64k.sh   # on a real 64K host
 ```
 
 ## Deploy on a worker
 
 ```bash
-export METHYL_METHYLGRAPHER_IMAGE=epimethyl/methylgrapher:1.70
-# either registry:
-#   docker pull "$METHYL_METHYLGRAPHER_IMAGE"
-# or CI artifact:
-#   export METHYLGRAPHER_IMAGE_TAR=/path/to/methylgrapher-1.70-arm64.tar.gz
+# NVIDIA
+export METHYL_METHYLGRAPHER_IMAGE=epimethyl/methylgrapher:1.70-mojo-cuda
+# AMD
+# export METHYL_METHYLGRAPHER_IMAGE=epimethyl/methylgrapher:1.70-mojo-rocm
 ./scripts/ensure_methylgrapher_image.sh
 ```
-
-Image tag is `:1.70` (platform matrix). CI compiles vg `v1.70.0` but publishes `:1.70` — do not retag to the full vg semver unless you also change `METHYLGRAPHER_IMAGE_*`.
 
 `scripts/write_worker_env.sh` writes `METHYL_METHYLGRAPHER_IMAGE` from `platform_matrix.env` when set.

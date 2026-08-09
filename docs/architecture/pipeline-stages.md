@@ -18,7 +18,7 @@ flowchart LR
 
 | Stage | Usage chapter | Primary packages |
 |-------|---------------|------------------|
-| Sample prep | [ch.03](../usage/03-sample-prep-and-qc.qmd) | workers, `methylalignmentqc`, external Parabricks/extract |
+| Sample prep | [ch.03](../usage/03-sample-prep-and-qc.qmd) | workers, `methylalignmentqc`, native-Mojo methylGrapher (pangenome_wgbs) or explicit Parabricks/extract |
 | Stability | [ch.05](../usage/05-stage-stability.qmd) | `methylcentroid`, `methyldetector`, `methylvalidation` |
 | Freeze | [ch.06](../usage/06-stage-freeze.qmd) | + `methylmapper`, `methylenricher`, optional `methyldiseaseprogression` |
 | Model | [ch.07](../usage/07-stage-model.qmd) | `methylclassifier`, `methylpredictor` |

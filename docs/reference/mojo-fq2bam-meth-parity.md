@@ -1,6 +1,6 @@
 # MojoFq2bamMeth MVP parity matrix (vs Clara fq2bam_meth)
 
-Capability remains `sample.parabricks_fq2bam` / `parabricks.fq2bam`. Switch with `actionConfig.parabricks.engine`.
+Capability remains `sample.parabricks_fq2bam` / `parabricks.fq2bam`. Switch with **explicit** `actionConfig.parabricks.engine` (`parabricks` = Clara, `mojo` = MojoFq2bamMeth) — never an automatic consequence of `pangenome_wgbs` Mojo failure. See [`mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md).
 
 ## Downstream consumers (must match)
 

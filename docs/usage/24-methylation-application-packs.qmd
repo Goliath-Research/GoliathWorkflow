@@ -35,8 +35,8 @@ Committed under
 
 | Procedure | Analyte | Defaults |
 |-----------|---------|----------|
-| `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | **Default** WGBS pangenome (methylGrapher, `alignmentMode: pangenome_wgbs`); requires `hprc-d9-bs.wl.gfa` |
-| `buffy_wgbs_linear_gene_fc` | `buffy_coat` | Linear WGBS baseline (same science knobs, cheaper aligner) |
+| `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | **Default** WGBS pangenome (native-Mojo methylGrapher on NVIDIA or AMD, `alignmentMode: pangenome_wgbs`); requires `hprc-d9-bs.wl.gfa` |
+| `buffy_wgbs_linear_gene_fc` | `buffy_coat` | Linear WGBS baseline via **explicit** Clara Parabricks (or MojoFq2bamMeth); same science knobs |
 | `cfdna_wgbs_plasma` | `cfdna` | Linear WGBS + fragmentomics (analyte merge), gene FeatureCuts, **no** cell deconv lifecycle |
 | `cfdna_emseq_targeted` | `cfdna` | `libraryProtocol: emseq_targeted`, `sample_prep_emseq`, panel BED + elevated `min_cov`, no deconv |
 | `plant_wgbs_gene_fc` | `plant_tissue` | Linear WGBS, gene FeatureCuts, plant lifecycle (no blood deconv) |
@@ -53,7 +53,7 @@ methyl-workflow-run \
 
 Accepted for production buffy research after linear-vs-wgbs gates
 ([`docs/plans/wgbs-alignment-decision.plan.md`](../plans/wgbs-alignment-decision.plan.md)).
-Use `buffy_wgbs_linear_gene_fc` when GPU-only / lower wall-time is preferred.
+Use `buffy_wgbs_linear_gene_fc` when the explicit NVIDIA Clara (or linear Mojo) path is preferred for wall-time or linear BAM workflows.
 
 Prefer the procedure’s `lifecycleProgram` / `samplePrepProgram` hints (especially
 `study_validation_lifecycle_no_deconv` for cfDNA plasma and EM-Seq). Schema:

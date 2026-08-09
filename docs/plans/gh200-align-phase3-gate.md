@@ -11,7 +11,7 @@ Companion to [`gh200-wgbs-dual-graph-align.plan.md`](gh200-wgbs-dual-graph-align
 | Image `:1.70-mojo` with Align native | **PASS** (rebuilt on GH200 host) |
 | Full Buffy Align wall ≤ ~2 h on GH200 | **PENDING** operator measurement (local NVMe work dir) |
 | MethylCall GAF science parity vs CPU ref | **PENDING** on full-sample GAF from new Align |
-| Site flip `align_engine=gpu_giraffe` on GH200 fleets | **BLOCKED** until wall + parity pass; do not imply GPU map |
+| Site flip `align_engine=gpu_giraffe` on GH200 fleets | **BLOCKED** until wall + parity pass (operator); living docs already describe native-Mojo GPU as the SamplePrep contract — this row is the fleet flip gate, not a “CPU-only” claim |
 | Mojo Giraffe fixture GAF + prefer-mojo backend | **PASS** — see [`mojo-giraffe-cutover-gate.md`](mojo-giraffe-cutover-gate.md) |
 
 ## How to measure the wall gate

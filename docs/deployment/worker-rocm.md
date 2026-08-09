@@ -1,6 +1,6 @@
-# GPU workers on AMD ROCm (Mojo dual Align)
+# GPU workers on AMD ROCm (native-Mojo Align)
 
-Companion to [`docs/architecture/mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md).
+Companion to [`docs/architecture/mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md). Same native-Mojo binary as NVIDIA; site image tag + host ROCm runtime select HIP. Clara Parabricks is NVIDIA-only and is never used as an automatic Mojo fallback.
 
 ## Image
 

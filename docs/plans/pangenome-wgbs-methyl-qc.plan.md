@@ -4,6 +4,8 @@ overview: Make sample.methyl_qc mode-aware for linear / pangenome / pangenome_wg
 
 > **Status: IMPLEMENTED (+ follow-on).** Mode-aware QC; missing25 SamplePrep (instance 59); native Mojo MethylCall/MergeCpG/ConversionRate; WGBS Align may run Picard `collectmultiplemetrics` on the QC BAM with optional QC enrichment. **Full Buffy 238 re-extract stays gated** until missing25 SamplePrep COMPLETED.
 
+> **Docs sync (2026-08-09):** This plan is the implemented **mode-aware methyl_qc** contract mirrored into theory ch.09, usage ch.03, sample-preparation-flow, and `packages/methylalignmentqc/docs/USAGE.md` via [`native-mojo-sample-prep-docs.plan.md`](native-mojo-sample-prep-docs.plan.md).
+
 azure_devops:
   type: Feature
   title: "Pangenome WGBS methyl QC + MethylCall Mojo cutover"

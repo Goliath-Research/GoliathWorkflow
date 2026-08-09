@@ -4,6 +4,8 @@ overview: Run SamplePrep through extraction QC for plasma `DPLST-051425-111148` 
 
 > **Status: DEPTH-MATCHED COMPARE COMPLETE (with caveats).** Report: `/work/samples/_comparisons/20260728T151643Z/`. Linear arm reached QC pass + MethylExtractor H5s. Pangenome dual-graph `MethylCall` on the 18 GB named-coordinate GAF was abandoned (~30 h ETA); CpG metrics below are from MethylExtractor on the C2T-only QC BAM (73.6% mapped), so they understate a full dual-graph methylation call.
 
+> **Docs note (2026-08-09):** Historical compare assumed a CPU-only methylGrapher arm. Living SamplePrep docs now treat `pangenome_wgbs` as **native-Mojo on NVIDIA/AMD**; re-run compares against `:1.70-mojo-cuda` / `:1.70-mojo-rocm` when measuring wall time. See [`native-mojo-sample-prep-docs.plan.md`](native-mojo-sample-prep-docs.plan.md).
+
 ## Live-run findings (2026-07-28)
 
 Full depth for plasma `DPLST-051425-111148` is 349.3M read pairs, so the arms run on a **deterministic 20M-pair subset** (`DPLST-051425-111148-DS20M`, first 20M pairs of each mate file, ~5.7% of depth) to keep the CPU-only arm to hours instead of days. Blockers found and cleared while getting the first real dual-arm run:

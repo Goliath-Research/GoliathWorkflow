@@ -7,6 +7,8 @@ Companion to [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md),
 
 ## Status (2026-08-07 — pure Mojo path)
 
+> **Docs note (2026-08-09):** Living docs treat native-Mojo Giraffe as the canonical `pangenome_wgbs` Align path on NVIDIA **and** AMD; `cpu_vg` ~6.2 h baseline below is the historical comparator, not the product default. See [`native-mojo-sample-prep-docs.plan.md`](native-mojo-sample-prep-docs.plan.md).
+
 | Criterion | Status |
 |-----------|--------|
 | Toy PE GAF vs golden (GFA path) | **PASS** |

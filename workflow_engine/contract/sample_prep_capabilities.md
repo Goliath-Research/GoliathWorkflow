@@ -226,11 +226,12 @@ Task `input_json` keys: `parabricksImage`, `bwaThreads`, `gpuFlags`, `extraDocke
 ## `methylgrapher.wgbs_align`
 
 **action_name:** `sample.methylgrapher_wgbs_align`  
-**Runtime:** Docker **CPU** container (`METHYL_METHYLGRAPHER_IMAGE`) running methylGrapher Align (dual C→T / G→A Giraffe indexes) for methylation calls, plus a `vg giraffe -o BAM --ref-paths` C2T pass for the QC-compatible GRCh38 BAM. The methylGrapher GAF is in named-segment space and cannot be fed to `vg surject`. **No GPU / CUDA acceleration** — stock `vg` and methylGrapher are CPU-only by design. On 64 KB-page ARM64 (Grace/GH200) the image must ship `jemalloc=off` vg (see [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md)); exposing `--gpus` does not speed this path. Expect substantially longer wall time than Parabricks linear `fq2bam_meth` on the same host.
+**Capability:** `methylgrapher.wgbs_align` / `methylgrapher.wgbs_gpu_align`  
+**Runtime:** Docker **GPU** container (`:1.70-mojo-cuda` or `:1.70-mojo-rocm`) running **native-Mojo** methylGrapher Align (dual C→T / G→A GBZ → science GAF) via `std.gpu.host.DeviceContext` on **NVIDIA CUDA or AMD HIP**. QC BAM is a separate C2T pass (Mojo QC BAM or `vg giraffe -o BAM` when configured). The science GAF is in named-segment space and cannot be fed to `vg surject`. On known NVIDIA/AMD fleets DeviceContext failure is **fail-closed** — not a switch to Clara Parabricks. CPU (`cpu_vg`) is only for unknown GPU vendors or explicit parity rollback. On 64 KB-page ARM64 the image must ship `jemalloc=off` vg for any vg-assisted QC path (see [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md)).
 
 **When:** SamplePrep **IF** `useWgbsPangenome` is true (`alignmentMode: "pangenome_wgbs"`). Checked **before** `usePangenome` in the program graph. Idempotency and `forceRealign` semantics match `parabricks.fq2bam`.
 
-**Site manifest (`pangenome_wgbs_genome`) / `actionConfig.methylgrapher_wgbs`:** dual converted indexes (`gbz`, `dist`, `min`, `zipcodes`), `cpg_tsv`, `ref_paths`, `original_gbz`, `linear_ref_fasta` (QNAP asset `pangenome-grch38-d9-bs-1.70`). **Do not** fall back to stock `pangenome_genome` when the BS bundle is missing.
+**Site manifest (`pangenome_wgbs_genome`) / `actionConfig.methylgrapher_wgbs`:** dual converted indexes (`gbz`, `dist`, `min`, `zipcodes`), `cpg_tsv`, `ref_paths`, `original_gbz`, `linear_ref_fasta` (QNAP asset `pangenome-grch38-d9-bs-1.70`), plus `engine=mojo`, `align_engine=gpu_giraffe|mojo_giraffe`, `giraffe_device`, `image`. **Do not** fall back to stock `pangenome_genome` when the BS bundle is missing. Clara is an **explicit** `alignmentMode: linear|pangenome` choice only.
 
 **Worker environment (fallback):**
 
@@ -240,15 +241,15 @@ Task `input_json` keys: `parabricksImage`, `bwaThreads`, `gpuFlags`, `extraDocke
 
 Gate production promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md).
 
-**Outputs (QC path unchanged for methyl-qc):**
+**Outputs (mode-aware methyl-qc):**
 
 | Artifact | Path |
 |----------|------|
 | QC BAM | `{sampleId}.bam` (surjected, original read sequences restored) |
 | Merged GAF | `{sampleId}.alignment.gaf` |
 | Duplicate metrics | `{sampleId}.deduplicate_metrics.txt` |
-| QC metrics archive | `{sampleId}.qc-metrics.tar` |
-| Align provenance | `{sampleId}.alignment_metrics.json` (tool/image pins, asset fingerprints) |
+| QC metrics archive | `{sampleId}.qc-metrics.tar` (optional; when Picard collectmultiplemetrics succeeds) |
+| Align provenance | `{sampleId}.alignment_metrics.json` (primary methylGrapher-family QC input) |
 
 Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py).
 
@@ -256,7 +257,7 @@ Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../wor
 ## `methylgrapher.wgbs_extract`
 
 **action_name:** `sample.methylgrapher_wgbs_extract`  
-**Runtime:** Same **CPU** methylGrapher Docker image as align (MethylCall + MergeCpG → linear-coordinate CpG TSV → `{chrom}-{ctx}.h5` + optional `{chrom}-{ctx}.patterns.h5`). Not a GPU workload.
+**Runtime:** Same native-Mojo methylGrapher Docker image as align (`MethylCall` + `MergeCpG` → linear-coordinate CpG TSV → `{chrom}-{ctx}.h5` + optional `{chrom}-{ctx}.patterns.h5`). Hot path is **native-Mojo** with Mojo `parallelize()` (CPU-parallel — **not** a CUDA/HIP GPU workload and **not** stock Python).
 
 **When:** SamplePrep pass path when `useWgbsPangenome` is true (replaces `sample.methyl_extract`). Requires prior `sample.methylgrapher_wgbs_align` GAF + QC BAM on disk.
 

@@ -7,6 +7,8 @@ azure_devops:
 overview: "Eliminate Python from the production GBZ and linear map hot loops in methylGrapher-mojo, then rebuild/distribute the fleet image and clear science + wall-clock gates so ~738 Buffy Aligns (238 pending + 500 inbound) run the fastest science-backed path: pangenome_wgbs dual-map ≤~2h and linear Mojo strictly faster than Clara."
 
 > **Status: IMPLEMENTED (code + image).** Toy stream-map PASS; `:1.70-mojo` rebuilt (`3b0b063d…` / OCI `8ca56896…`). Operator gates (Buffy ≤2h, DS20M, linear &lt; Clara, sister load) tracked in [`native-mojo-align-hotpath-gates.md`](native-mojo-align-hotpath-gates.md).
+
+> **Docs sync (2026-08-09):** Living SamplePrep / architecture / usage docs describe native-Mojo GBZ stream map as the canonical `pangenome_wgbs` Align hot path (NVIDIA + AMD). See [`native-mojo-sample-prep-docs.plan.md`](native-mojo-sample-prep-docs.plan.md).
 todos:
   - id: gbz-stream-mojo
     content: "Implement giraffe_stream_map.mojo: batched FASTQ → GPU seed → minzip/dist → gapless_extend_native → GAF; retarget map_gbz_native off quartet_map"

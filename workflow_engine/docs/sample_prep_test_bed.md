@@ -153,10 +153,10 @@ comparison. NVIDIA does not publish a WGBS FASTQ fixture; GSE261315 is the citab
 Use this when evaluating whether methylGrapher WGBS improves usable CpG read support vs linear
 on real lab samples (plasma + buffy), with alignment wall time as a cost metric.
 
-**Compute asymmetry (do not confuse with canary GPU label):** linear arms use **Parabricks GPU**;
-`pangenome_wgbs` arms use the **CPU-only** methylGrapher(+vg) Docker image. A “GPU worker” is
-still required for the linear arm and for MethylExtractor on linear, but methylGrapher itself
-never uses CUDA — longer wall time on the same GH200 is expected.
+**Compute note:** linear arms use **explicit Clara Parabricks** (NVIDIA GPU);
+`pangenome_wgbs` arms use **native-Mojo** methylGrapher (`:1.70-mojo-cuda` / `:1.70-mojo-rocm`)
+on NVIDIA CUDA or AMD HIP. Compare wall time and CpG yield fairly on the same GPU class;
+do not treat Clara as an automatic Mojo fallback.
 
 | Piece | Path |
 |-------|------|
