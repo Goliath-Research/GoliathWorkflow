@@ -1123,12 +1123,139 @@ def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
             "qc_sam_emit.py",
             "gpu_mem.py",
             "alignments.py",
+            "named_coords.py",
         ):
             p = eng_dir / name
             if p.is_file():
                 docker_cmd.extend(
                     ["-v", f"{p}:/opt/methylgrapher-mojo/engine/{name}:ro"]
                 )
+
+
+def _mojo_named_coords_paths() -> Tuple[Path, Path]:
+    """Return (translate_script, pythonpath_root) for GBZ→GFA GAF rewrite."""
+    overlay = Path(
+        os.environ.get(
+            "METHYLGRAPHER_MOJO_OVERLAY",
+            "/work/epimethyl/images/methylgrapher-mojo-overlay",
+        )
+    )
+    candidates = [
+        Path("/home/ubuntu/methylGrapher-mojo"),
+        overlay,
+        Path("/opt/methylgrapher-mojo"),
+        Path("/work/epimethyl/images/mojo_named_coords"),
+    ]
+    for root in candidates:
+        script = root / "scripts" / "translate_mojo_gaf_named_coords.py"
+        eng = root / "engine" / "named_coords.py"
+        if script.is_file() and eng.is_file():
+            return script, root
+    raise FileNotFoundError(
+        "translate_mojo_gaf_named_coords.py + engine/named_coords.py not found "
+        f"under {[str(c) for c in candidates]}"
+    )
+
+
+def _named_coords_index_dir(bundle: "MethylGrapherWgbsBundle") -> Path:
+    cache = (
+        (bundle.mojo_segments_cache or "").strip()
+        or os.environ.get("METHYLGRAPHER_MOJO_SEGMENTS_CACHE", "").strip()
+        or "/work/cache/mojo_segments"
+    )
+    return Path(cache) / "hprc-d9-bs.wl.gbz_to_gfa.named_coords"
+
+
+def _gaf_needs_gbz_to_gfa(work_dir: Path, gaf_path: Path, index_dir: Path) -> bool:
+    """True when GAF still carries GBZ chopped-node ids (Mojo emit)."""
+    stamp = Path(str(gaf_path) + ".named_coords.json")
+    if stamp.is_file() and stamp.stat().st_mtime >= gaf_path.stat().st_mtime:
+        return False
+    if any(work_dir.glob("alignment.mojo.Ref_*.gaf")):
+        return True
+    meta_path = index_dir / "meta.json"
+    max_gfa = 0
+    if meta_path.is_file():
+        try:
+            max_gfa = int(json.loads(meta_path.read_text(encoding="utf-8")).get(
+                "max_gfa_segment") or 0)
+        except (OSError, ValueError, json.JSONDecodeError):
+            max_gfa = 0
+    if max_gfa <= 0:
+        return False
+    # Any path node id above the GFA segment space ⇒ GBZ ids.
+    try:
+        with gaf_path.open("r", encoding="utf-8", errors="replace") as fh:
+            for i, line in enumerate(fh):
+                if i >= 20000:
+                    break
+                parts = line.split("\t")
+                if len(parts) < 6:
+                    continue
+                for tok in parts[5].replace("<", ">").split(">"):
+                    if tok.isdigit() and int(tok) > max_gfa:
+                        return True
+    except OSError:
+        return False
+    return False
+
+
+def ensure_gaf_named_coordinates(
+    gaf_path: Path,
+    work_dir: Path,
+    bundle: "MethylGrapherWgbsBundle",
+    log_path: Path,
+) -> None:
+    """Rewrite Mojo GAF paths to GFA named-coordinates before MethylCall.
+
+    Align packs use ``vg convert --no-translation`` (GBZ node ids). MethylCall
+    + cpg.tsv use ``*.wl.gfa`` segment ids. Skip cpu_vg GAFs already in GFA space.
+    """
+    if not gaf_path.is_file() or gaf_path.stat().st_size <= 0:
+        return
+    index_dir = _named_coords_index_dir(bundle)
+    if not (index_dir / "nodes.bin").is_file():
+        if any(work_dir.glob("alignment.mojo.Ref_*.gaf")):
+            raise RuntimeError(
+                "Mojo GAF present but GBZ→GFA named_coords index missing: "
+                f"{index_dir} (build via scripts/build_named_coords_index.py)"
+            )
+        return
+    if not _gaf_needs_gbz_to_gfa(work_dir, gaf_path, index_dir):
+        return
+    script, py_root = _mojo_named_coords_paths()
+    cmd = [
+        os.environ.get("PYTHON", "").strip() or "python3",
+        str(script),
+        str(gaf_path),
+        "--index",
+        str(index_dir),
+    ]
+    env = os.environ.copy()
+    prev = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(py_root) + (os.pathsep + prev if prev else "")
+    _append_log(
+        log_path,
+        f"NAMED_COORDS: translating {gaf_path} via {index_dir}",
+    )
+    logger.info("mojo.gaf_named_coords: %s", " ".join(shlex.quote(c) for c in cmd))
+    _append_log(log_path, "COMMAND: " + " ".join(shlex.quote(c) for c in cmd))
+    proc = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    if proc.stdout:
+        _append_log(log_path, f"[mojo.gaf_named_coords] stdout:\n{proc.stdout}")
+    if proc.stderr:
+        _append_log(log_path, f"[mojo.gaf_named_coords] stderr:\n{proc.stderr}")
+    if proc.returncode != 0:
+        raise RuntimeError(
+            (proc.stderr or proc.stdout or "").strip()
+            or f"mojo.gaf_named_coords failed (rc={proc.returncode})"
+        )
 
 
 def samtools_sam_to_bam(sam_path: Path, bam_path: Path, log_path: Path) -> None:
@@ -1834,6 +1961,17 @@ def run_methylgrapher_wgbs_align(
                         f"methylGrapher Align did not produce a GAF under {work_dir}"
                     )
                 shutil.copy2(candidates[0], gaf_path)
+
+        # Mojo emits GBZ chopped-node ids; MethylCall needs GFA named-coordinates.
+        work_gaf = work_dir / "alignment.gaf"
+        if not work_gaf.is_file() and gaf_path.is_file():
+            shutil.copy2(gaf_path, work_gaf)
+        if work_gaf.is_file():
+            ensure_gaf_named_coordinates(work_gaf, work_dir, bundle, log_path)
+            if gaf_path.resolve() != work_gaf.resolve():
+                shutil.copy2(work_gaf, gaf_path)
+        elif gaf_path.is_file():
+            ensure_gaf_named_coordinates(gaf_path, work_dir, bundle, log_path)
 
         if not bundle.directional:
             logger.warning(
@@ -2923,6 +3061,14 @@ def run_methylgrapher_wgbs_extract(
         if not work_gaf.is_file() and gaf_path.is_file():
             if gaf_path.resolve() != work_gaf.resolve():
                 shutil.copy2(gaf_path, work_gaf)
+        # Translate Mojo GBZ-node GAF → GFA named-coordinates before MethylCall.
+        if work_gaf.is_file():
+            ensure_gaf_named_coordinates(work_gaf, work_dir, bundle, log_path)
+            if gaf_path.resolve() != work_gaf.resolve():
+                shutil.copy2(work_gaf, gaf_path)
+        elif gaf_path.is_file():
+            ensure_gaf_named_coordinates(gaf_path, work_dir, bundle, log_path)
+            shutil.copy2(gaf_path, work_gaf)
 
         image = _resolve_image(bundle)
         methyl_cmd = build_methylcall_command(
