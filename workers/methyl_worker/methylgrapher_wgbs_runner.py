@@ -243,7 +243,11 @@ def resolve_wgbs_bundle_from_resolved(
         ),
         cg_only=_pick_bool(raw, "cg_only", True),
         contexts=contexts,
-        read_level_enabled=_pick_bool(rl, "enabled", True),
+        read_level_enabled=_pick_bool(
+            rl,
+            "enabled",
+            _pick_bool(raw, "read_level_enabled", True),
+        ),
         tile_size=int(rl.get("tile_size") or 4),
         batch_size=int(raw["batch_size"]) if raw.get("batch_size") is not None else None,
         linear_cpg_tsv=(
@@ -1166,38 +1170,50 @@ def _named_coords_index_dir(bundle: "MethylGrapherWgbsBundle") -> Path:
     return Path(cache) / "hprc-d9-bs.wl.gbz_to_gfa.named_coords"
 
 
-def _gaf_needs_gbz_to_gfa(work_dir: Path, gaf_path: Path, index_dir: Path) -> bool:
-    """True when GAF still carries GBZ chopped-node ids (Mojo emit)."""
-    stamp = Path(str(gaf_path) + ".named_coords.json")
-    if stamp.is_file() and stamp.stat().st_mtime >= gaf_path.stat().st_mtime:
-        return False
-    if any(work_dir.glob("alignment.mojo.Ref_*.gaf")):
-        return True
-    meta_path = index_dir / "meta.json"
-    max_gfa = 0
-    if meta_path.is_file():
-        try:
-            max_gfa = int(json.loads(meta_path.read_text(encoding="utf-8")).get(
-                "max_gfa_segment") or 0)
-        except (OSError, ValueError, json.JSONDecodeError):
-            max_gfa = 0
-    if max_gfa <= 0:
-        return False
-    # Any path node id above the GFA segment space ⇒ GBZ ids.
+def _gaf_has_ids_above(gaf_path: Path, max_id: int, *, sample_lines: int = 50000) -> bool:
+    """True if any GAF path node id exceeds ``max_id`` (sampled)."""
     try:
         with gaf_path.open("r", encoding="utf-8", errors="replace") as fh:
             for i, line in enumerate(fh):
-                if i >= 20000:
+                if i >= sample_lines:
                     break
                 parts = line.split("\t")
                 if len(parts) < 6:
                     continue
                 for tok in parts[5].replace("<", ">").split(">"):
-                    if tok.isdigit() and int(tok) > max_gfa:
+                    if tok.isdigit() and int(tok) > max_id:
                         return True
     except OSError:
         return False
     return False
+
+
+def _gaf_needs_gbz_to_gfa(work_dir: Path, gaf_path: Path, index_dir: Path) -> bool:
+    """True when GAF still carries GBZ chopped-node ids (Mojo emit).
+
+    Decision is ID-space based (any path node > max GFA segment). Do **not**
+    re-translate merely because Mojo shard files exist or the GAF was touched
+    after the stamp — that double-applies GBZ→GFA and corrupts paths.
+    """
+    stamp = Path(str(gaf_path) + ".named_coords.json")
+    if stamp.is_file() and stamp.stat().st_mtime >= gaf_path.stat().st_mtime:
+        return False
+    meta_path = index_dir / "meta.json"
+    max_gfa = 0
+    if meta_path.is_file():
+        try:
+            max_gfa = int(
+                json.loads(meta_path.read_text(encoding="utf-8")).get(
+                    "max_gfa_segment"
+                )
+                or 0
+            )
+        except (OSError, ValueError, json.JSONDecodeError):
+            max_gfa = 0
+    if max_gfa > 0:
+        return _gaf_has_ids_above(gaf_path, max_gfa)
+    # No index meta: only translate when Mojo shards exist and no stamp yet.
+    return any(work_dir.glob("alignment.mojo.Ref_*.gaf")) and not stamp.is_file()
 
 
 def ensure_gaf_named_coordinates(
