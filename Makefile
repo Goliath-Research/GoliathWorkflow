@@ -1,8 +1,12 @@
 # MethylPipeline developer shortcuts (requires repo-root .venv)
+# Make uses /bin/sh by default (often dash); prefer bash for recipes that need it.
+SHELL := /bin/bash
 .PHONY: help venv install test test-ci schemas diagrams docs docs-serve docs-pdf docs-customer check-docs check-layout bootstrap-verify
 
 VENV := .venv/bin
 PY := $(VENV)/python
+PIP := $(VENV)/pip
+MKDOCS := $(VENV)/mkdocs
 
 help:
 	@echo "Targets: venv install test test-ci schemas diagrams docs docs-serve docs-pdf docs-customer check-docs check-layout bootstrap-verify"
@@ -14,25 +18,31 @@ install:
 	bash scripts/install_all.sh
 
 test:
-	source .venv/bin/activate && bash scripts/run_tests.sh
+	PATH="$(CURDIR)/$(VENV):$$PATH" bash scripts/run_tests.sh
 
 test-ci:
-	source .venv/bin/activate && bash scripts/run_tests_ci.sh
+	PATH="$(CURDIR)/$(VENV):$$PATH" bash scripts/run_tests_ci.sh
 
 schemas:
-	source .venv/bin/activate && bash scripts/export_config_schemas.sh && methyl-export-task-schemas && methyl-export-action-catalog && methyl-export-domain-schemas
+	PATH="$(CURDIR)/$(VENV):$$PATH" bash scripts/export_config_schemas.sh
+	PATH="$(CURDIR)/$(VENV):$$PATH" methyl-export-task-schemas
+	PATH="$(CURDIR)/$(VENV):$$PATH" methyl-export-action-catalog
+	PATH="$(CURDIR)/$(VENV):$$PATH" methyl-export-domain-schemas
 
 diagrams:
 	bash scripts/render_diagrams.sh
 
 docs:
-	source .venv/bin/activate && pip install -q -r docs-requirements.txt && mkdocs build --strict
+	$(PIP) install -q -r docs-requirements.txt
+	$(MKDOCS) build --strict
 
 docs-serve:
-	source .venv/bin/activate && pip install -q -r docs-requirements.txt && mkdocs serve
+	$(PIP) install -q -r docs-requirements.txt
+	$(MKDOCS) serve
 
 docs-customer:
-	source .venv/bin/activate && pip install -q -r docs-requirements.txt && mkdocs build -f mkdocs.customer.yml --strict
+	$(PIP) install -q -r docs-requirements.txt
+	$(MKDOCS) build -f mkdocs.customer.yml --strict
 
 docs-pdf:
 	bash scripts/build_docs_pdf.sh
@@ -40,8 +50,9 @@ docs-pdf:
 check-docs:
 	bash scripts/check_doc_links.sh
 	bash scripts/check_doc_freshness.sh
-	source .venv/bin/activate && pip install -q -r docs-requirements.txt && mkdocs build --strict
-	python scripts/check_no_step_config.py
+	$(PIP) install -q -r docs-requirements.txt
+	$(MKDOCS) build --strict
+	$(PY) scripts/check_no_step_config.py
 
 check-layout:
 	bash scripts/verify_work_layout.sh

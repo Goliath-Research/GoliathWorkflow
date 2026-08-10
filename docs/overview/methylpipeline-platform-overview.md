@@ -2,7 +2,7 @@
 
 **Audience:** mixed technical, product, and SaMD-review readers  
 **Format:** print-friendly Markdown synthesis (~24–36 pages)  
-**Companion Canvas:** [methylpipeline-platform-overview.canvas.tsx](../canvas/methylpipeline-platform-overview.canvas.tsx)  
+**Companion Canvas:** [platform overview canvas](../canvas/README.md#methylpipeline-platform-overview) — open in Cursor after `bash scripts/sync_cursor_canvases.sh`  
 **Status:** canonical quick platform overview (2026-07)
 
 > **Not a regulatory claim.** Architecture, profiles, schemas, and scaffolds support
@@ -921,7 +921,7 @@ evidence packages are completed and bound to a released software version.
 
 Open the Docs Canvas for a navigable visual summary of this overview:
 
-- Git source: [`docs/canvas/methylpipeline-platform-overview.canvas.tsx`](../canvas/methylpipeline-platform-overview.canvas.tsx)
+- Git source: `docs/canvas/methylpipeline-platform-overview.canvas.tsx` — [canvas index](../canvas/README.md#methylpipeline-platform-overview)
 - Sync: `bash scripts/sync_cursor_canvases.sh`
 
 ---

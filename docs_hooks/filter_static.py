@@ -14,7 +14,6 @@ _DROP_PREFIXES = (
     "diagrams/",
     "plans/",
     "research/",
-    "canvas/",
     "diagnostics/",
     "examples/",
     "user-manual/",
@@ -28,6 +27,15 @@ _DROP_SUFFIXES = (
     ".pdf",
     ".tex",
     ".bib",
+    ".canvas.tsx",
+    ".canvas.data.json",
+)
+
+# IDE-only files under canvas/; keep canvas/README.md for the HTML site.
+_DROP_EXACT = frozenset(
+    {
+        "canvas/tsconfig.json",
+    }
 )
 
 
@@ -37,6 +45,8 @@ def on_files(files: Files, config) -> Files:  # noqa: ANN001
         src = f.src_uri if hasattr(f, "src_uri") else f.src_path
         src = src.replace("\\", "/")
         if src.startswith(".quarto/") or "/.quarto/" in src:
+            continue
+        if src in _DROP_EXACT:
             continue
         if any(src.startswith(p) for p in _DROP_PREFIXES):
             continue

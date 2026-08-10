@@ -85,4 +85,4 @@ See [Usage ch.13](../usage/13-distributed-methyl-validation.md).
 
 - [Production runbook](production_runbook.md)
 - [Usage ch.14 — Deployment and distributed workflow](../usage/14-deployment-and-distributed-workflow.md)
-- [Operator DB canvas](../canvas/methylpipeline-db-runbook.canvas.tsx)
+- [Operator DB canvas](../canvas/README.md#methylpipeline-db-runbook) (Cursor; sync with `bash scripts/sync_cursor_canvases.sh`)

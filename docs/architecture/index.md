@@ -21,11 +21,11 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Execution scopes & CAAS](../usage/17-content-addressed-action-store.md) | Experiment with the same workflow under varied config; idempotent cross-instance reuse ([deep dive](../../workflow_engine/docs/pipeline_architecture.md#execution-scopes-and-caas)) |
 | [Documentation audit (2026-07)](documentation-audit-2026-07.md) | Staleness findings + Quarto validation + remediation checklist |
 
-**Interactive hub:** [methylpipeline-architecture canvas](../canvas/methylpipeline-architecture.canvas.tsx) (local vs gateway, config layers, DB contract)
+**Interactive hub:** [architecture canvas](../canvas/README.md#methylpipeline-architecture) (local vs gateway, config layers, DB contract; open in Cursor after sync)
 
-**Platform overview:** [Platform Overview](../overview/methylpipeline-platform-overview.md) · [overview canvas](../canvas/methylpipeline-platform-overview.canvas.tsx)
+**Platform overview:** [Platform Overview](../overview/methylpipeline-platform-overview.md) · [overview canvas](../canvas/README.md#methylpipeline-platform-overview)
 
-**Documentation hub:** [methylpipeline-docs canvas](../canvas/methylpipeline-docs.canvas.tsx) — [all canvases](../canvas/README.md)
+**Documentation hub:** [docs canvas](../canvas/README.md#methylpipeline-docs) — [all canvases](../canvas/README.md)
 
 **Implementation detail:** [Implementation guide](../implementation/index.md). **Operator runbooks:** [Usage manual](../usage/index.md).
 

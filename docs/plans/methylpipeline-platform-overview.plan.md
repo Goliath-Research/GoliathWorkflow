@@ -34,7 +34,7 @@ todos:
 ## Deliverables
 
 - Canonical Markdown overview: [`docs/overview/methylpipeline-platform-overview.md`](../overview/methylpipeline-platform-overview.md)
-- Companion canvas: [`docs/canvas/methylpipeline-platform-overview.canvas.tsx`](../canvas/methylpipeline-platform-overview.canvas.tsx)
+- Companion canvas: [`docs/canvas/README.md`](../canvas/README.md#methylpipeline-platform-overview) (`methylpipeline-platform-overview.canvas.tsx`)
 - Registered in [`docs/index.md`](../index.md) and [`docs/DOCUMENTATION_AUDIT.md`](../DOCUMENTATION_AUDIT.md)
 
 ## Content structure

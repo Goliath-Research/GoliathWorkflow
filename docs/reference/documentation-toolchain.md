@@ -12,7 +12,7 @@
 | **Diagrams** | Fenced ` ```mermaid ` (dynamic JS) | Native in Material; GitHub-native too |
 | **PDF** | Playwright print of built HTML | `make docs-pdf` → `site-pdf/MethylPipeline-Documentation.pdf` |
 | **Customer pack** | Nav subset | `mkdocs build -f mkdocs.customer.yml` |
-| **Cursor canvases** | `.canvas.tsx` in `docs/canvas/` | IDE hubs; not part of the static site |
+| **Cursor canvases** | `.canvas.tsx` in `docs/canvas/` | IDE hubs; site links to [`canvas/README.md`](../canvas/README.md) (sync + open in Cursor) |
 | **Marp decks** | `docs/presentations/` | Optional pre-rendered PNG from `docs/diagrams/out/` |
 
 **Decision:** Prefer **plain Markdown + Mermaid + MathJax** over Quarto books. Quarto was kept previously only for theory equations; that forced Mermaid pre-render (SVG/PNG) for PDF. MkDocs Material restores **dynamic Mermaid** while preserving LaTeX-style math in the browser and in Playwright PDFs.

@@ -4,9 +4,9 @@ Markdown-first documentation site (Material for MkDocs) covering Theory, Usage, 
 
 **Build / preview:** see [Contributing](CONTRIBUTING.md) — `make docs-serve` or `mkdocs build --strict` → portable `site/`.
 
-**Quick platform overview:** [Platform Overview](overview/methylpipeline-platform-overview.md) · [companion canvas](canvas/methylpipeline-platform-overview.canvas.tsx)
+**Quick platform overview:** [Platform Overview](overview/methylpipeline-platform-overview.md) · [companion canvas](canvas/README.md#methylpipeline-platform-overview)
 
-**Interactive hub:** [methylpipeline-docs canvas](canvas/methylpipeline-docs.canvas.tsx) — [canvas index](canvas/README.md)
+**Interactive hub:** [docs canvas](canvas/README.md#methylpipeline-docs) — [canvas index](canvas/README.md) (open in Cursor after `bash scripts/sync_cursor_canvases.sh`)
 
 ## Start here by role
 

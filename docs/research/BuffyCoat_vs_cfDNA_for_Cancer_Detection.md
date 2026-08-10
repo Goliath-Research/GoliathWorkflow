@@ -2,7 +2,7 @@
 
 **Status:** research / design note (not operator runbook).  
 **Canonical config:** `[docs/ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md)` — set `regulatory.primary_analyte` to `buffy_coat`, `cfdna`, or `combined`.  
-**Empirical comparison canvas:** `[docs/canvas/analyte-comparison.canvas.tsx](../canvas/analyte-comparison.canvas.tsx)`.  
+**Empirical comparison canvas:** [analyte-comparison](../canvas/README.md#analyte-comparison).  
 **Landscape context:** `[Gemini_on_Cancer_Detection.md](Gemini_on_Cancer_Detection.md)` (MCED competitors / analytes) and `[Grok_on_Gemini_conclusions.md](Grok_on_Gemini_conclusions.md)` (verification + caveats).
 
 MethylPipeline is **analyte-agnostic**: the same DomainProgram + profile path runs for leukocyte DNA and plasma cfDNA. Analyte choice changes biology, QC defaults, and how you interpret features — not which CLI you use.
@@ -144,7 +144,7 @@ Empirical prostate buffy vs plasma MC comparison (marginal separation on one rub
 
 - `[docs/ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md)` — analyte defaults and study examples
 - `[docs/implementation/sample-preparation-flow.md](../implementation/sample-preparation-flow.md)` — shared prep + cfDNA fragmentomics QC
-- `[docs/canvas/analyte-comparison.canvas.tsx](../canvas/analyte-comparison.canvas.tsx)` — buffy vs plasma MC comparison explorer
+- [analyte-comparison canvas](../canvas/README.md#analyte-comparison) — buffy vs plasma MC comparison explorer
 - `[Gemini_on_Cancer_Detection.md](Gemini_on_Cancer_Detection.md)` — MCED competitors, multiomics, buffy as CHIP filter
 - `[Grok_on_Gemini_conclusions.md](Grok_on_Gemini_conclusions.md)` — verification of that landscape note and performance/regulatory caveats
 

@@ -89,7 +89,9 @@ exclude_docs: |
   /plans/
   /research/
   /presentations/
-  /canvas/
+  /canvas/**/*.canvas.tsx
+  /canvas/**/*.canvas.data.json
+  /canvas/tsconfig.json
   /diagrams/
   /user-manual/
   /docs/
@@ -120,6 +122,7 @@ nav:
   - Home: index.md
   - Overview:
       - Platform overview: overview/methylpipeline-platform-overview.md
+      - Cursor canvases: canvas/README.md
       - Documentation audit: DOCUMENTATION_AUDIT.md
       - Contributing to docs: CONTRIBUTING.md
       - Dev environment: DEPLOYMENT.md

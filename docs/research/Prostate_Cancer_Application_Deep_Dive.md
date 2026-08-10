@@ -292,4 +292,4 @@ Canonical analyte encoding: [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md). Produ
 - Two workflows (WF1–3): [theory ch.12](../theory/chapters/12-two-workflows.md)  
 - Model creation: [theory ch.15](../theory/chapters/15-model-creation-and-validation.md)  
 - SamplePrep linear vs WGBS compare: [sample_prep_test_bed.md](../../workflow_engine/docs/sample_prep_test_bed.md)  
-- Interactive canvases: [analyte-comparison](../canvas/analyte-comparison.canvas.tsx), [pca-detection-fitness](../canvas/pca-detection-fitness.canvas.tsx)
+- Interactive canvases: [analyte-comparison](../canvas/README.md#analyte-comparison), [pca-detection-fitness](../canvas/README.md#pca-detection-fitness)
