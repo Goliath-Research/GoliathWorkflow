@@ -899,14 +899,58 @@ def build_qc_bam_command(
     ]
 
 
-def build_qc_bam_mojo_gaf_command(
+def resolve_grch38_offsets_dir(
+    bundle: MethylGrapherWgbsBundle, index_prefix: str
+) -> Path:
+    """Directory with grch38-dense-v1 offsets (``meta.json`` + ``records.bin``).
+
+    Search order: ``METHYLGRAPHER_MOJO_SEGMENT_OFFSETS``,
+    ``{wl.gfa}.grch38_offsets``, cache siblings under mojo_segments.
+    """
+
+    def _ready(cand: Path) -> bool:
+        return (cand / "meta.json").is_file() and (cand / "records.bin").is_file()
+
+    env = os.environ.get("METHYLGRAPHER_MOJO_SEGMENT_OFFSETS", "").strip()
+    candidates: List[Path] = []
+    if env:
+        env_p = Path(env).expanduser()
+        if _ready(env_p):
+            return env_p.resolve()
+        candidates.append(env_p)
+    wl = resolve_wl_gfa_path(bundle, index_prefix)
+    candidates.append(Path(str(wl) + ".grch38_offsets"))
+    candidates.append(wl.parent / f"{wl.name}.grch38_offsets")
+    cache_roots = [
+        Path("/work/cache/mojo_segments"),
+        Path("/lambda/nfs/Work/cache/mojo_segments"),
+    ]
+    try:
+        cache_roots.append(mojo_segments_cache_path(bundle))
+    except Exception:
+        pass
+    for root in cache_roots:
+        candidates.append(root / "hprc-d9-bs.wl.grch38_offsets")
+        candidates.append(root / f"{Path(index_prefix).name}.wl.grch38_offsets")
+    for cand in candidates:
+        if _ready(cand):
+            return cand.resolve()
+    raise RuntimeError(
+        "Mojo QC SAM requires grch38-dense-v1 offsets "
+        "(run methylGrapher-mojo/scripts/build_grch38_offsets.py). "
+        f"Searched: {', '.join(str(c) for c in candidates)}"
+    )
+
+
+def build_qc_bam_mojo_sam_command(
     *,
     bundle: MethylGrapherWgbsBundle,
     fq1_c2t: Path,
     fq2_g2a: Path,
-    out_gaf: Path,
+    out_sam: Path,
+    segment_offsets: Path,
 ) -> List[str]:
-    """MojoGiraffe QC remap → GAF (then packaged to linear BAM on the host)."""
+    """MojoGiraffe QC remap → linear SAM (native emit; no host packer)."""
     mg = os.environ.get(METHYLGRAPHER_BIN_ENV, "").strip() or "methylGrapher"
     device = (bundle.giraffe_device or "nvidia").strip() or "nvidia"
     return [
@@ -924,150 +968,59 @@ def build_qc_bam_mojo_gaf_command(
         str(fq1_c2t),
         "-fq2",
         str(fq2_g2a),
-        "-out_gaf",
-        str(out_gaf),
+        "-out_sam",
+        str(out_sam),
+        "-segment_offsets",
+        str(segment_offsets),
         "-device",
         device,
     ]
 
 
-def package_mojo_qc_gaf_to_bam(
-    *,
-    gaf_path: Path,
-    fq1_c2t: Path,
-    fq2_g2a: Path,
-    ref_fasta: Path,
-    wl_gfa: Path,
-    out_bam: Path,
-    log_path: Path,
-) -> int:
-    """Project Mojo named-coordinate QC GAF onto GRCh38 and write an unsorted BAM.
-
-    Uses ``wl.gfa`` GRCh38 path offsets (same as CpG projection). Sequence comes from
-    GAF ``os:Z`` when present, else from the converted FASTQ by qname. Returns the
-    number of mapped records written. Raises when the GAF is empty.
-    """
-    import pysam
-
-    if not gaf_path.is_file() or gaf_path.stat().st_size == 0:
-        raise RuntimeError(f"Mojo QC GAF missing or empty: {gaf_path}")
-    offsets = build_grch38_segment_offsets_from_gfa(wl_gfa)
-    if not offsets:
-        raise RuntimeError(f"No GRCh38 segment offsets in {wl_gfa}; cannot pack Mojo QC BAM")
-
-    # Optional qname → sequence from converted FASTQs (os:Z preferred).
-    seq_by_qname: Dict[str, str] = {}
-
-    def _ingest_fq(path: Path) -> None:
-        opener = gzip.open if str(path).endswith(".gz") else open
-        with opener(path, "rt", encoding="utf-8", errors="replace") as fh:  # type: ignore[arg-type]
-            while True:
-                h = fh.readline()
-                if not h:
-                    break
-                seq = fh.readline().rstrip("\n")
-                fh.readline()
-                fh.readline()
-                if not h.startswith("@"):
-                    continue
-                qn = h[1:].split()[0]
-                # Strip common methylGrapher suffixes if present.
-                for suf in ("_C2T", "_G2A"):
-                    if qn.endswith(suf):
-                        qn = qn[: -len(suf)]
-                seq_by_qname[qn] = seq
-
-    _ingest_fq(fq1_c2t)
-    _ingest_fq(fq2_g2a)
-
-    # Header from linear FASTA chrom lengths.
-    header = {"HD": {"VN": "1.6", "SO": "unsorted"}, "SQ": []}
-    with pysam.FastaFile(str(ref_fasta)) as fa:
-        for chrom in fa.references:
-            norm = _normalize_grch38_chrom(chrom) or chrom
-            header["SQ"].append({"SN": norm, "LN": int(fa.get_reference_length(chrom))})
-
-    import re
-
-    seg_re = re.compile(r"([><])([^><]+)")
-    n_mapped = 0
-    out_bam.parent.mkdir(parents=True, exist_ok=True)
-    with pysam.AlignmentFile(str(out_bam), "wb", header=header) as bam_out:
-        with gaf_path.open("r", encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                if not line.strip():
-                    continue
-                parts = line.rstrip("\n").split("\t")
-                if len(parts) < 12:
-                    continue
-                qname, _qlen, qstart_s, qend_s, strand, path = parts[:6]
-                try:
-                    qstart, qend = int(qstart_s), int(qend_s)
-                except ValueError:
-                    continue
-                tags = {}
-                for tok in parts[12:]:
-                    if len(tok) > 5 and tok[2:5] == ":Z:":
-                        tags[tok[:2]] = tok[5:]
-                    elif len(tok) > 5 and tok[2:5] == ":i:":
-                        try:
-                            tags[tok[:2]] = int(tok[5:])
-                        except ValueError:
-                            pass
-                # First GRCh38 segment on the path anchors the alignment.
-                chrom = None
-                ref_pos0 = None
-                path_cursor = 0
-                try:
-                    pstart = int(parts[7])
-                except ValueError:
-                    pstart = 0
-                for m in seg_re.finditer(path):
-                    orient, seg_id = m.group(1), m.group(2)
-                    info = offsets.get(seg_id)
-                    seg_len = int(info[2]) if info else 0
-                    if info is not None and chrom is None:
-                        # Alignment start on this segment ≈ pstart within path.
-                        # Approximate: place at segment genomic start + max(0, pstart - path_cursor).
-                        chrom, seg_genomic0, seg_len, _seg_or = info
-                        within = max(0, pstart - path_cursor)
-                        if within < seg_len:
-                            ref_pos0 = seg_genomic0 + within
-                    path_cursor += seg_len
-                if chrom is None or ref_pos0 is None:
-                    continue
-                seq = str(tags.get("os") or seq_by_qname.get(qname.split()[0], ""))
-                if not seq:
-                    continue
-                # Clip to aligned query interval when possible.
-                if 0 <= qstart < qend <= len(seq):
-                    seq = seq[qstart:qend]
-                aln = pysam.AlignedSegment()
-                aln.query_name = qname
-                aln.query_sequence = seq
-                aln.flag = 0 if strand == "+" else 16
-                aln.reference_id = bam_out.get_tid(str(chrom))
-                if aln.reference_id < 0:
-                    # try chr-prefixed
-                    aln.reference_id = bam_out.get_tid(f"chr{chrom}")
-                if aln.reference_id < 0:
-                    continue
-                aln.reference_start = int(ref_pos0)
-                aln.mapping_quality = int(parts[11]) if parts[11].isdigit() else 60
-                aln.cigar = [(0, len(seq))]  # match Op
-                aln.next_reference_id = -1
-                aln.next_reference_start = -1
-                aln.template_length = 0
-                aln.query_qualities = pysam.qualitystring_to_array("I" * len(seq))
-                bam_out.write(aln)
-                n_mapped += 1
-    _append_log(
-        log_path,
-        f"Mojo QC GAF→BAM packed {n_mapped} mapped records → {out_bam}",
+def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
+    """Bind-mount host Mojo src/engine hotfixes into the Align/QC container."""
+    overlay = Path(
+        os.environ.get(
+            "METHYLGRAPHER_MOJO_OVERLAY",
+            "/work/epimethyl/images/methylgrapher-mojo-overlay",
+        )
     )
-    if n_mapped <= 0:
-        raise RuntimeError(f"Mojo QC GAF→BAM wrote 0 mapped records from {gaf_path}")
-    return n_mapped
+    src_overlay = overlay / "src"
+    if src_overlay.is_dir():
+        for name in (
+            "giraffe_gaf_emit.mojo",
+            "giraffe_sam_emit.mojo",
+            "giraffe_mapper.mojo",
+            "giraffe_stream_map.mojo",
+            "main.mojo",
+            "mcall.mojo",
+        ):
+            p = src_overlay / name
+            if p.is_file():
+                docker_cmd.extend(
+                    ["-v", f"{p}:/opt/methylgrapher-mojo/src/{name}:ro"]
+                )
+    eng_dir = overlay / "engine"
+    if eng_dir.is_dir():
+        for name in ("mcall.py", "grch38_offsets.py", "qc_sam_state.py"):
+            p = eng_dir / name
+            if p.is_file():
+                docker_cmd.extend(
+                    ["-v", f"{p}:/opt/methylgrapher-mojo/engine/{name}:ro"]
+                )
+
+
+def samtools_sam_to_bam(sam_path: Path, bam_path: Path, log_path: Path) -> None:
+    """Convert Mojo QC SAM → unsorted BAM (host samtools; streaming read)."""
+    if not sam_path.is_file() or sam_path.stat().st_size == 0:
+        raise RuntimeError(f"Mojo QC SAM missing or empty: {sam_path}")
+    _run(
+        ["samtools", "view", "-b", "-o", str(bam_path), str(sam_path)],
+        log_path,
+        step="samtools.qc_sam_to_bam",
+    )
+    if not bam_path.is_file() or bam_path.stat().st_size == 0:
+        raise RuntimeError(f"samtools view wrote empty BAM: {bam_path}")
 
 
 def _write_bs_converted_fastq(
@@ -1704,6 +1657,7 @@ def run_methylgrapher_wgbs_align(
                 docker_cmd.extend(["-e", env_pair])
             for root in sorted(mount_roots, key=str):
                 docker_cmd.extend(["-v", f"{root}:{root}"])
+            add_mojo_src_overlay_mounts(docker_cmd)
             docker_cmd.extend([image, *align_cmd])
             with _gpu_align_lock(align_device):
                 _run(docker_cmd, log_path, step="methylGrapher.Align")
@@ -1785,12 +1739,15 @@ def run_methylgrapher_wgbs_align(
                 provenance["qc_bam_fallback"] = qc_fallback
                 used_vg_fallback = False
                 if qc_engine == "mojo":
-                    qc_gaf = work_dir / f"{sample_id}.qc_mojo.gaf"
-                    mojo_qc_cmd = build_qc_bam_mojo_gaf_command(
+                    qc_sam = work_dir / f"{sample_id}.qc_mojo.sam"
+                    index_prefix_qc = resolve_index_prefix(bundle)
+                    offsets_dir = resolve_grch38_offsets_dir(bundle, index_prefix_qc)
+                    mojo_qc_cmd = build_qc_bam_mojo_sam_command(
                         bundle=bundle,
                         fq1_c2t=c2t_r1,
                         fq2_g2a=g2a_r2,
-                        out_gaf=qc_gaf,
+                        out_sam=qc_sam,
+                        segment_offsets=offsets_dir,
                     )
                     docker_mojo_qc = [
                         _docker_bin(),
@@ -1802,24 +1759,38 @@ def run_methylgrapher_wgbs_align(
                     ]
                     for env_pair in materialize_align_docker_env(bundle):
                         docker_mojo_qc.extend(["-e", env_pair])
-                    for root in sorted(
-                        mount_roots | {bundle.ref_paths.parent.resolve()}, key=str
-                    ):
+                    docker_mojo_qc.extend(
+                        [
+                            "-e",
+                            "METHYLGRAPHER_MOJO_EMIT=sam",
+                            "-e",
+                            f"METHYLGRAPHER_MOJO_SEGMENT_OFFSETS={offsets_dir}",
+                        ]
+                    )
+                    qc_mounts = set(mount_roots)
+                    qc_mounts.add(bundle.ref_paths.parent.resolve())
+                    try:
+                        qc_mounts.add(offsets_dir.resolve())
+                    except OSError:
+                        qc_mounts.add(offsets_dir)
+                    add_mojo_segment_cache_mounts(qc_mounts, bundle)
+                    for root in sorted(qc_mounts, key=str):
                         docker_mojo_qc.extend(["-v", f"{root}:{root}"])
+                    add_mojo_src_overlay_mounts(docker_mojo_qc)
                     docker_mojo_qc.extend([image, *mojo_qc_cmd])
                     try:
-                        _run(docker_mojo_qc, log_path, step="mojo.qc_gaf")
-                        index_prefix_qc = resolve_index_prefix(bundle)
-                        wl_for_qc = resolve_wl_gfa_path(bundle, index_prefix_qc)
-                        package_mojo_qc_gaf_to_bam(
-                            gaf_path=qc_gaf,
-                            fq1_c2t=c2t_r1,
-                            fq2_g2a=g2a_r2,
-                            ref_fasta=bundle.linear_ref_fasta,
-                            wl_gfa=wl_for_qc,
-                            out_bam=qc_bam,
-                            log_path=log_path,
+                        _append_log(
+                            log_path,
+                            f"Mojo QC SAM emit (native); offsets={offsets_dir}",
                         )
+                        _run(docker_mojo_qc, log_path, step="mojo.qc_sam")
+                        samtools_sam_to_bam(qc_sam, qc_bam, log_path)
+                        _append_log(
+                            log_path,
+                            f"Mojo QC SAM→BAM {qc_sam} → {qc_bam} "
+                            f"({qc_bam.stat().st_size} bytes)",
+                        )
+                        qc_sam.unlink(missing_ok=True)
                     except Exception as exc:
                         if qc_fallback == "error":
                             _append_log(
@@ -2802,26 +2773,9 @@ def run_methylgrapher_wgbs_extract(
         docker_cmd = [_docker_bin(), "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}"]
         for root in sorted(mount_roots, key=str):
             docker_cmd.extend(["-v", f"{root}:{root}"])
-        # Optional host overlay so Mojo GAF / MethylCall hotfixes ship without image rebuild.
-        overlay = Path(
-            os.environ.get(
-                "METHYLGRAPHER_MOJO_OVERLAY",
-                "/work/epimethyl/images/methylgrapher-mojo-overlay",
-            )
-        )
-        eng_overlay = overlay / "engine" / "mcall.py"
-        if eng_overlay.is_file():
-            docker_cmd.extend(
-                ["-v", f"{eng_overlay}:/opt/methylgrapher-mojo/engine/mcall.py:ro"]
-            )
-        src_overlay = overlay / "src"
-        if src_overlay.is_dir():
-            for name in ("giraffe_gaf_emit.mojo", "mcall.mojo"):
-                p = src_overlay / name
-                if p.is_file():
-                    docker_cmd.extend(
-                        ["-v", f"{p}:/opt/methylgrapher-mojo/src/{name}:ro"]
-                    )
+        # Optional host overlay so Mojo GAF / MethylCall / QC SAM hotfixes ship
+        # without image rebuild.
+        add_mojo_src_overlay_mounts(docker_cmd)
         docker_cmd.extend([image, *methyl_cmd])
         _run(docker_cmd, log_path, step="methylGrapher.MethylCall")
 
