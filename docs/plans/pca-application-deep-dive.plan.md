@@ -2,7 +2,7 @@
 name: PCa Application Deep Dive
 overview: Author a Prostate Cancer application deep-dive that synthesizes existing research, analyte/alignment choices (buffy 30× WGBS, plasma 30× WGBS, best of linear vs pangenome_wgbs, plus EM-Seq targeted GRAIL-style plasma), and the full validation story for physicians and payers—with explicit claim boundaries against current feasibility-only evidence.
 
-> **Status: IMPLEMENTED.** Deliverable: [`docs/research/Prostate_Cancer_Application_Deep_Dive.md`](../research/Prostate_Cancer_Application_Deep_Dive.md). Indexed in [`docs/research/README.md`](../research/README.md) and [`docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md`](../regulatory/Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.md).
+> **Status: IMPLEMENTED.** Deliverable: [`docs/research/Prostate_Cancer_Application_Deep_Dive.md`](../research/Prostate_Cancer_Application_Deep_Dive.md). Indexed in [`docs/research/README.md`](../research/README.md) and [`docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md`](../regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md).
 
 azure_devops:
   type: Feature
@@ -29,19 +29,19 @@ Create one primary document:
 
 [`docs/research/Prostate_Cancer_Application_Deep_Dive.md`](../research/Prostate_Cancer_Application_Deep_Dive.md)
 
-Audience: scientists, physicians, and insurance/medical-director readers who need to understand **why** the platform choices matter—not an operator runbook. Cross-link the Alzheimer-style pack pattern ([`docs/usage/24-methylation-application-packs.qmd`](../usage/24-methylation-application-packs.qmd)) as the follow-on operator surface; do **not** build `docs/examples/samd/prostate-*` in this pass.
+Audience: scientists, physicians, and insurance/medical-director readers who need to understand **why** the platform choices matter—not an operator runbook. Cross-link the Alzheimer-style pack pattern ([`docs/usage/24-methylation-application-packs.qmd`](../usage/24-methylation-application-packs.md)) as the follow-on operator surface; do **not** build `docs/examples/samd/prostate-*` in this pass.
 
 Also update:
 
 - [`docs/research/README.md`](../research/README.md) — index entry
-- [`docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md`](../regulatory/Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.md) — roadmap row for `App_oncology` / prostate pointing at the new deep-dive
+- [`docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md`](../regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md) — roadmap row for `App_oncology` / prostate pointing at the new deep-dive
 
 ## Source material to synthesize (do not reinvent)
 
 | Topic | Anchor |
 |-------|--------|
 | Buffy vs plasma | [`docs/research/BuffyCoat_vs_cfDNA_for_Cancer_Detection.md`](../research/BuffyCoat_vs_cfDNA_for_Cancer_Detection.md), [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md) |
-| Physician gatekeeper / NPV + EM-Seq SOW | [`docs/research/Prostate Cancer Detection.md`](../research/Prostate%20Cancer%20Detection.md) (GRAIL comparison; EM-seq + hybrid capture), fitness sibling |
+| Physician gatekeeper / NPV + EM-Seq SOW | [`docs/research/Prostate Cancer Detection.md`](../research/Prostate Cancer Detection.md) (GRAIL comparison; EM-seq + hybrid capture), fitness sibling |
 | EM-Seq procedure pack | [`workflow_engine/domain/profiles/procedures/cfdna_emseq_targeted.procedure.json`](../../workflow_engine/domain/profiles/procedures/cfdna_emseq_targeted.procedure.json), `sample_prep_emseq.program.json` |
 | Alignment compare (WGBS arms) | [`docs/plans/linear-vs-wgbs-sampleprep-compare.plan.md`](../plans/linear-vs-wgbs-sampleprep-compare.plan.md), [`workflow_engine/docs/sample_prep_test_bed.md`](../../workflow_engine/docs/sample_prep_test_bed.md) |
 | informME + deconv | theory ch.07a, [`docs/architecture/end-to-end-workflow.md`](../architecture/end-to-end-workflow.md) §covariates |
@@ -62,7 +62,7 @@ Present as a **decision table**, not a premature single winner:
 4. **Plasma / cfDNA EM-Seq + hybrid-capture panel (GRAIL-style chemistry, gatekeeper geometry)** — operator-supplied `target_panel_bed`; procedure [`cfdna_emseq_targeted`](../../workflow_engine/domain/profiles/procedures/cfdna_emseq_targeted.procedure.json) (“inch-wide, mile-deep”); no genome-wide DMP hunt; no cell deconvolution by default. Frame explicitly against GRAIL Galleri:
    - **Same biology** as GRAIL: cfDNA methylation as the liquid-biopsy signal; EM-Seq preferred over bisulfite for low-yield cfDNA.
    - **Different clinical objective**: GRAIL = multi-cancer population screen (miles-wide, moderate depth, ultra-high specificity); this option = **single-cancer pre-biopsy gatekeeper** (50–100 prostate / GG≥2 regions, extreme depth ~2,000–5,000×) so early localized PCa is not “structurally quiet.”
-   - Cite the existing GRAIL comparison in [`Prostate Cancer Detection.md`](../research/Prostate%20Cancer%20Detection.md); do not imply Galleri-equivalent claims or clearance.
+   - Cite the existing GRAIL comparison in [`Prostate Cancer Detection.md`](../research/Prostate Cancer Detection.md); do not imply Galleri-equivalent claims or clearance.
 
 Include: when each benefits a physician workflow (elevated PSA → biopsy decision) vs when it does not; depth guidance (~30× buffy often adequate; WGBS plasma needs TF-aware interpretation; EM-Seq panel needs a locked BED + extreme on-target depth, not “more genome-wide depth”).
 

@@ -67,7 +67,7 @@ Methylation-only steps (centroid/DMP/ECDF, Houseman/HiTIMED, bisulfite QC) do **
 
 ## 6. GPU / GH200
 
-The DIA-NN / Prosit / Casanovo actions run on the same Lambda/Nebius GH200 nodes as Parabricks, gated by GPU + their image env (`METHYL_DIANN_IMAGE`, etc.). Because workers run host-native (no `--platform`), on Grace/Hopper (`aarch64`) these images must be linux/arm64 or multi-arch. See [gpu_worker_runbook.md](../deployment/gpu_worker_runbook.md#proteomics-gpu-tools-dia-nn--prosit--casanovo).
+The DIA-NN / Prosit / Casanovo actions run on the same Lambda/Nebius GH200 nodes as Parabricks, gated by GPU + their image env (`METHYL_DIANN_IMAGE`, etc.). Because workers run host-native (no `--platform`), on Grace/Hopper (`aarch64`) these images must be linux/arm64 or multi-arch. See [gpu_worker_runbook.md](../deployment/gpu_worker_runbook.md#proteomics-gpu-tools-dia-nn-prosit-casanovo).
 
 ## 7. Operator run order
 

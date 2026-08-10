@@ -62,7 +62,7 @@ acts as a Monte Carlo approximation to selection probability under re-sampling. 
 
 For most projects, this is the stage where panel size and robustness are tuned (`n_iterations`, `train_fraction`, `stability_dmp_freq`).
 
-When the iteration count is high and a single host is too slow, the same stability stage can be **executed in parallel** across multiple machines, as long as all workers share one output tree; see [§ distributed mc shared storage](#sec-distributed-mc-shared-storage) (and the user manual chapter on distributed MethylValidation).
+When the iteration count is high and a single host is too slow, the same stability stage can be **executed in parallel** across multiple machines, as long as all workers share one output tree; see [§ distributed mc shared storage](15-model-creation-and-validation.md#sec-distributed-mc-shared-storage) (and the user manual chapter on distributed MethylValidation).
 
 #### Stage B — Freeze/Analysis (`--freeze`)
 

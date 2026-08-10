@@ -9,7 +9,7 @@ Training-time checks frequently classify **group centroids** (or mean profiles) 
 ## Label alignment (binary Monte Carlo)
 
 1. **`generate_run_project`** ([`project_gen.py`](../../packages/methylvalidation/methyl_validation/project_gen.py)) flattens the template `controls` / `diseases` into **one training CSV per side** and rewrites `comparisons` using [`_first_control_and_disease_labels`](../../packages/methylvalidation/methyl_validation/project_gen.py):
-   - Control label = **first control group’s `label`** (e.g. `all` in [`project_Healthy_vs_PCa1_only_CG.json`](../../configs/project_Healthy_vs_PCa1_only_CG.json)).
+   - Control label = **first control group’s `label`** (e.g. `all` in [`project_Healthy_vs_PCa1-5-CG.json`](../../workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG.json)).
    - Disease label = **first disease parent group’s `label`** (e.g. `pca`), not the staged leaf `pca_pca1`, because the MC project **replaces** nested `stages` with a single flat disease group.
 
 2. After this rewrite, **`get_comparisons()`** and **`get_resolved_groups()`** agree: e.g. `all` vs `pca`, with outputs under `detections/all/pca/`, `classifiers/all/pca/`, etc.
@@ -28,7 +28,7 @@ The **slim** template may use staged disease leaves (`pca_pca1`) for the **full*
 
 ## `actionConfig.classifier` vs constant test predictions
 
-[`project_Healthy_vs_PCa1_only_CG.json`](../../configs/project_Healthy_vs_PCa1_only_CG.json) sets `ovr_binary_pickles_from_comparisons: false` and **`weight_method: linear_fitted`** for multi-chromosome fusion. If every sample gets **similar** `prob_class0` / `prob_class1` and **always** predicts class 0, investigate:
+[`project_Healthy_vs_PCa1-5-CG.json`](../../workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG.json) sets `ovr_binary_pickles_from_comparisons: false` and **`weight_method: linear_fitted`** for multi-chromosome fusion. If every sample gets **similar** `prob_class0` / `prob_class1` and **always** predicts class 0, investigate:
 
 - Per-chromosome / fused logits (`methyl-predictor` / classifier **`--debug`**).
 - Whether **fitted chromosome weights** collapse signal toward one expert.

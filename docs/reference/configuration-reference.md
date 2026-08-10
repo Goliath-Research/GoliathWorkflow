@@ -62,7 +62,7 @@ Canonical replacements:
 
 | Parameter | Type | Default | Constraints | Description |
 |---|---|---|---|---|
-| `fixed_dmp_panel` | str (path) \| null | `null` | File must exist; must have `chromosome` and `position` columns | Path to a fixed DMP panel CSV. If set, bypasses statistical and biological discovery entirely. See [§ detector fixed panel](#sec-detector-fixed-panel). |
+| `fixed_dmp_panel` | str (path) \| null | `null` | File must exist; must have `chromosome` and `position` columns | Path to a fixed DMP panel CSV. If set, bypasses statistical and biological discovery entirely. See [§ detector fixed panel](../theory/chapters/03-methyldetector.md#sec-detector-fixed-panel). |
 | `output_dir` | str \| null | (from project) | — | Override for the detection output directory. Usually resolved from the project. |
 
 ### Statistical Screening ★

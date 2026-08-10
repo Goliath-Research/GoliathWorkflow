@@ -29,7 +29,7 @@ Current prostate packages in the evidence index are **`feasibility`** with **no 
 | Submission topic (illustrative) | MethylPipeline control / artifact |
 |---------------------------------|-----------------------------------|
 | Device description / intended use | Study `regulatory.intended_use_summary`, `claim_boundary`, analyte; SaMD SOP ch.18 |
-| Software architecture / SoTA | [`../architecture/`](../architecture/), [`methylpipeline-product-and-operational-controls.md`](methylpipeline-product-and-operational-controls.md) |
+| Software architecture / SoTA | [`../architecture/index.md`](../architecture/index.md), [`methylpipeline-product-and-operational-controls.md`](methylpipeline-product-and-operational-controls.md) |
 | Design controls / change control | [`change-management-plan.md`](change-management-plan.md), [`traceability-matrix.md`](traceability-matrix.md) |
 | Configuration management | Four-layer config (site / profile / study / program); `config-not-code`; CAAS / `hyperparamSetId` |
 | Verification (unit/integration) | [`continuous-integration-and-regression-testing.md`](continuous-integration-and-regression-testing.md), CI JUnit |
@@ -46,6 +46,16 @@ Current prostate packages in the evidence index are **`feasibility`** with **no 
 | EV-PCA-PLASMA-2026-06 | Plasma_healthy_vs_PCa | Richest chain (stability → production → PMV clinical reports); still feasibility |
 | EV-PCA-HGOOD-2026-06 | H_PCa_good | Freeze/model present; gene panel empty at threshold — document limitation |
 | EV-PCA-BUFFY-2026-07 | Buffy_healthy_vs_PCa | Stability + readiness only; incomplete model chain |
+
+## SaMD profile ladder
+
+Operator profiles on the claim path (see also [ch.18](../usage/18-samd-study-lifecycle.md)):
+
+| Profile | Role |
+|---------|------|
+| `samd_research` | Discovery / feasibility; research-mode overlays when folded |
+| `samd_holdout_enrichment` | Locked holdout enrichment; WF3 on `locked_test` |
+| `samd_pivotal` | Pivotal validation; clinical performance claims only after stage + review |
 
 ## Recommended path to claim-ready evidence
 

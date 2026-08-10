@@ -8,7 +8,7 @@ Single navigation page for production operators. Each step links to the canonica
 
 | Step | Action | Deep dive |
 |------|--------|-----------|
-| 1 | Mount shared storage at `/work/epimethyl` and study trees under `/work/projects/<study>/` | [Production platform — Phase 0](production-platform.md#phase-0--shared-storage-and-site) |
+| 1 | Mount shared storage at `/work/epimethyl` and study trees under `/work/projects/<study>/` | [Production platform — Phase 0](production-platform.md#phase-0-shared-storage-and-site) |
 | 2 | Install site manifest at `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | [Layer model](../architecture/layer-model.md) |
 | 3 | Production DB = Azure SQL (portal); PostgreSQL for parity/CI | [Usage ch.14](../usage/14-deployment-and-distributed-workflow.md) |
 
@@ -19,8 +19,8 @@ Single navigation page for production operators. Each step links to the canonica
 | 4 | Promote MethylPipeline + MethylExtractor (+ Parabricks) | [production_release.md](production_release.md) |
 | 5 | Deploy DB schema + catalog + workflows | `bash scripts/bootstrap_distributed_workers.sh` |
 | 6 | Verify bootstrap (read-only) | `bash scripts/bootstrap_distributed_workers.sh --verify` |
-| 7 | Start gateway (systemd + nginx TLS + Arc attest) | [production-platform.md — Phase 3](production-platform.md#phase-3--single-gateway-vm) |
-| 8 | Portal-preregister IP → Arc → `methyl-worker enroll` → systemd | [production-platform.md — Phase 4](production-platform.md#phase-4--each-gpu-worker-arc--enroll) |
+| 7 | Start gateway (systemd + nginx TLS + Arc attest) | [production-platform.md — Phase 3](production-platform.md#phase-3-single-gateway-vm) |
+| 8 | Portal-preregister IP → Arc → `methyl-worker enroll` → systemd | [production-platform.md — Phase 4](production-platform.md#phase-4-each-gpu-worker-arc-enroll) |
 
 See [Distributed workers bootstrap](distributed-workers-bootstrap.md), [arc_worker_runbook.md](arc_worker_runbook.md), and [GPU worker runbook](gpu_worker_runbook.md).
 

@@ -19,7 +19,7 @@ discussions.
 
 | Document | Purpose |
 |----------|---------|
-| [Regulatory-Ready Platform for Multiomics Diagnostics](Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.md) | Product positioning, open-core packaging, GTM, and analyte/process roadmap (strategy). **Standalone HTML** (offline Mermaid): [`Regulatory-Ready Platform for Multiomics Diagnostics.html`](Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.html) — regenerate with `scripts/render_regulatory_standalone.sh`. Sales pitch deck (Marp): [`../presentations/regulatory-ready-platform-multiomics.md`](../presentations/regulatory-ready-platform-multiomics.md) (HTML/PDF via `scripts/render_presentations.sh`; re-render after pitch edits — the deck can lag the strategy article). |
+| [Regulatory-Ready Platform for Multiomics Diagnostics](Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.md) | Product positioning, open-core packaging, GTM, and analyte/process roadmap (strategy). Standalone HTML (offline Mermaid; repo-only, not in the MkDocs site): `docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.html` — regenerate with `scripts/render_regulatory_standalone.sh`. Sales pitch deck (Marp; repo-only): `docs/presentations/regulatory-ready-platform-multiomics.md` (HTML/PDF via `scripts/render_presentations.sh`). |
 | [Product and operational controls](methylpipeline-product-and-operational-controls.md) | Product scope, feature inventory, configuration-as-workflow model, and control summary |
 | [Deployment and supervision](deployment-and-supervision.md) | Production topology, worker supervision, portal monitoring, release bundles, rollback, and security controls |
 | [Validation evidence index](validation-evidence-index.md) | Template and registry structure for real study/model results tied to exact software and configuration versions |
@@ -35,7 +35,7 @@ For creating new healthy-vs-disease studies with real holdouts and a small profi
 
 - [`../usage/18-samd-study-lifecycle.md`](../usage/18-samd-study-lifecycle.md)
 - Scaffold: `methyl-study-init` / validate: `methyl-study-validate-manifest`
-- Example manifests: [`../examples/samd/`](../examples/samd/)
+- Example manifests (repo-only; not in the MkDocs site): `docs/examples/samd/` — see also [application packs (ch.24)](../usage/24-methylation-application-packs.md)
 
 ## Relationship to Canonical Docs
 

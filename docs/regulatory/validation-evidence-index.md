@@ -13,7 +13,7 @@ clinical or analytical performance claims.
 populated `pivotal_validation` partition, freeze readiness go/go_with_risks, and
 a reviewed intended-use statement. Operator path:
 [`../usage/18-samd-study-lifecycle.md`](../usage/18-samd-study-lifecycle.md).
-Example partition shapes: [`../examples/samd/`](../examples/samd/).
+Example partition shapes (repo-only): `docs/examples/samd/` — see [ch.18](../usage/18-samd-study-lifecycle.md) and [ch.24](../usage/24-methylation-application-packs.md).
 
 Architecture and release controls show that the product is controlled. This
 index shows what evidence was produced by a specific controlled version.

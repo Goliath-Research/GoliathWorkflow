@@ -1,6 +1,6 @@
 # Package Implementation Index
 
-Thin index linking each package's `IMPLEMENTATION.md`. Apply [`_TEMPLATE.md`](_TEMPLATE.md) when adding or refreshing package docs.
+Thin index linking each package's `IMPLEMENTATION.md`. Apply `implementation/packages/_TEMPLATE.md` (repo only; excluded from the published site) when adding or refreshing package docs.
 
 | Package | Implementation | Theory stub | Usage |
 |---------|----------------|-------------|-------|

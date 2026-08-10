@@ -1,7 +1,7 @@
 # Prostate Cancer Detection doc — MethylPipeline fitness analysis
 
 **Status:** research / design note (not operator runbook).  
-**Source analyzed:** [`Prostate Cancer Detection.md`](Prostate%20Cancer%20Detection.md)  
+**Source analyzed:** [`Prostate Cancer Detection.md`](Prostate Cancer Detection.md)  
 **Related:** [`BuffyCoat_vs_cfDNA_for_Cancer_Detection.md`](BuffyCoat_vs_cfDNA_for_Cancer_Detection.md), SaMD SOP [`docs/usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.md), evidence index [`docs/regulatory/validation-evidence-index.md`](../regulatory/validation-evidence-index.md)  
 **Interactive canvas:** [`pca-detection-fitness.canvas.tsx`](../canvas/pca-detection-fitness.canvas.tsx) (sync with `bash scripts/sync_cursor_canvases.sh` to open beside chat)
 

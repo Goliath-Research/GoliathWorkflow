@@ -54,7 +54,7 @@ cfg `reference_asset`s for reproducibility.
 GH200 GPU VMs as Parabricks, each behind its own image env (`METHYL_DIANN_IMAGE`,
 `METHYL_PROSIT_IMAGE`, `METHYL_CASANOVO_IMAGE`) and gated by GPU availability. On ARM64
 (Grace) the images must be linux/arm64 or multi-arch — see the
-[GPU worker runbook](../deployment/gpu_worker_runbook.md#proteomics-gpu-tools-dia-nn--prosit--casanovo).
+[GPU worker runbook](../deployment/gpu_worker_runbook.md#proteomics-gpu-tools-dia-nn-prosit-casanovo).
 Panel ingest is CPU-only and lands on non-GPU workers.
 
 ## Downstream

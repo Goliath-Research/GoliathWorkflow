@@ -31,7 +31,7 @@ todos:
 
 ## Problem
 
-[`docs/user-manual/How to define samples.md`](../user-manual/How%20to%20define%20samples.md) correctly says the **study** owns which samples are in which analysis group, but incorrectly treated CSVs as the source of truth and dismissed `portal.Samples`.
+[`docs/user-manual/How to define samples.md`](../user-manual/How to define samples.md) correctly says the **study** owns which samples are in which analysis group, but incorrectly treated CSVs as the source of truth and dismissed `portal.Samples`.
 
 Reality:
 

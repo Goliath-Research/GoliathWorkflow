@@ -9,7 +9,7 @@
 | Document | Role |
 |----------|------|
 | [BuffyCoat_vs_cfDNA_for_Cancer_Detection.md](BuffyCoat_vs_cfDNA_for_Cancer_Detection.md) | Analyte biology and pairing |
-| [Prostate Cancer Detection.md](Prostate%20Cancer%20Detection.md) | Gatekeeper clinical framing; EM-Seq + GRAIL contrast; wet-lab SOW |
+| [Prostate Cancer Detection.md](Prostate Cancer Detection.md) | Gatekeeper clinical framing; EM-Seq + GRAIL contrast; wet-lab SOW |
 | [Prostate_Cancer_Detection_MethylPipeline_Fitness.md](Prostate_Cancer_Detection_MethylPipeline_Fitness.md) | What the platform can / cannot claim today |
 | [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md) | Operator analyte config |
 | [validation-evidence-index.md](../regulatory/validation-evidence-index.md) | EV-PCA-* feasibility packages |
@@ -72,7 +72,7 @@ Buffy-only shallow WGBS is a poor fit for a **pre-biopsy csPCa (GG≥2) rule-out
 
 ### Option 4 — EM-Seq gatekeeper vs GRAIL (shared biology, different geometry)
 
-The wet-lab and clinical framing in [Prostate Cancer Detection.md](Prostate%20Cancer%20Detection.md) recommends **Enzymatic Methyl-Seq (EM-Seq) + custom hybridization capture** for a prostate gatekeeper. The shipped procedure is [`cfdna_emseq_targeted`](../../workflow_engine/domain/profiles/procedures/cfdna_emseq_targeted.procedure.json): operator-supplied panel BED, elevated `min_cov`, SamplePrep via `sample_prep_emseq`, **no** genome-wide DMP hunt, **no** cell deconvolution by default.
+The wet-lab and clinical framing in [Prostate Cancer Detection.md](Prostate Cancer Detection.md) recommends **Enzymatic Methyl-Seq (EM-Seq) + custom hybridization capture** for a prostate gatekeeper. The shipped procedure is [`cfdna_emseq_targeted`](../../workflow_engine/domain/profiles/procedures/cfdna_emseq_targeted.procedure.json): operator-supplied panel BED, elevated `min_cov`, SamplePrep via `sample_prep_emseq`, **no** genome-wide DMP hunt, **no** cell deconvolution by default.
 
 | Dimension | GRAIL Galleri (MCED) | Prostate EM-Seq gatekeeper (this option) |
 |-----------|----------------------|------------------------------------------|
@@ -166,7 +166,7 @@ Elevated PSA (and/or secondary serum markers) → decision to biopsy. A useful m
 - Separates indolent GG1 from actionable disease when biology allows
 - Complements—not replaces—mpMRI, PHI, 4Kscore
 
-Buffy WGBS research informs host biology; **EM-Seq targeted plasma** is the chemistry geometry aimed at the gatekeeper window; plasma WGBS is the discovery / breadth path. Requirements source: [Prostate Cancer Detection.md](Prostate%20Cancer%20Detection.md). Fitness gaps (GG≥2 positive class, NPV LCB gates): [Prostate_Cancer_Detection_MethylPipeline_Fitness.md](Prostate_Cancer_Detection_MethylPipeline_Fitness.md).
+Buffy WGBS research informs host biology; **EM-Seq targeted plasma** is the chemistry geometry aimed at the gatekeeper window; plasma WGBS is the discovery / breadth path. Requirements source: [Prostate Cancer Detection.md](Prostate Cancer Detection.md). Fitness gaps (GG≥2 positive class, NPV LCB gates): [Prostate_Cancer_Detection_MethylPipeline_Fitness.md](Prostate_Cancer_Detection_MethylPipeline_Fitness.md).
 
 ### Payer / medical-director lens
 
@@ -282,7 +282,7 @@ None of these packages alone supports physician biopsy-deferral policy or payer 
 | EM-Seq gatekeeper research | `primary_analyte: cfdna` + `cfdna_emseq_targeted` + operator `target_panel_bed` |
 | Claims | Only after partitions + pivotal stage + filled evidence package |
 
-Canonical analyte encoding: [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md). Product roadmap context: [Regulatory-Ready Platform for Multiomics Diagnostics.md](../regulatory/Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.md).
+Canonical analyte encoding: [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md). Product roadmap context: [Regulatory-Ready Platform for Multiomics Diagnostics.md](../regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md).
 
 ---
 

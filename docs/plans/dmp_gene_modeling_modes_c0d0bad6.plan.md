@@ -218,7 +218,7 @@ Update [`docs/reference/domain-program-language.md`](../reference/domain-program
 
 - Artifact ladder: program → profile → manifest → context
 - Profile matrix keyed by **statistical mode**, not Buffy / H_PCa / prostate-cancer
-- Regulatory narrative: MC stability, BA gates, panel freeze—cite [`docs/theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.qmd) patterns
+- Regulatory narrative: MC stability, BA gates, panel freeze—cite [`docs/theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.md) patterns
 - Example commands use **fixture** manifests under `workflow_engine/domain/fixtures/`
 
 **Do not add** study-specific runbooks to domain check READMEs as part of this work; studies may document their chosen profile + overrides locally under `/work/projects/...` if needed.

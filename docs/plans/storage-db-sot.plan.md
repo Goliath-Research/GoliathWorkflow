@@ -100,7 +100,7 @@ flowchart TB
   - `portal.sp_upsert_credential` / `portal.sp_publish_credential` — accept full `secret_json` write; get/list return redacted `{authMode, provider, contentHash, version}` only
   - `portal.sp_list_credentials` redacted
 - RBAC contract for EpiPortal: **lab admin** and **infrastructure admin** are the only principals that may upsert/publish endpoints and credentials (scoped by role); study operators may list/select published redacted endpoints when binding a study—never invent or edit storage accounts.
-- Deprecate production use of CLI upsert in [`docs/usage/19-config-registry.qmd`](../usage/19-config-registry.qmd) and [`docs/deployment/portal_resource_profile.md`](../deployment/portal_resource_profile.md): **CLI = CI/dev/bootstrap**; production = portal procs.
+- Deprecate production use of CLI upsert in [`docs/usage/19-config-registry.qmd`](../usage/19-config-registry.md) and [`docs/deployment/portal_resource_profile.md`](../deployment/portal_resource_profile.md): **CLI = CI/dev/bootstrap**; production = portal procs.
 
 ## 2. Schedule-time expansion (still not workers)
 

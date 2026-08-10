@@ -31,7 +31,7 @@ For statistical background, use [`docs/theory/`](../theory/index.md). For compil
 - **Sample prep (FASTQ → HDF5):** Chapter `03` (`03-sample-prep-and-qc.md`).
 - **New project setup:** Chapters `01`, `02`, `04` (orchestration), then `05` or [Tutorial ch.16](16-tutorial-healthy-vs-cancer-stages.md).
 - **Fast path (stage execution):** [Orchestration ch.04](04-orchestration-workflow-run.md) → `methyl-workflow-run`; stage detail in ch.05–09.
-- **Guided tutorial (healthy vs. cancer stages):** Chapter `16` — end-to-end walkthrough; [profile catalog in ch.16](16-tutorial-healthy-vs-cancer-stages.md#step-4--pick-a-profile).
+- **Guided tutorial (healthy vs. cancer stages):** Chapter `16` — end-to-end walkthrough; [profile catalog in ch.16](16-tutorial-healthy-vs-cancer-stages.md#step-4-pick-a-profile).
 - **SaMD study ladder (research → holdouts → pivotal):** Chapter `18` — [`18-samd-study-lifecycle.md`](18-samd-study-lifecycle.md); scaffold with `methyl-study-init`.
 - **Application packs (config on a process):** Chapter `24` — pattern + checklist; instances in ch.21 (Alzheimer) and ch.23 (plant abiotic stress).
 - **Hyperparameter versioning (CAAS):** `17-content-addressed-action-store.md` (Part V; follows the tutorial).

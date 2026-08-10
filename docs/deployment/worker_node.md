@@ -193,7 +193,7 @@ Follow [production-platform.md](production-platform.md) Phases 2–3, or:
 
 1. [`workflow_engine/sql_mssql/deploy_azure.sh`](../../workflow_engine/sql_mssql/deploy_azure.sh) (production Azure SQL) or [`sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh) (parity/CI)
 2. `bash scripts/bootstrap_distributed_workers.sh` — schema + catalog seed + workflow deploy
-3. `sudo bash scripts/install_gateway_systemd.sh` + `setup_gateway_nginx.sh` — see [`production-platform.md`](production-platform.md#phase-3--single-gateway-vm)
+3. `sudo bash scripts/install_gateway_systemd.sh` + `setup_gateway_nginx.sh` — see [`production-platform.md`](production-platform.md#phase-3-single-gateway-vm)
 
 ## Staged lifecycle smoke
 

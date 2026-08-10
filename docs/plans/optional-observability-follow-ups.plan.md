@@ -64,7 +64,7 @@ flowchart TB
 
 ## 1. `docs/reference/domain-program-language.md` — result_code section
 
-**Gap:** [`docs/reference/domain-program-language.md`](../reference/domain-program-language.md) documents IF on boolean scope vars (`qcPass`, `runDmpSelection`) but not integer **`result_code`** branching. [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md) and [`docs/usage/09-artifacts-and-qa-checks.qmd`](../usage/09-artifacts-and-qa-checks.qmd) already cover worker/operator view.
+**Gap:** [`docs/reference/domain-program-language.md`](../reference/domain-program-language.md) documents IF on boolean scope vars (`qcPass`, `runDmpSelection`) but not integer **`result_code`** branching. [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md) and [`docs/usage/09-artifacts-and-qa-checks.qmd`](../usage/10-artifacts-and-qa-checks.md) already cover worker/operator view.
 
 **Add (~40 lines) after the "Conditions (IF)" section:**
 

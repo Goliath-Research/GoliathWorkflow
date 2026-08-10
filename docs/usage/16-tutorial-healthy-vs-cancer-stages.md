@@ -236,7 +236,7 @@ For a binary study the single comparison appears under `detections/all/PCa/`. Mo
 
 1. One CSV per group under `data/`.
 2. One manifest: `controls` + `diseases` (nest `stages[]` for increasing stages), `comparisons: "control_vs_each_disease"`.
-3. Pick a profile from the [full catalog](#step-4--pick-a-profile) (`mc_dmp_gene_fc` binary dual-axis, `mc_*` research axes, `staged_*` multi-stage). For FDA-style holdout/claim controls use the [SaMD ladder (ch.18)](18-samd-study-lifecycle.md) (`samd_research` → `samd_holdout_enrichment` → `samd_pivotal`).
+3. Pick a profile from the [full catalog](#step-4-pick-a-profile) (`mc_dmp_gene_fc` binary dual-axis, `mc_*` research axes, `staged_*` multi-stage). For FDA-style holdout/claim controls use the [SaMD ladder (ch.18)](18-samd-study-lifecycle.md) (`samd_research` → `samd_holdout_enrichment` → `samd_pivotal`).
 4. `methyl-workflow-run --program … --context-file …profile.json --context '{"projectPath":…,"pipelineProfile":…}'`.
 5. Read results per comparison under `<project_name>/detections/<control>/<disease>/`.
 
