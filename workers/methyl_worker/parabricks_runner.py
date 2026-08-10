@@ -86,6 +86,69 @@ def _pick_bool(
     return bool(value)
 
 
+def resolve_collectmultiplemetrics_config(
+    *,
+    project_path: str | Path | None = None,
+    input_json: Optional[Mapping[str, Any]] = None,
+) -> ParabricksConfig:
+    """Resolve Docker settings for ``pbrun collectmultiplemetrics``.
+
+    Always uses the Clara Parabricks image. Callers often pass a *different*
+    action's ``resolvedConfig`` (e.g. methylgrapher_wgbs with ``engine=mojo`` /
+    ``image=…methylgrapher:*-mojo``). ``resolve_from_task_input`` returns that
+    slice as-is for any ``action_key``, which would put ``pbrun`` in an image
+    that does not contain it. Strip ``resolvedConfig`` here and pin
+    ``METHYL_PARABRICKS_IMAGE`` (or ``actionConfig.parabricks.parabricksImage``).
+    """
+    payload = dict(input_json or {})
+    metrics_input: Dict[str, Any] = {}
+    proj = project_path or payload.get("projectPath") or payload.get("project")
+    if proj not in (None, ""):
+        metrics_input["projectPath"] = proj
+        metrics_input["project"] = proj
+
+    ac = payload.get("actionConfig")
+    pb_slice: Dict[str, Any] = {}
+    if isinstance(ac, dict) and isinstance(ac.get("parabricks"), dict):
+        pb_slice = dict(ac["parabricks"])
+        # Metrics need NVIDIA Clara ``pbrun`` even when linear align engine is mojo.
+        pb_slice["engine"] = "parabricks"
+        # Drop align-image keys that may point at methylgrapher-mojo.
+        for key in ("image", "mojoImage", "mojo_image"):
+            pb_slice.pop(key, None)
+        metrics_input["actionConfig"] = {"parabricks": pb_slice}
+
+    clara = os.environ.get("METHYL_PARABRICKS_IMAGE", "").strip()
+    if not clara:
+        candidate = str(pb_slice.get("parabricksImage") or "").strip()
+        if candidate and "methylgrapher" not in candidate:
+            clara = candidate
+    if not clara:
+        raise RuntimeError(
+            "collectmultiplemetrics requires METHYL_PARABRICKS_IMAGE "
+            "(Clara Parabricks image with pbrun); Mojo methylgrapher images do not ship pbrun"
+        )
+
+    cfg = resolve_parabricks_config(
+        project_path=proj,
+        input_json=metrics_input,
+        parabricks_image=clara,
+    )
+    if cfg.engine == "mojo" or "methylgrapher" in cfg.image:
+        # Belt-and-suspenders: never invoke pbrun in the Mojo align image.
+        return ParabricksConfig(
+            image=clara,
+            gpu_flags=cfg.gpu_flags
+            or tuple(shlex.split(os.environ.get("METHYL_PARABRICKS_GPU_FLAGS", "--gpus all"))),
+            bwa_threads=cfg.bwa_threads,
+            extra_docker_args=cfg.extra_docker_args,
+            cleanup_tmp=cfg.cleanup_tmp,
+            engine="parabricks",
+            align_device=cfg.align_device,
+        )
+    return cfg
+
+
 def resolve_parabricks_config(
     *,
     project_path: str | Path | None = None,

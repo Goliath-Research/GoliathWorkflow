@@ -204,6 +204,28 @@ def test_resolve_mojo_engine_defaults_image(tmp_path: Path) -> None:
     assert cfg.bwa_threads == 4
 
 
+def test_collectmultiplemetrics_ignores_mojo_methylgrapher_resolved_config() -> None:
+    """WGBS Mojo align resolvedConfig must not put pbrun in the Mojo image."""
+    clara = "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1"
+    with patch.dict(
+        "os.environ",
+        {"METHYL_PARABRICKS_IMAGE": clara, "METHYL_PARABRICKS_GPU_FLAGS": "--gpus all"},
+        clear=False,
+    ):
+        cfg = runner.resolve_collectmultiplemetrics_config(
+            input_json={
+                "resolvedConfig": {
+                    "engine": "mojo",
+                    "image": "epimethyl/methylgrapher:1.70-mojo",
+                    "align_engine": "gpu_giraffe",
+                }
+            }
+        )
+    assert cfg.engine == "parabricks"
+    assert cfg.image == clara
+    assert "methylgrapher" not in cfg.image
+
+
 def test_resolve_mojo_cpu_has_no_gpu_flags(tmp_path: Path) -> None:
     """align_device=cpu must not inject --gpus all (breaks hosts without NVIDIA CTK)."""
     with patch.dict(

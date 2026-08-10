@@ -1457,6 +1457,10 @@ def _maybe_collect_picard_metrics(
 ) -> bool:
     """Run ``pbrun collectmultiplemetrics`` on the WGBS QC BAM (soft-fail).
 
+    Uses the **Clara Parabricks** image (``METHYL_PARABRICKS_IMAGE``), not the Mojo
+    methylgrapher align image — Mojo does not ship ``pbrun``. BAM production and
+    Picard metrics are separate containers.
+
     Returns True when ``quality_yield.txt`` (or equivalent) lands under
     ``metrics_dir``. BS-converted BAM bases can skew artifact/GC metrics;
     these tables are operational screening only.
@@ -1478,14 +1482,14 @@ def _maybe_collect_picard_metrics(
         from methyl_worker.giraffe_runner import _build_collect_metrics_docker_command
         from methyl_worker.parabricks_runner import (
             ParabricksPaths,
-            resolve_parabricks_config,
+            resolve_collectmultiplemetrics_config,
         )
     except Exception as exc:  # pragma: no cover - import surface
         logger.warning("collectmultiplemetrics unavailable (import): %s", exc)
         return False
 
     try:
-        cfg = resolve_parabricks_config(
+        cfg = resolve_collectmultiplemetrics_config(
             project_path=(input_json or {}).get("projectPath")
             or (input_json or {}).get("project"),
             input_json=input_json,
@@ -1512,7 +1516,11 @@ def _maybe_collect_picard_metrics(
         tmp_dir=sample_path / "tmp",
     )
     metrics_cmd = _build_collect_metrics_docker_command(cfg, paths, linear_ref_fasta)
-    logger.info("Running Parabricks collectmultiplemetrics for WGBS QC BAM %s", sample_id)
+    logger.info(
+        "Running Parabricks collectmultiplemetrics for WGBS QC BAM %s (image=%s)",
+        sample_id,
+        cfg.image,
+    )
     _append_log(log_path, "COMMAND: " + " ".join(shlex.quote(c) for c in metrics_cmd))
     try:
         _run(metrics_cmd, log_path, step="collectmultiplemetrics")
