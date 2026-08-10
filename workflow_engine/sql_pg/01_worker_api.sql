@@ -225,7 +225,19 @@ BEGIN
             AND wn_cap.workflow_action_id = wa.id
         ) < wa.max_per_worker
       )
-    ORDER BY ne.available_at_utc ASC NULLS FIRST, ne.id ASC
+    -- Finish in-flight samples before starting new ones: rank each READY
+    -- ACTION by how many sibling executions in its parent scope have already
+    -- SUCCEEDED (chain progress), then FIFO. Mirrors MSSQL
+    -- wf_worker_desired_state.sql.
+    ORDER BY
+      (SELECT COUNT(*)
+       FROM wf.node_execution AS prog
+       WHERE prog.workflow_instance_id = ne.workflow_instance_id
+         AND prog.parent_node_execution_id IS NOT DISTINCT FROM ne.parent_node_execution_id
+         AND prog.id <> ne.id
+         AND prog.status = 'SUCCEEDED') DESC,
+      ne.available_at_utc ASC NULLS FIRST,
+      ne.id ASC
     LIMIT 1
     FOR UPDATE OF ne SKIP LOCKED
   )

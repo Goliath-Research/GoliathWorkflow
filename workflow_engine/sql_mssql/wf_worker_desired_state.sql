@@ -251,7 +251,21 @@ BEGIN
                     AND wn_cap.workflow_action_id = wa.id
               ) < wa.max_per_worker
           )
-        ORDER BY ne.available_at_utc ASC, ne.id ASC
+        -- Finish in-flight samples before starting new ones: rank each READY
+        -- ACTION by how many sibling executions in its parent scope have already
+        -- SUCCEEDED (chain progress), then FIFO. A sample's post-align steps
+        -- (QC / remediate / extract) therefore outrank another sample's first
+        -- align, regardless of when the rows were stamped. Process-agnostic:
+        -- no node names, only engine lineage.
+        ORDER BY
+            (SELECT COUNT(*)
+             FROM wf.node_execution AS prog
+             WHERE prog.workflow_instance_id = ne.workflow_instance_id
+               AND prog.parent_node_execution_id = ne.parent_node_execution_id
+               AND prog.id <> ne.id
+               AND prog.status = N'SUCCEEDED') DESC,
+            ne.available_at_utc ASC,
+            ne.id ASC
     )
     UPDATE ne
     SET status = N'RUNNING',
