@@ -32,6 +32,15 @@ Record tested combinations in release `manifest.json`:
 
 Buffy default WGBS pangenome Align runs **native-Mojo** on the same NVIDIA workers via `epimethyl/methylgrapher:1.70-mojo-cuda` (`actionConfig.methylgrapher_wgbs.engine=mojo`, `align_engine=gpu_giraffe|mojo_giraffe`, `giraffe_device=auto|nvidia`). Pass `--gpus all` (or site GPU flags) into the methylGrapher container — fail-closed on DeviceContext errors; do **not** switch to Clara on Mojo failure. AMD ROCm twin: [`worker-rocm.md`](worker-rocm.md). Canonical contract: [`mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md), [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md).
 
+**HBM admission / release (GH200).** One Align or MojoGiraffe QC ≈ a full card. Pin in `worker.env` (not Python defaults):
+
+| Env | Role |
+|-----|------|
+| `METHYL_GPU_HBM_FREE_FRACTION=0.90` | Require ≥ this share of *total* HBM free before starting a GPU action, and again after it finishes (orphan kill + reclaim) |
+| `METHYL_GPU_ALIGN_HBM_WAIT_S=180` | Seconds to wait for admit / post-action release |
+| `METHYL_GPU_ALIGN_MIN_FREE_GIB` | Legacy absolute GiB floor (used only when `FREE_FRACTION` is unset) |
+
+The worker flock kills leftover `Align` **and** `MojoGiraffe` containers, then waits for the free fraction. Do **not** run `nvidia-smi --gpu-reset` on GH200 (Grace–Hopper coherent fabric); reboot or kill holders instead.
 ## Proteomics GPU tools (DIA-NN / Prosit / Casanovo)
 
 The proteomics pack adds non-Parabricks GPU Docker tools that run on the same GPU VMs

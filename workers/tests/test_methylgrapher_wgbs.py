@@ -137,6 +137,82 @@ def test_align_engine_from_resolved_config_ignores_host_env(
     assert cmd[cmd.index("-align_engine") + 1] == "gpu_giraffe"
 
 
+def test_materialize_passes_host_hbm_fraction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import (
+        materialize_align_docker_env,
+        resolve_wgbs_bundle_from_resolved,
+    )
+
+    cfg = _touch_bundle(tmp_path)
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    monkeypatch.setenv("METHYL_GPU_HBM_FREE_FRACTION", "0.90")
+    env_pairs = materialize_align_docker_env(bundle)
+    assert "METHYLGRAPHER_GPU_HBM_FRACTION=0.90" in env_pairs
+
+
+def test_orphan_gpu_matcher_covers_mojo_giraffe() -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import _is_orphan_gpu_container
+
+    assert _is_orphan_gpu_container(
+        "epimethyl/methylgrapher:1.70-mojo",
+        '"methylGrapher" "MojoGiraffe" -gbz /x',
+    )
+    assert _is_orphan_gpu_container(
+        "epimethyl/methylgrapher:1.70-mojo",
+        '"methylGrapher" "Align" -t 64',
+    )
+    assert not _is_orphan_gpu_container(
+        "epimethyl/methylgrapher:1.70-mojo",
+        '"methylGrapher" "MethylCall" -t 8',
+    )
+    assert not _is_orphan_gpu_container("postgres:17", "Align")
+
+
+def test_admission_min_free_uses_fraction(monkeypatch: pytest.MonkeyPatch) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import _admission_min_free_gib
+
+    monkeypatch.setenv("METHYL_GPU_HBM_FREE_FRACTION", "0.90")
+    monkeypatch.delenv("METHYL_GPU_ALIGN_MIN_FREE_GIB", raising=False)
+    assert _admission_min_free_gib(95.577) == pytest.approx(86.0193)
+
+
+def test_admission_min_free_legacy_absolute(monkeypatch: pytest.MonkeyPatch) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import _admission_min_free_gib
+
+    monkeypatch.delenv("METHYL_GPU_HBM_FREE_FRACTION", raising=False)
+    monkeypatch.setenv("METHYL_GPU_ALIGN_MIN_FREE_GIB", "90")
+    assert _admission_min_free_gib(95.577) == 90.0
+
+
+def test_gpu_align_lock_releases_hbm_after_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lock finally must reclaim orphans even when the body raises."""
+    from methyl_worker import methylgrapher_wgbs_runner as m
+
+    monkeypatch.setenv("METHYL_GPU_HBM_FREE_FRACTION", "0.90")
+    monkeypatch.setenv("METHYL_GPU_ALIGN_HBM_WAIT_S", "1")
+    monkeypatch.setenv("METHYL_GPU_ALIGN_LOCK_DIR", str(tmp_path / "locks"))
+    calls: list[str] = []
+
+    def fake_kill() -> list[str]:
+        calls.append("kill")
+        return []
+
+    def fake_wait(device: str, *, timeout_s: float, purpose: str) -> None:
+        calls.append(f"wait:{purpose}")
+
+    monkeypatch.setattr(m, "_kill_orphan_gpu_containers", fake_kill)
+    monkeypatch.setattr(m, "_wait_host_gpu_hbm", fake_wait)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        with m._gpu_align_lock("nvidia"):
+            calls.append("body")
+            raise RuntimeError("boom")
+
+    assert calls == ["kill", "wait:admit", "body", "kill", "wait:release"]
+
+
 def test_mojo_giraffe_ready_false_materializes_zero(tmp_path: Path) -> None:
     from methyl_worker.methylgrapher_wgbs_runner import (
         materialize_align_docker_env,

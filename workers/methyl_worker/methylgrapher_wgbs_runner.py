@@ -417,14 +417,13 @@ def _ensure_align_workdir_writable(work_dir: Path) -> None:
         pass
 
 
-def _nvidia_hbm_free_gib() -> float | None:
-    import subprocess
-
+def _nvidia_hbm_free_total_gib() -> tuple[float, float] | None:
+    """Return ``(free_gib, total_gib)`` for GPU 0, or ``None`` if unreadable."""
     try:
         ps = subprocess.run(
             [
                 "nvidia-smi",
-                "--query-gpu=memory.free",
+                "--query-gpu=memory.free,memory.total",
                 "--format=csv,noheader,nounits",
             ],
             check=False,
@@ -437,15 +436,69 @@ def _nvidia_hbm_free_gib() -> float | None:
     if ps.returncode != 0 or not (ps.stdout or "").strip():
         return None
     try:
-        return float((ps.stdout or "").strip().splitlines()[0].split(",")[0].strip()) / 1024.0
-    except ValueError:
+        parts = (ps.stdout or "").strip().splitlines()[0].split(",")
+        free_mib = float(parts[0].strip())
+        total_mib = float(parts[1].strip())
+    except (ValueError, IndexError):
         return None
+    return free_mib / 1024.0, total_mib / 1024.0
 
 
-def _kill_orphan_align_containers() -> list[str]:
-    """Kill leftover methylgrapher Align containers on this host."""
-    import subprocess
+def _hbm_free_fraction() -> float | None:
+    """Operator-pinned share of total HBM that must be free before/after GPU work.
 
+    Set ``METHYL_GPU_HBM_FREE_FRACTION`` in ``worker.env`` / site deploy (e.g. ``0.90``).
+    Absolute legacy ``METHYL_GPU_ALIGN_MIN_FREE_GIB`` remains supported when fraction
+    is unset. Neither set → ``None`` (caller decides).
+    """
+    raw = os.environ.get("METHYL_GPU_HBM_FREE_FRACTION", "").strip()
+    if not raw:
+        return None
+    try:
+        frac = float(raw)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"METHYL_GPU_HBM_FREE_FRACTION must be a float in (0, 1], got {raw!r}"
+        ) from exc
+    if not (0.0 < frac <= 1.0):
+        raise RuntimeError(
+            f"METHYL_GPU_HBM_FREE_FRACTION must be in (0, 1], got {frac}"
+        )
+    return frac
+
+
+def _admission_min_free_gib(total_gib: float) -> float:
+    """Minimum free HBM (GiB) required to admit / verify release of a GPU action."""
+    frac = _hbm_free_fraction()
+    if frac is not None:
+        return float(total_gib) * frac
+    legacy = os.environ.get("METHYL_GPU_ALIGN_MIN_FREE_GIB", "").strip()
+    if legacy:
+        return float(legacy)
+    raise RuntimeError(
+        "GPU HBM admission is not configured: set METHYL_GPU_HBM_FREE_FRACTION "
+        "(preferred, e.g. 0.90) or legacy METHYL_GPU_ALIGN_MIN_FREE_GIB in "
+        "worker.env / site deploy."
+    )
+
+
+# methylGrapher GPU docker argv markers that hold DeviceContext / HBM.
+_GPU_ORPHAN_CMD_MARKERS = (
+    "Align",
+    "MojoGiraffe",
+    "MojoFq2bamMeth",
+)
+
+
+def _is_orphan_gpu_container(image: str, cmd: str) -> bool:
+    """True when a running container is a leftover methylGrapher GPU job."""
+    if "methylgrapher" not in (image or "").lower():
+        return False
+    return any(marker in (cmd or "") for marker in _GPU_ORPHAN_CMD_MARKERS)
+
+
+def _kill_orphan_gpu_containers() -> list[str]:
+    """Kill leftover methylGrapher GPU containers (Align *and* MojoGiraffe QC)."""
     ps = subprocess.run(
         [
             _docker_bin(),
@@ -464,56 +517,82 @@ def _kill_orphan_align_containers() -> list[str]:
         if len(parts) < 3:
             continue
         cid, image, cmd = parts[0], parts[1], parts[2]
-        if "methylgrapher" in image.lower() and "Align" in cmd:
-            subprocess.run(
-                [_docker_bin(), "kill", cid],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            killed.append(cid)
+        if not _is_orphan_gpu_container(image, cmd):
+            continue
+        subprocess.run(
+            [_docker_bin(), "kill", cid],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        killed.append(cid)
     return killed
 
 
-def _wait_host_gpu_hbm(device: str, *, min_free_gib: float, timeout_s: float) -> None:
-    """Block until local GPU HBM is free enough for a full Align residency."""
-    import time
+# Back-compat alias for callers/tests that still import the old name.
+_kill_orphan_align_containers = _kill_orphan_gpu_containers
 
+
+def _wait_host_gpu_hbm(device: str, *, timeout_s: float, purpose: str) -> None:
+    """Block until free HBM ≥ configured fraction (or legacy absolute GiB) of total."""
     dev = (device or "").strip().lower()
     if dev not in {"nvidia", "cuda"}:
         return
     deadline = time.monotonic() + timeout_s
+    last_free: float | None = None
+    last_need: float | None = None
     while True:
-        free = _nvidia_hbm_free_gib()
-        if free is not None and free >= min_free_gib:
-            logger.info(
-                "GPU HBM ready for Align: free=%.1f GiB (need ≥%.1f)",
-                free,
-                min_free_gib,
-            )
-            return
+        pair = _nvidia_hbm_free_total_gib()
+        if pair is not None:
+            free, total = pair
+            last_free = free
+            need = _admission_min_free_gib(total)
+            last_need = need
+            if free >= need:
+                logger.info(
+                    "GPU HBM %s: free=%.1f GiB / total=%.1f GiB (need ≥%.1f)",
+                    purpose,
+                    free,
+                    total,
+                    need,
+                )
+                return
         if time.monotonic() >= deadline:
             raise RuntimeError(
-                f"GPU HBM not reclaimed for Align: need ≥{min_free_gib:.1f} GiB free, "
-                f"have {free if free is not None else 'unknown'} GiB after "
-                f"{timeout_s:.0f}s. Kill leftover Mojo/Align on this host."
+                f"GPU HBM not ready for {purpose}: need ≥"
+                f"{last_need if last_need is not None else '?'} GiB free, "
+                f"have {last_free if last_free is not None else 'unknown'} GiB after "
+                f"{timeout_s:.0f}s. Kill leftover Mojo/Align/MojoGiraffe on this host; "
+                "set METHYL_GPU_HBM_FREE_FRACTION in worker.env."
             )
         time.sleep(2.0)
 
 
+def _reclaim_gpu_hbm(device: str, *, timeout_s: float) -> None:
+    """Kill orphan GPU containers, then wait until HBM is free again."""
+    killed = _kill_orphan_gpu_containers()
+    if killed:
+        logger.warning("Reclaimed orphan GPU container(s): %s", killed)
+        time.sleep(3.0)
+    _wait_host_gpu_hbm(device, timeout_s=timeout_s, purpose="release")
+
+
 @contextmanager
 def _gpu_align_lock(device: str) -> Iterator[None]:
-    """Serialize GPU Align docker on a node (one GH200 Align ≈ full HBM).
+    """Serialize one GPU Align/QC docker on a node and always release HBM after.
 
     Host flock path is local (not NFS) so sisters do not block each other.
     CPU Align skips the lock.
 
+    On enter: kill orphan methylGrapher GPU containers, wait until free HBM is
+    at least ``METHYL_GPU_HBM_FREE_FRACTION`` of total (or legacy absolute GiB).
+    On exit (success *or* failure): kill orphans again and wait for the same
+    free fraction so the next action sees a clean card.
+
     Catalog ``dispatch.exclusive_worker`` / ``max_per_worker`` gate claims in
     ``wf.sp_worker_request_task``; this flock covers local races / orphans.
     """
-    import time
-
     dev = (device or "").strip().lower()
     if dev not in {"nvidia", "cuda", "amd", "hip", "rocm"}:
         yield
@@ -523,23 +602,37 @@ def _gpu_align_lock(device: str) -> Iterator[None]:
     )
     lock_dir.mkdir(parents=True, exist_ok=True)
     lock_path = lock_dir / "align.lock"
-    min_free = float(os.environ.get("METHYL_GPU_ALIGN_MIN_FREE_GIB", "90"))
-    wait_s = float(os.environ.get("METHYL_GPU_ALIGN_HBM_WAIT_S", "180"))
+    # Seconds to wait for HBM admit/release. Operator-set in worker.env; empty
+    # means "not configured" (fail closed — no silent Python default).
+    wait_raw = os.environ.get("METHYL_GPU_ALIGN_HBM_WAIT_S", "").strip()
+    if not wait_raw:
+        raise RuntimeError(
+            "METHYL_GPU_ALIGN_HBM_WAIT_S is not set (seconds to wait for HBM "
+            "admit/release). Pin it in worker.env (see deploy/env/worker.env.example)."
+        )
+    wait_s = float(wait_raw)
     with lock_path.open("a+", encoding="utf-8") as fh:
         logger.info("Acquiring GPU Align flock %s (device=%s)", lock_path, dev)
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
         try:
-            killed = _kill_orphan_align_containers()
+            killed = _kill_orphan_gpu_containers()
             if killed:
-                logger.warning("Killed orphan Align container(s): %s", killed)
+                logger.warning("Killed orphan GPU container(s): %s", killed)
                 time.sleep(3.0)
-            _wait_host_gpu_hbm(dev, min_free_gib=min_free, timeout_s=wait_s)
+            _wait_host_gpu_hbm(dev, timeout_s=wait_s, purpose="admit")
             fh.seek(0)
             fh.truncate()
             fh.write(f"pid={os.getpid()}\ndevice={dev}\n")
             fh.flush()
             yield
         finally:
+            try:
+                _reclaim_gpu_hbm(dev, timeout_s=wait_s)
+            except Exception:
+                logger.exception(
+                    "GPU HBM release wait failed after Align/QC; "
+                    "next admit may re-kill orphans"
+                )
             fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
 
@@ -793,6 +886,10 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
         or "/opt/methylgrapher-mojo/cuda/bin/ptxas"
     )
     env.append(f"MODULAR_NVPTX_COMPILER_PATH={ptxas}")
+    # Host HBM free-fraction → container preflight budget (same operator pin).
+    hbm_frac = os.environ.get("METHYL_GPU_HBM_FREE_FRACTION", "").strip()
+    if hbm_frac:
+        env.append(f"METHYLGRAPHER_GPU_HBM_FRACTION={hbm_frac}")
     return env
 
 
@@ -1008,6 +1105,7 @@ def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
             "grch38_offsets.py",
             "qc_sam_state.py",
             "qc_sam_emit.py",
+            "gpu_mem.py",
         ):
             p = eng_dir / name
             if p.is_file():
@@ -1695,6 +1793,7 @@ def run_methylgrapher_wgbs_align(
                 docker_cmd.extend(["-v", f"{root}:{root}"])
             add_mojo_src_overlay_mounts(docker_cmd)
             docker_cmd.extend([image, *align_cmd])
+            # One GH200 ≈ full HBM: flock + admit fraction + always release after.
             with _gpu_align_lock(align_device):
                 _run(docker_cmd, log_path, step="methylGrapher.Align")
 
@@ -1830,7 +1929,11 @@ def run_methylgrapher_wgbs_align(
                             log_path,
                             f"Mojo QC SAM emit (native); offsets={offsets_dir}",
                         )
-                        _run(docker_mojo_qc, log_path, step="mojo.qc_sam")
+                        # QC MojoGiraffe needs the same HBM residency as Align; run
+                        # under the flock even when science GAF was reused (that
+                        # path skips the Align lock). Always release on exit.
+                        with _gpu_align_lock(resolve_giraffe_device(bundle)):
+                            _run(docker_mojo_qc, log_path, step="mojo.qc_sam")
                         samtools_sam_to_bam(qc_sam, qc_bam, log_path)
                         write_mojo_qc_sam_provenance(qc_bam, offsets_dir=offsets_dir)
                         _append_log(
