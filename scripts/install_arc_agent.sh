@@ -91,13 +91,25 @@ if ! command -v azcmagent >/dev/null 2>&1; then
   fi
 fi
 
+# azcmagent requires --correlation-id to be a GUID (not an arbitrary string).
+if command -v uuidgen >/dev/null 2>&1; then
+  CORRELATION_ID="$(uuidgen)"
+else
+  CORRELATION_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+fi
+
 connect_args=(
   --resource-group "$RESOURCE_GROUP"
   --tenant-id "$TENANT_ID"
   --location "$LOCATION"
   --subscription-id "$SUBSCRIPTION_ID"
-  --correlation-id "methyl-$(date +%s)"
+  --resource-name "$MACHINE_NAME"
+  --correlation-id "$CORRELATION_ID"
 )
+
+if [[ -n "$TAGS" ]]; then
+  connect_args+=(--tags "$TAGS")
+fi
 
 if [[ -n "$PROXY_URL" ]]; then
   connect_args+=(--proxy-url "$PROXY_URL")
