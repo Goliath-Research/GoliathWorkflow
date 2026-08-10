@@ -61,32 +61,37 @@ Terraform state (use write-only/ephemeral variables where supported).
 | Asset | Storage |
 |-------|---------|
 | Terraform state | Azure Storage backend, encrypted, RBAC, versioning, no public access |
-| `WORKER_TOKEN` | Key Vault secret; fetched at VM boot via managed identity |
+| Worker enroll token | Issued by gateway after portal IP preregistration (`methyl-worker enroll`) → `/etc/methyl/worker-token` |
 | Cloud API keys (Nebius, Lambda) | Key Vault / CI secret store |
 | Worker credentials on VM | `/etc/methyl/worker-token` mode 600 |
 
 Terraform modules **do not** embed worker tokens in state. `worker-common` cloud-init
-runs `register_worker.py --auto-detect` after bundle checksum verification.
+extracts a **scripts seed** tarball to `/opt/methyl`, preflights QNAP `/work/epimethyl/current`,
+and runs **join-only prepare** by default (`--prepare-only`). Portal prereg + Arc approval +
+`--finish-enroll` remain operator steps — see [lambda_worker_join.md](lambda_worker_join.md).
 
 ## Operator workflow
 
 1. **Control plane** — `cd deploy/terraform/envs/<env> && terraform init && terraform apply`
    (requires Azure credentials).
-2. **Populate Key Vault** — worker registration tokens, Nebius SA key, Lambda API key.
-3. **Worker fleet** — apply `worker-nebius` or `worker-lambda` module with `worker-common`
-   `cloud_init` output.
-4. **Gateway NSG** — set `gateway_allowed_worker_cidrs` to each fleet egress CIDR
+2. **Populate Key Vault** — Nebius SA key, Lambda API key (cloud provider creds — not worker tokens).
+3. **Cluster once** — promote Epimethyl release + Parabricks to QNAP `/work` ([lambda_worker_join.md](lambda_worker_join.md) §A).
+4. **Worker fleet** — apply `worker-nebius` or `worker-lambda` with `worker-common`
+   `cloud_init` output (default prepare-only).
+5. **Per VM** — portal-preregister public IP → approve Arc Connected →
+   `provision_worker_node.sh --finish-enroll`.
+6. **Gateway NSG** — set `gateway_allowed_worker_cidrs` to each fleet egress CIDR
    (feeds `wf.cluster.allowed_source_cidrs` at registration).
-5. **Verify** — `scripts/verify_arc_prereqs.sh`, `methyl-worker --authenticate`, poll test.
+7. **Verify** — `scripts/verify_arc_prereqs.sh`, worker poll test.
 
 ## Capability tie-in
 
-Cloud-init invokes capability detection before registration:
+After `--finish-enroll` (or a non-prepare cloud-init path):
 
-1. `resolve_worker_capabilities()` probes GPU, Parabricks, extractor, CLIs.
-2. `register_worker.py` writes the set to `wf.worker.capabilities`.
+1. `resolve_worker_capabilities()` probes GPU, Parabricks, extractor, CLIs at enroll time.
+2. Gateway enroll writes capabilities to `wf.worker`.
 3. `sp_worker_request_task` only returns matching tasks.
-4. systemd installs `methyl-worker@<capability>.service` per detected cap (or omnibus).
+4. systemd installs `methyl-worker@<capability>.service` per detected cap (or omnibus) when `--detect-capabilities` is set.
 
 ## CoreWeave follow-on (design only)
 

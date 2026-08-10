@@ -20,8 +20,8 @@ Options:
   --branch NAME            Git branch for both repos (default: current or main)
   --system-deps            Pass --system-deps to setup_host.sh
   --gpu                    Force GPU Python requirements
-  --skip-docker            Skip setup_gpu_node.sh
-  --skip-parabricks-pull   Do not docker pull Parabricks image
+  --skip-docker            Skip Docker Engine / NVIDIA CTK install (verify-only)
+  --skip-parabricks-pull   Do not docker pull Parabricks image (node join default)
   --skip-methyl-extractor  Skip MethylExtractor build
   --docker-data-root PATH  Shared Docker data-root (default: /work/epimethyl/docker with --release-dir)
   --dry-run                Print actions without executing
@@ -154,20 +154,29 @@ if [[ -n "$RELEASE_DIR" ]]; then
       --arch "$ARCH_KEY" --worker-api-base "$WORKER_API_BASE"
   fi
 
+  # Node join installs Docker Engine + NVIDIA CTK locally; image layers stay under
+  # shared DOCKER_DATA_ROOT (/work/epimethyl/docker). Parabricks pull is cluster-once
+  # (promote host / --promote-release), not every Lambda join.
   if [[ "$SKIP_DOCKER" -eq 0 ]]; then
-    GPU_ARGS=(--docker-data-root "$DOCKER_DATA_ROOT" --env-dir "$ENV_DIR" --skip-docker)
+    GPU_ARGS=(--docker-data-root "$DOCKER_DATA_ROOT" --env-dir "$ENV_DIR")
     if [[ "$SKIP_PARABRICKS_PULL" -eq 0 && "$PROMOTE_RELEASE" -eq 0 ]]; then
       GPU_ARGS+=(--pull-parabricks)
     fi
     run bash "$SCRIPTS_DIR/setup_gpu_node.sh" "${GPU_ARGS[@]}" 2>/dev/null || \
       run bash "$REPO_ROOT/scripts/setup_gpu_node.sh" "${GPU_ARGS[@]}"
+  elif [[ -n "$DOCKER_DATA_ROOT" ]]; then
+    # Verify-only path when caller explicitly skipped Docker install
+    GPU_ARGS=(--docker-data-root "$DOCKER_DATA_ROOT" --env-dir "$ENV_DIR" --skip-docker)
+    run bash "$SCRIPTS_DIR/setup_gpu_node.sh" "${GPU_ARGS[@]}" 2>/dev/null || \
+      run bash "$REPO_ROOT/scripts/setup_gpu_node.sh" "${GPU_ARGS[@]}" || true
   fi
 
   info "Bootstrap (release) complete."
   info "Next steps:"
   info "  1. source $ENV_DIR/worker.env"
-  info "  2. Register worker: $SCRIPTS_DIR/register_worker.sh"
-  info "  3. Verify node: $SCRIPTS_DIR/verify_e2e_node.sh"
+  info "  2. Join enroll: $SCRIPTS_DIR/provision_worker_node.sh --finish-enroll (after Arc)"
+  info "  3. Or register: $SCRIPTS_DIR/register_worker.sh"
+  info "  4. Verify node: $SCRIPTS_DIR/verify_e2e_node.sh"
   exit 0
 fi
 

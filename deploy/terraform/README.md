@@ -3,7 +3,7 @@
 ## Layout
 
 - **`modules/control-plane-azure`**: Gateway, Azure SQL, Key Vault, NSGs
-- **`modules/worker-common`**: Cloud-init (Arc, bundle, register, systemd)
+- **`modules/worker-common`**: Cloud-init (scripts seed → join prepare; Arc/enroll staged)
 - **`modules/worker-nebius`**: Nebius GPU VMs (official `nebius/nebius` provider)
 - **`modules/worker-lambda`**: Lambda Cloud VMs (community provider, pinned)
 - **`envs/<name>/`**: Backend and `tfvars` configuration per environment
@@ -29,10 +29,13 @@ terraform validate
 ## Operator workflow
 
 1. Deploy `envs/prod` control plane (`control-plane-azure` module).
-2. Store Nebius/Lambda API keys and per-cluster CIDRs in Key Vault.
-3. Deploy `worker-nebius` or `worker-lambda` with `worker-common` cloud-init.
-4. Workers fetch `WORKER_TOKEN` from Key Vault at boot (never in TF state).
-5. `register_worker.py --auto-detect` runs in cloud-init; capabilities flow to dispatch.
+2. Store Nebius/Lambda API keys and per-cluster CIDRs in Key Vault (provider creds only).
+3. Promote Epimethyl release + Parabricks to QNAP `/work` (cluster once).
+4. Deploy `worker-nebius` or `worker-lambda` with `worker-common` cloud-init
+   (default `--prepare-only`; seed tarball → `/opt/methyl`).
+5. Portal-preregister IP → approve Arc → `provision_worker_node.sh --finish-enroll`
+   (token from gateway enroll, never from TF state). See
+   [lambda_worker_join.md](../../docs/deployment/lambda_worker_join.md).
 
 ## Security
 

@@ -216,6 +216,7 @@ nav:
       - Worker provision: deployment/worker_provision.md
       - Worker node: deployment/worker_node.md
       - GPU worker: deployment/gpu_worker_runbook.md
+      - Lambda worker join: deployment/lambda_worker_join.md
       - ROCm worker: deployment/worker-rocm.md
       - Arc worker: deployment/arc_worker_runbook.md
       - Platform matrix: deployment/platform_matrix.md

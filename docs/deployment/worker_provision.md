@@ -2,7 +2,8 @@
 
 Step-by-step for joining a **new GPU VM** to an existing production release on shared storage, with **Azure Arc** governance before cluster enrollment.
 
-**Canonical production story:** [production-platform.md](production-platform.md) (portal IP prereg → Arc → gateway enroll). This page is the per-VM detail.
+**Canonical join (Lambda / QNAP):** [lambda_worker_join.md](lambda_worker_join.md) — Azure vs QNAP vs NGC vs Arc, staged prepare → approve → finish-enroll.  
+**Platform phases:** [production-platform.md](production-platform.md). This page is the per-VM detail.
 
 Related: [production_release.md](production_release.md), [gpu_worker_runbook.md](gpu_worker_runbook.md), [arc_worker_runbook.md](arc_worker_runbook.md).
 
@@ -13,31 +14,42 @@ Related: [production_release.md](production_release.md), [gpu_worker_runbook.md]
 - Gateway HTTPS up (`WORKER_API_BASE`); portal has preregistered this VM’s **public IP**
 - Operator has sudo + Azure permissions for Arc onboarding (company tenant/subscription)
 
-## Orchestrated path (recommended)
+## Orchestrated path (recommended — staged Arc)
 
-Single entry point for Arc → bundle → register → systemd:
+Default is **join-only** (`--join-mode join`): never promote or re-pull Parabricks on the worker.
 
 ```bash
 export WORKER_API_BASE=https://gateway.example.com/v1
-export AZ_SUBSCRIPTION_ID=... AZ_RESOURCE_GROUP=... AZURE_TENANT_ID=...
 
+bash /work/epimethyl/current/runtime-bundle/scripts/preflight_worker_join.sh \
+  --gpu --require-api --require-current
+
+# 1) Local install (no Arc)
 sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
-  --gpu \
-  --arc-onboard \
-  --require-arc \
-  --register-worker \
-  --enable-systemd \
-  --cluster gpu-west
+  --gpu --join-mode join --prepare-only --cluster gpu-west
+
+# 2) Arc onboard + approve Connected (human-gated)
+export AZ_SUBSCRIPTION_ID=... AZ_RESOURCE_GROUP=... AZURE_TENANT_ID=...
+sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_arc_agent.sh \
+  --subscription-id "$AZ_SUBSCRIPTION_ID" \
+  --resource-group "$AZ_RESOURCE_GROUP" \
+  --tenant-id "$AZURE_TENANT_ID"
+bash /work/epimethyl/current/runtime-bundle/scripts/verify_arc_prereqs.sh
+
+# 3) Enroll + systemd
+sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
+  --gpu --join-mode join --finish-enroll --cluster gpu-west
 ```
 
-Second and subsequent VMs on the same cluster (shared venv already on `/work`):
+When Arc is already Connected, one-shot enroll is fine:
 
 ```bash
-sudo bash scripts/provision_worker_node.sh \
-  --gpu --require-arc --skip-promote \
-  --register-worker --enable-systemd --cluster gpu-west
+sudo bash …/provision_worker_node.sh \
+  --gpu --join-mode join --require-arc \
+  --enroll-worker --enable-systemd --detect-capabilities --cluster gpu-west
 ```
 
+`--skip-promote` remains a legacy alias for `--join-mode join`.
 ## Manual steps (reference)
 
 ### 0. Azure Arc (production)

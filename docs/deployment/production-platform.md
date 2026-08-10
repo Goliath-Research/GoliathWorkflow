@@ -226,13 +226,36 @@ Gateway HTTP is **worker-only** (`POST /v1/workers/*`). Day-2 humans use the **p
 
 ## Phase 4 — Each GPU worker (Arc + enroll)
 
+**Lambda / QNAP join runbook (recommended):** [lambda_worker_join.md](lambda_worker_join.md) — Azure CI vs QNAP `/work` vs NGC vs Arc vs portal, plus staged prepare → Arc approve → finish-enroll.
+
 Every production worker must be:
 
 1. An **Azure Arc Connected** machine in the **company** Azure tenant/subscription/resource group.
 2. Preregistered in the portal by **public IP**.
 3. Enrolled through the gateway (token file on the node).
 
-### 4.1 Arc (company account)
+Release content and genomes live on **QNAP → `/work`**. Azure builds artifacts and hosts Arc/portal/gateway; it does **not** store Parabricks/mojo images for worker boot.
+
+### 4.1 Portal preregistration
+
+In the **EpiPortal UI**, preregister this VM’s **public IP**, `cluster_key`, and worker `key` (usually `hostname -s`). The UI persists via `portal.sp_upsert_worker_enrollment`. Enroll fails if the client IP is not preregistered.
+
+### 4.2 Prepare (local install; default join-only)
+
+With `/work` mounted and `/work/epimethyl/current/manifest.json` present:
+
+```bash
+export WORKER_API_BASE=https://<gateway-fqdn>/v1
+bash /work/epimethyl/current/runtime-bundle/scripts/preflight_worker_join.sh \
+  --gpu --require-api --require-current
+
+sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
+  --gpu --join-mode join --prepare-only --cluster gpu-west
+```
+
+`--join-mode join` (default) never promotes a release or re-pulls Parabricks. Use `--join-mode first` only as an admin escape hatch on a promote host.
+
+### 4.3 Arc (company account; human-gated)
 
 ```bash
 export AZ_SUBSCRIPTION_ID=… AZ_RESOURCE_GROUP=… AZURE_TENANT_ID=…
@@ -250,36 +273,27 @@ bash /work/epimethyl/current/runtime-bundle/scripts/verify_arc_prereqs.sh
 
 Uses `azcmagent` plus Azure CLI (`az`) for Connected Machine resource id / AMA extension. See [arc_worker_runbook.md](arc_worker_runbook.md) for Private Link Scope, Guest Configuration, Defender, and Sentinel.
 
-### 4.2 Portal preregistration
-
-In the **EpiPortal UI**, preregister this VM’s **public IP**, `cluster_key`, and worker `key` (usually `hostname -s`). The UI persists via `portal.sp_upsert_worker_enrollment`. Enroll fails if the client IP is not preregistered.
-
-### 4.3 Orchestrated node join (recommended)
+### 4.4 Finish enroll + systemd
 
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
-export AZ_SUBSCRIPTION_ID=… AZ_RESOURCE_GROUP=… AZURE_TENANT_ID=…
 
 sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
-  --gpu \
-  --arc-onboard \
-  --require-arc \
-  --register-worker \
-  --enable-systemd \
+  --gpu --join-mode join --finish-enroll --require-arc \
+  --enroll-worker --enable-systemd --detect-capabilities \
   --cluster gpu-west
 ```
 
-`--register-worker` is the enroll alias: calls the gateway when DB env is absent (production). It does **not** put SQL passwords on the worker.
+`--enroll-worker` / `--register-worker` calls the gateway (production). It does **not** put SQL passwords on the worker.
 
-Second and later VMs on the same cluster (shared venv already on `/work`):
+Optional one-shot when Arc is already Connected:
 
 ```bash
 sudo bash …/provision_worker_node.sh \
-  --gpu --require-arc --skip-promote \
-  --register-worker --enable-systemd --cluster gpu-west
+  --gpu --join-mode join --require-arc \
+  --enroll-worker --enable-systemd --detect-capabilities --cluster gpu-west
 ```
-
-### 4.4 What the provision path installs
+### 4.5 What the provision path installs
 
 | Prerequisite | Script / artifact | Needed for |
 |--------------|-------------------|------------|
@@ -302,7 +316,7 @@ set +a
 bash /work/epimethyl/current/runtime-bundle/scripts/verify_e2e_node.sh
 ```
 
-### 4.5 Enroll-only (node already provisioned)
+### 4.6 Enroll-only (node already provisioned)
 
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
@@ -342,10 +356,11 @@ See [production_runbook.md](production_runbook.md) and [Usage ch.04](../usage/04
 | `scripts/install_gateway_systemd.sh` | 3 — gateway |
 | `scripts/setup_gateway_nginx.sh` | 3 — TLS |
 | `scripts/install_arc_agent.sh` / `verify_arc_prereqs.sh` | 4 — Arc (`az` / `azcmagent`) |
+| `scripts/preflight_worker_join.sh` | 4 — QNAP join preflight |
 | `scripts/setup_host.sh` / `setup_gpu_node.sh` | 4 — host + Docker |
-| `scripts/provision_worker_node.sh` | 4 — omnibus join |
+| `scripts/provision_worker_node.sh` | 4 — join / prepare / finish-enroll |
 | `scripts/install_worker_systemd.sh` | 4 — systemd |
-| `scripts/verify_e2e_node.sh` / `verify_parabricks.sh` / `verify_methyl_extractor.sh` | 4 — preflight |
+| `scripts/verify_e2e_node.sh` / `verify_parabricks.sh` / `verify_methyl_extractor.sh` | 4 — verify |
 
 Azure CLI (`az`) is used for Arc Connected Machine metadata/AMA and for Azure Artifacts downloads during assemble — not for day-2 worker claim traffic.
 
