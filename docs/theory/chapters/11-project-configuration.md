@@ -78,7 +78,7 @@ Parameters previously embedded in `step_config` now live under **`actionConfig.<
 | `validation` | `methyl-validation` | Monte Carlo settings, stability gates, backend profiles. |
 | `alignment_qc` | `methyl-alignment-qc` | Schema validation, guardrails. |
 
-Exhaustive parameter tables: [configuration-reference](../reference/configuration-reference.md) (keys listed as `actionConfig.*` sections).
+Exhaustive parameter tables: [configuration-reference](../../reference/configuration-reference.md) (keys listed as `actionConfig.*` sections).
 
 Resolution: `resolve_action_config` / `resolve_for_project` in `packages/methylutils/methyl_utils/action_config_resolver.py`.
 
@@ -169,6 +169,6 @@ Downstream FeatureCuts and mapper steps prefer **`dmps-*-selected.csv`** (BA-gat
 
 ## Related
 
-- Usage: [Project config and layout](../usage/02-project-config-and-layout.md)
-- Reference: [Config parameter matrix](../reference/config-parameter-matrix.md)
-- Architecture: [Layer model](../architecture/layer-model.md)
+- Usage: [Project config and layout](../../usage/02-project-config-and-layout.md)
+- Reference: [Config parameter matrix](../../reference/config-parameter-matrix.md)
+- Architecture: [Layer model](../../architecture/layer-model.md)

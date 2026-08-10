@@ -33,7 +33,7 @@ Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.
 
 **`cell_deconvolution` note.** The method switch and analyte-driven HiTIMED tree roots are **not** applied by the analyte profile merge today; set `method` (`houseman` | `hitimed`) under profile `actionConfig.cell_deconvolution`. HiTIMED reads its tree from the `analyte` field, which defaults to `regulatory.primary_analyte`. There is no dedicated `tissue` entry in `analyte_profiles.py`, so tissue prep/enricher steps use `combined`/unknown defaults unless a profile overrides them. See [Theory ch.07a MethylDeconv](theory/chapters/07a-methyldeconv.md).
 
-Background research on analyte tradeoffs: [docs/research/](../research/README.md).
+Background research on analyte tradeoffs: [docs/research/](research/README.md).
 
 ## CIS-BP multi-mode (cfDNA)
 

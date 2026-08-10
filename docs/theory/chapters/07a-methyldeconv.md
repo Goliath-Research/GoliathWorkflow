@@ -1,7 +1,7 @@
 # MethylDeconv {#sec-methyldeconv}
 ## Role
 
-`methyldeconv` estimates the cell-type composition $\Omega$ of each sample from its methylation profile and writes those fractions as model covariates. It runs as the `pipeline.cell_deconvolution` action after the freeze mapper stage (see [§ two workflows](12-two-workflows.md#sec-two-workflows)) and feeds the ECDF second-stage stacker described in the [end-to-end workflow](../architecture/end-to-end-workflow.md).
+`methyldeconv` estimates the cell-type composition $\Omega$ of each sample from its methylation profile and writes those fractions as model covariates. It runs as the `pipeline.cell_deconvolution` action after the freeze mapper stage (see [§ two workflows](12-two-workflows.md#sec-two-workflows)) and feeds the ECDF second-stage stacker described in the [end-to-end workflow](../../architecture/end-to-end-workflow.md).
 
 The action exposes a `method` switch with two estimators that share one output contract:
 
@@ -85,4 +85,4 @@ Following the taxonomy in [§ limitations](10-limitations-and-open-questions.md#
 | `analyte` | tree selector; defaults to `regulatory.primary_analyte` |
 | `contexts`, `marker_min_coverage`, `min_marker_fraction` | marker extraction and QP gating |
 
-The shipped `cell_deconv_hitimed.profile.json` profile sets `method = hitimed` with ALR composition covariates (and `tumor_fraction` for cfDNA). Design and provisioning details: [`docs/plans/hitimed-hierarchical-deconvolution.plan.md`](../plans/hitimed-hierarchical-deconvolution.plan.md).
+The shipped `cell_deconv_hitimed.profile.json` profile sets `method = hitimed` with ALR composition covariates (and `tumor_fraction` for cfDNA). Design and provisioning details: [`docs/plans/hitimed-hierarchical-deconvolution.plan.md`](../../plans/hitimed-hierarchical-deconvolution.plan.md).

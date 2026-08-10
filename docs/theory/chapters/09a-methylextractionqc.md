@@ -3,7 +3,7 @@
 
 `methylextractionqc` evaluates the extraction manifest after methylation extraction. For linear / stock pangenome that is **GPU MethylExtractor**; for `pangenome_wgbs` it is **native-Mojo** methylGrapher `MethylCall`/`MergeCpG` (CPU-parallel Mojo hot path — not stock Python and not a CUDA/HIP GPU workload). Alignment QC confirms the QC BAM / GAF provenance; extraction QC confirms the methylation call layer has sufficient coverage and conversion-quality signal before HDF5 files enter downstream cohort analysis.
 
-Operator guide: [Usage ch.03 — Sample Prep and QC](../usage/03-sample-prep-and-qc.md).
+Operator guide: [Usage ch.03 — Sample Prep and QC](../../usage/03-sample-prep-and-qc.md).
 
 ## Input: extraction manifest
 

@@ -122,7 +122,7 @@ flowchart TB
   prep --> cov --> bio
 ```
 
-`pipeline.cell_deconvolution` in this stage carries the method switch and analyte-driven trees documented in [§ methyldeconv](07a-methyldeconv.md#sec-methyldeconv). The remaining covariates (`derived_measures`, `info_measures`) and the biology step (`enricher`) are described in the [end-to-end workflow](../architecture/end-to-end-workflow.md) and [§ methylenricher](08-methylenricher.md#sec-methylenricher).
+`pipeline.cell_deconvolution` in this stage carries the method switch and analyte-driven trees documented in [§ methyldeconv](07a-methyldeconv.md#sec-methyldeconv). The remaining covariates (`derived_measures`, `info_measures`) and the biology step (`enricher`) are described in the [end-to-end workflow](../../architecture/end-to-end-workflow.md) and [§ methylenricher](08-methylenricher.md#sec-methylenricher).
 
 ### Per-Analyte Action Inventory {#sec-analyte-actions}
 The set of actions that run — and how they are parameterized — is gated by the study `regulatory.primary_analyte`. Analyte defaults are merged into profile/site `actionConfig` by `merge_step_config` in `packages/methylutils/methyl_utils/analyte_profiles.py` (explicit profile/site keys always win). The three covered analytes:
@@ -138,7 +138,7 @@ The set of actions that run — and how they are parameterized — is gated by t
 | `enricher` | `cancer-core` + CIS-BP multi-mode (gene_sets + motif_scan + annotate) | CIS-BP gene_sets only | defaults unless profile overrides |
 | `validation` | `enforce_training_analyte_match: true` | `false` | not set by analyte pack |
 
-Two caveats today: (1) there is no dedicated `tissue` entry in `analyte_profiles.py`, so tissue prep/enricher behave like the `combined`/unknown default unless a profile overrides them; the tissue-specific behavior above is the HiTIMED tree, which is selected by the `cell_deconvolution` `analyte` field rather than the analyte profile merge. (2) Flat Houseman always projects against the blood IDOL basis, so for `tissue` the meaningful compositional estimate comes from `method = hitimed` with the full tree. See [§ methyldeconv](07a-methyldeconv.md#sec-methyldeconv) for the deconvolution math and [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md) for the operator view.
+Two caveats today: (1) there is no dedicated `tissue` entry in `analyte_profiles.py`, so tissue prep/enricher behave like the `combined`/unknown default unless a profile overrides them; the tissue-specific behavior above is the HiTIMED tree, which is selected by the `cell_deconvolution` `analyte` field rather than the analyte profile merge. (2) Flat Houseman always projects against the blood IDOL basis, so for `tissue` the meaningful compositional estimate comes from `method = hitimed` with the full tree. See [§ methyldeconv](07a-methyldeconv.md#sec-methyldeconv) for the deconvolution math and [`docs/ANALYTE_PROFILES.md`](../../ANALYTE_PROFILES.md) for the operator view.
 
 ### Steps
 

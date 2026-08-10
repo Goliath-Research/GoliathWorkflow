@@ -5,7 +5,7 @@ It complements:
 
 - [§ workflow model creation](12-two-workflows.md#sec-workflow-model-creation) (workflow theory),
 - [§ workflow prediction](12-two-workflows.md#sec-workflow-prediction) (predictor-only evaluation),
-- **Usage manual** ch.05–08 for operator commands ([`docs/usage/`](../usage/index.md)).
+- **Usage manual** ch.05–08 for operator commands ([`docs/usage/`](../../usage/index.md)).
 
 ---
 
@@ -192,11 +192,11 @@ Use this as a starting point, then tune in this order:
 ## Distributed Monte Carlo on shared storage {#sec-distributed-mc-shared-storage}
 Large `n_iterations` in stability discovery are often limited by **wall time** on a single host, not by statistical need. Sharded Monte Carlo requires shared read–write access to the same `output_base` tree. The queue workflow is a **plan → workers → aggregate** pattern.
 
-**Operator documentation:** [Usage ch.13](../usage/13-distributed-methyl-validation.md) and [`packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`](../../../packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md).
+**Operator documentation:** [Usage ch.13](../../usage/13-distributed-methyl-validation.md) and [`packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`](../../../packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md).
 
 ---
 
 ## Optional pipeline hyperparameter search {#sec-optional-hyperparameter-search}
 The package implements a read-only **scalar objective** \(J(\theta)\) from completed runs, combining weighted validation metrics with optional panel-size terms. Discovery/stability optima and calibration metrics can **conflict**; a **two-stage** search is often safer than a single ad hoc \(J\).
 
-**Theory and formulas:** [`packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md`](../../../packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md). **Operator steps:** [Usage ch.15](../usage/15-optional-hyperparameter-search.md).
+**Theory and formulas:** [`packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md`](../../../packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md). **Operator steps:** [Usage ch.15](../../usage/15-optional-hyperparameter-search.md).

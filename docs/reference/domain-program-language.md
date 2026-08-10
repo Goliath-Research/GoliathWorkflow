@@ -14,8 +14,8 @@ Authoring format for MethylPipeline workflows.
 Compiler: `workflow_engine/domain/compiler.py` → `WorkflowDefinitionSpec` (Pydantic: `workflow_engine/contract/workflow_definition_spec.py`).
 
 **Full language (assign / WHILE / SWITCH / REPEAT / typed variables):** [`domain-program-language-v2.md`](domain-program-language-v2.md)  
-**Architecture overview:** [`docs/architecture/index.md`](architecture/index.md)  
-**Operator deployment:** [Usage ch.14](usage/14-deployment-and-distributed-workflow.md)  
+**Architecture overview:** [`docs/architecture/index.md`](../architecture/index.md)  
+**Operator deployment:** [Usage ch.14](../usage/14-deployment-and-distributed-workflow.md)  
 **Admin CLI:** [admin-cli-methyl-study-start.md](admin-cli-methyl-study-start.md)
 
 ## Artifact ladder
@@ -138,7 +138,7 @@ When a worker completes an ACTION, it submits **`result_code`** (integer) with t
 | `1` | True branch (e.g. remediation needed) |
 | `2..N` | Multi-way SWITCH cases (per action) |
 
-See also [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) (worker contract) and the user manual [Content-Addressed Action Store (CAAS)](usage/17-content-addressed-action-store.md) and [Artifacts and QA Checks — observability](usage/10-artifacts-and-qa-checks.md).
+See also [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md) (worker contract) and the user manual [Content-Addressed Action Store (CAAS)](../usage/17-content-addressed-action-store.md) and [Artifacts and QA Checks — observability](../usage/10-artifacts-and-qa-checks.md).
 
 ### Two branching styles
 
@@ -272,7 +272,7 @@ Compiler emits bindings for `project.*` references. Engine resolves `projectPath
 
 ### Four-layer authoring
 
-New runs combine four artifacts (see [`reference/config-parameter-matrix.md`](reference/config-parameter-matrix.md)):
+New runs combine four artifacts (see [`reference/config-parameter-matrix.md`](config-parameter-matrix.md)):
 
 1. **Study manifest** — cohorts, stages, comparisons, `regulatory`, `validation_partitions`, `progression_order`
 2. **DomainProgram** — topology and optional per-action `stepOverride`
@@ -401,4 +401,4 @@ Stability summaries record active axes in `stability_summary.json` → `pipeline
 
 ## Sample prep reference
 
-QC gates and Picard/Parabricks/extraction guardrails: [Usage ch.03](usage/03-sample-prep-and-qc.md), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md).
+QC gates and Picard/Parabricks/extraction guardrails: [Usage ch.03](../usage/03-sample-prep-and-qc.md), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md).

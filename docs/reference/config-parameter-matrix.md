@@ -1,6 +1,6 @@
 # Configuration Parameter Matrix (Four-Layer Model)
 
-This matrix documents the **new-only** configuration stack. **`step_config` in study manifests is removed** — see [`docs/plans/simplify-study-config.plan.md`](plans/simplify-study-config.plan.md).
+This matrix documents the **new-only** configuration stack. **`step_config` in study manifests is removed** — see [`docs/plans/simplify-study-config.plan.md`](../plans/simplify-study-config.plan.md).
 
 Pipeline **topology** (stage order, IF branches) belongs in **DomainProgram** JSON. **Tunable tool parameters** belong in **profile `actionConfig`**, **site manifest**, or program **`with` / `stepOverride`** — not in `project_*.json`.
 
@@ -149,5 +149,5 @@ See also [action parameter contract](action-parameter-contract.md).
 
 - [DomainProgram language](domain-program-language.md) — profiles, site, instance context
 - [Action parameter contract](action-parameter-contract.md) — per-action wire vs resolvedConfig boundary
-- [Architecture review](architecture/index.md) — layer map and migration status
-- [Simplify study config plan](plans/simplify-study-config.plan.md) — phased implementation
+- [Architecture review](../architecture/index.md) — layer map and migration status
+- [Simplify study config plan](../plans/simplify-study-config.plan.md) — phased implementation

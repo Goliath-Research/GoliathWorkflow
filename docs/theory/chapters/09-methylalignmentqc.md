@@ -8,7 +8,7 @@
 | `linear` / `pangenome` | Parabricks | Clara Parabricks `fq2bam_meth` / `giraffe` + Picard tables |
 | `pangenome_wgbs` | methylGrapher | native-Mojo methylGrapher Align provenance + QC BAM / GAF (+ optional Picard enrichment) |
 
-Operator guide: [Usage ch.03 — Sample Prep and QC](../usage/03-sample-prep-and-qc.md). Implementation: [Sample preparation flow](../implementation/sample-preparation-flow.md). Family detection: `methyl_alignment_qc/core/metrics_family.py`.
+Operator guide: [Usage ch.03 — Sample Prep and QC](../../usage/03-sample-prep-and-qc.md). Implementation: [Sample preparation flow](../../implementation/sample-preparation-flow.md). Family detection: `methyl_alignment_qc/core/metrics_family.py`.
 
 The package is deterministic: parsing, normalization, threshold checks, and cycle-quality screening — not new statistical inference on methylation.
 
@@ -73,7 +73,7 @@ No cycle metrics by default → screening disposition `NO_CYCLE_METRICS` / `USE_
 
 Beyond family-specific sequencing/library checks, `alignment_derived_qc.py` derives **mapping rate**, **secondary/supplementary rate**, and **GC coverage uniformity** from Picard dedup and (when present) GC bias tables. When `alignment_guardrails.flagstat_enabled` is true, `bam_flagstat.py` runs `samtools flagstat` on the aligned BAM and gates **properly paired rate** and supplementary alignments.
 
-Analyte profiles enable these guardrails by default for `cfdna` and `buffy_coat`. See the [sample preparation flow](../implementation/sample-preparation-flow.md) for thresholds and operator guidance.
+Analyte profiles enable these guardrails by default for `cfdna` and `buffy_coat`. See the [sample preparation flow](../../implementation/sample-preparation-flow.md) for thresholds and operator guidance.
 
 ## Export JSON (V2)
 
@@ -133,6 +133,6 @@ Describe `methylalignmentqc` as:
 ## Related
 
 - Package usage: `packages/methylalignmentqc/docs/USAGE.md`
-- Implementation guide (remediation, extraction filtering, cfDNA fragmentomics): [Sample preparation flow](../implementation/sample-preparation-flow.md)
-- Mode-aware QC plan: [`docs/plans/pangenome-wgbs-methyl-qc.plan.md`](../plans/pangenome-wgbs-methyl-qc.plan.md)
+- Implementation guide (remediation, extraction filtering, cfDNA fragmentomics): [Sample preparation flow](../../implementation/sample-preparation-flow.md)
+- Mode-aware QC plan: [`docs/plans/pangenome-wgbs-methyl-qc.plan.md`](../../plans/pangenome-wgbs-methyl-qc.plan.md)
 - Extraction QC (downstream gate): [§ methylextractionqc](09a-methylextractionqc.md#sec-methylextractionqc)
