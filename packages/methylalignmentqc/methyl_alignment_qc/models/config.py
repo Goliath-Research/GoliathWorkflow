@@ -164,7 +164,11 @@ class AlignmentGuardrailsConfig(BaseModel):
         default=0.90,
         ge=0.0,
         le=1.0,
-        description="Fail when flagstat properly_paired_rate is below this.",
+        description=(
+            "Fail when flagstat properly_paired_rate is below this (linear / "
+            "Parabricks BAMs). Not applied to methylgrapher_wgbs QC BAMs — "
+            "surjected Mojo emits historically lack proper-pair bits."
+        ),
     )
     max_supplementary_rate_flagstat: Optional[float] = Field(
         default=0.02,

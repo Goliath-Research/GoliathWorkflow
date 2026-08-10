@@ -692,12 +692,28 @@ def build_sample_qc_v2_dict(
         payload["alignment_stats"] = stats
 
     if align_cfg.enabled:
-        apply_alignment_derived_guardrails(payload["guardrails"], payload, align_cfg)
-        if align_cfg.flagstat_enabled:
+        # Pangenome WGBS QC BAMs are C2T-surjected Mojo emits: linear PE
+        # properly_paired_rate and min_mapping_rate falsely fail (historic FLAG=0 /
+        # missing 0x2; mapping floors belong on wgbs_min_mapped_rate). Keep
+        # secondary/GC/supplementary votes when Picard tables exist.
+        derived_cfg = align_cfg
+        flagstat_cfg = align_cfg
+        if family == MetricsFamily.METHYLGRAPHER_WGBS:
+            derived_cfg = align_cfg.model_copy(
+                update={
+                    "min_mapping_rate": None,
+                    "min_properly_paired_rate": None,
+                }
+            )
+            flagstat_cfg = derived_cfg
+        apply_alignment_derived_guardrails(
+            payload["guardrails"], payload, derived_cfg
+        )
+        if flagstat_cfg.flagstat_enabled:
             apply_flagstat_guardrails(
                 payload["guardrails"],
                 flagstat_metrics,
-                align_cfg,
+                flagstat_cfg,
                 error=flagstat_error,
             )
 

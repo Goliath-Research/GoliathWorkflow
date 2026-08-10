@@ -38,7 +38,9 @@ def parse_flagstat_text(text: str) -> Dict[str, int]:
             counts["supplementary_reads"] = total
         elif label == "duplicates":
             counts["duplicate_reads"] = total
-        elif label.endswith("mapped"):
+        # Exact "mapped" / "mapped (...%)" only — do not match
+        # "with itself and mate mapped" (endswith "mapped").
+        elif label == "mapped" or label.startswith("mapped ("):
             counts["mapped_reads"] = total
         elif "properly paired" in label:
             counts["properly_paired_reads"] = total
@@ -48,6 +50,8 @@ def parse_flagstat_text(text: str) -> Dict[str, int]:
             counts["read2_reads"] = total
         elif "singletons" in label:
             counts["singleton_reads"] = total
+        elif "with itself and mate mapped" in label:
+            counts["mate_mapped_reads"] = total
     return counts
 
 

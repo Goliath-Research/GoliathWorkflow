@@ -1832,6 +1832,12 @@ BEGIN
 
     DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
 
+    -- Bind action outputs into FOREACH/sample scope (qcPass, qcPath, …).
+    EXEC wf.wf_apply_output_bindings
+        @action_execution_id = @action_execution_id,
+        @result_code = @result_code,
+        @output_json = @oj;
+
     IF @parent IS NULL
     BEGIN
         UPDATE wf.workflow_instance SET status = N'COMPLETED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;

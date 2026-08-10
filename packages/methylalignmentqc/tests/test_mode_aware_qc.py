@@ -118,6 +118,48 @@ def test_build_qc_wgbs_path_no_parabricks_hard_fail(tmp_path: Path):
     assert screening.get("quality_pattern") == "NO_CYCLE_METRICS"
 
 
+def test_build_qc_wgbs_ignores_linear_properly_paired(tmp_path: Path, monkeypatch) -> None:
+    """Mojo QC BAMs often report properly_paired_rate=0; must not block extract."""
+    from methyl_alignment_qc.models.sample_qc import AlignmentFlagstat
+
+    sample = "HBCST-PAIR0"
+    d = _setup_wgbs_sample(tmp_path, sample)
+    # Preflight accepts gzip magic; content unused because flagstat is mocked.
+    (d / f"{sample}.bam").write_bytes(b"\x1f\x8b" + b"\x00" * 64)
+
+    def _fake_flagstat(sample_dir, sid, force=False):
+        return AlignmentFlagstat(
+            total_reads=1000,
+            mapped_reads=1000,
+            properly_paired_reads=0,
+            supplementary_reads=0,
+            secondary_reads=0,
+            duplicate_reads=0,
+            mapped_rate=1.0,
+            properly_paired_rate=0.0,
+            supplementary_rate=0.0,
+        )
+
+    monkeypatch.setattr("methyl_alignment_qc.core.writer.run_flagstat", _fake_flagstat)
+    payload = build_sample_qc_v2_dict(
+        d,
+        sample_id=sample,
+        validate_schema=True,
+        alignment_mode="pangenome_wgbs",
+        alignment_guardrails=AlignmentGuardrailsConfig(
+            enabled=True,
+            flagstat_enabled=True,
+            min_properly_paired_rate=0.80,
+            min_mapping_rate=0.98,
+        ),
+        cycle_screening=CycleScreeningConfig(enabled=True),
+    )
+    gr = payload["guardrails"]
+    assert gr["overall_pass"] is True
+    assert "properly_paired_rate" not in (gr.get("details") or {})
+    assert "mapping_rate" not in (gr.get("details") or {})
+
+
 def test_build_qc_wgbs_fails_when_gaf_missing(tmp_path: Path):
     sample = "HBCST-FAIL"
     d = _setup_wgbs_sample(tmp_path, sample)

@@ -5,6 +5,10 @@
   @output_json NVARCHAR(MAX) from the base MethylPipeline bundle.
 
   Prerequisites: wf schema with json columns on workflow_instance / node_execution.
+
+  NOTE: This script redefines wf.wf_engine_on_action_complete. It MUST keep
+  wf.wf_apply_output_bindings (qcPass / qcPath scope) and must not fail the
+  whole instance on a single action failure (sibling FOREACH claimability).
 */
 
 SET ANSI_NULLS ON;
@@ -22,6 +26,10 @@ BEGIN
     DECLARE @inst BIGINT;
     DECLARE @wn BIGINT;
     DECLARE @parent BIGINT;
+    DECLARE @oj NVARCHAR(MAX) = CASE
+        WHEN @output_json IS NULL THEN NULL
+        ELSE CONVERT(NVARCHAR(MAX), @output_json)
+    END;
 
     SELECT @inst = workflow_instance_id, @wn = workflow_node_id, @parent = parent_node_execution_id
     FROM wf.node_execution WHERE id = @action_execution_id;
@@ -38,10 +46,7 @@ BEGIN
 
         DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
 
-        UPDATE wf.workflow_instance
-        SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME()
-        WHERE id = @inst;
-
+        -- Node failed; leave instance RUNNING so sibling FOREACH tasks remain claimable.
         RETURN;
     END
 
@@ -53,6 +58,12 @@ BEGIN
     WHERE id = @action_execution_id;
 
     DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
+
+    -- Bind action outputs into FOREACH/sample scope (qcPass, qcPath, …).
+    EXEC wf.wf_apply_output_bindings
+        @action_execution_id = @action_execution_id,
+        @result_code = @result_code,
+        @output_json = @oj;
 
     IF @parent IS NULL
     BEGIN
