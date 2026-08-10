@@ -1003,7 +1003,12 @@ def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
                 )
     eng_dir = overlay / "engine"
     if eng_dir.is_dir():
-        for name in ("mcall.py", "grch38_offsets.py", "qc_sam_state.py"):
+        for name in (
+            "mcall.py",
+            "grch38_offsets.py",
+            "qc_sam_state.py",
+            "qc_sam_emit.py",
+        ):
             p = eng_dir / name
             if p.is_file():
                 docker_cmd.extend(
