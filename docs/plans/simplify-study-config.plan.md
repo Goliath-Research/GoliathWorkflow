@@ -126,7 +126,7 @@ Update [`pipeline_profiles.py`](../../workflow_engine/domain/pipeline_profiles.p
 - Add [`schemas/config/site_manifest.schema.json`](../../schemas/config/site_manifest.schema.json).
 - Add [`schemas/config/profile.schema.json`](../../schemas/config/profile.schema.json) with `actionConfig` (optional JSON Schema export for editor).
 - Rewrite [docs/reference/domain-program-language.md](../reference/domain-program-language.md), [docs/reference/config-parameter-matrix.md](../reference/config-parameter-matrix.md), [docs/architecture/index.md](../architecture/index.md) — **new-only** config model.
-- Slim manifest target ~60–80 lines ([project_Healthy_vs_PCa1-5-CG.json](tools/methyl-config-editor/configs/project_Healthy_vs_PCa1-5-CG.json) reference).
+- Slim manifest target ~60–80 lines ([project_Healthy_vs_PCa1-5-CG.json](../../tools/methyl-config-editor/configs/project_Healthy_vs_PCa1-5-CG.json) reference).
 
 ---
 
@@ -151,7 +151,7 @@ Update [`pipeline_profiles.py`](../../workflow_engine/domain/pipeline_profiles.p
 **Goal:** All tunable parameters live in versioned profiles, not project JSON.
 
 - Add profiles: `staged_ovr_mc`, `staged_full_lifecycle`, `staged_progression_interpretation`, `buffy_mc_gene_fc`.
-- Migrate content from current bloated project `step_config` blocks into these profiles + [site_grch38.example.json](tools/methyl-config-editor/configs/site_grch38.example.json).
+- Migrate content from current bloated project `step_config` blocks into these profiles + [site_grch38.example.json](../../tools/methyl-config-editor/configs/site_grch38.example.json).
 - `runProgressionAnalysis` scope flag for IF around `pipeline.progression`.
 - Update all existing [workflow_engine/domain/profiles/*.profile.json](../../workflow_engine/domain/profiles/) to use `actionConfig` instead of `step_config_overrides`.
 
@@ -174,9 +174,9 @@ Update [`pipeline_profiles.py`](../../workflow_engine/domain/pipeline_profiles.p
 **Goal:** Codebase has zero `step_config` references in runtime paths.
 
 - Remove from [`ProgressionStepConfig`](../../packages/methyldiseaseprogression/methyl_disease_progression/config.py) / progression runner: read progression params from **`resolvedConfig`** passed by workflow; delete `auto_gleason`, `ordered_disease_groups`, project-file progression block.
-- Delete [`migrate_detection_config.py`](../../packages/methylvalidation/methyl_validation/utils/migrate_detection_config.py) and [`migrate_step_config`](../../packages/methylvalidation/methyl_validation/utils/migrate_detection_config.py) call sites.
+- Delete `migrate_detection_config.py` / `migrate_step_config` (removed from the tree; historical migration helper) and remaining call sites.
 - Remove legacy orchestration flags: `run_mapper_and_enricher`, `skip_enricher`, `validator` alias paths.
-- Update **all** tests, smoke project JSONs under `workflow_engine/domain/checks/`, [tools/methyl-config-editor/configs/](tools/methyl-config-editor/configs/), [`.smoke/`](.smoke/).
+- Update **all** tests, smoke project JSONs under `workflow_engine/domain/checks/`, [tools/methyl-config-editor/configs/](../../tools/methyl-config-editor/configs/), [`.smoke/`](../../.smoke/).
 - CI: fail if any committed `project*.json` contains `"step_config"`.
 
 ---
@@ -200,7 +200,7 @@ Script [`scripts/migrate_project_config.py`](../../scripts/migrate_project_confi
 
 ## Phase 7 — Config editor and manual
 
-- [methyl-config-editor](tools/methyl-config-editor/): Study | Profile | Site | Program picker; **no step_config editor**.
+- [methyl-config-editor](../../tools/methyl-config-editor/): Study | Profile | Site | Program picker; **no step_config editor**.
 - Usage manual + theory chapters: new-only authoring path; remove step_config tables.
 
 ---

@@ -51,7 +51,7 @@ Updated [`docs/architecture/end-to-end-workflow.md`](../architecture/end-to-end-
 
 ## 2. Theory Part I: methyldeconv chapter
 
-Added [`docs/theory/chapters/07a-methyldeconv.qmd`](../theory/chapters/07a-methyldeconv.md) (`@sec-methyldeconv`), after mapper and before enricher. Covers the Houseman constrained-projection QP, marker extraction, the HiTIMED path-product tree, analyte-driven roots, config knobs, and category/reference-basis caveats. Wired into [`_quarto.yml`](../theory/_quarto.yml), both package-map tables in [`index.qmd`](../theory/index.md), and [`README.md`](../theory/README.md). Added a reference-basis caveat and deprecation-snapshot row in [`10-limitations-and-open-questions.qmd`](../theory/chapters/10-limitations-and-open-questions.md).
+Added [`docs/theory/chapters/07a-methyldeconv.qmd`](../theory/chapters/07a-methyldeconv.md) (`@sec-methyldeconv`), after mapper and before enricher. Covers the Houseman constrained-projection QP, marker extraction, the HiTIMED path-product tree, analyte-driven roots, config knobs, and category/reference-basis caveats. Wired into the theory book (historically `_quarto.yml`; now [`mkdocs.yml`](../../mkdocs.yml)), both package-map tables in [`index.qmd`](../theory/index.md), and [`README.md`](../theory/README.md). Added a reference-basis caveat and deprecation-snapshot row in [`10-limitations-and-open-questions.qmd`](../theory/chapters/10-limitations-and-open-questions.md).
 
 ## 3. Theory Part II: analyte action inventory
 

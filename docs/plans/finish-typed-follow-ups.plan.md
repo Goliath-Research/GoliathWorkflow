@@ -54,7 +54,7 @@ Infrastructure is already in place:
 - Worker collectors: [`ManifestFirstCollector`](../../workers/methyl_worker/collectors.py) reads manifests first, falls back to legacy scrapers
 - **Done:** `pipeline.dmp_select`, `pipeline.mapper` write manifests; worker wired with manifest-first collectors
 - **Pending:** `pipeline.detector`, `pipeline.centroid` have legacy collectors only; `pipeline.enricher` uses [`GenericPipelineCollector`](../../workers/methyl_worker/collectors.py) (stdout-only)
-- **Pending:** ~17 in-process handlers in [`handlers.py`](../../workers/methyl_worker/handlers.py) still return `Dict[str, Any]`; [`InProcessAction`](../../workers/methyl_worker/actions/base.py) accepts dict or `BaseModel` and runs `finalize_output`
+- **Pending:** ~17 in-process handlers in [`handlers.py`](../../workers/methyl_worker/handlers/) still return `Dict[str, Any]`; [`InProcessAction`](../../workers/methyl_worker/actions/base.py) accepts dict or `BaseModel` and runs `finalize_output`
 
 ```mermaid
 flowchart LR
@@ -164,7 +164,7 @@ Add `EnricherLegacyCollector` in [`collectors.py`](../../workers/methyl_worker/c
 
 ### Pattern (copy from completed handlers)
 
-Reference: [`_handle_validation_stability`](../../workers/methyl_worker/handlers.py) returns `ValidationStabilityOutput`; [`_handle_methyl_qc`](../../workers/methyl_worker/handlers.py) returns `MethylQcTaskOutput` with nested `GuardrailsOutput`.
+Reference: [`_handle_validation_stability`](../../workers/methyl_worker/handlers/validation.py) returns `ValidationStabilityOutput`; [`_handle_methyl_qc`](../../workers/methyl_worker/handlers/sample_prep.py) returns `MethylQcTaskOutput` with nested `GuardrailsOutput`.
 
 For each remaining handler:
 

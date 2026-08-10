@@ -48,11 +48,11 @@ The worker contract *looks* typed (catalog → Pydantic schemas → JSON Schema 
 
 | Layer | Today | Why observability is lost |
 |-------|--------|---------------------------|
-| Handler boundary | `HandlerResult = Dict[str, Any]` in [`workers/methyl_worker/actions/base.py`](../../workers/methyl_worker/actions/base.py) and [`handlers.py`](../../workers/methyl_worker/handlers.py) | No compile-time or runtime guarantee on shape |
-| 8 pipeline CLIs | Share [`PipelineCliTaskOutput`](../../workers/methyl_worker/task_models.py) (`status`, `tool`, `stdout_tail`, `extra="allow"`) | Success submits almost nothing; [`pipeline_centroid.output.schema.json`](../../schemas/tasks/pipeline_centroid.output.schema.json) allows any extra field |
+| Handler boundary | `HandlerResult = Dict[str, Any]` in [`workers/methyl_worker/actions/base.py`](../../workers/methyl_worker/actions/base.py) and [`handlers.py`](../../workers/methyl_worker/handlers/) | No compile-time or runtime guarantee on shape |
+| 8 pipeline CLIs | Share [`PipelineCliTaskOutput`](../../workers/methyl_worker/task_models/) (`status`, `tool`, `stdout_tail`, `extra="allow"`) | Success submits almost nothing; [`pipeline_centroid.output.schema.json`](../../schemas/tasks/pipeline_centroid.output.schema.json) allows any extra field |
 | CLI subprocess | [`CliAction.execute`](../../workers/methyl_worker/actions/base.py) returns generic dict after exit 0 | Core library already computed rich results but CLI only prints them (e.g. [`run_dmp_selection`](../../packages/methyldmpselect/methyl_dmp_select/core/runner.py) returns audit dict; [`DMPMapper.run`](../../packages/methylmapper/methyl_mapper/mapper.py) returns counts) |
-| `result_code` | Worker always submits `0` or `-1` ([`runner.py`](../../workers/methyl_worker/runner.py)) | Engine supports `0..N` for IF/SWITCH via [`wf_try_task_result_code`](../../workflow_engine/sql/MethylPipelineDB_Script.sql), but actions never populate meaningful codes |
-| Validation actions | [`ValidationTaskOutput`](../../workers/methyl_worker/task_models.py) with `summary: Dict[str, Any]` | Counts/paths stay opaque blobs |
+| `result_code` | Worker always submits `0` or `-1` ([`runner.py`](../../workers/methyl_worker/runner.py)) | Engine supports `0..N` for IF/SWITCH via [`wf_try_task_result_code`](../../workflow_engine/sql_mssql/MethylPipelineDB_Script.sql), but actions never populate meaningful codes |
+| Validation actions | [`ValidationTaskOutput`](../../workers/methyl_worker/task_models/) with `summary: Dict[str, Any]` | Counts/paths stay opaque blobs |
 
 **Good partial precedent:** [`split_detector_task_models.py`](../../workers/methyl_worker/split_detector_task_models.py) (`extra="forbid"`) + worker adapters that scrape `/work` audit files ([`dmp_select.py`](../../workers/methyl_worker/actions/dmp_select.py)). Sample prep uses [`sample_prep_log.jsonl`](../../workers/methyl_worker/sample_prep_log.py) for per-action traceability.
 
@@ -194,7 +194,7 @@ Add per-action modules mirroring [`split_detector_task_models.py`](../../workers
 
 ### 3. Tighten validation actions
 
-Replace shared loose [`ValidationTaskOutput`](../../workers/methyl_worker/task_models.py) with one output model per validation action (e.g. `ValidationStabilityOutput` with typed stability counts, tier breakdown, output paths — sourced from [`run_stability_analysis`](../../packages/methylvalidation/methyl_validation/stability.py) return value, not `summary: dict`).
+Replace shared loose [`ValidationTaskOutput`](../../workers/methyl_worker/task_models/) with one output model per validation action (e.g. `ValidationStabilityOutput` with typed stability counts, tier breakdown, output paths — sourced from [`run_stability_analysis`](../../packages/methylvalidation/methyl_validation/stability.py) return value, not `summary: dict`).
 
 ### 4. Tighten sample prep nested dicts
 

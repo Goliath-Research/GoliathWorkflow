@@ -145,9 +145,9 @@ Internal helpers that today accept `project: Dict[str, Any]` for raw `project.js
 
 ## 2. Fix validation.plan_iterations handler output (critical)
 
-**File:** [`handlers.py`](../../workers/methyl_worker/handlers.py)
+**File:** [`handlers/context.py`](../../workers/methyl_worker/handlers/context.py) (historically monolith `handlers.py`)
 
-Today `_handle_validation_plan_iterations` maps iterations through `_normalize_validation_iteration_payload` into slim [`ValidationIterationRef`](../../workers/methyl_worker/task_models/validation_models.py), **dropping** `centroidGroups`, `centroid1Dir`, `taskConfig`, etc. That breaks cold-start workflows where `scope_bindings` populate `iterations` from ACTION output (pre-planned instances via [`study_lifecycle.py`](../../workflow_engine/rest/study_lifecycle.py) work only because full context is written before start).
+Today `_handle_validation_plan_iterations` maps iterations through `_normalize_validation_iteration_payload` into slim [`ValidationIterationRef`](../../workers/methyl_worker/task_models/validation_models.py), **dropping** `centroidGroups`, `centroid1Dir`, `taskConfig`, etc. That breaks cold-start workflows where `scope_bindings` populate `iterations` from ACTION output (pre-planned instances via [`study_lifecycle.py`](../../workflow_engine/ops/study_lifecycle.py) work only because full context is written before start).
 
 **Fix:**
 - Extend `ValidationPlanTaskOutput` with `centroidSeedGroups: List[CentroidSeedGroup]` and `iterations: List[ValidationPlannedIteration]` (strict models; `extra="forbid"`).
@@ -239,19 +239,19 @@ Both databases are **reachable via MCP** in the current environment. Use MCP for
 | Role | Azure SQL | PostgreSQL |
 |------|-----------|------------|
 | MCP server | `user-azure-sql-dev` — `mcp_execute_query`, `mcp_paginated_query`, `mcp_discover_tables`, … | Operator PostgreSQL MCP (e.g. `epimethyl` / `postgres_dba` profile) |
-| Bulk catalog seed | [`seed_action_catalog.py`](../../workflow_engine/sql/seed_action_catalog.py) with `BACKEND_DB=mssql`, or `POST /v1/admin/catalog/seed` | Same script with `--dsn` / `POSTGRES_*`, or gateway admin seed |
+| Bulk catalog seed | [`seed_action_catalog.py`](../../workflow_engine/sql_mssql/seed_action_catalog.py) with `BACKEND_DB=mssql`, or `POST /v1/admin/catalog/seed` | Same script with `--dsn` / `POSTGRES_*`, or gateway admin seed |
 | Bulk workflow deploy | `POST /v1/workflows/definitions` / `check_pipeline.py --deploy` | Same gateway path (dialect-agnostic) |
 | Post-deploy verify | MCP `mcp_execute_query` | MCP SQL execute (parity queries below) |
 
 ### 6a. Action catalog + schemas (both DBs)
 
-**Write path:** [`workflow_engine/sql/seed_action_catalog.py`](../../workflow_engine/sql/seed_action_catalog.py) (idempotent upsert of all actions + schemas from `schemas/actions/catalog.json` and `schemas/tasks/`).
+**Write path:** [`workflow_engine/sql/seed_action_catalog.py`](../../workflow_engine/sql_mssql/seed_action_catalog.py) (idempotent upsert of all actions + schemas from `schemas/actions/catalog.json` and `schemas/tasks/`).
 
 ```bash
 source .venv/bin/activate
 methyl-export-task-schemas && methyl-export-action-catalog
-python workflow_engine/sql/seed_action_catalog.py          # Azure SQL (BACKEND_DB=mssql env)
-python workflow_engine/sql/seed_action_catalog.py --dsn …  # PostgreSQL
+python workflow_engine/sql_mssql/seed_action_catalog.py          # Azure SQL (BACKEND_DB=mssql env)
+python workflow_engine/sql_mssql/seed_action_catalog.py --dsn …  # PostgreSQL
 ```
 
 **Verify via MCP** (run on **both** DBs; compare row counts and key JSON paths):
@@ -330,11 +330,11 @@ Document MCP verification outcomes in the implementation PR / commit notes (whic
 
 No SQL migration. New runs get `centroidSeedGroups` via:
 
-- `POST /v1/studies/validation/start` ([`study_lifecycle.py`](../../workflow_engine/rest/study_lifecycle.py)), or
+- `POST /v1/studies/validation/start` ([`study_lifecycle.py`](../../workflow_engine/ops/study_lifecycle.py)), or
 - `POST /v1/validation/plan-iterations` + `wf_apply_validation_plan`, or
 - In-workflow `plan_iterations` ACTION (after handler fix).
 
-Update example: [`workflow_engine/sql/instance_context_examples/validation_mc.json`](../../workflow_engine/sql/instance_context_examples/validation_mc.json).
+Update example: [`workflow_engine/sql/instance_context_examples/validation_mc.json`](../../workflow_engine/sql_mssql/instance_context_examples/validation_mc.json).
 
 ## 7. Tests
 

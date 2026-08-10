@@ -81,7 +81,7 @@ flowchart TB
 
 ## 2. CI golden-fixture test per catalog action
 
-**Gap:** [`methyl-export-task-schemas --check`](../../workers/methyl_worker/task_schema_export.py) proves Pydantic → JSON Schema drift only. There is **no** committed example payload per action validated end-to-end. Worker tests exist per-handler but not catalog-wide. [`.github/workflows/db-parity.yml`](.github/workflows/db-parity.yml) does **not** run `pytest workers/tests/` today.
+**Gap:** [`methyl-export-task-schemas --check`](../../workers/methyl_worker/task_schema_export.py) proves Pydantic → JSON Schema drift only. There is **no** committed example payload per action validated end-to-end. Worker tests exist per-handler but not catalog-wide. [`.github/workflows/db-parity.yml`](../../.github/workflows/db-parity.yml) does **not** run `pytest workers/tests/` today.
 
 **Recommended approach (output-only goldens, not full handler runs):**
 
@@ -119,7 +119,7 @@ def append_action_run_log(mc_root, *, action, capability, result_code, inputs, o
     # same record shape as sample_prep_log: ts_utc, action, capability, result_code, inputs, outputs
 ```
 
-**Hook point (central, not per-handler):** in [`execute_task()`](../../workers/methyl_worker/handlers.py) after successful `ActionExecutionResult`, when `entry.category == "validation"` (from [`action_catalog.py`](../../workers/methyl_worker/action_catalog.py)):
+**Hook point (central, not per-handler):** in [`execute_task()`](../../workers/methyl_worker/handlers/dispatch.py) after successful `ActionExecutionResult`, when `entry.category == "validation"` (from [`action_catalog.py`](../../workers/methyl_worker/action_catalog.py)):
 
 1. Resolve log root via existing `_resolve_monte_carlo_runs_root(input_json)` (fallback: `input_json.runDir` parent).
 2. Append one JSONL line with trimmed `result.output.model_dump(mode="json")` in `outputs`.
@@ -142,7 +142,7 @@ def append_action_run_log(mc_root, *, action, capability, result_code, inputs, o
 1. Change handler signature to `(capability: str, action_name: str, input: BaseModel) -> BaseModel`.
 2. **`InProcessAction`:** pass `input_model` directly; remove `model_dump` on input path.
 3. **Per handler:** either use typed fields (`task.sampleDir`) or a single line `payload = input.model_dump(mode="json")` at the top for helpers that still expect dicts (`_resolve_monte_carlo_runs_root`, `run_fastp_trim`, archive helpers). Prefer typed access for new/edited code.
-4. Update [`_handle_stub_external`](../../workers/methyl_worker/handlers.py) and stub path in `execute_task`.
+4. Update [`_handle_stub_external`](../../workers/methyl_worker/handlers/stub.py) and stub path in `execute_task`.
 5. Narrow shared helpers to accept `Mapping[str, Any]` from `input.model_dump()` at call sites (minimal churn).
 
 **Do not change:** CLI `CliAction` (still uses dict for argv building); `validate_input()` stays the single validation gate.

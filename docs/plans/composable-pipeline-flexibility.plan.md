@@ -209,7 +209,7 @@ Low priority for discovery path (mapper globs by pattern). Add `domain_effects.o
 
 ### 4. Project config migration
 
-Run [migrate_detection_config.py](../../packages/methylvalidation/methyl_validation/utils/migrate_detection_config.py) on bundle projects:
+Run `migrate_detection_config.py` (removed from the tree; historical migration helper) on bundle projects:
 
 - [project_Buffy_healthy_vs_PCa.json](../../workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json)
 - [project_Healthy_vs_PCa1-5-CG.json](../../workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG.json)

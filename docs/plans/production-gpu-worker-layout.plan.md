@@ -261,7 +261,7 @@ From [`scripts/packages.list`](../../scripts/packages.list) + [`workers/pyprojec
 - All `packages/*` CLIs (`methyl-centroid`, `methyl-detector`, `methyl-validation`, …)
 - **`methyl-worker`** and in-process handlers (import monorepo packages — see [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md))
 
-Third-party stack from [`requirements-pipeline.txt`](requirements-pipeline.txt) + [`requirements-gpu-cuda12.txt`](requirements-gpu-cuda12.txt) (CuPy/cuDF for GPU centroid paths).
+Third-party stack from [`requirements-pipeline.txt`](../../requirements-pipeline.txt) + [`requirements-gpu-cuda12.txt`](../../requirements-gpu-cuda12.txt) (CuPy/cuDF for GPU centroid paths).
 
 ### Phase 1 — Shared storage wheelhouse (no git on workers)
 

@@ -62,7 +62,7 @@ So the split you described (engine primitives vs process-registered actions) is 
 | Coupling | Location | Would `fast_depends` help? | Better fix |
 |----------|----------|----------------------------|------------|
 | Growing `if action_name == …` for CLI subclasses | [`build_action_from_catalog`](../../workers/methyl_worker/actions/base.py) | No | Catalog field / registry: `action_class` or decorator map |
-| Monolithic string-named handlers | [`handlers.py`](../../workers/methyl_worker/handlers.py) (~1500 lines) | Marginally (inject `runtime`) | Split modules + registry keyed by catalog `in_process_handler` |
+| Monolithic string-named handlers | [`handlers.py`](../../workers/methyl_worker/handlers/) (~1500 lines) | Marginally (inject `runtime`) | Split modules + registry keyed by catalog `in_process_handler` |
 | Compiler special-cases centroid/detector templates | [`compiler.py`](../../workflow_engine/domain/compiler.py) `_action_template` | No | Catalog-driven template/binding rules (`domain_effects`, argv/template metadata) |
 | Hardcoded capability lists | [`capabilities.py`](../../workers/methyl_worker/capabilities.py) | No | Derive from catalog |
 | Adding an action touches many files | catalog + models + export + handler + seed | No | Scaffold from catalog metadata; keep explicit catalog (no silent entry-point discovery) |

@@ -50,29 +50,29 @@ isProject: false
 - Separate **definition layer** (templates) from **runtime layer** (instances + node executions).
 
 ## Proposed SQL Artifacts
-- `[sql/workflow_definition.sql](sql/workflow_definition.sql)`
+- `[sql/workflow_definition.sql](../../workflow_engine/sql_mssql/workflow_definition.sql)`
   - `workflow_def`, `workflow_version`
   - `workflow_node`
   - `workflow_edge` (parent-child + branch metadata)
   - `workflow_action` (action handler + payload schema reference)
   - `workflow_input_template` (JSON template payload per `ACTION` or control-flow node)
   - `workflow_input_binding` (optional explicit bindings: target_json_path, source_expr)
-- `[sql/workflow_runtime.sql](sql/workflow_runtime.sql)`
+- `[sql/workflow_runtime.sql](../../workflow_engine/sql_mssql/workflow_runtime.sql)`
   - `workflow_instance`
   - `node_execution` (status, attempt, started/ended, input_json, output_json, result_code)
   - `execution_context` (resolved key/value runtime variables for each node execution)
   - `instance_cursor` (optional accelerator for schedulers)
   - `task_lease` (worker lease/lock ownership, timeout, heartbeat)
   - `loop_state` (repeat/while iteration counters)
-- `[sql/workflow_worker_api.sql](sql/workflow_worker_api.sql)`
+- `[sql/workflow_worker_api.sql](../../workflow_engine/sql_mssql/workflow_worker_api.sql)`
   - `sp_worker_request_task` (atomically claim one runnable action for a worker)
   - `sp_worker_submit_result` (submit output JSON + integer result and advance workflow)
   - optional `sp_worker_heartbeat` / `sp_worker_fail_task` for long-running tasks and explicit failure reporting
-- `[sql/workflow_constraints_indexes.sql](sql/workflow_constraints_indexes.sql)`
+- `[sql/workflow_constraints_indexes.sql](../../workflow_engine/sql_mssql/workflow_constraints_indexes.sql)`
   - check constraints per `node_type`
   - unique constraints for branch validity (e.g., one ELSE edge, unique SWITCH case per parent)
   - indexes for scheduler polling and child traversal
-- `[sql/workflow_seed_examples.sql](sql/workflow_seed_examples.sql)`
+- `[sql/workflow_seed_examples.sql](../../workflow_engine/sql_mssql/workflow_seed_examples.sql)`
   - one end-to-end sample workflow using sequence + parallel + if/switch + while/repeat
 
 ## Control-Flow Semantics Mapping

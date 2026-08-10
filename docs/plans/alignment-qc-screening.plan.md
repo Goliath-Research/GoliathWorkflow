@@ -246,7 +246,7 @@ Extend [`scripts/compare_alignment_qc_groups.py`](../../scripts/compare_alignmen
 | Piece | Location |
 |-------|----------|
 | Runner | [`workers/methyl_worker/fastq_trim_runner.py`](../../workers/methyl_worker/fastq_trim_runner.py) — invoke `fastp` |
-| Handler | [`handlers.py`](../../workers/methyl_worker/handlers.py) `_handle_trim_fastq` |
+| Handler | [`handlers/sample_prep.py`](../../workers/methyl_worker/handlers/sample_prep.py) `_handle_trim_fastq` |
 | Catalog | [`action_catalog.py`](../../workers/methyl_worker/action_catalog.py) — `sample.trim_fastq` / `sample.trim-fastq` |
 | Schema | `schemas/tasks/sample.trim_fastq.*.json` |
 
@@ -280,7 +280,7 @@ Extend [`parabricks_runner.py`](../../workers/methyl_worker/parabricks_runner.py
 
 ### 4a. Reorder `delete_fastqs` (prerequisite for trimming)
 
-**Change the canonical step order** in [`sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (legacy SQL seed [`workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql`](../../workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql) is deprecated):
+**Change the canonical step order** in [`sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (legacy SQL seed [`workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql`](../../workflow_engine/sql_mssql/deprecated/wf_sample_prep_pipeline_seed.sql) is deprecated):
 
 | Before (current) | After (required) |
 |------------------|------------------|
@@ -349,7 +349,7 @@ Deploy via [`scripts/deploy_workflow_definitions.sh`](../../scripts/deploy_workf
 
 ### 4d. Handler / domain updates
 
-- [`handlers.py`](../../workers/methyl_worker/handlers.py) `_handle_methyl_qc`: pass attempt/reason into writer; return `screening` + `qcHistory` summary in output for bindings
+- [`handlers/sample_prep.py`](../../workers/methyl_worker/handlers/sample_prep.py) `_handle_methyl_qc`: pass attempt/reason into writer; return `screening` + `qcHistory` summary in output for bindings
 - [`methyl_domain/helpers.py`](../../packages/methyldomain/methyl_domain/helpers.py): map disposition + latest `qc_history` entry into `AlignmentQcRef.guardrails`
 - [`sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md): document FASTQ retention policy, trim + remediation branch, **`sample_prep_log.jsonl` contract**, and **`qc_history` on retry**
 
