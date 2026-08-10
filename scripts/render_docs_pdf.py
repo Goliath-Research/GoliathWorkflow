@@ -95,7 +95,74 @@ async () => {
         document.head.appendChild(s);
       });
     }
-    mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' });
+    // Compact layout for print: natural SVG size (not 100% page width), then fit.
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'loose',
+      themeVariables: {
+        fontSize: '12px',
+        fontFamily: 'Helvetica, Arial, sans-serif',
+      },
+      flowchart: {
+        useMaxWidth: false,
+        htmlLabels: true,
+        nodeSpacing: 18,
+        rankSpacing: 28,
+        padding: 8,
+        curve: 'basis',
+      },
+      sequence: {
+        useMaxWidth: false,
+        actorMargin: 24,
+        messageMargin: 24,
+        mirrorActors: false,
+      },
+    });
+
+    // A4 content ≈ 182×265mm. Cap diagrams so a figure stays on one page and
+    // does not expand to full page width (Mermaid useMaxWidth default).
+    const MAX_W_PX = 480;
+    const MAX_H_PX = 320;
+    const MIN_SCALE = 0.55;
+
+    const fitSvg = (svg) => {
+      if (!svg) return;
+      let vw = 0, vh = 0;
+      const vb = svg.getAttribute('viewBox');
+      if (vb) {
+        const p = vb.trim().split(/[\s,]+/).map(Number);
+        if (p.length === 4 && p[2] > 0 && p[3] > 0) {
+          vw = p[2];
+          vh = p[3];
+        }
+      }
+      if (!vw || !vh) {
+        try {
+          const bb = svg.getBBox();
+          vw = bb.width || 1;
+          vh = bb.height || 1;
+          svg.setAttribute('viewBox', `${bb.x} ${bb.y} ${vw} ${vh}`);
+        } catch (_) {
+          vw = parseFloat(svg.getAttribute('width')) || MAX_W_PX;
+          vh = parseFloat(svg.getAttribute('height')) || MAX_H_PX;
+        }
+      }
+      let scale = Math.min(MAX_W_PX / vw, MAX_H_PX / vh, 1);
+      // Ultra-wide strips: avoid micro-text; rely on max-width instead.
+      if (vw / vh > 3.2 && scale < MIN_SCALE) scale = MIN_SCALE;
+      const w = Math.max(1, Math.round(vw * scale));
+      const h = Math.max(1, Math.round(vh * scale));
+      svg.setAttribute('width', String(w));
+      svg.setAttribute('height', String(h));
+      svg.style.cssText = [
+        `width:${w}px`,
+        `height:${h}px`,
+        'max-width:100%',
+        'max-height:85mm',
+        'display:block',
+        'margin:0.4rem auto',
+      ].join(';');
+    };
 
     for (let i = 0; i < hosts.length; i++) {
       const host = hosts[i];
@@ -107,6 +174,8 @@ async () => {
         const wrap = document.createElement('div');
         wrap.className = 'mermaid pdf-mermaid-light';
         wrap.innerHTML = svg;
+        const el = wrap.querySelector('svg');
+        fitSvg(el);
         host.replaceWith(wrap);
         mermaidCount++;
       } catch (err) {
@@ -179,15 +248,27 @@ PRINT_CSS = """
 }
 .pdf-mermaid-light {
   overflow: visible !important;
+  text-align: center !important;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+  margin: 0.6rem auto !important;
+  max-width: 100% !important;
 }
 .pdf-mermaid-light svg {
   max-width: 100% !important;
+  max-height: 85mm !important;
   height: auto !important;
+  display: block !important;
+  margin: 0 auto !important;
 }
 @media print {
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+  .pdf-mermaid-light {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }
 """

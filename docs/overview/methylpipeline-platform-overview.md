@@ -97,6 +97,7 @@ What a team cannot honestly claim without more work:
 - that feasibility prostate packages in the evidence index are claim-ready.
 
 ```mermaid
+%%{init: {"flowchart": {"htmlLabels": true, "nodeSpacing": 12, "rankSpacing": 22}}}%%
 flowchart TB
   users["Authors / operators / reviewers"]
   cfg["Site + profile + study + DomainProgram"]

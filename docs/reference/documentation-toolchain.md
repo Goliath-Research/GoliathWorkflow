@@ -10,7 +10,8 @@
 | **All site docs** | Plain Markdown (`.md`) | `mkdocs build` → portable `site/` |
 | **Theory math** | `$…$` / `$$…$$` + MathJax | Rendered in HTML; PDF via Playwright print |
 | **Diagrams** | Fenced ` ```mermaid ` (dynamic JS) | Native in Material; GitHub-native too |
-| **PDF** | Playwright print of built HTML (HTTP + Mermaid flattened out of closed shadow DOM) | `make docs-pdf` → `site-pdf/MethylPipeline-Documentation.pdf` |
+| **PDF** | Playwright print of built HTML (HTTP + Mermaid flattened out of closed shadow DOM, scale-to-fit ≤ ~½ page) | `make docs-pdf` → `site-pdf/MethylPipeline-Documentation.pdf` |
+| **Static diagram PNGs** (optional) | `docs/diagrams/src/*.mmd` → `docs/diagrams/out/*` via `scripts/render_diagrams.sh` | Marp / offline only — not preferred for the MkDocs PDF path |
 | **Customer pack** | Nav subset | `mkdocs build -f mkdocs.customer.yml` |
 | **Cursor canvases** | `.canvas.tsx` in `docs/canvas/` | IDE hubs; site links to [`canvas/README.md`](../canvas/README.md) (sync + open in Cursor) |
 | **Marp decks** | `docs/presentations/` | Optional pre-rendered PNG from `docs/diagrams/out/` |
@@ -78,7 +79,7 @@ On docs changes:
 3. `bash scripts/check_doc_freshness.sh`
 4. `python scripts/check_windows_paths.py`
 5. Optional: `bash scripts/render_diagrams.sh --check` when shared Marp diagram sources change
-6. Release: `bash scripts/build_docs_pdf.sh` (Playwright HTML→PDF)
+6. Release: `bash scripts/build_docs_pdf.sh` (Playwright HTML→PDF; Mermaid scale-to-fit in `scripts/render_docs_pdf.py`)
 
 ## Related
 
