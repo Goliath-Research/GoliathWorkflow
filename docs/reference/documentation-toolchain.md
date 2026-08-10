@@ -10,7 +10,7 @@
 | **All site docs** | Plain Markdown (`.md`) | `mkdocs build` → portable `site/` |
 | **Theory math** | `$…$` / `$$…$$` + MathJax | Rendered in HTML; PDF via Playwright print |
 | **Diagrams** | Fenced ` ```mermaid ` (dynamic JS) | Native in Material; GitHub-native too |
-| **PDF** | Playwright print of built HTML | `make docs-pdf` → `site-pdf/MethylPipeline-Documentation.pdf` |
+| **PDF** | Playwright print of built HTML (HTTP + Mermaid flattened out of closed shadow DOM) | `make docs-pdf` → `site-pdf/MethylPipeline-Documentation.pdf` |
 | **Customer pack** | Nav subset | `mkdocs build -f mkdocs.customer.yml` |
 | **Cursor canvases** | `.canvas.tsx` in `docs/canvas/` | IDE hubs; site links to [`canvas/README.md`](../canvas/README.md) (sync + open in Cursor) |
 | **Marp decks** | `docs/presentations/` | Optional pre-rendered PNG from `docs/diagrams/out/` |
