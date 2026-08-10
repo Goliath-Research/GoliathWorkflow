@@ -127,8 +127,23 @@ else
   run azcmagent connect "${connect_args[@]}"
 fi
 
+# Prefer azcmagent (always present post-connect); fall back to az CLI.
 resource_id=""
-if command -v az >/dev/null 2>&1; then
+machine_name_resolved="$MACHINE_NAME"
+resource_group_resolved="$RESOURCE_GROUP"
+if command -v azcmagent >/dev/null 2>&1; then
+  eval "$(azcmagent show -j 2>/dev/null | python3 -c '
+import json, sys, shlex
+d = json.load(sys.stdin)
+rid = d.get("resourceId") or ""
+name = d.get("resourceName") or ""
+rg = d.get("resourceGroup") or ""
+print("resource_id=" + shlex.quote(rid))
+print("machine_name_resolved=" + shlex.quote(name or "'"$MACHINE_NAME"'"))
+print("resource_group_resolved=" + shlex.quote(rg or "'"$RESOURCE_GROUP"'"))
+' 2>/dev/null || true)"
+fi
+if [[ -z "$resource_id" ]] && command -v az >/dev/null 2>&1; then
   resource_id="$(az connectedmachine show \
     --name "$MACHINE_NAME" \
     --resource-group "$RESOURCE_GROUP" \
@@ -140,12 +155,13 @@ run mkdir -p /etc/methyl
 if [[ "$DRY_RUN" -eq 0 ]]; then
   cat >"$ARC_ENV" <<EOF
 # Written by scripts/install_arc_agent.sh
-ARC_MACHINE_NAME=$MACHINE_NAME
-ARC_RESOURCE_GROUP=$RESOURCE_GROUP
+ARC_MACHINE_NAME=$machine_name_resolved
+ARC_RESOURCE_GROUP=$resource_group_resolved
 ARC_SUBSCRIPTION_ID=$SUBSCRIPTION_ID
 ARC_RESOURCE_ID=${resource_id:-}
 EOF
-  chmod 600 "$ARC_ENV"
+  # Not a secret (resource ids only); must be readable by verify_arc_prereqs as non-root.
+  chmod 644 "$ARC_ENV"
 fi
 
 echo "Arc onboarding complete; wrote $ARC_ENV"

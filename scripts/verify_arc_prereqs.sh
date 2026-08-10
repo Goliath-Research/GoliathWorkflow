@@ -28,6 +28,10 @@ if [[ ! -f "$ARC_ENV" ]]; then
   echo "Arc Connected but missing $ARC_ENV (run install_arc_agent.sh post-connect hook)" >&2
   exit 1
 fi
+if [[ ! -r "$ARC_ENV" ]]; then
+  echo "Arc Connected but cannot read $ARC_ENV (chmod 644; written as root-only?)" >&2
+  exit 1
+fi
 
 # shellcheck disable=SC1090
 source "$ARC_ENV"
