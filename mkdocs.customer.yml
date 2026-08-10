@@ -1,0 +1,101 @@
+# Customer-facing docs site (subset of the full nav).
+# Usage: mkdocs build -f mkdocs.customer.yml --strict
+INHERIT: mkdocs.yml
+
+site_name: MethylPipeline — Customer Documentation
+
+exclude_docs: |
+  plans/**
+  research/**
+  presentations/**
+  canvas/**
+  diagrams/**
+  user-manual/**
+  docs/**
+  diagnostics/**
+  examples/**
+  **/_book/**
+  **/*_files/**
+  MethylPipeline-analysis_files/**
+  MethylPipeline-overview_files/**
+  **/*.qmd
+  **/*.html
+  **/*.pdf
+  **/*.tex
+  **/*.bib
+  theory/README.md
+  theory/chapters/13-configuration-reference.md
+  theory/chapters/14-user-guide.md
+  architecture/documentation-audit*.md
+  architecture/integrity-and-design-review*.md
+  architecture/worker-security-review.md
+  architecture/worker-transport-decision.md
+  implementation/**
+  DOCUMENTATION_AUDIT.md
+  DEPLOYMENT.md
+  CONTRIBUTING.md
+  MethylPipeline-overview.qmd
+  MethylPipeline-analysis.qmd
+  architecture_review.md
+  config_parameter_matrix.md
+  domain_program_language.md
+  code_first_discovery_report.md
+  deployment/buffy_gene_tier_a_cross_vm.md
+  deployment/hpca_ecdf_extval10_other_vm.md
+  deployment/multicloud-iac.md
+  deployment/work_layout_migration.md
+  reference/ci-sync-matrix.md
+  reference/test-data-registry.md
+  reference/mojo-fq2bam-meth-parity.md
+
+nav:
+  - Home: index.md
+  - Overview:
+      - Platform overview: overview/methylpipeline-platform-overview.md
+      - Analyte profiles: ANALYTE_PROFILES.md
+  - Theory:
+      - theory/index.md
+      - Foundations:
+          - methylutils: theory/chapters/01-methylutils.md
+          - methylcentroid: theory/chapters/02-methylcentroid.md
+          - methyldetector: theory/chapters/03-methyldetector.md
+          - methylclassifier: theory/chapters/04-methylclassifier.md
+          - Predictor and validation: theory/chapters/05-methylpredictor-and-validation.md
+          - Limitations: theory/chapters/10-limitations-and-open-questions.md
+  - Usage:
+      - usage/index.md
+      - Sample prep and QC: usage/03-sample-prep-and-qc.md
+      - Alignment engines: usage/alignment-engines.md
+      - Orchestration: usage/04-orchestration-workflow-run.md
+      - Staged solution:
+          - Stability: usage/05-stage-stability.md
+          - Freeze: usage/06-stage-freeze.md
+          - Model: usage/07-stage-model.md
+          - Post-model validation: usage/08-stage-post-model-validation.md
+          - Blind prediction: usage/09-stage-blind-prediction.md
+      - SaMD study lifecycle: usage/18-samd-study-lifecycle.md
+      - Application packs: usage/24-methylation-application-packs.md
+      - Tutorial: usage/16-tutorial-healthy-vs-cancer-stages.md
+  - Architecture:
+      - Layer model: architecture/layer-model.md
+      - End-to-end workflow: architecture/end-to-end-workflow.md
+      - Distributed runtime: architecture/distributed-runtime.md
+  - Deployment:
+      - Operator journey: deployment/operator-journey.md
+      - Production runbook: deployment/production_runbook.md
+      - Production release: deployment/production_release.md
+  - Reference:
+      - DomainProgram language: reference/domain-program-language.md
+      - Configuration reference: reference/configuration-reference.md
+      - Config parameter matrix: reference/config-parameter-matrix.md
+  - Regulatory:
+      - regulatory/README.md
+      - Product and operational controls: regulatory/methylpipeline-product-and-operational-controls.md
+      - Deployment and supervision: regulatory/deployment-and-supervision.md
+      - Validation evidence index: regulatory/validation-evidence-index.md
+      - SaMD submission scaffold: regulatory/samd-submission-scaffold.md
+      - Change management: regulatory/change-management-plan.md
+      - Traceability matrix: regulatory/traceability-matrix.md
+      - Regulatory-ready platform: "regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md"
+
+site_dir: site-customer

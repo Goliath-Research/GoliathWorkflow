@@ -1,0 +1,519 @@
+# Configuration Reference {#sec-configuration-reference}
+> **Canonical home:** this file in `docs/reference/`. Moved from theory Part III (2026-06 IA revision).
+
+This reference lists parameters for each **`actionConfig`** section resolved by `resolve_action_config` (site → profile → program/instance override). Study manifests **must not** embed these keys; set them in pipeline profiles (`workflow_engine/domain/profiles/*.profile.json`), site manifest (`/work/site/methyl_site.json`), or workflow `stepOverride`.
+
+For theoretical background on each parameter group, see the cross-references in each section header.
+
+Parameters are listed with their JSON/Python name, type, default value, constraints, and a description. "Required" in the Default column means the field must be present in the merged config; there is no code fallback for tunable science knobs.
+
+---
+
+## Breaking change: Effective Monte Carlo config
+
+Legacy Monte Carlo parameters were removed from `MonteCarloConfig` and generated schemas. Existing `monte_carlo_runs/queue/mc_config.json` snapshots from prior releases are **not** automatically migrated; resume those runs on the release that wrote them. New planners write canonical `mc_config.json` and an informational `mc_config.effective.json` (nested activation-aware view for operators).
+
+Canonical replacements:
+
+- `healthy_csv` / `disease_csv` → `cohorts: [{label, csv}, ...]`
+- `stability_min_selected_dmps` → `stability_min_core_dmps` (or `dmp_featurecuts_min_dmps`)
+- `run_mapper_and_enricher` / `skip_enricher` → DomainProgram topology / `actionConfig.enricher.skip`
+- Flat backend fields → `backend_profiles.<backend>.params`
+
+## `actionConfig.centroid` {#sec-ref-centroid}
+*See [§ methylcentroid](../theory/chapters/02-methylcentroid.md#sec-methylcentroid) for theoretical background.*
+
+### Batch wrapper fields
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `chromosomes` | list[str] | (from project) | each ∈ 1–22, X, Y | Chromosomes to process in this batch run. |
+| `contexts` | list[str] | `["CG"]` | each ∈ `CG`, `CHG`, `CHH` | Methylation contexts to process. |
+| `continue_on_error` | bool | `true` | — | If `true`, log errors and continue; if `false`, abort on first failure. |
+| `save_batch_summary` | bool | `true` | — | Write a JSON summary of the batch run. |
+
+### `base_config` fields (`MethylCentroidConfig`)
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `min_coverage` | int | `4` | ≥ 1 | Minimum total (mC + uC) reads per position per sample. Positions below this threshold are excluded from the centroid. **Should match `actionConfig.detection.min_coverage`.** |
+| `use_gpu` | bool | `true` | — | Use GPU acceleration when available. |
+| `max_sample_workers` | int \| null | `null` | ≥ 1 or null | Maximum parallel worker processes for sample loading. `null` uses all available CPUs. |
+| `verbose` | bool | `true` | — | Verbose logging during centroid construction. |
+| `binned_stats_bins` | int | `20` | ≥ 1 | Number of histogram bins for the per-locus ECDF summary stored in the H5 centroid file. Used by `methyl-detector` for KS/overlap statistics. |
+| `cap_coverage` | bool | `false` | — | If `true`, apply binomial thinning to cap extreme coverage values before centroid construction. |
+| `cap_coverage_n_cap` | int \| null | `null` | ≥ 1 or null | Hard coverage cap. If `null` and `cap_coverage_auto_n_cap` is `true`, the cap is estimated automatically. |
+| `cap_coverage_seed` | int | `0` | — | RNG seed for binomial thinning. |
+| `cap_coverage_auto_n_cap` | bool | `false` | — | If `true`, estimate the coverage cap from the first sample using an IQR-based method. |
+| `cap_coverage_n_cap_method` | str | `"iqr"` | `"iqr"` | Method for auto-estimating the coverage cap. Currently only IQR is supported. |
+| `cap_coverage_n_cap_iqr_multiplier` | float | `3.0` | > 0 | IQR multiplier for auto-cap: cap = Q3 + multiplier × IQR. |
+| `cap_coverage_n_cap_max_positions` | int \| null | `null` | ≥ 1 or null | Maximum positions to sample when auto-estimating the coverage cap. `null` uses all positions. |
+| `laboratory` | str | `""` | — | Metadata label written to H5 attributes. |
+| `disease` | str | `""` | — | Metadata label written to H5 attributes. |
+| `group` | str | `""` | — | Metadata label written to H5 attributes. |
+| `batch` | str | `""` | — | Metadata label written to H5 attributes (usually inherited from project `batch`). |
+
+---
+
+## `actionConfig.detection` — Runtime Parameters {#sec-ref-detection-runtime}
+*See [§ methyldetector](../theory/chapters/03-methyldetector.md#sec-methyldetector) for theoretical background. The parameters marked with an asterisk (★) have direct theoretical counterparts in the chapter.*
+
+### Input / Output
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `fixed_dmp_panel` | str (path) \| null | `null` | File must exist; must have `chromosome` and `position` columns | Path to a fixed DMP panel CSV. If set, bypasses statistical and biological discovery entirely. See [§ detector fixed panel](#sec-detector-fixed-panel). |
+| `output_dir` | str \| null | (from project) | — | Override for the detection output directory. Usually resolved from the project. |
+
+### Statistical Screening ★
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `alpha` | float | `0.05` | [0, 1] | q-value threshold for the statistical DMP set $\mathcal{D}_{\text{stat}}$ ([Eq. detector-statset](../theory/chapters/03-methyldetector.md#eq-detector-statset)). |
+| `significance_test` | str | `"ks_ecdf"` | `"ks_ecdf"` or `"mann_whitney"` | Statistical test. `ks_ecdf` uses the KS statistic on reconstructed ECDFs ([§ methylutils](../theory/chapters/01-methylutils.md#sec-methylutils)); `mann_whitney` uses the histogram-based rank sum approximation. |
+| `ecdf_grid_size` | int | `256` | [16, 4096] | Grid resolution for ECDF reconstruction, KS statistics, and overlap integration. Higher values improve accuracy at the cost of compute. |
+| `min_coverage` | int | `4` | ≥ 1 | Minimum centroid coverage required for a locus to be a DMP candidate. Should match `base_config.min_coverage`. |
+| `min_samples_abs` | int | `1` | ≥ 1 | Absolute minimum number of samples per locus per centroid. |
+| `min_samples_pct` | float | `0.05` | [0, 1] | Minimum fraction of cohort samples that must cover a locus. Effective min = `max(min_samples_abs, ceil(min_samples_pct × cohort_size))`. |
+| `delta_mean_reduction` | float \| null | `null` | [0, 1] or null | Optional pre-statistical gate: discard loci where $|\Delta\mu| < \delta_{\min}$ before running the statistical test. Reduces test count for large CHH context runs. |
+| `random_state` | int | `42` | ≥ 0 | RNG seed for reproducibility. |
+
+### Biological Prioritization ★
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `effect_size_coverage` | float | `0.95` | [0, 1] | Per-context effect-mass filter: keep the minimum set of statistical DMPs covering this fraction of total effect mass ([Eq. effect-coverage](../theory/chapters/03-methyldetector.md#eq-effect-coverage)). `1.0` = keep all. |
+| `biological_only_effect_size_coverage` | float \| null | `null` | [0, 1] or null | Optional rescue track: apply the same cumulative coverage to non-significant loci (q > α) and flag them as biological-only DMPs. |
+| `biological_only_max_candidates` | int | `5000` | ≥ 1 | Maximum non-significant candidates per context to consider for biological-only rescue before ECDF rescoring. |
+| `max_tau2_for_dmp` | float \| null | `null` | ≥ 0 or null | Heterogeneity filter: drop loci where both groups exceed this between-sample variance estimate. Useful for removing subpopulation-driven loci. |
+| `lambda_var` | float | `2.0` | [0, 20] | Variance penalty in the effect size formula: $e_i = |\Delta\mu_i| (1-O_i) \exp(-\lambda_{\text{var}} (\sqrt{v_1} + \sqrt{v_2}))$. |
+| `effect_size_use_mean_level` | bool | `true` | — | Multiply effect size by a mean-level factor that down-weights loci at low average methylation (e.g. CHH context). |
+| `effect_size_mean_level_use_max` | bool | `true` | — | Use $\max(\mu_1, \mu_2)$ (rather than the mean) for the mean-level factor. |
+| `effect_size_mean_level_weight` | str | `"saturating"` | `"sqrt"`, `"linear"`, `"saturating"`, `"boundary"` | Shape of the mean-level weight function. |
+| `effect_size_mean_level_k` | float | `0.05` | [0.01, 0.5] | Parameter $k$ (saturating) or $\tau$ (boundary) for the mean-level weight. |
+| `effect_size_mean_level_k_by_context` | dict \| null | `null` | — | Per-context override of `k` (e.g. `{"CHH": 0.20, "CHG": 0.10}`). Useful for contexts with inflated raw effect sizes. |
+
+### DMP Selection and Export
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `dmp_export_mode` | str | `"dual"` | `"unified"` or `"dual"` | `dual`: exports `dmps-{chrom}-discovery.csv` (mapper/enricher) and `dmps-{chrom}-selected.csv` (FeatureCuts panel; primary for downstream). Legacy `dmps-{chrom}-classifier.csv` is transitional. |
+| `dynamic_dmp_cutoff_enabled` | bool | `true` | — | Apply elbow detection on the effect-size distribution to trim the long tail of low-importance DMPs. |
+| `dynamic_dmp_cutoff_relaxation` | float | `1.0` | > 0 | Multiplier on the elbow threshold. < 1 keeps more DMPs; > 1 is stricter. |
+| `discovery_dynamic_dmp_cutoff_enabled` | bool | `false` | — | Apply the elbow trim to the discovery export as well (default: discovery keeps all biologically filtered DMPs). |
+| `classifier_dmp_selection` | str | `"elbow"` | `"elbow"` or `"featurecuts_validation"` | How to select the prediction panel. `elbow`: effect-size distribution trim. `featurecuts_validation`: optimize balanced accuracy on validation samples. |
+| `featurecuts_exhaustive_search` | bool | `false` | — | More thorough search over candidate panel sizes in `featurecuts_validation` mode (slower). |
+| `featurecuts_max_candidates` | int | `50` | ≥ 1 | Maximum number of panel size candidates evaluated in featurecuts mode. |
+| `featurecuts_max_k_cap` | int \| null | `null` | ≥ 1 or null | Upper bound on panel size $k$ in featurecuts mode. |
+| `min_selected_dmps` | int \| null | `null` | ≥ 1 or null | Minimum panel size (binary search floor). |
+| `min_dmps_for_export` | int | `1000` | ≥ 1 | Minimum rows in the exported DMP CSV. In unified mode, the CSV is widened to this count if the classifier elbow subset is smaller and more biological DMPs exist. |
+| `effect_size_weight_power` | float | `1.0` | [0.1, 5] | Power applied to normalized effect sizes when computing classifier feature weights: $w_i = (e_i / e_{\max})^p$. Values > 1 concentrate weight on top positions. |
+| `filter_funnel_explore` | dict \| null | `null` | — | If set, sweeps `effect_size_coverage` over a range and writes `filter_funnel.csv`. Dict with sub-key `effect_size_coverage: {min, max, step}`. |
+| `target_balanced_accuracy` | float \| null | `null` | [0, 1] or null | Optional BA target when `classifier_dmp_selection=featurecuts_validation` (minimum top-$k$ by effect-size rank that reaches this BA). |
+
+### Context Weighting
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `use_context_weights` | bool | `true` | — | Enable trimmed-mean context weighting when multiple contexts (CG, CHG, CHH) are processed together. |
+| `trimmed_percentile_low` | float | `0.10` | [0, 0.5]; sum with `high` < 1 | Remove the bottom this fraction of DMPs (by effect size) when computing the trimmed mean for context weighting. |
+| `trimmed_percentile_high` | float | `0.01` | [0, 0.5] | Remove the top this fraction. |
+| `context_weight_direction` | str | `"inverse"` | `"inverse"` or `"proportional"` | `inverse`: weight ∝ 1/trimmed_mean (down-weight contexts with inflated effects, e.g. CHH). `proportional`: weight ∝ trimmed_mean. |
+
+### Validation cohorts (real samples only)
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `centroid1_validation_samples` | str \| list[str] \| null | `null` | — | Paths to class-1 validation cohort (dirs or `.h5`), or `"use_metadata"` to read sample paths from centroid H5 metadata. |
+| `centroid2_validation_samples` | str \| list[str] \| null | `null` | — | Same for class 2. |
+| `validation_samples_base_path` | str \| null | `null` | — | When centroid metadata stores sample basenames only, prepend this directory (often project `samples_base_path`). |
+| `validation_split_ratio` | float | `0.0` | [0, 1] | Fraction of validation rows per class held out for test BA (repeated stratified). `0` = no row holdout. |
+| `validation_n_repeats` | int | `1` | [1, 100] | Number of repeated holdouts when `validation_split_ratio` > 0. |
+| `validation_min_coverage` | int | `4` | [1, 100] | Minimum coverage when extracting methylation from validation samples for BA / FeatureCuts. |
+
+### Classifier metadata and self-check
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `temperature` | float | `1.0` | [0.1, 10] | Softmax temperature for the binary ECDF classifier metadata. |
+| `enable_platt_calibration` | bool | `false` | — | Enable Platt scaling calibration on validation data. |
+| `centroid_self_check_top_k` | int \| null | `null` | ≥ 1 or null | If set, restrict the self-check centroid classification to the top-K DMPs by effect size. |
+
+### Debug and Output
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `debug` | bool | `false` | — | Enable verbose debug logging. |
+| `export_sample_size_estimate` | bool | `false` | — | Add `n_estimated_per_group` column to the DMP CSV: estimated per-group sample size for target statistical power. |
+| `target_power` | float | `0.8` | [0.5, 0.999] | Target power for sample size estimation (only used when `export_sample_size_estimate: true`). |
+
+---
+
+## `actionConfig.detection` — Multiclass Export-Only Parameters {#sec-ref-detection-multiclass}
+These parameters are **stripped before** `MethylDetectorConfig` is constructed; they are passed to the native multiclass PKL export step (`build_multiclass_model`). They have no effect on DMP detection.
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `multiclass_train_learned_head` | bool | `false` | — | If `true`, fit a multinomial logistic regression on top of the histogram-based pre-softmax scores during multiclass PKL export. |
+| `multiclass_learned_logistic_C` | float | `1.0` | > 0 | Inverse regularization strength for the logistic regression ($C = 1/\lambda$). Smaller values = stronger regularization. |
+| `multiclass_learned_max_iter` | int | `2000` | ≥ 1 | Maximum iterations for the LBFGS solver. |
+| `multiclass_learned_standardize` | bool | `true` | — | StandardScaler on the pre-softmax feature scores before logistic regression. |
+| `multiclass_learned_random_state` | int | `0` | ≥ 0 | RNG seed for the logistic regression solver. |
+| `multiclass_learned_class_weight` | str \| null | `null` | `"balanced"` or null | Class weights for the logistic regression. `"balanced"` computes $w_k = n_{\text{total}} / (K n_k)$. Recommended for imbalanced cohorts. See [§ classifier class weight](../theory/chapters/04-methylclassifier.md#sec-classifier-class-weight). |
+
+---
+
+## `actionConfig.mapper` {#sec-ref-mapper}
+*See [§ methylmapper](../theory/chapters/07-methylmapper.md#sec-methylmapper) for theoretical background.*
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `csv_pattern` | str | `"dmps-*-discovery.csv"` | Glob pattern for DMP CSV files to map. Use `dmps-*-selected.csv` for FeatureCuts panels. |
+| `gtf` | str (path) | required | Path to the GTF annotation file (e.g. GENCODE v44). |
+| `upstream_size` | int | `5000` | Promoter window upstream of TSS (bp). |
+| `downstream_size` | int | `2000` | Terminator window downstream of gene end (bp). |
+| `min_intron_size` | int | `0` | Minimum intron size to include in mapping (bp). |
+| `use_sp_regions` | bool | `true` | Use special-purpose genomic regions (promoter, terminator, etc.) in addition to exon/intron/gene body. |
+| `storey_lambda` | float | `0.4` | Lambda parameter for Storey q-value estimation of gene-level p-values. |
+| `w_promoter` | float | `2.0` | Weight for DMPs in promoter regions when computing gene-level DMP scores. |
+| `w_terminator` | float | `0.5` | Weight for terminator region DMPs. |
+| `w_gene_body` | float | `1.0` | Weight for gene body DMPs. |
+| `w_exon` | float | `1.5` | Weight for exon DMPs. |
+| `w_intron` | float | `0.7` | Weight for intron DMPs. |
+| `w_unknown` | float | `1.0` | Weight for DMPs in unannotated or intergenic regions. |
+| `disease_term` | str | `""` | Disease term for literature/database enrichment (e.g. `"Prostate Cancer"`). |
+| `enrich_disease` | bool | `false` | Run disease association enrichment alongside genomic mapping. |
+| `enrich_source` | str | `"opentargets"` | Enrichment source: `"opentargets"`, `"grok"`, or `"grok+opentargets"`. |
+| `enrich_profile` | str | `"permissive"` | Enrichment stringency profile. |
+| `grok_max_workers` | int | `1` | Parallel workers for Grok API calls. |
+| `grok_batch_size` | int | `16` | Gene batch size per Grok API request. |
+| `rate_limit_delay` | float | `5.0` | Seconds to wait between Grok API calls. |
+| `grok_max_retries` | int | `3` | Maximum Grok API retries per request. |
+| `grok_429_cooldown` | int | `60` | Seconds to wait after a 429 rate-limit response. |
+| `grok_batch_api` | bool | `false` | Use the Grok batch API instead of synchronous calls. |
+| `grok_batch_poll_interval` | int | `30` | Polling interval (seconds) for batch API job completion. |
+| `grok_batch_submit_chunk_size` | int | `100` | Genes per batch API submit chunk. |
+| `grok_cache_ttl_days` | int | `7` | TTL (days) for cached Grok responses. |
+| `optimize_dmps` | bool | `false` | Run DMP optimization before mapping. |
+| `extend_after_stable` | bool | `false` | Extend the DMP list after stability analysis. |
+| `run_bedtools_closest` | bool | `false` | Use bedtools `closest` for nearest-gene assignment. |
+| `closest_gene_bed` | str \| null | `null` | BED file for bedtools closest gene lookup. |
+
+---
+
+## `actionConfig.enricher` {#sec-ref-enricher}
+*See [§ methylenricher](../theory/chapters/08-methylenricher.md#sec-methylenricher) for theoretical background.*
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `gene_column` | str | `"gene_name"` | Column in mapper output used as gene identifier. |
+| `disease_only` | bool | `true` | Restrict enrichment to disease-associated genes from DisGeNET/Open Targets. |
+| `disease_association_type` | list[str] | `["direct", "indirect"]` | Association types to include. |
+| `min_disease_evidence_level` | str | `"medium"` | Minimum evidence level: `"low"`, `"medium"`, `"high"`. |
+| `min_disease_score` | float | `0.0` | Minimum disease association score. |
+| `min_dmp_count` | int | `2` | Minimum number of mapped DMPs per gene. |
+| `min_unique_dmps` | int \| null | `null` | Minimum unique (chromosome, position) DMP count per gene. |
+| `max_gene_q_value` | float | `0.05` | Maximum gene-level q-value to include in enrichment. |
+| `sort_by` | str | `"total_weight"` | Column to sort the enriched gene list by. |
+| `sort_ascending` | bool | `false` | Sort direction. |
+| `library_preset` | str \| null | `null` | Named Enrichr preset. Supported values include `"cancer-core"` and `"cancer-extended"`. Used when `libraries` is not set. |
+| `libraries` | list[str] | `["KEGG_2021_Human", "Reactome_2022", "GO_Biological_Process_2023", "GO_Molecular_Function_2023", "GO_Cellular_Component_2023", "MSigDB_Hallmark_2020", "WikiPathway_2023_Human"]` | Explicit Enrichr libraries for over-representation analysis. **Highest precedence**: if set, overrides `library_preset`. |
+| `top` | int | `150` | Maximum number of genes to report. |
+| `cutoff` | float | `0.05` | Adjusted p-value cutoff for pathway enrichment. |
+| `organism` | str | `"Human"` | Organism for Enrichr queries. |
+| `modules` | bool | `true` | Compute gene-gene co-citation modules. |
+| `similarity_threshold` | float | `0.15` | Jaccard similarity threshold for module graph edges. |
+| `cluster_resolution` | float | `0.8` | Leiden clustering resolution for module detection. |
+| `module_cluster_max_q` | float \| null | `null` | Optional pre-clustering filter: keep only terms with `Adjusted P-value <= module_cluster_max_q` when building pathway modules. Recommended with large presets like `cancer-extended`. |
+| `module_cluster_top_terms_per_library` | int \| null | `null` | Optional pre-clustering cap: keep top N enrichment terms per library (after q-value sorting) before module clustering. |
+| `network_plot` | str | `"plotly"` | Library used for the network visualization (`"plotly"` or `"matplotlib"`). |
+
+---
+
+## `actionConfig.classifier` {#sec-ref-classifier}
+*See [§ methylclassifier](../theory/chapters/04-methylclassifier.md#sec-methylclassifier) for theoretical background.*
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `ovr_binary_pickles_from_comparisons` | bool | `false` | Build the OvR multiclass PKL automatically from per-comparison detection directories. Recommended for hierarchical multiclass projects. |
+| `weight_method` | str | `"effect_size"` | Chromosome weight method: `"config"`, `"effect_size"`, `"linear_fitted"`, `"logistic_fitted"`, `"elasticnet_fitted"`. |
+| `weight_fit_regularization` | str | `"lasso"` | Regularization for fitted weights: `"lasso"`, `"ridge"`, `"elasticnet"`. |
+| `weight_fit_alpha` | float | `1.0` | Regularization strength for fitted weights. |
+| `weight_fit_l1_ratio` | float | `0.5` | L1 ratio for elastic-net weight fitting. |
+| `temperature` | float | `1.0` | Softmax temperature applied to classifier outputs. |
+| `enable_platt_calibration` | bool | `false` | Apply Platt scaling calibration to binary classifier outputs. |
+| `use_isotonic_calibration` | bool | `false` | Enable isotonic probability calibration. During labeled runs, calibrators are fit and then applied; during inference, saved calibrators are reused when present. |
+| `use_elasticnet_stacking` | bool | `false` | Fit chromosome weights with ElasticNet stacking on labeled data. |
+| `calibration_train_fraction` | float \| null | `null` | If set in `(0,1]`, fit isotonic/stacking on a stratified per-class fraction (MC-style holdout mask). `null` means use full labeled set. |
+| `calibration_seed` | int \| null | `null` | Seed for stratified calibration/stacking fit mask. |
+| `trimmed_percentile_low` | float | `0.10` | Lower percentile for trimmed-mean effect-size weights. |
+| `trimmed_percentile_high` | float | `0.01` | Upper percentile for trimmed-mean effect-size weights. |
+| `chromosome_weights` | dict \| null | `null` | Fixed per-chromosome weights dict (bypasses trimmed-mean computation). |
+| `debug` | bool | `false` | Verbose debug logging. |
+| `log_level` | str | `"INFO"` | Log level: `"DEBUG"`, `"INFO"`, `"WARNING"`, `"ERROR"`. |
+| `panel` | dict \| null | `null` | Hierarchical prediction panel for OvR readout. Sub-keys: `primary_family` (str), `families` (dict: family → list of class names), `indeterminate_delta` (float). |
+
+---
+
+## `actionConfig.predictor` {#sec-ref-predictor}
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `debug` | bool | `false` | Verbose debug logging for the predictor. |
+| `panel` | dict \| null | `null` | Same hierarchical panel as classifier. Usually identical to `actionConfig.classifier.panel`. |
+| `multiclass_model_path` | str \| null | `null` | Override path to a specific multiclass PKL. If `null`, resolved from the project classifier output. |
+
+**Note.** Do not repeat the `controls`/`diseases` block inside `actionConfig.predictor`. Sample paths are inherited from the project's top-level cohort structure. See [§ project configuration](../theory/chapters/11-project-configuration.md#sec-project-configuration) for the correct anti-pattern avoidance.
+
+---
+
+## `actionConfig.validation` {#sec-ref-validation}
+*Fields inherited from the project (`samples_base_path`, `output_base`, cohort structure) do not need to be repeated here.*
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `train_fraction` | float | required | (0, 1) exclusive | Fraction of each cohort used for training per iteration. |
+| `n_iterations` | int | required | ≥ 1 | Number of Monte Carlo iterations. |
+| `seed` | int \| null | `null` | — | Base RNG seed; iteration $r$ uses `seed + r`. |
+| `run_stability` | bool | `false` | — | Run stability analysis after the main loop. |
+| `stability_dmp_freq` | float | `0.7` | [0, 1] | Minimum recurrence frequency $\tau$ for a DMP to be declared stable. |
+| `stability_min_balanced_accuracy` | float \| null | `null` | [0, 1] or null | Only runs with `balanced_accuracy ≥` this value contribute to DMP frequency counts. |
+| `stability_early_stop_enabled` | bool | `false` | — | Enable adaptive early stopping for stability MC when stable-panel convergence conditions are met. |
+| `stability_min_iterations` | int | `20` | ≥ 1 | Minimum qualifying runs before convergence checks can terminate the loop. |
+| `stability_convergence_window` | int | `5` | ≥ 1 | Compare stable panel at run index $k$ versus $k-w$ (qualifying runs). |
+| `stability_convergence_jaccard` | float | `0.98` | [0, 1] | Required Jaccard overlap between current and lagged stable panels. |
+| `stability_convergence_max_size_delta` | float | `0.02` | [0, 1] | Maximum allowed relative panel-size change between checkpoints. |
+| `stability_convergence_patience` | int | `3` | ≥ 1 | Consecutive passing checkpoints required before early stop triggers. |
+| `stability_gene_freq` | float | `0.5` | [0, 1] | Minimum recurrence frequency for a gene (enricher output) to be declared stable. |
+| `freeze_stable_dmp_csv` | str \| null | `null` | — | Path to the stable DMP CSV for `--freeze`. Defaults to `monte_carlo_runs/stability/stable_dmps_production.csv`. |
+| `production_output_dir` | str \| null | `null` | — | Override directory for the production freeze output. Defaults to `monte_carlo_runs/production`. |
+| `predictor_only` | bool | `false` | — | If `true`, only run `methyl-predictor` per iteration (Workflow 2). |
+| `frozen_project_path` | str \| null | `null` | — | Path to `production/project.json` for predictor-only mode. Defaults to `monte_carlo_runs/production/project.json` if it exists. |
+| `require_biological_review_for_model` | bool | `false` | — | If `true`, `methyl-validation --model` is blocked unless `biological_review_confirmed=true`. |
+| `biological_review_confirmed` | bool | `false` | — | Explicit confirmation flag that unlocks `--model` when biological review is required. |
+| `abort_on_step_failure` | bool | `false` | — | If `true`, abort all iterations when any pipeline step fails. If `false`, log the error and skip the iteration. |
+| `model_backend` | str | `"ecdf"` | `"ecdf"`, `"tabular_sklearn"`, `"generative_hybrid"` | Backend for `--model`. `ecdf`: classifier→predictor. `tabular_sklearn`: bundle + sklearn train/predict. `generative_hybrid`: bundle + latent-density generative train/predict. |
+| `model_bundle_dir` | str \| null | `null` | — | Optional output directory for model feature bundle artifacts. Default: `<production_output_dir>/model_bundle`. |
+| `model_weight_column` | str | `"effect_size"` | — | Legacy compatibility field. Tabular/generative model bundle weighting is canonicalized to detector `effect_size`. |
+| `tabular_model_type` | str | `"random_forest"` | `"random_forest"`, `"hist_gradient_boosting"`, `"logistic_regression"`, `"xgboost"` | Model type when `model_backend="tabular_sklearn"`. |
+| `tabular_max_dmps` | int \| null | `null` | null, `0`, or ≥ 10 | DMP cap for tabular/generative backend training. `null`/`0` keeps all stable loci from the bundle index; positive values keep top loci by descending effect size. |
+| `feature_family_set` | str | `"dmp_scored"` | `dmp_scored`, `gene`, `structural`, `gene_scored`, `dmp_scored+gene`, `dmp_scored+structural`, `dmp_scored+gene_scored`, `hybrid-all` (canonical only) | Feature-family contract under `backend_profiles.*.params`. Applies when `feature_mode=observed_hybrid`. |
+| `ecdf_aggregated_enabled` | bool \| null | `null` | — | Toggle aggregated ECDF OvR for `model_backend=ecdf`. `null` auto-enables when `feature_mode=observed_hybrid` and `feature_family_set!=dmp_scored`. |
+| `ecdf_aggregated_n_bins` | int | `100` | [8, 512] | Histogram bin count for aggregated ECDF OvR package training. |
+| `covariates_path` | str \| null | `null` | — | Optional covariates sidecar (`.h5` preferred, `.csv` accepted) for tabular or generative backend. |
+| `covariate_id_column` | str | `"sample_id"` | — | Covariates column used to join rows with sample basenames. |
+| `covariate_numeric_columns` | list[str] \| null | `null` | no overlap with ordinal/categorical columns | Explicit numeric covariate columns. If omitted (and no explicit role lists are set), numeric roles are inferred. |
+| `covariate_ordinal_columns` | list[str] \| null | `null` | no overlap with numeric/categorical columns | Explicit ordinal columns (ordered labels such as low/medium/high). Encoded as one numeric feature per column. |
+| `covariate_ordinal_maps` | dict[str, dict[str, float]] \| null | `null` | keys must be listed in `covariate_ordinal_columns` | Optional per-column label->code mapping for ordinal values; labels are normalized to lowercase. |
+| `covariate_ordinal_unknown_value` | float | `0.0` | — | Fallback numeric code for missing/unknown ordinal values at training/inference. |
+| `covariate_categorical_columns` | list[str] \| null | `null` | no overlap with numeric/ordinal columns | Explicit categorical columns; encoded with one-hot and frozen levels. |
+| `covariate_missing_numeric_strategy` | str | `"mean"` | `"mean"`, `"median"`, `"zero"` | Numeric imputation strategy used for numeric covariates. |
+| `covariate_standardize_numeric` | bool | `true` | — | If true, z-score standardize numeric and ordinal-coded features using training statistics. |
+| `covariates_strict_join` | bool | `false` | — | If true, tabular backend requires every sample id to exist in covariates sidecar. |
+| `generative_latent_dim` | int | `16` | ≥ 2 | Latent dimensionality for `model_backend="generative_hybrid"`. |
+| `generative_kl_weight` | float | `0.1` | ≥ 0 | KL-like regularization weight metadata/control for generative hybrid training. |
+| `generative_density_type` | str | `"diag_gaussian"` | currently only `"diag_gaussian"` | Latent class-density family for the generative hybrid backend. |
+| `generative_epochs` | int | `50` | ≥ 1 | Epoch count metadata/control for generative hybrid training. |
+| `generative_batch_size` | int | `64` | ≥ 1 | Batch size metadata/control for generative hybrid training. |
+| `generative_seed` | int | `13` | — | RNG seed for generative hybrid training. |
+| `generative_calibrate` | bool | `false` | — | Enable optional calibration stage for generative hybrid probabilities when available. |
+| `generative_covariates_strict` | bool | `true` | — | If `true`, require all sample IDs to exist in covariates sidecar during generative backend joins. |
+
+---
+
+## `actionConfig.progression` {#sec-ref-progression}
+*See [§ two workflows](../theory/chapters/12-two-workflows.md#sec-two-workflows) for workflow placement after freeze.*
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Run `methyl-disease-progression` after enricher during `--freeze`. |
+| `output_dir` | str \| null | `null` | Optional output directory override. Default: `<project_root>/progression`. |
+| `ordered_comparison_labels` | list[str] \| null | `null` | Explicit stage order using comparison labels and/or disease groups. |
+| `ordered_disease_groups` | list[str] \| null | `null` | Alias for stage order override. |
+| `strict_missing` | bool | `false` | If `true`, progression fails when expected stage files are missing. |
+| `report_md` | bool | `false` | Emit `progression/report.md` in addition to CSV/JSON outputs. |
+
+---
+
+## `actionConfig.alignment_qc` {#sec-ref-alignment-qc}
+*See [§ methylalignmentqc](../theory/chapters/09-methylalignmentqc.md#sec-methylalignmentqc) for theoretical background.*
+
+| Parameter | Type | Description |
+|---|---|---|
+| `groups` | list[str] \| null | Cohort group labels to include (e.g. `["control", "disease"]`). `null` = all groups. |
+| `output_dir` | str \| null | Override output directory. |
+| `validate_schema` | bool | Validate per-sample QC JSON against the canonical schema. |
+
+---
+
+## Configuration Audit Matrix {#sec-config-audit-matrix}
+The active-steps configuration audit (declared vs consumed vs inherited keys, alias/legacy status, evidence paths, and redundancy dispositions) is maintained in:
+
+- [docs/reference/config-parameter-matrix.md](../reference/config-parameter-matrix.md)
+
+Use that matrix as the practical source for cleanup/deprecation planning. This chapter remains the canonical reference for currently supported keys.
+
+---
+
+## Deprecation Roadmap (Proposed) {#sec-config-deprecation-roadmap}
+This roadmap aligns deprecations with the current production workflow (`--stability` -> `--freeze` -> `--model`) and prioritizes migration safety for existing projects.
+
+### Scope of proposed deprecations
+
+| Key / pattern | Current state | Proposed disposition |
+|---|---|---|
+| `actionConfig.validation.run_mapper_and_enricher` | **Removed** | Mapper/enricher belong to DomainProgram / `--freeze`. |
+| `actionConfig.validation.skip_enricher` | **Removed** | Use DomainProgram IF or `actionConfig.enricher.skip`. |
+| `actionConfig.validator` | Deprecated alias of `actionConfig.predictor` | Remove after one full release cycle of warnings. |
+| Flat schema (`group1`/`group2`/`groups`) for new configs | Backward-compatible | Keep loader compatibility; stop documenting as a preferred authoring pattern. |
+
+### Phased plan
+
+#### Phase 1: Warn (next minor release)
+
+- Emit `DeprecationWarning` whenever deprecated keys are parsed.
+- Keep runtime behavior unchanged.
+- Add docs examples showing only canonical keys:
+  - `actionConfig.predictor` (not `validator`),
+  - control/disease/comparisons project schema,
+  - freeze-stage mapper/enricher behavior.
+
+#### Phase 2: Migrate (following minor release)
+
+- Provide a migration helper that rewrites old project JSONs to canonical shape.
+- In CI/examples, validate only canonical schema.
+- Keep deprecated key parsing behind an explicit compatibility switch for transition runs.
+
+#### Phase 3: Remove (next major release)
+
+- Drop deprecated keys and compatibility parsing paths.
+- Convert compatibility warnings into validation errors with actionable messages.
+- Keep a pinned migration guide with before/after JSON snippets.
+
+### Migration acceptance criteria
+
+Before removing compatibility paths, require:
+
+1. all first-party templates/examples use canonical schema only,
+2. at least one full release cycle with warnings enabled,
+3. no unresolved blockers in the configuration audit matrix.
+
+### Accuracy guardrails during migration
+
+Deprecation must not change model-quality semantics:
+
+- detector holdout reporting (`optimization_validation`) remains the model-selection target,
+- detector training-fold reporting (`training_fold_validation`) remains an overfit diagnostic,
+- freeze-stage outputs remain reproducible for fixed inputs and seeds.
+
+### Operator migration checklist (before/after JSON)
+
+Use this quick checklist when modernizing existing project configs.
+
+#### 1) `actionConfig.validator` -> `actionConfig.predictor`
+
+Before:
+
+```json
+"actionConfig": {
+  "validator": {
+    "debug": false,
+    "panel": { "primary_family": "prostate", "families": { "prostate": ["pca_pca1"] } }
+  }
+}
+```
+
+After:
+
+```json
+"actionConfig": {
+  "predictor": {
+    "debug": false,
+    "panel": { "primary_family": "prostate", "families": { "prostate": ["pca_pca1"] } }
+  }
+}
+```
+
+#### 2) `run_mapper_and_enricher` / `skip_enricher` removed from `actionConfig.validation`
+
+Before:
+
+```json
+"actionConfig": {
+  "validation": {
+    "train_fraction": 0.8,
+    "n_iterations": 50,
+    "run_stability": true,
+    "run_mapper_and_enricher": true,
+    "skip_enricher": false
+  }
+}
+```
+
+After:
+
+```json
+"actionConfig": {
+  "validation": {
+    "train_fraction": 0.8,
+    "n_iterations": 50,
+    "run_stability": true
+  },
+  "mapper": {
+    "gtf": "/path/to/annotation.gtf"
+  },
+  "enricher": {
+    "libraries": ["KEGG_2021_Human", "Reactome_2022"],
+    "skip": false
+  }
+}
+```
+
+#### 3) Flat schema -> control/disease/comparisons schema
+
+Before:
+
+```json
+{
+  "group1": { "label": "healthy", "sample_paths": ["configs/healthy.csv"] },
+  "group2": { "label": "pca1", "sample_paths": ["configs/pca1.csv"] }
+}
+```
+
+After:
+
+```json
+{
+  "control": {
+    "label": "healthy",
+    "groups": [{ "label": "all", "sample_paths": ["configs/healthy.csv"] }]
+  },
+  "disease": {
+    "label": "cancer",
+    "groups": [{ "label": "pca1", "sample_paths": ["configs/pca1.csv"] }]
+  },
+  "comparisons": "control_vs_each_disease"
+}
+```
+
+#### 4) Accuracy sanity checks after migration
+
+After rewriting config keys, rerun staged validation with the **canonical** entry:
+
+```bash
+methyl-workflow-run \
+  --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
+  --context '{"projectPath":"/work/.../configs/project.json","pipelineProfile":"mc_dmp_gene_fc"}'
+```
+
+Legacy transitional path (same stages, monolithic CLI):
+
+1. `methyl-validation --project <project.json> --stability`
+2. `methyl-validation --project <project.json> --freeze`
+3. `methyl-validation --project <project.json> --model`
+
+Then verify in detector results:
+
+- `optimization_validation` (holdout/generalization) is present,
+- `training_fold_validation` (in-sample fit) is present,
+- holdout-vs-training gap is acceptable for your deployment tolerance.

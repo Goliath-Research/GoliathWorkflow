@@ -4,7 +4,7 @@ Developer and operator reference for the per-sample upstream workflow: laborator
 
 **Workflow source of truth:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
 
-**Operator quick start:** [Usage ch.03 — Sample Prep and QC](../usage/03-sample-prep-and-qc.qmd)
+**Operator quick start:** [Usage ch.03 — Sample Prep and QC](../usage/03-sample-prep-and-qc.md)
 
 ## Overview
 
@@ -296,7 +296,7 @@ Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../wor
 
 ## Metrics import and structured JSON
 
-`methyl-qc` (`packages/methylalignmentqc`) is **mode-aware**. It detects a metrics family ([`metrics_family.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/metrics_family.py)) and merges **shared** plus **tool-specific** guardrails into one normalized V2 export per sample. Operator table: [Usage ch.03](../usage/03-sample-prep-and-qc.qmd); theory: [ch.09 methylalignmentqc](../theory/chapters/09-methylalignmentqc.qmd).
+`methyl-qc` (`packages/methylalignmentqc`) is **mode-aware**. It detects a metrics family ([`metrics_family.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/metrics_family.py)) and merges **shared** plus **tool-specific** guardrails into one normalized V2 export per sample. Operator table: [Usage ch.03](../usage/03-sample-prep-and-qc.md); theory: [ch.09 methylalignmentqc](../theory/chapters/09-methylalignmentqc.md).
 
 ### Artifacts by alignment mode
 
@@ -657,13 +657,13 @@ python scripts/alignment_qc_cohort_screening.py \
   --out /work/projects/prostate-cancer/alignment_qc/screening_report
 ```
 
-More operator commands: [Usage ch.03](../usage/03-sample-prep-and-qc.qmd).
+More operator commands: [Usage ch.03](../usage/03-sample-prep-and-qc.md).
 
 ## Related documentation
 
 | Document | Role |
 |----------|------|
-| [Usage ch.03 — Sample Prep and QC](../usage/03-sample-prep-and-qc.qmd) | Operator manual, flow diagram, config examples |
+| [Usage ch.03 — Sample Prep and QC](../usage/03-sample-prep-and-qc.md) | Operator manual, flow diagram, config examples |
 | [SamplePrepFlow.md](../../workflow_engine/sql_mssql/SamplePrepFlow.md) | Workflow tree, instance context, deploy |
 | [sample_prep_capabilities.md](../../workflow_engine/contract/sample_prep_capabilities.md) | Worker I/O contracts, idempotency |
 | [fastq_storage.py](../../packages/methyldomain/methyl_domain/fastq_storage.py) | Typed FASTQ source models (file / S3 / Azure) |
@@ -677,7 +677,7 @@ More operator commands: [Usage ch.03](../usage/03-sample-prep-and-qc.qmd).
 | [methyl-fragmentomics USAGE](../../packages/methylfragmentomics/docs/USAGE.md) | Phase 2 BAM fragmentomics |
 | [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md) | cfDNA vs buffy profile defaults |
 | [alignment-qc-screening.plan.md](../plans/alignment-qc-screening.plan.md) | Historical design for cycle screening + fastp |
-| [Theory ch.09 — MethylAlignmentQC](../theory/chapters/09-methylalignmentqc.qmd) | Publication framing |
+| [Theory ch.09 — MethylAlignmentQC](../theory/chapters/09-methylalignmentqc.md) | Publication framing |
 
 ## What this document does not cover
 

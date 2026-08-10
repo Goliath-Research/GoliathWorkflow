@@ -30,4 +30,4 @@ Deploy compiled specs: `bash scripts/deploy_workflow_definitions.sh`
 
 Deprecated SQL seeds (`workflow_methylvalidation_seed.sql`, `wf_pca_*`, `wf_sample_prep_pipeline_seed.sql`) — use DomainProgram compile + deploy instead.
 
-**Usage:** [ch.14 deployment](../usage/14-deployment-and-distributed-workflow.qmd). **Implementation:** [workers-and-gateway.md](../implementation/workers-and-gateway.md).
+**Usage:** [ch.14 deployment](../usage/14-deployment-and-distributed-workflow.md). **Implementation:** [workers-and-gateway.md](../implementation/workers-and-gateway.md).

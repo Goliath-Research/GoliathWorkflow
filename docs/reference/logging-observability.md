@@ -56,5 +56,5 @@ Propagate `workflow_instance_id` and `node_execution_id` from claim payload into
 ## Related
 
 - [Traceability and provenance](traceability-provenance.md)
-- [Troubleshooting ch.11](../usage/11-troubleshooting-and-recovery.qmd)
+- [Troubleshooting ch.11](../usage/11-troubleshooting-and-recovery.md)
 - [Distributed runtime](../architecture/distributed-runtime.md)

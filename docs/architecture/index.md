@@ -18,7 +18,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [End-to-end workflow — Proteomics](end-to-end-workflow-proteomics.md) | Ingest (GPU DIA-NN / panel) → proteomics QC → abundance.h5 → differential-abundance panel + tabular classification (Mermaid) |
 | [Portal remote control](portal-remote-control.md) | UI→DB vs workers→gateway; multi-instance hyperparameter grids; `cfg` trials → wf `execution_scope` |
 | [Portal information architecture](portal-ia.md) | EpiPortal nav hierarchy, RBAC floors, screen → `portal.sp_*` inventory |
-| [Execution scopes & CAAS](../usage/17-content-addressed-action-store.qmd) | Experiment with the same workflow under varied config; idempotent cross-instance reuse ([deep dive](../../workflow_engine/docs/pipeline_architecture.md#execution-scopes-and-caas)) |
+| [Execution scopes & CAAS](../usage/17-content-addressed-action-store.md) | Experiment with the same workflow under varied config; idempotent cross-instance reuse ([deep dive](../../workflow_engine/docs/pipeline_architecture.md#execution-scopes-and-caas)) |
 | [Documentation audit (2026-07)](documentation-audit-2026-07.md) | Staleness findings + Quarto validation + remediation checklist |
 
 **Interactive hub:** [methylpipeline-architecture canvas](../canvas/methylpipeline-architecture.canvas.tsx) (local vs gateway, config layers, DB contract)
@@ -27,12 +27,12 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 
 **Documentation hub:** [methylpipeline-docs canvas](../canvas/methylpipeline-docs.canvas.tsx) — [all canvases](../canvas/README.md)
 
-**Implementation detail:** [Implementation guide](../implementation/index.md). **Operator runbooks:** [Usage manual](../usage/index.qmd).
+**Implementation detail:** [Implementation guide](../implementation/index.md). **Operator runbooks:** [Usage manual](../usage/index.md).
 
 ## Quick audience routing
 
 - **Config author** → [layer-model.md](layer-model.md) + [config-registry.md](config-registry.md)
-- **DevOps / cluster** → [production-platform.md](../deployment/production-platform.md) + [distributed-runtime.md](distributed-runtime.md) + [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) + [Usage ch.19](../usage/19-config-registry.qmd)
-- **Workflow author** → [orchestration-paths.md](orchestration-paths.md) + [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd) + [DomainProgram reference](../reference/domain-program-language.md) + [end-to-end workflow](end-to-end-workflow.md)
-- **Experimentation / result versioning** → [Usage ch.17](../usage/17-content-addressed-action-store.qmd) + [pipeline architecture — execution scopes](../../workflow_engine/docs/pipeline_architecture.md#execution-scopes-and-caas) + [portal remote control](portal-remote-control.md)
+- **DevOps / cluster** → [production-platform.md](../deployment/production-platform.md) + [distributed-runtime.md](distributed-runtime.md) + [Usage ch.14](../usage/14-deployment-and-distributed-workflow.md) + [Usage ch.19](../usage/19-config-registry.md)
+- **Workflow author** → [orchestration-paths.md](orchestration-paths.md) + [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.md) + [DomainProgram reference](../reference/domain-program-language.md) + [end-to-end workflow](end-to-end-workflow.md)
+- **Experimentation / result versioning** → [Usage ch.17](../usage/17-content-addressed-action-store.md) + [pipeline architecture — execution scopes](../../workflow_engine/docs/pipeline_architecture.md#execution-scopes-and-caas) + [portal remote control](portal-remote-control.md)
 - **EpiPortal UI / RBAC** → [portal-ia.md](portal-ia.md) + [portal remote control](portal-remote-control.md) + [config-registry storage RBAC](config-registry.md)

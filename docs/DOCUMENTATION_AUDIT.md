@@ -1,8 +1,8 @@
 # MethylPipeline Documentation Audit
 
-**Date:** 2026-07-09 (comprehensive audit refresh)  
-**Prior IA revision:** 2026-06-26  
-**Scope:** Theory, Usage, Implementation, Architecture, Reference, deployment, DomainProgram language.
+**Date:** 2026-08-10 (Markdown-first MkDocs migration)  
+**Prior:** 2026-07-09 comprehensive audit; 2026-06-26 IA revision  
+**Scope:** Theory, Usage, Implementation, Architecture, Reference, deployment, DomainProgram language, regulatory.
 
 This document is the canonical register of documentation coverage, canonical sources, stale items, and maintenance rules.
 
@@ -10,72 +10,59 @@ This document is the canonical register of documentation coverage, canonical sou
 
 | Area | Canonical source | Status | Notes |
 |------|------------------|--------|-------|
-| **Theory** | [`docs/theory/`](theory/) | Slimmed | Parts I–II only; no CLI runbook chapters |
-| **Usage** | [`docs/usage/`](usage/index.qmd) | Complete | Renamed from `user-manual/`; DomainProgram-first front matter |
-| **Implementation** | [`docs/implementation/`](implementation/index.md), [`workflow_engine/docs/IMPLEMENTATION.md`](../workflow_engine/docs/IMPLEMENTATION.md) | Consolidated | Package index at `implementation/packages/` |
-| **Architecture** | [`docs/architecture/`](architecture/index.md) | Consolidated | Absorbs architecture_review + pipeline overview |
-| **Reference** | [`docs/reference/`](reference/documentation-toolchain.md) | New pillar | Config matrix, DomainProgram language, toolchain decision |
-| **Workflow JSON** | [`reference/domain-program-language.md`](reference/domain-program-language.md) | Moved | Schemas in `schemas/domain/` |
-| **SamplePrep + QC** | Usage [ch.03](usage/03-sample-prep-and-qc.qmd), [`sample_prep.program.json`](../workflow_engine/domain/fixtures/sample_prep.program.json), [`docs/implementation/sample-preparation-flow.md`](implementation/sample-preparation-flow.md), [`docs/architecture/mojo-multi-gpu-dual-align.md`](architecture/mojo-multi-gpu-dual-align.md), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md), plans [`native-mojo-sample-prep-docs.plan.md`](plans/native-mojo-sample-prep-docs.plan.md) + [`pangenome-wgbs-methyl-qc.plan.md`](plans/pangenome-wgbs-methyl-qc.plan.md) | Documented | Three-mode align: native-Mojo methylGrapher (`pangenome_wgbs` on NVIDIA/AMD) or explicit Clara Parabricks (`linear`/`pangenome`); mode-aware methyl_qc (shared + tool-specific); `sample.archive_sample` |
-| **Deployment** | Usage ch.14, [`deployment/production_runbook.md`](deployment/production_runbook.md) | Dual-backend | Worker-only gateway; env templates in `deploy/env/` |
-| **Admin CLI** | [`reference/admin-cli-methyl-study-start.md`](reference/admin-cli-methyl-study-start.md) | Documented | Direct DB; not on gateway |
-| **Workflow engine** | [`implementation/workflow-engine.md`](implementation/workflow-engine.md) | Expanded | Dual-dialect state machine |
-| **Traceability / ops** | [`reference/traceability-provenance.md`](reference/traceability-provenance.md), [`architecture/workflow-idempotency-retry-lease.md`](architecture/workflow-idempotency-retry-lease.md) | New | Honest lease/retry gaps |
-| **July 2026 audit** | [`architecture/documentation-audit-2026-07-09.md`](architecture/documentation-audit-2026-07-09.md) | Active | Supersedes partial 2026-07 config audit items |
-| **Schemas / contracts** | [`reference/schema-index.md`](reference/schema-index.md), [`contracts/openapi.yaml`](../contracts/openapi.yaml) | Machine-readable | |
-| **Regulatory / product controls** | [`regulatory/`](regulatory/README.md) | New synthesis pillar | Product controls, validation evidence index, change management, deployment supervision, traceability |
-| **Platform overview** | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) | Canonical quick synthesis | Few-dozen-page Markdown + [companion canvas](canvas/methylpipeline-platform-overview.canvas.tsx); not a fourth Quarto book |
-| **Storage credentials (DB SoT)** | [`architecture/config-registry.md`](architecture/config-registry.md), [`deployment/portal_resource_profile.md`](deployment/portal_resource_profile.md), plan [`plans/storage-db-sot.plan.md`](plans/storage-db-sot.plan.md) | Active | Portal `sp_*` authoring; expand + `contentHash` + node-local cache; Key Vault optional |
-| **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/), [`docs/diagrams/out/*.png`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` (`htmlLabels: false`, PNG for Quarto PDF) |
+| **Site toolchain** | [`mkdocs.yml`](../mkdocs.yml), [`reference/documentation-toolchain.md`](reference/documentation-toolchain.md) | Adopted | Markdown + Mermaid + MathJax; portable `site/` |
+| **Theory** | [`docs/theory/`](theory/index.md) | Markdown | MathJax equations; Parts I–II |
+| **Usage** | [`docs/usage/`](usage/index.md) | Markdown | Includes ch.18–24 (SaMD, packs) + [alignment engines](usage/alignment-engines.md) |
+| **Implementation** | [`docs/implementation/`](implementation/index.md) | Consolidated | Package index at `implementation/packages/` |
+| **Architecture** | [`docs/architecture/`](architecture/index.md) | Consolidated | Inline Mermaid |
+| **Reference** | [`docs/reference/`](reference/documentation-toolchain.md) | Active | Config matrix, DomainProgram language, toolchain ADR |
+| **SamplePrep + QC** | Usage [ch.03](usage/03-sample-prep-and-qc.md), [alignment engines](usage/alignment-engines.md), [`sample-preparation-flow.md`](implementation/sample-preparation-flow.md) | Documented | Three-mode align; native-Mojo `pangenome_wgbs`; explicit Clara for linear/stock |
+| **Deployment** | [`deployment/operator-journey.md`](deployment/operator-journey.md) | Dual-backend | Worker-only gateway |
+| **Regulatory** | [`regulatory/`](regulatory/README.md) | Synthesis | Claim-boundary admonitions; customer nav via `mkdocs.customer.yml` |
+| **Platform overview** | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) | Canonical | Quick synthesis + canvas |
+| **Diagrams** | Inline Mermaid; optional [`diagrams/src/*.mmd`](diagrams/src/) | Dynamic first | `render_diagrams.sh` optional for Marp |
+| **July 2026 ops audit** | [`architecture/documentation-audit-2026-07-09.md`](architecture/documentation-audit-2026-07-09.md) | Historical | Many P0 items gated by freshness scripts; treat open header as backlog pointer |
 
 ## Canonical doc map (“read this for X”)
 
 | Question | Start here |
 |----------|------------|
+| How do I preview the docs site? | [`CONTRIBUTING.md`](CONTRIBUTING.md), `make docs-serve` |
 | What is the end-to-end platform + SaMD fitness story? | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) |
 | How do I set up the dev environment? | [`DEPLOYMENT.md`](DEPLOYMENT.md), Usage ch.01 |
-| Where do project configs vs programs live? | Usage ch.02, [work-config-paths](../.cursor/rules/work-config-paths.mdc), [layer model](architecture/layer-model.md) |
-| How does SamplePrep QC work? | Usage [ch.03](usage/03-sample-prep-and-qc.qmd), [`sample_prep.program.json`](../workflow_engine/domain/fixtures/sample_prep.program.json), [`sample-preparation-flow.md`](implementation/sample-preparation-flow.md), [`SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md) |
-| How do I run a study end-to-end? | `methyl-workflow-run` + Usage Part II |
+| Where do project configs vs programs live? | Usage ch.02, [layer model](architecture/layer-model.md) |
+| Which aligner / engine should I use? | [alignment-engines.md](usage/alignment-engines.md) |
+| How does SamplePrep QC work? | Usage [ch.03](usage/03-sample-prep-and-qc.md), [`sample-preparation-flow.md`](implementation/sample-preparation-flow.md) |
+| How do I run a study end-to-end? | `methyl-workflow-run` + Usage staged chapters |
 | How do I author a workflow in JSON? | [domain-program-language.md](reference/domain-program-language.md) |
-| How do I deploy DB + gateway + workers? | Usage ch.14, [production_runbook.md](deployment/production_runbook.md), [deploy/env/](../deploy/env/README.md) |
-| How do I compile/start instances without gateway admin? | [admin-cli-methyl-study-start.md](reference/admin-cli-methyl-study-start.md) |
-| What is the REST/worker protocol? | [WORKER_PROTOCOL.md](../workers/WORKER_PROTOCOL.md), [contracts/openapi.yaml](../contracts/openapi.yaml) |
-| What is stale vs current? | This file + [documentation-audit-2026-07-09.md](architecture/documentation-audit-2026-07-09.md) |
+| How do I deploy DB + gateway + workers? | [operator-journey.md](deployment/operator-journey.md), [production_runbook.md](deployment/production_runbook.md) |
+| What is stale vs current? | This file + freshness CI |
 
-## Repository vs `/work` ownership
-
-| **Repository (versioned)** | **`/work/<study>/` (runtime)** |
-|----------------------------|--------------------------------|
-| `workflow_engine/domain/profiles/*.profile.json` | `configs/project_*.json` |
-| `workflow_engine/domain/checks/*/configs/*.program.json` | Sample CSVs, outputs |
-| `workflow_engine/domain/fixtures/*.program.json` | `monte_carlo_runs/`, `alignment_qc/` |
-| `schemas/`, docs, theory | Per-study artifacts |
-
-## Maintenance rules (IA revision)
+## Maintenance rules
 
 1. **One canonical home per fact** — if duplicated, lower-pillar doc links upward.
-2. **Theory changes** require equation label + bib entry when adding principled methods.
-3. **Usage changes** require Usage chapter update when CLI defaults change.
-4. **Implementation changes** require `workflow_engine/docs/IMPLEMENTATION.md` or package IMPLEMENTATION update when action catalog or compiler changes.
-5. **No new top-level standalone Quarto docs** — use the three pillars + architecture/reference.
+2. **Theory changes** — keep MathJax delimiters; add equation anchors for cross-links.
+3. **Usage changes** — update Usage chapters when CLI / artifact contracts change; keep `mkdocs.yml` nav in sync.
+4. **Implementation changes** — update `implementation/` or package IMPLEMENTATION when action catalog or compiler changes.
+5. **No new Quarto books** — Markdown + MkDocs only.
 6. **Presentations** remain derivative exports from pillars.
-7. **Diagrams** — edit `docs/diagrams/src/*.mmd`; run `render_diagrams.sh`; never edit TikZ workflow figures by hand.
-8. **PDF builds** must not rely on live Mermaid JS — only pre-rendered assets from `docs/diagrams/out/`.
-9. **Package THEORY.md** — max ~40 lines; link to theory book chapter only.
-10. **Committed `_book/`** — regenerate after substantive `.qmd` edits or publish from CI.
+7. **Diagrams** — prefer inline Mermaid; shared sources under `docs/diagrams/src/` for Marp.
+8. **PDF** — Playwright print of rendered HTML (`make docs-pdf`), not TeX/Mermaid pre-render for the site.
+9. **Package THEORY.md** — max ~40 lines; link to theory chapters.
+10. **Do not commit `site/`** — build in CI or locally; host the artifact anywhere.
 
 ## CI hooks
 
-- `bash scripts/check_doc_links.sh` — legacy path guard + required files
-- `python scripts/check_windows_paths.py` — reject tracked paths invalid on Windows
-- `bash scripts/render_diagrams.sh --check` — SVG freshness vs `.mmd` sources
-- `bash scripts/check_doc_freshness.sh` — stale config/export token guard
-- `quarto render docs/theory docs/usage --to html` — book smoke (when Quarto available)
+- `mkdocs build --strict`
+- `bash scripts/check_doc_links.sh`
+- `bash scripts/check_doc_freshness.sh`
+- `python scripts/check_windows_paths.py`
+- Optional: `bash scripts/render_diagrams.sh --check` (Marp assets)
+- Release: `mkdocs build -f mkdocs.customer.yml` and `bash scripts/build_docs_pdf.sh`
 
 ## Related documents
 
 - Hub: [`index.md`](index.md)
+- Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Toolchain decision: [`reference/documentation-toolchain.md`](reference/documentation-toolchain.md)
-- Canvas hub: [`methylpipeline-docs.canvas.tsx`](canvas/methylpipeline-docs.canvas.tsx) (git: `docs/canvas/`; sync with `scripts/sync_cursor_canvases.sh`)
 - Plans: [`plans/README.md`](plans/README.md)

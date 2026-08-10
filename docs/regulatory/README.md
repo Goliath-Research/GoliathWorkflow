@@ -1,5 +1,10 @@
 # Regulatory and Product Controls
 
+!!! warning "Claim boundary"
+    Architecture, profiles, and these synthesis documents are **not** FDA clearance
+    or a filed SaMD submission. Live study/model claims belong in the
+    [validation evidence index](validation-evidence-index.md) after pivotal runs.
+
 This folder is the regulatory-facing synthesis layer for MethylPipeline. It
 does not replace the theory, usage, implementation, architecture, deployment,
 or reference documentation. Instead, it explains how those materials combine
@@ -28,19 +33,16 @@ discussions.
 For creating new healthy-vs-disease studies with real holdouts and a small profile progression
 (`samd_research` → `samd_holdout_enrichment` → `samd_pivotal`), use the operator SOP:
 
-- [`../usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd)
+- [`../usage/18-samd-study-lifecycle.md`](../usage/18-samd-study-lifecycle.md)
 - Scaffold: `methyl-study-init` / validate: `methyl-study-validate-manifest`
 - Example manifests: [`../examples/samd/`](../examples/samd/)
-
-Architecture and profiles are **not** FDA approval. Fill evidence packages in the
-[validation evidence index](validation-evidence-index.md) after pivotal runs.
 
 ## Relationship to Canonical Docs
 
 | Pillar | Canonical Location | Regulatory Use |
 |--------|--------------------|----------------|
-| Theory | [`../theory/`](../theory/) | Statistical method, assumptions, validation limitations |
-| Usage | [`../usage/`](../usage/index.qmd) | Operator run paths, artifact gates, troubleshooting |
+| Theory | [`../theory/`](../theory/index.md) | Statistical method, assumptions, validation limitations |
+| Usage | [`../usage/`](../usage/index.md) | Operator run paths, artifact gates, troubleshooting |
 | Architecture | [`../architecture/`](../architecture/index.md) | System topology and configuration layers |
 | Implementation | [`../implementation/`](../implementation/index.md) | Engine, compiler, workers, package boundaries |
 | Deployment | [`../deployment/`](../deployment/production_runbook.md) | Production release and runtime operations |

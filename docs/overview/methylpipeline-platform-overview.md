@@ -57,8 +57,8 @@ operational knobs in application code.
 | Operator / DevOps | Runtime topology, release bundle, storage rules |
 | Quality / SaMD reviewer | Evidence ladder, controls inventory, explicit gaps |
 
-Deep method detail lives in the [Theory book](../theory/index.qmd); runbooks live in the
-[Usage manual](../usage/index.qmd); engine internals live in
+Deep method detail lives in the [Theory book](../theory/index.md); runbooks live in the
+[Usage manual](../usage/index.md); engine internals live in
 [Implementation](../implementation/index.md).
 
 ### Critical qualifications
@@ -80,7 +80,7 @@ Think of MethylPipeline as nested products:
    process pack covers sample prep through blind prediction and SaMD study profiles.
 3. **Application pack** — a study configuration on an existing process (cohorts,
    partitions, overlay). Alzheimer cfDNA and plant abiotic stress are methylation
-   application packs; see [Usage ch.24](../usage/24-methylation-application-packs.qmd).
+   application packs; see [Usage ch.24](../usage/24-methylation-application-packs.md).
 
 A team can:
 
@@ -128,7 +128,7 @@ This overview is designed as a **few-dozen-page print synthesis**. Prefer:
 | Config | [Layer model](../architecture/layer-model.md), [config registry](../architecture/config-registry.md) |
 | Science stages | [Pipeline stages](../architecture/pipeline-stages.md), Usage ch.03–09 |
 | Runtime | [Distributed runtime](../architecture/distributed-runtime.md), [WORKER_PROTOCOL](../../workers/WORKER_PROTOCOL.md) |
-| SaMD | [Usage ch.18](../usage/18-samd-study-lifecycle.qmd), [submission scaffold](../regulatory/samd-submission-scaffold.md), [evidence index](../regulatory/validation-evidence-index.md) |
+| SaMD | [Usage ch.18](../usage/18-samd-study-lifecycle.md), [submission scaffold](../regulatory/samd-submission-scaffold.md), [evidence index](../regulatory/validation-evidence-index.md) |
 
 ---
 
@@ -141,10 +141,10 @@ MethylPipeline delivers two complementary surfaces: a **scientific process pack*
 
 | Area | Capability | Canonical docs |
 |------|------------|----------------|
-| Sample preparation | FASTQ ingress; three-mode align (native-Mojo methylGrapher pangenome_wgbs on NVIDIA/AMD, or explicit Clara Parabricks linear/stock); remediation; extract; archive | [Usage ch.03](../usage/03-sample-prep-and-qc.qmd) |
-| Quality control | Mode-aware alignment QC (shared + tool-specific), extraction QC, branchable remediation | [Usage ch.10](../usage/10-artifacts-and-qa-checks.qmd) · [Theory ch.09](../theory/chapters/09-methylalignmentqc.qmd) |
+| Sample preparation | FASTQ ingress; three-mode align (native-Mojo methylGrapher pangenome_wgbs on NVIDIA/AMD, or explicit Clara Parabricks linear/stock); remediation; extract; archive | [Usage ch.03](../usage/03-sample-prep-and-qc.md) |
+| Quality control | Mode-aware alignment QC (shared + tool-specific), extraction QC, branchable remediation | [Usage ch.10](../usage/10-artifacts-and-qa-checks.md) · [Theory ch.09](../theory/chapters/09-methylalignmentqc.md) |
 | DMP discovery | Centroid, detector, Storey FDR, panel modes | Theory ch.02–03 |
-| Stability and freeze | Monte Carlo recurrence, stable panel, freeze readiness | [Usage ch.05–06](../usage/05-stage-stability.qmd) |
+| Stability and freeze | Monte Carlo recurrence, stable panel, freeze readiness | [Usage ch.05–06](../usage/05-stage-stability.md) |
 | Interpretation | Mapper, enricher, PPI/Enrichr, progression | Theory ch.07–08 |
 | Modeling and prediction | Classifier, predictor, holdout evaluation | Theory ch.04, 15 |
 | Optional measures | Fragmentomics, derived measures, info-theory covariates | Package docs under `packages/*/docs/` |
@@ -157,7 +157,7 @@ MethylPipeline delivers two complementary surfaces: a **scientific process pack*
 | Distributed runtime | Portal, `cfg`+`wf` DB, gateway, workers, shared storage | [Distributed runtime](../architecture/distributed-runtime.md) |
 | Typed contracts | Action catalog (~45 actions), task schemas, OpenAPI | [Schema index](../reference/schema-index.md) |
 | Config registry | Sites, profiles, programs, studies, storage endpoints | [Config registry](../architecture/config-registry.md) |
-| Reuse / versioning | Idempotent skip, CAAS content keys, `hyperparamSetId` | [Usage ch.17](../usage/17-content-addressed-action-store.qmd) |
+| Reuse / versioning | Idempotent skip, CAAS content keys, `hyperparamSetId` | [Usage ch.17](../usage/17-content-addressed-action-store.md) |
 | Release | Versioned runtime bundle, manifest hashes, gated deploy | [Production release](../deployment/production_release.md) |
 | Regulatory synthesis | Traceability, change management, evidence templates | [Regulatory](../regulatory/README.md) |
 
@@ -389,7 +389,7 @@ via EpiPortal (`portal.sp_*` upsert/publish). `methyl-cfg` (`import-fs`, `upsert
 - Git keeps contracts, CI fixtures, and import seeds.
 
 See [config-registry](../architecture/config-registry.md) and
-[Usage ch.19](../usage/19-config-registry.qmd).
+[Usage ch.19](../usage/19-config-registry.md).
 
 ### Example: gene FeatureCuts caps (config-not-code)
 
@@ -464,12 +464,12 @@ flowchart LR
 
 | Stage | Packages | Operator chapter |
 |-------|----------|------------------|
-| Sample prep / QC | workers, `methylalignmentqc`, Parabricks, MethylExtractor | [ch.03](../usage/03-sample-prep-and-qc.qmd) |
-| Stability (WF1 core) | `methylcentroid`, `methyldetector`, `methylvalidation` | [ch.05](../usage/05-stage-stability.qmd) |
-| Freeze | + `methylmapper`, `methylenricher`, optional progression | [ch.06](../usage/06-stage-freeze.qmd) |
-| Model | `methylclassifier`, `methylpredictor` | [ch.07](../usage/07-stage-model.qmd) |
-| Post-model validation | `methylvalidation` | [ch.08](../usage/08-stage-post-model-validation.qmd) |
-| Blind prediction | `methylpredictor` | [ch.09](../usage/09-stage-blind-prediction.qmd) |
+| Sample prep / QC | workers, `methylalignmentqc`, Parabricks, MethylExtractor | [ch.03](../usage/03-sample-prep-and-qc.md) |
+| Stability (WF1 core) | `methylcentroid`, `methyldetector`, `methylvalidation` | [ch.05](../usage/05-stage-stability.md) |
+| Freeze | + `methylmapper`, `methylenricher`, optional progression | [ch.06](../usage/06-stage-freeze.md) |
+| Model | `methylclassifier`, `methylpredictor` | [ch.07](../usage/07-stage-model.md) |
+| Post-model validation | `methylvalidation` | [ch.08](../usage/08-stage-post-model-validation.md) |
+| Blind prediction | `methylpredictor` | [ch.09](../usage/09-stage-blind-prediction.md) |
 
 ### Statistical workflow distinction (do not conflate)
 
@@ -479,7 +479,7 @@ flowchart LR
 | **WF2** | Random-split evaluation of a frozen model | Engineering / exploratory |
 | **WF3** | True held-out partitions (`locked_test` / `pivotal_validation`) | Classical holdout / pivotal path |
 
-Theory: [two workflows](../theory/chapters/12-two-workflows.qmd).
+Theory: [two workflows](../theory/chapters/12-two-workflows.md).
 
 ![Stability stage internals](../diagrams/out/stability-stage.png)
 
@@ -523,8 +523,8 @@ guarantee.
 
 Optional Tier A/B search helpers exist for research tiers; enrichment/pivotal
 profiles expect locked hyperparameters. See
-[Usage ch.15](../usage/15-optional-hyperparameter-search.qmd) and CAAS
-([Usage ch.17](../usage/17-content-addressed-action-store.qmd)) for versioning
+[Usage ch.15](../usage/15-optional-hyperparameter-search.md) and CAAS
+([Usage ch.17](../usage/17-content-addressed-action-store.md)) for versioning
 results across hyperparameter sets without silently mixing claim stages.
 
 ---
@@ -664,7 +664,7 @@ flowchart LR
 | `samd_holdout_enrichment` | `internal_validation` | **Required** non-empty `locked_test` | Locked from research; freeze readiness |
 | `samd_pivotal` | `pivotal_validation` | **Required** non-empty `pivotal_validation` | Fully locked; hard BA fail |
 
-Operator SOP: [Usage ch.18](../usage/18-samd-study-lifecycle.qmd).
+Operator SOP: [Usage ch.18](../usage/18-samd-study-lifecycle.md).
 
 ### Partition promotion example
 
@@ -848,7 +848,7 @@ sequenceDiagram
 
 For a new indication or trait on methylation (or another shipped process), follow the
 **application pack** checklist in
-[Usage ch.24 Methylation application packs](../usage/24-methylation-application-packs.qmd)
+[Usage ch.24 Methylation application packs](../usage/24-methylation-application-packs.md)
 instead of the process-pack table above: study manifest, context overlay, partitions,
 optional enrichment preset / analyte / site pins, CI smoke, and a short instance guide.
 Do not invent a new modality when a config overlay is enough.
@@ -896,8 +896,8 @@ evidence packages are completed and bound to a released software version.
 
 | Need | Start |
 |------|-------|
-| Run a study | [Usage manual](../usage/index.qmd), [SaMD lifecycle](../usage/18-samd-study-lifecycle.qmd) |
-| Methods | [Theory book](../theory/index.qmd) |
+| Run a study | [Usage manual](../usage/index.md), [SaMD lifecycle](../usage/18-samd-study-lifecycle.md) |
+| Methods | [Theory book](../theory/index.md) |
 | Author workflows | [DomainProgram language](../reference/domain-program-language.md) |
 | Deploy cluster | [Operator journey](../deployment/operator-journey.md), [production runbook](../deployment/production_runbook.md) |
 | Audit / quality | [Regulatory](../regulatory/README.md), [traceability](../reference/traceability-provenance.md) |
@@ -1036,7 +1036,7 @@ to these controls. Completing the pivotal ladder remains a **study/ops obligatio
 | Auditor matrix | Regulatory folder | Research notes |
 
 Maintenance rule: keep this overview as synthesis; update pillars for detail; do
-not revive retired root Quarto stubs (`MethylPipeline-overview.qmd`).
+not revive retired root Quarto stubs (`MethylPipeline-overview.md`).
 
 ---
 

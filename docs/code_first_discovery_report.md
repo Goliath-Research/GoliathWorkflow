@@ -6,11 +6,11 @@ Scope: analysis only (no documentation replacement in this phase)
 ## Status Note (Post-Cleanup)
 
 This report preserves the discovery-time snapshot used to plan remediation.  
-Some findings listed below (for example broken `06-methylcluster.qmd` links and active-workflow wording) were subsequently addressed during phase-2 documentation cleanup.
+Some findings listed below (for example broken `06-methylcluster.md` links and active-workflow wording) were subsequently addressed during phase-2 documentation cleanup.
 
 Current canonical status after cleanup:
 - active workflow docs exclude `MethylCluster` from production-path sections
-- broken links to `docs/theory/chapters/06-methylcluster.qmd` were removed/repointed
+- broken links to `docs/theory/chapters/06-methylcluster.md` were removed/repointed
 - legacy `MethylCluster` content is isolated to deprecated/compatibility contexts
 
 ## 1) Deprecated `MethylCluster` Reference Inventory
@@ -27,9 +27,9 @@ Classification policy used:
 | `README.md` | Package list includes `methylcluster` as active package | Remove from main workflow | Canonical docs should exclude it from active path |
 | `docs/architecture/index.md` | Narrative + diagrams include `methylcluster` node | Remove from main workflow | Conflicts with deprecation direction |
 | `docs/Next Steps.md` | Section `MethylCluster (Deprecated)` | Move to appendix | Keep historical context only |
-| `docs/theory/DOCUMENTATION_PLAN.md` | Mentions `chapters/06-methylcluster.qmd` | Remove | Stale plan (chapter file absent) |
-| `docs/theory/chapters/11-project-configuration.qmd` | Table row for `cluster` -> `methyl-cluster` | Move to appendix | Keep only as legacy compatibility note |
-| `packages/methylcluster/docs/USAGE.md` | Links to missing `06-methylcluster.qmd`; CLI mention | Move to appendix + fix broken link | Package exists, but should be historical |
+| `docs/theory/DOCUMENTATION_PLAN.md` | Mentions `chapters/06-methylcluster.md` | Remove | Stale plan (chapter file absent) |
+| `docs/theory/chapters/11-project-configuration.md` | Table row for `cluster` -> `methyl-cluster` | Move to appendix | Keep only as legacy compatibility note |
+| `packages/methylcluster/docs/USAGE.md` | Links to missing `06-methylcluster.md`; CLI mention | Move to appendix + fix broken link | Package exists, but should be historical |
 | `packages/methylcluster/docs/THEORY.md` | Canonical chapter link points to missing file | Move to appendix + fix broken link | Broken reference and deprecated narrative |
 | `packages/methylcluster/docs/IMPLEMENTATION.md` | Active-style implementation narrative | Move to appendix | Keep only as legacy technical reference |
 | `docs/theory/README.md` | Explicit migration note says MethylCluster removed | Retain | Already aligned with target state |
@@ -46,7 +46,7 @@ Classification policy used:
 
 ### 1.3 Broken/stale reference requiring cleanup in phase 2
 
-- Missing target file: `docs/theory/chapters/06-methylcluster.qmd`
+- Missing target file: `docs/theory/chapters/06-methylcluster.md`
 - Broken links currently present in:
   - `packages/methylcluster/docs/USAGE.md`
   - `packages/methylcluster/docs/THEORY.md`

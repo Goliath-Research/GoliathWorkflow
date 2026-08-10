@@ -33,7 +33,7 @@ Diagnostics."** Messaging rests on three pillars:
   aligner, informME, deconvolution, and FeatureCuts knobs.
 * **Production-scale cloud efficiency.** Cluster-parallel execution and the
   Content-Addressed Action Store
-  ([CAAS](../usage/17-content-addressed-action-store.qmd)) skip redundant work
+  ([CAAS](../usage/17-content-addressed-action-store.md)) skip redundant work
   when only downstream steps change, reducing VM cost on large cohorts.
 * **SaMD-oriented process controls.** Code and profiles guard against statistical
   contamination (for example mixing development and locked holdout patients),
@@ -54,7 +54,7 @@ single hard-coded assay:
 
 Merge precedence stays config-not-code: **instance → procedure → profile/mode →
 analyte → site**. Guide:
-[Methylation application packs](../usage/24-methylation-application-packs.qmd)
+[Methylation application packs](../usage/24-methylation-application-packs.md)
 (procedure JSON under
 `workflow_engine/domain/profiles/procedures/`).
 
@@ -94,14 +94,14 @@ oncology cohorts. Near-term packs use the same control plane:
 | Assay procedures — `cfdna_emseq_targeted` | **Shipped (research)** | Inch-wide / mile-deep: `libraryProtocol: emseq_targeted`, `sample_prep_emseq`, operator panel BED (`methyl_extract.target_panel_bed`), elevated `min_cov`, no deconv. |
 | Assay procedures — `plant_wgbs_gene_fc` | **Shipped (research)** | Plant WGBS trait recipe; pairs with `plant_tissue` analyte and plant lifecycle. |
 | RNA-Seq **process** | **Shipped (research)** | `primary_modality: rnaseq`. Parabricks `rna_fq2bam` (STAR) or `kallisto` via `actionConfig.rna_align.quant_mode`. Typed actions, RNA QC, expression contract, DE gene-panel + tabular classification. Gate: representative cohorts + validation evidence. |
-| Proteomics **process** | **Shipped (research)** | `primary_modality: proteomics`. GPU DIA-NN; CPU DDA via Sage; panel-matrix ingest; Prosit / Casanovo. Shares `samples x features` seam with RNA-Seq. See [ch.22](../usage/22-proteomics-process-pack.qmd). |
-| Alzheimer cfDNA **application** | **Shipped (research)** | Disease overlay on `cfdna_wgbs_plasma`: staged Control → MCI → AD, `neuro-core`, progression. No new actions. See [ch.21](../usage/21-alzheimer-cfdna-pack.qmd). |
-| Prostate cancer **application** (`App_oncology`) | **Research deep-dive (pack pending)** | Buffy ~30× WGBS, plasma ~30× WGBS, linear vs `pangenome_wgbs` compare gate, and EM-Seq targeted (GRAIL-style chemistry / gatekeeper geometry) on `cfdna_emseq_targeted`. Physician/payer narrative and claim boundaries: [Prostate Cancer Application Deep-Dive](../research/Prostate_Cancer_Application_Deep_Dive.md). Operator pack (`usage/25-*` + `examples/samd/prostate-*`) not yet shipped—follow [ch.24](../usage/24-methylation-application-packs.qmd). |
-| Plant abiotic stress **application** | **Shipped (research)** | Trait overlay on `plant_wgbs_gene_fc`: Control vs Drought, multi-crop sites, `plant-stress-core`, offline `plant_traits` prior. See [ch.23](../usage/23-plant-abiotic-stress-pack.qmd). |
+| Proteomics **process** | **Shipped (research)** | `primary_modality: proteomics`. GPU DIA-NN; CPU DDA via Sage; panel-matrix ingest; Prosit / Casanovo. Shares `samples x features` seam with RNA-Seq. See [ch.22](../usage/22-proteomics-process-pack.md). |
+| Alzheimer cfDNA **application** | **Shipped (research)** | Disease overlay on `cfdna_wgbs_plasma`: staged Control → MCI → AD, `neuro-core`, progression. No new actions. See [ch.21](../usage/21-alzheimer-cfdna-pack.md). |
+| Prostate cancer **application** (`App_oncology`) | **Research deep-dive (pack pending)** | Buffy ~30× WGBS, plasma ~30× WGBS, linear vs `pangenome_wgbs` compare gate, and EM-Seq targeted (GRAIL-style chemistry / gatekeeper geometry) on `cfdna_emseq_targeted`. Physician/payer narrative and claim boundaries: [Prostate Cancer Application Deep-Dive](../research/Prostate_Cancer_Application_Deep_Dive.md). Operator pack (`usage/25-*` + `examples/samd/prostate-*`) not yet shipped—follow [ch.24](../usage/24-methylation-application-packs.md). |
+| Plant abiotic stress **application** | **Shipped (research)** | Trait overlay on `plant_wgbs_gene_fc`: Control vs Drought, multi-crop sites, `plant-stress-core`, offline `plant_traits` prior. See [ch.23](../usage/23-plant-abiotic-stress-pack.md). |
 
-See [RNA-Seq process pack](../usage/20-rnaseq-process-pack.qmd),
-[Proteomics process pack](../usage/22-proteomics-process-pack.qmd), and
-[Methylation application packs](../usage/24-methylation-application-packs.qmd).
+See [RNA-Seq process pack](../usage/20-rnaseq-process-pack.md),
+[Proteomics process pack](../usage/22-proteomics-process-pack.md), and
+[Methylation application packs](../usage/24-methylation-application-packs.md).
 
 ---
 
@@ -207,7 +207,7 @@ architecture that already exists:
   suitable for quality review.
 * **Cost savings via CAAS.** Changing only a downstream classification step can
   skip alignment and extraction across large cohorts
-  ([CAAS](../usage/17-content-addressed-action-store.qmd)).
+  ([CAAS](../usage/17-content-addressed-action-store.md)).
 * **Three-layer extensibility.** New **process packs** add `DomainProgram`s and
   typed actions on the same scheduler
   ([domain-program-language.md](../reference/domain-program-language.md)). New
@@ -216,7 +216,7 @@ architecture that already exists:
   stack—without disease names in Python. New **application packs** reuse a
   process + procedure with config only (manifest, overlay, partitions, optional
   preset); see
-  [Methylation application packs](../usage/24-methylation-application-packs.qmd).
+  [Methylation application packs](../usage/24-methylation-application-packs.md).
 * **Shipped multiomics process packs.** **RNA-Seq** reuses the Parabricks GPU
   SamplePrep pattern (`sample.parabricks_rna_fq2bam` / `sample.kallisto`), adds
   RNA QC and an expression contract, and feeds DE gene selection into the same
@@ -240,6 +240,6 @@ architecture that already exists:
 | [Product and operational controls](methylpipeline-product-and-operational-controls.md) | Feature inventory and control summary |
 | [SaMD submission scaffold](samd-submission-scaffold.md) | 510(k) / De Novo-style content map |
 | [Production platform](../deployment/production-platform.md) | Day-2 access: portal UI + worker gateway |
-| [SaMD study lifecycle (usage ch.18)](../usage/18-samd-study-lifecycle.qmd) | Operator SOP for the profile ladder |
-| [Methylation application packs (usage ch.24)](../usage/24-methylation-application-packs.qmd) | Process vs procedure vs application |
+| [SaMD study lifecycle (usage ch.18)](../usage/18-samd-study-lifecycle.md) | Operator SOP for the profile ladder |
+| [Methylation application packs (usage ch.24)](../usage/24-methylation-application-packs.md) | Process vs procedure vs application |
 | [Assay procedure packs plan](../plans/assay-procedure-packs.plan.md) | Implementation record for `pipelineProcedure` |

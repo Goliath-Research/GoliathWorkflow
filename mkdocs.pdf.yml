@@ -1,0 +1,5 @@
+# Retained for compatibility. PDF generation uses scripts/build_docs_pdf.sh
+# (Playwright print of the HTML site), which preserves Mermaid + MathJax without
+# mkdocs-exporter's stylesheet rewrite pass.
+INHERIT: mkdocs.yml
+site_dir: site-pdf-html

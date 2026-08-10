@@ -133,4 +133,4 @@ File-backed store keeps the same structure under `study.extra.studyGroups`. CLI:
 - [layer-model.md](layer-model.md)
 - [distributed-runtime.md](distributed-runtime.md)
 - [portal_resource_profile.md](../deployment/portal_resource_profile.md)
-- Usage: [docs/usage/19-config-registry.qmd](../usage/19-config-registry.qmd)
+- Usage: [docs/usage/19-config-registry.md](../usage/19-config-registry.md)

@@ -30,8 +30,11 @@ RG_GLOBS=(
   --glob '!docs/deployment/production_runbook.md'
   --glob '!docs/reference/action-parameter-contract.md'
   --glob '!docs/implementation/sample-preparation-flow.md'
-  --glob '!docs/theory/chapters/13-configuration-reference.qmd'
-  --glob '!docs/theory/chapters/14-user-guide.qmd'
+  --glob '!docs/theory/chapters/13-configuration-reference.md'
+  --glob '!docs/theory/chapters/14-user-guide.md'
+  --glob '!**/site/**'
+  --glob '!**/site-customer/**'
+  --glob '!**/site-pdf/**'
 )
 
 check_absent() {
@@ -92,9 +95,16 @@ check_absent 'stability_gene_featurecuts_max_dmps": 500' 'Gene FC caps belong in
 
 check_absent 'package defaults in MonteCarloConfig' 'Do not document Python package defaults for MC tunables'
 
-# Usage manual PDF uses pre-rendered PNG; inline Mermaid renders as source in LaTeX.
-if rg -l '```mermaid' --glob 'docs/usage/**/*.qmd' . >/tmp/doc_fresh_hits.txt 2>/dev/null; then
-  echo "FAIL: docs/usage must not use inline \`\`\`mermaid (use ../diagrams/out/*.png for PDF)" >&2
+# Usage/Theory are Markdown + dynamic Mermaid (MkDocs). Flag regressions to Quarto books
+# or pre-rendered PNG-only diagram embeds in active usage chapters.
+if rg -l '.' --glob 'docs/usage/**/*.qmd' --glob 'docs/theory/**/*.qmd' . >/tmp/doc_fresh_hits.txt 2>/dev/null; then
+  echo "FAIL: Quarto .qmd sources remain under docs/usage or docs/theory (convert to .md)" >&2
+  head -30 /tmp/doc_fresh_hits.txt >&2
+  fail=1
+fi
+
+if rg -l 'diagrams/out/.*\.png' --glob 'docs/usage/**/*.md' --glob 'docs/theory/**/*.md' . >/tmp/doc_fresh_hits.txt 2>/dev/null; then
+  echo "FAIL: usage/theory must use inline \`\`\`mermaid (not diagrams/out PNG embeds)" >&2
   head -30 /tmp/doc_fresh_hits.txt >&2
   fail=1
 fi

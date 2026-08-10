@@ -15,7 +15,7 @@ Compiler: `workflow_engine/domain/compiler.py` → `WorkflowDefinitionSpec` (Pyd
 
 **Full language (assign / WHILE / SWITCH / REPEAT / typed variables):** [`domain-program-language-v2.md`](domain-program-language-v2.md)  
 **Architecture overview:** [`docs/architecture/index.md`](architecture/index.md)  
-**Operator deployment:** [Usage ch.14](usage/14-deployment-and-distributed-workflow.qmd)  
+**Operator deployment:** [Usage ch.14](usage/14-deployment-and-distributed-workflow.md)  
 **Admin CLI:** [admin-cli-methyl-study-start.md](admin-cli-methyl-study-start.md)
 
 ## Artifact ladder
@@ -138,7 +138,7 @@ When a worker completes an ACTION, it submits **`result_code`** (integer) with t
 | `1` | True branch (e.g. remediation needed) |
 | `2..N` | Multi-way SWITCH cases (per action) |
 
-See also [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) (worker contract) and the user manual [Content-Addressed Action Store (CAAS)](usage/17-content-addressed-action-store.qmd) and [Artifacts and QA Checks — observability](usage/10-artifacts-and-qa-checks.qmd).
+See also [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) (worker contract) and the user manual [Content-Addressed Action Store (CAAS)](usage/17-content-addressed-action-store.md) and [Artifacts and QA Checks — observability](usage/10-artifacts-and-qa-checks.md).
 
 ### Two branching styles
 
@@ -299,7 +299,7 @@ Legacy `mc_*` profile names remain **deprecated aliases** that load `samd_resear
 | `gene_fc` | `mc_gene_fc` | `raw_pool` | `featurecuts` | Gene-axis BA gate on enricher/PPI genes |
 | `dual_fc` (default `samd_research`) | `mc_dmp_gene_fc` | `featurecuts` | `featurecuts` | Full DMP + gene FeatureCuts |
 | `phase_a_dmp_stability` → `phase_b_gene_from_stable_dmps` | (unchanged) | `featurecuts` → `stable_panel` | `none` → `from_stable_dmp_panel` | Two-stage panel lock before gene modeling |
-| SaMD ladder | `samd_research` → `samd_holdout_enrichment` → `samd_pivotal` | (research mode) | (research mode) | Claim-bound ladder with real holdouts ([usage ch.18](../usage/18-samd-study-lifecycle.qmd)) |
+| SaMD ladder | `samd_research` → `samd_holdout_enrichment` → `samd_pivotal` | (research mode) | (research mode) | Claim-bound ladder with real holdouts ([usage ch.18](../usage/18-samd-study-lifecycle.md)) |
 
 **PPI vs Enrichr (`gene_enricher` / `gene_fc`, legacy `mc_gene` / `mc_gene_fc`):** mode overlays default to `actionConfig.enricher.ppi_only: true` (STRING PPI hubs, fast). Set `ppi_only: false` in a site/profile/instance override to use Enrichr pathway libraries instead.
 
@@ -401,4 +401,4 @@ Stability summaries record active axes in `stability_summary.json` → `pipeline
 
 ## Sample prep reference
 
-QC gates and Picard/Parabricks/extraction guardrails: [Usage ch.03](usage/03-sample-prep-and-qc.qmd), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md).
+QC gates and Picard/Parabricks/extraction guardrails: [Usage ch.03](usage/03-sample-prep-and-qc.md), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md).

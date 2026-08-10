@@ -1,6 +1,6 @@
 # Plant abiotic stress methylation pack (example)
 
-Instance of the [methylation application-pack pattern](../../../usage/24-methylation-application-packs.qmd)
+Instance of the [methylation application-pack pattern](../../../usage/24-methylation-application-packs.md)
 (trait application). A **binary Control vs Drought** *Arabidopsis thaliana* leaf WGBS
 methylation study on the existing methylation control plane. It selects assay procedure
 `plant_wgbs_gene_fc` (linear WGBS, gene FeatureCuts, plant lifecycle without blood
@@ -13,7 +13,7 @@ This instance extends the application-pack pattern with plant platform unblocker
 fragmentomics), a linear TAIR10 site reference, a lifecycle program **without** blood
 cell deconvolution, and the `plant-stress-core` enrichment preset.
 
-See the operator guide: [Usage ch.23 Plant abiotic stress pack](../../../usage/23-plant-abiotic-stress-pack.qmd),
+See the operator guide: [Usage ch.23 Plant abiotic stress pack](../../../usage/23-plant-abiotic-stress-pack.md),
 the analyte defaults in [ANALYTE_PROFILES](../../../ANALYTE_PROFILES.md), and the plant
 epigenomics background in [Plant Research](../../../research/Plant%20Research.md).
 
@@ -106,5 +106,5 @@ Same program and analyte; only site pins, chromosome list, organism, and STRING 
   `workflow_engine/domain/checks/plant_abiotic_stress/data/plant_houseman_seed_fixture.json`.
 - **epi-GBS:** `libraryProtocol: epi_gbs` + `sample_prep_epigbs.program.json` +
   `actionConfig.docker_align` image/argv (Parabricks WGBS SamplePrep stays separate).
-  See [ch.23](../../../usage/23-plant-abiotic-stress-pack.qmd) and
+  See [ch.23](../../../usage/23-plant-abiotic-stress-pack.md) and
   [plant-deconv-epigbs-seams](../../../plans/plant-deconv-epigbs-seams.plan.md).

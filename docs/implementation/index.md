@@ -14,7 +14,7 @@ Developer-facing documentation for the workflow engine, workers, DomainProgram c
 
 **Also:** [`workflow_engine/docs/IMPLEMENTATION.md`](../../workflow_engine/docs/IMPLEMENTATION.md) — gateway, DB client, scheduler internals.
 
-**Architecture (system design):** [../architecture/](../architecture/index.md). **Operator runbooks:** [../usage/](../usage/index.qmd).
+**Architecture (system design):** [../architecture/](../architecture/index.md). **Operator runbooks:** [../usage/](../usage/index.md).
 
 ## When to update
 

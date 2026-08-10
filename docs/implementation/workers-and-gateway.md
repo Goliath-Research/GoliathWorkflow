@@ -33,7 +33,7 @@ sequenceDiagram
 
 ## Deployment
 
-See [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) and [`docs/deployment/production_runbook.md`](../deployment/production_runbook.md).
+See [Usage ch.14](../usage/14-deployment-and-distributed-workflow.md) and [`docs/deployment/production_runbook.md`](../deployment/production_runbook.md).
 
 ## Implementation detail
 

@@ -10,8 +10,8 @@ This audit records drift between MethylPipeline code and documentation after the
 
 | Pillar | Format | Rationale |
 |--------|--------|-----------|
-| **Theory** | Quarto (`.qmd`) | LaTeX math, `references.bib`, `@eq-` / `@sec-` cross-refs, publication PDF via `lualatex` |
-| **Usage** | Quarto (`.qmd`) | Multi-part book assembly, PDF runbooks; reviewed 2026-07 — **stays Quarto** |
+| **Theory** | Quarto (`.md`) | LaTeX math, `references.bib`, `@eq-` / `@sec-` cross-refs, publication PDF via `lualatex` |
+| **Usage** | Quarto (`.md`) | Multi-part book assembly, PDF runbooks; reviewed 2026-07 — **stays Quarto** |
 | **Implementation / Architecture / Reference** | Plain Markdown | GitHub-native; Mermaid + pre-rendered SVG |
 
 **Validated 2026-07:** Theory cannot move to plain Markdown without losing equation numbering and bibliography. Usage has no math but benefits from book/PDF export; migration to Markdown would not reduce contributor burden proportionally.
@@ -36,8 +36,8 @@ This audit records drift between MethylPipeline code and documentation after the
 
 | File | Issue | Fix |
 |------|-------|-----|
-| `docs/theory/chapters/11-project-configuration.qmd` | Entire chapter built around `step_config` dictionary | Rewritten: four-layer model, study manifest only |
-| `docs/reference/configuration-reference.qmd` | Organized as `step_config.*` keys | Reframed as `actionConfig.*` resolver targets |
+| `docs/theory/chapters/11-project-configuration.md` | Entire chapter built around `step_config` dictionary | Rewritten: four-layer model, study manifest only |
+| `docs/reference/configuration-reference.md` | Organized as `step_config.*` keys | Reframed as `actionConfig.*` resolver targets |
 | `packages/methylvalidation/docs/USAGE.md` | "Project Config: step_config.validation"; package defaults | Profile + `resolvedConfig` + `mc_config.json` |
 | `workflow_engine/docs/pipeline_architecture.md` | `step_config` as authoritative project content | Four-layer + enriched `context_json` |
 
@@ -45,10 +45,10 @@ This audit records drift between MethylPipeline code and documentation after the
 
 | File | Issue | Fix |
 |------|-------|-----|
-| `docs/usage/02-project-config-and-layout.qmd` | Precedence ends in "package defaults" | "no Python fallback for tunable science knobs" |
+| `docs/usage/02-project-config-and-layout.md` | Precedence ends in "package defaults" | "no Python fallback for tunable science knobs" |
 | `docs/reference/domain-program-language.md` | Same precedence; deprecated profile examples | Canonical profiles; updated precedence |
 | `docs/reference/config-parameter-matrix.md` | Same precedence line | Aligned with layer model |
-| `docs/usage/05-stage-stability.qmd` | Deprecated profiles; no modeling modes | `mc_*` profiles; modeling mode section |
+| `docs/usage/05-stage-stability.md` | Deprecated profiles; no modeling modes | `mc_*` profiles; modeling mode section |
 | DMP export docs | Lead with `classifier` / `classifier-extended` | Primary: `dmps-*-selected.csv` |
 | `docs/ANALYTE_PROFILES.md` | `step_config.validation.regulatory` | Top-level `regulatory` + profile/site |
 

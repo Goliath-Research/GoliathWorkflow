@@ -1,5 +1,10 @@
 # MethylPipeline Product and Operational Controls
 
+!!! warning "Claim boundary"
+    This synthesis summarizes implemented controls for design review. It is
+    **not** a filed SaMD submission or FDA clearance. Evidence packages belong in
+    the [validation evidence index](validation-evidence-index.md).
+
 > Status: proposed regulatory-facing synthesis. This document summarizes
 > implemented product controls and points to canonical engineering documents
 > for detail.
@@ -22,12 +27,12 @@ must all be traceable to one another.
 
 | Feature Area | Capability | Canonical Docs |
 |--------------|------------|----------------|
-| Sample preparation | FASTQ ingress, Parabricks alignment, remediation, methylation extraction, archive and cleanup | [`../usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd), [`../../workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md) |
-| Quality control | Alignment QC, extraction QC, guardrails, branchable remediation decisions | [`../usage/10-artifacts-and-qa-checks.qmd`](../usage/10-artifacts-and-qa-checks.qmd) |
-| DMP discovery | Centroid construction, detector, Storey FDR, biological effect ranking, fixed panel mode | [`../theory/chapters/02-methylcentroid.qmd`](../theory/chapters/02-methylcentroid.qmd), [`../theory/chapters/03-methyldetector.qmd`](../theory/chapters/03-methyldetector.qmd) |
-| Stability and freeze | Monte Carlo recurrence, stable panel, production freeze, readiness checks | [`../theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.qmd), [`../../packages/methylvalidation/docs/STABILITY_FREEZE_READINESS.md`](../../packages/methylvalidation/docs/STABILITY_FREEZE_READINESS.md) |
-| Interpretation | DMP to gene mapping, feature weights, enrichment, PPI, disease progression | [`../theory/chapters/07-methylmapper.qmd`](../theory/chapters/07-methylmapper.qmd), [`../theory/chapters/08-methylenricher.qmd`](../theory/chapters/08-methylenricher.qmd) |
-| Modeling and prediction | ECDF classifier, alternative model backends, predictor, holdout evaluation | [`../theory/chapters/04-methylclassifier.qmd`](../theory/chapters/04-methylclassifier.qmd), [`../theory/chapters/15-model-creation-and-validation.qmd`](../theory/chapters/15-model-creation-and-validation.qmd) |
+| Sample preparation | FASTQ ingress, Parabricks alignment, remediation, methylation extraction, archive and cleanup | [`../usage/03-sample-prep-and-qc.md`](../usage/03-sample-prep-and-qc.md), [`../../workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md) |
+| Quality control | Alignment QC, extraction QC, guardrails, branchable remediation decisions | [`../usage/10-artifacts-and-qa-checks.md`](../usage/10-artifacts-and-qa-checks.md) |
+| DMP discovery | Centroid construction, detector, Storey FDR, biological effect ranking, fixed panel mode | [`../theory/chapters/02-methylcentroid.md`](../theory/chapters/02-methylcentroid.md), [`../theory/chapters/03-methyldetector.md`](../theory/chapters/03-methyldetector.md) |
+| Stability and freeze | Monte Carlo recurrence, stable panel, production freeze, readiness checks | [`../theory/chapters/12-two-workflows.md`](../theory/chapters/12-two-workflows.md), [`../../packages/methylvalidation/docs/STABILITY_FREEZE_READINESS.md`](../../packages/methylvalidation/docs/STABILITY_FREEZE_READINESS.md) |
+| Interpretation | DMP to gene mapping, feature weights, enrichment, PPI, disease progression | [`../theory/chapters/07-methylmapper.md`](../theory/chapters/07-methylmapper.md), [`../theory/chapters/08-methylenricher.md`](../theory/chapters/08-methylenricher.md) |
+| Modeling and prediction | ECDF classifier, alternative model backends, predictor, holdout evaluation | [`../theory/chapters/04-methylclassifier.md`](../theory/chapters/04-methylclassifier.md), [`../theory/chapters/15-model-creation-and-validation.md`](../theory/chapters/15-model-creation-and-validation.md) |
 
 ### Platform Features
 

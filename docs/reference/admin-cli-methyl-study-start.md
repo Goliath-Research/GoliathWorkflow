@@ -102,7 +102,7 @@ OpenAPI: [`contracts/openapi.yaml`](../../contracts/openapi.yaml) documents work
 | `methyl-study-init` | Scaffold `/work/projects/<study-id>/` + slim `project_*.json` with `validation_partitions` |
 | `methyl-study-validate-manifest` | Refuse empty required holdouts for `samd_holdout_enrichment` / `samd_pivotal`; block pre-pivotal clinical claims |
 
-Operator SOP: [`../usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd). Presets: `scripts/workflow_presets.sh list` (`samd_*`).
+Operator SOP: [`../usage/18-samd-study-lifecycle.md`](../usage/18-samd-study-lifecycle.md). Presets: `scripts/workflow_presets.sh list` (`samd_*`).
 
 Example validation-start context for enrichment:
 
@@ -119,4 +119,4 @@ Example validation-start context for enrichment:
 - [Workflow engine](../implementation/workflow-engine.md)
 - [Operator journey](../deployment/operator-journey.md)
 - [Component boundaries](../architecture/component-boundaries.md)
-- [SaMD study lifecycle](../usage/18-samd-study-lifecycle.qmd)
+- [SaMD study lifecycle](../usage/18-samd-study-lifecycle.md)

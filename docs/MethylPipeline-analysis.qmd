@@ -7,7 +7,7 @@ title: "MethylPipeline Analysis (retired)"
 
 This standalone Quarto analysis doc was retired during the 2026-06 documentation IA revision.
 
-- Statistical content → [Theory book](theory/index.qmd)
+- Statistical content → [Theory book](theory/index.md)
 - Workflow diagrams → [Architecture](architecture/index.md)
-- Operator steps → [Usage manual](usage/index.qmd)
+- Operator steps → [Usage manual](usage/index.md)
 :::

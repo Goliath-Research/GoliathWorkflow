@@ -46,16 +46,18 @@ steps:
     displayName: Package install and catalog fixture contracts
 
   - script: |
+      # Optional Marp/offline diagram assets (site uses dynamic Mermaid).
       sudo apt-get update
       sudo apt-get install -y chromium-browser
       (cd docs/diagrams && npm ci --no-audit --no-fund)
       bash scripts/render_diagrams.sh --check
-    displayName: Diagram asset freshness check
+    displayName: Optional Marp diagram asset freshness check
+    continueOnError: true
 
   - script: |
-      bash scripts/install_quarto_ci.sh
-      quarto render docs/theory docs/usage --to html
-    displayName: Quarto book smoke (theory + usage HTML)
+      python -m pip install -r docs-requirements.txt
+      mkdocs build --strict
+    displayName: MkDocs site smoke (strict)
 
   - script: |
       python -m venv .venv

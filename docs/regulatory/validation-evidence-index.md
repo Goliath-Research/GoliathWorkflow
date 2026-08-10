@@ -12,7 +12,7 @@ clinical or analytical performance claims.
 **When to add a package:** after a `samd_pivotal` (or equivalent) run that used a
 populated `pivotal_validation` partition, freeze readiness go/go_with_risks, and
 a reviewed intended-use statement. Operator path:
-[`../usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd).
+[`../usage/18-samd-study-lifecycle.md`](../usage/18-samd-study-lifecycle.md).
 Example partition shapes: [`../examples/samd/`](../examples/samd/).
 
 Architecture and release controls show that the product is controlled. This
@@ -342,8 +342,8 @@ and traceability to the deployed product version that produced the results.
 
 ## Related Documents
 
-- [`../theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.qmd)
-- [`../theory/chapters/15-model-creation-and-validation.qmd`](../theory/chapters/15-model-creation-and-validation.qmd)
-- [`../usage/10-artifacts-and-qa-checks.qmd`](../usage/10-artifacts-and-qa-checks.qmd)
+- [`../theory/chapters/12-two-workflows.md`](../theory/chapters/12-two-workflows.md)
+- [`../theory/chapters/15-model-creation-and-validation.md`](../theory/chapters/15-model-creation-and-validation.md)
+- [`../usage/10-artifacts-and-qa-checks.md`](../usage/10-artifacts-and-qa-checks.md)
 - [`deployment-and-supervision.md`](deployment-and-supervision.md)
 - [`traceability-matrix.md`](traceability-matrix.md)

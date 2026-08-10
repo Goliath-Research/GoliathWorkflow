@@ -1,8 +1,8 @@
 # Analyte-driven pipeline profiles
 
-> **Modality vs analyte.** `regulatory.primary_modality` (`methylation` | `rnaseq` | `proteomics`) selects the **omics process pack** and is distinct from `regulatory.primary_analyte` (the DNA-methylation sample matrix: `cfdna`, `buffy_coat`, `combined`). Modality defaults to `methylation` when unset. The non-methylation packs have their own programs/profiles/actions and the analyte packs below apply to the methylation modality only. See [RNA-Seq process pack](usage/20-rnaseq-process-pack.qmd) and [Proteomics process pack](usage/22-proteomics-process-pack.qmd). RNA-Seq and proteomics share a common `samples x features` seam (`omics_features`) feeding the tabular classifier + covariate stacking.
+> **Modality vs analyte.** `regulatory.primary_modality` (`methylation` | `rnaseq` | `proteomics`) selects the **omics process pack** and is distinct from `regulatory.primary_analyte` (the DNA-methylation sample matrix: `cfdna`, `buffy_coat`, `combined`). Modality defaults to `methylation` when unset. The non-methylation packs have their own programs/profiles/actions and the analyte packs below apply to the methylation modality only. See [RNA-Seq process pack](usage/20-rnaseq-process-pack.md) and [Proteomics process pack](usage/22-proteomics-process-pack.md). RNA-Seq and proteomics share a common `samples x features` seam (`omics_features`) feeding the tabular classifier + covariate stacking.
 
-> **Application packs.** An [application pack](usage/24-methylation-application-packs.qmd) is a study configuration on an existing process modality (cohorts + partitions + a config overlay), not a new process pack. Worked methylation instances: the [Alzheimer cfDNA pack](usage/21-alzheimer-cfdna-pack.qmd) (disease application — staged Control -> MCI -> AD on `primary_analyte: cfdna`, `neuro-core` enrichment) and the [plant abiotic stress pack](usage/23-plant-abiotic-stress-pack.qmd) (trait application — Control vs Drought on `primary_analyte: plant_tissue`, `plant-stress-core` enrichment).
+> **Application packs.** An [application pack](usage/24-methylation-application-packs.md) is a study configuration on an existing process modality (cohorts + partitions + a config overlay), not a new process pack. Worked methylation instances: the [Alzheimer cfDNA pack](usage/21-alzheimer-cfdna-pack.md) (disease application — staged Control -> MCI -> AD on `primary_analyte: cfdna`, `neuro-core` enrichment) and the [plant abiotic stress pack](usage/23-plant-abiotic-stress-pack.md) (trait application — Control vs Drought on `primary_analyte: plant_tissue`, `plant-stress-core` enrichment).
 
 > **Assay procedure packs.** Between process and application, pick a named
 > `pipelineProcedure` (e.g. `buffy_wgbs_pangenome_gene_fc`, `cfdna_wgbs_plasma`,
@@ -10,7 +10,7 @@
 > [`workflow_engine/domain/profiles/procedures/`](../workflow_engine/domain/profiles/procedures/).
 > Procedures pin library protocol, SamplePrep/lifecycle program hints, FeatureCuts
 > axis, and covariate defaults. The study `primary_analyte` must match the
-> procedure’s `analyteExpectation`. See [Usage ch.24](usage/24-methylation-application-packs.qmd).
+> procedure’s `analyteExpectation`. See [Usage ch.24](usage/24-methylation-application-packs.md).
 
 Set **`regulatory.primary_analyte`** once in the study manifest (`cfdna`, `buffy_coat`, or `combined`). The resolver merges analyte-specific defaults into profile/site `actionConfig` via `merge_step_config` in `packages/methylutils/methyl_utils/analyte_profiles.py` (explicit profile or site keys always win). Procedure and instance overlays still win over analyte fill-missing defaults.
 
@@ -29,9 +29,9 @@ Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.
 
 `combined` / unknown analytes: bisulfite QC defaults only.
 
-**`plant_tissue` (Arabidopsis / crop WGBS).** Aliases: `plant`, `leaf`, `root`, `meristem`, `seed`. Selected by the [plant abiotic stress pack](usage/23-plant-abiotic-stress-pack.qmd) (TAIR10 plus soybean / maize / wheat site recipes). Because plant genomes methylate in CG, CHG and CHH contexts, non-CpG methylation is a biological signal rather than a bisulfite-conversion failure: the conversion-rate gate stays on (spike-in / sidecar) but the non-CpG cap and mammalian CHG/CHH extraction caps are opened. Blood cell deconvolution and cfDNA fragmentomics do not apply. Gene↔trait priors use mapper `enrich_source: plant_traits` (offline TSV), not Open Targets.
+**`plant_tissue` (Arabidopsis / crop WGBS).** Aliases: `plant`, `leaf`, `root`, `meristem`, `seed`. Selected by the [plant abiotic stress pack](usage/23-plant-abiotic-stress-pack.md) (TAIR10 plus soybean / maize / wheat site recipes). Because plant genomes methylate in CG, CHG and CHH contexts, non-CpG methylation is a biological signal rather than a bisulfite-conversion failure: the conversion-rate gate stays on (spike-in / sidecar) but the non-CpG cap and mammalian CHG/CHH extraction caps are opened. Blood cell deconvolution and cfDNA fragmentomics do not apply. Gene↔trait priors use mapper `enrich_source: plant_traits` (offline TSV), not Open Targets.
 
-**`cell_deconvolution` note.** The method switch and analyte-driven HiTIMED tree roots are **not** applied by the analyte profile merge today; set `method` (`houseman` | `hitimed`) under profile `actionConfig.cell_deconvolution`. HiTIMED reads its tree from the `analyte` field, which defaults to `regulatory.primary_analyte`. There is no dedicated `tissue` entry in `analyte_profiles.py`, so tissue prep/enricher steps use `combined`/unknown defaults unless a profile overrides them. See [Theory ch.07a MethylDeconv](theory/chapters/07a-methyldeconv.qmd).
+**`cell_deconvolution` note.** The method switch and analyte-driven HiTIMED tree roots are **not** applied by the analyte profile merge today; set `method` (`houseman` | `hitimed`) under profile `actionConfig.cell_deconvolution`. HiTIMED reads its tree from the `analyte` field, which defaults to `regulatory.primary_analyte`. There is no dedicated `tissue` entry in `analyte_profiles.py`, so tissue prep/enricher steps use `combined`/unknown defaults unless a profile overrides them. See [Theory ch.07a MethylDeconv](theory/chapters/07a-methyldeconv.md).
 
 Background research on analyte tradeoffs: [docs/research/](../research/README.md).
 

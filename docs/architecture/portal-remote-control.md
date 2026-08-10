@@ -93,7 +93,7 @@ Source models: [`packages/methylvalidation/methyl_validation/hyperparam_models.p
 The host `methyl-hyperparam-search` subprocess loop
 ([`packages/methylvalidation/methyl_validation/hyperparam_search.py`](../../packages/methylvalidation/methyl_validation/hyperparam_search.py))
 remains for development and experimentation only (see
-[usage ch.15](../usage/15-optional-hyperparameter-search.qmd)). It reuses the same
+[usage ch.15](../usage/15-optional-hyperparameter-search.md)). It reuses the same
 grid expansion (`grid_to_dicts`) and objective, but does not create workflow
 instances or write the `cfg` ledger. Production uses the portal multi-instance
 path. Grid is the only supported strategy in this slice (Random / Hyperband /
@@ -106,4 +106,4 @@ Bayesian remain out of scope).
 - [Component boundaries](component-boundaries.md)
 - [Pipeline architecture — execution scopes and CAAS](../../workflow_engine/docs/pipeline_architecture.md)
 - [Portal study lifecycle](../../workflow_engine/docs/portal_study_lifecycle.md)
-- [Content-Addressed Action Store (usage ch.17)](../usage/17-content-addressed-action-store.qmd)
+- [Content-Addressed Action Store (usage ch.17)](../usage/17-content-addressed-action-store.md)

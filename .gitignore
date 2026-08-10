@@ -71,11 +71,13 @@ dmypy.json
 docs/_build/
 docs/_static/
 docs/_templates/
-# Quarto HTML under _book/ is regenerated; track PDF book outputs.
-docs/usage/_book/*
-!docs/usage/_book/*.pdf
-docs/theory/_book/*
-!docs/theory/_book/*.pdf
+# MkDocs static site outputs (build locally or in CI; do not commit)
+/site/
+/site-customer/
+/site-pdf/
+# Legacy Quarto book outputs (retired; do not reintroduce)
+docs/usage/_book/
+docs/theory/_book/
 
 # Docker
 *.tar

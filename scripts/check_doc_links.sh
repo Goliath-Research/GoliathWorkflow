@@ -10,7 +10,7 @@ fail=0
 check_absent() {
   local pattern="$1"
   local msg="$2"
-  if rg -l "$pattern" --glob '!.venv/**' --glob '!**/_book/**' --glob '!**/*.pdf' --glob '!**/*.html' . >/tmp/doc_link_hits.txt 2>/dev/null; then
+  if rg -l "$pattern" --glob '!.venv/**' --glob '!**/_book/**' --glob '!**/site/**' --glob '!**/site-customer/**' --glob '!**/site-pdf/**' --glob '!**/*.pdf' --glob '!**/*.html' --glob '!docs/plans/**' . >/tmp/doc_link_hits.txt 2>/dev/null; then
     echo "FAIL: $msg" >&2
     head -20 /tmp/doc_link_hits.txt >&2
     fail=1
@@ -21,14 +21,22 @@ check_absent() {
 check_absent 'docs/user-manual/[0-9]' 'Legacy user-manual chapter paths (use docs/usage/)'
 check_absent 'docs/domain_program_language\.md\)' 'Unqualified reference/domain-program-language.md link (use reference/)'
 
-# Required new paths should exist
+# Required paths should exist (Markdown-first site)
 for f in \
-  docs/usage/index.qmd \
+  docs/usage/index.md \
+  docs/theory/index.md \
+  docs/usage/alignment-engines.md \
+  docs/CONTRIBUTING.md \
+  mkdocs.yml \
+  mkdocs.customer.yml \
+  mkdocs.pdf.yml \
+  docs-requirements.txt \
   docs/reference/documentation-toolchain.md \
   docs/architecture/index.md \
   docs/implementation/index.md \
   docs/reference/domain-program-language.md \
-  docs/reference/config-parameter-matrix.md
+  docs/reference/config-parameter-matrix.md \
+  docs/reference/configuration-reference.md
 do
   if [[ ! -f "$f" ]]; then
     echo "FAIL: missing expected file $f" >&2

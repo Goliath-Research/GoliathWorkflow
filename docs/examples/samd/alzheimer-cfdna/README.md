@@ -1,13 +1,13 @@
 # Alzheimer cfDNA application pack (example)
 
-Instance of the [methylation application-pack pattern](../../../usage/24-methylation-application-packs.qmd)
+Instance of the [methylation application-pack pattern](../../../usage/24-methylation-application-packs.md)
 (disease application). A **staged (Control -> MCI -> AD)** cfDNA DNA-methylation study
 on the existing methylation SaMD control plane. It selects assay procedure
 `cfdna_wgbs_plasma` (linear WGBS, fragmentomics, gene FeatureCuts, no cell
 deconvolution), the `samd_*` profile ladder, and the cfDNA analyte profile. The pack
 is config + cohorts + partitions + a disease overlay — no new actions or aligners.
 
-See the operator guide: [Usage ch.21 Alzheimer cfDNA pack](../../../usage/21-alzheimer-cfdna-pack.qmd)
+See the operator guide: [Usage ch.21 Alzheimer cfDNA pack](../../../usage/21-alzheimer-cfdna-pack.md)
 and the shared methylation workflow: [end-to-end workflow](../../../architecture/end-to-end-workflow.md).
 
 ## Files

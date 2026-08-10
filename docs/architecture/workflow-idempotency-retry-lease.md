@@ -59,7 +59,7 @@ Operators may create a new instance or use portal/admin paths to reset work. `me
 
 ## Recovery (operator)
 
-See [Usage ch.11 — Troubleshooting and recovery](../usage/11-troubleshooting-and-recovery.qmd):
+See [Usage ch.11 — Troubleshooting and recovery](../usage/11-troubleshooting-and-recovery.md):
 
 1. Find stuck `RUNNING` rows with expired/missing leases (query below or portal task list).
 2. Verify worker health (`systemctl status methyl-worker`, journal).

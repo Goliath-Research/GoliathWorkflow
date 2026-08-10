@@ -1,0 +1,261 @@
+# MethylPipeline documentation site (Markdown-first).
+# Build:  source .venv/bin/activate && mkdocs build --strict
+# Serve:  mkdocs serve
+# PDF:    MKDOCS_EXPORTER_PDF_ENABLED=true mkdocs build
+
+site_name: MethylPipeline Documentation
+site_description: Theory, usage, architecture, deployment, and regulatory controls
+site_url: ""
+repo_url: https://github.com/Goliath-Research/MethylPipeline
+edit_uri: ""
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  icon:
+    logo: material/dna
+
+hooks:
+  - docs_hooks/filter_static.py
+
+plugins:
+  - search
+  # PDF export is enabled via mkdocs.pdf.yml (Playwright + mkdocs-exporter).
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+extra_css:
+  - stylesheets/extra.css
+
+exclude_docs: |
+  /plans/
+  /research/
+  /presentations/
+  /canvas/
+  /diagrams/
+  /user-manual/
+  /docs/
+  /diagnostics/
+  /examples/
+  **/_book/
+  **/*_files/
+  /MethylPipeline-analysis_files/
+  /MethylPipeline-overview_files/
+  **/*.qmd
+  **/*.html
+  **/*.pdf
+  **/*.tex
+  **/*.bib
+  /MethylPipeline-overview.qmd
+  /MethylPipeline-analysis.qmd
+  /architecture_review.md
+  /config_parameter_matrix.md
+  /domain_program_language.md
+  /code_first_discovery_report.md
+  /theory/chapters/13-configuration-reference.md
+  /theory/chapters/14-user-guide.md
+  /theory/README.md
+  /usage/pdf-table-fix.tex
+  /implementation/packages/_TEMPLATE.md
+
+nav:
+  - Home: index.md
+  - Overview:
+      - Platform overview: overview/methylpipeline-platform-overview.md
+      - Documentation audit: DOCUMENTATION_AUDIT.md
+      - Contributing to docs: CONTRIBUTING.md
+      - Dev environment: DEPLOYMENT.md
+      - Analyte profiles: ANALYTE_PROFILES.md
+  - Theory:
+      - theory/index.md
+      - Part I — Foundations:
+          - methylutils: theory/chapters/01-methylutils.md
+          - methylcentroid: theory/chapters/02-methylcentroid.md
+          - methyldetector: theory/chapters/03-methyldetector.md
+          - methylclassifier: theory/chapters/04-methylclassifier.md
+          - Predictor and validation: theory/chapters/05-methylpredictor-and-validation.md
+          - methylmapper: theory/chapters/07-methylmapper.md
+          - methyldeconv: theory/chapters/07a-methyldeconv.md
+          - methylenricher: theory/chapters/08-methylenricher.md
+          - Alignment QC: theory/chapters/09-methylalignmentqc.md
+          - Extraction QC: theory/chapters/09a-methylextractionqc.md
+          - Limitations: theory/chapters/10-limitations-and-open-questions.md
+      - Part II — Config and workflows:
+          - Project configuration: theory/chapters/11-project-configuration.md
+          - Two workflows: theory/chapters/12-two-workflows.md
+          - Model creation: theory/chapters/15-model-creation-and-validation.md
+  - Usage:
+      - usage/index.md
+      - Relationship to theory: usage/00-relationship-to-theory-and-implementation.md
+      - Setup and orientation:
+          - Prerequisites: usage/01-prerequisites-and-environment.md
+          - Project config and layout: usage/02-project-config-and-layout.md
+          - Sample prep and QC: usage/03-sample-prep-and-qc.md
+          - Alignment engines: usage/alignment-engines.md
+          - Orchestration: usage/04-orchestration-workflow-run.md
+          - Package reference: usage/04b-package-reference-individual-usage.md
+      - Staged solution:
+          - Stability: usage/05-stage-stability.md
+          - Freeze: usage/06-stage-freeze.md
+          - Model: usage/07-stage-model.md
+          - Post-model validation: usage/08-stage-post-model-validation.md
+          - Blind prediction: usage/09-stage-blind-prediction.md
+      - Operations:
+          - Artifacts and QA: usage/10-artifacts-and-qa-checks.md
+          - Troubleshooting: usage/11-troubleshooting-and-recovery.md
+          - Command cookbook: usage/12-command-cookbook.md
+          - Distributed validation: usage/13-distributed-methyl-validation.md
+          - Deployment: usage/14-deployment-and-distributed-workflow.md
+          - Hyperparameter search: usage/15-optional-hyperparameter-search.md
+      - Tutorials and packs:
+          - Healthy vs cancer tutorial: usage/16-tutorial-healthy-vs-cancer-stages.md
+          - Content-addressed action store: usage/17-content-addressed-action-store.md
+          - SaMD study lifecycle: usage/18-samd-study-lifecycle.md
+          - Config registry: usage/19-config-registry.md
+          - RNA-seq process pack: usage/20-rnaseq-process-pack.md
+          - Alzheimer cfDNA pack: usage/21-alzheimer-cfdna-pack.md
+          - Proteomics process pack: usage/22-proteomics-process-pack.md
+          - Plant abiotic stress pack: usage/23-plant-abiotic-stress-pack.md
+          - Application packs pattern: usage/24-methylation-application-packs.md
+  - Architecture:
+      - architecture/index.md
+      - Layer model: architecture/layer-model.md
+      - Pipeline stages: architecture/pipeline-stages.md
+      - End-to-end workflow: architecture/end-to-end-workflow.md
+      - RNA-seq workflow: architecture/end-to-end-workflow-rnaseq.md
+      - Proteomics workflow: architecture/end-to-end-workflow-proteomics.md
+      - Config registry: architecture/config-registry.md
+      - Config propagation: architecture/config-propagation-methylation.md
+      - Distributed runtime: architecture/distributed-runtime.md
+      - Orchestration paths: architecture/orchestration-paths.md
+      - Component boundaries: architecture/component-boundaries.md
+      - Mojo multi-GPU dual align: architecture/mojo-multi-gpu-dual-align.md
+      - Portal IA: architecture/portal-ia.md
+      - Portal remote control: architecture/portal-remote-control.md
+      - Idempotency / retry / lease: architecture/workflow-idempotency-retry-lease.md
+      - Action provider registry: architecture/action-provider-registry.md
+      - Worker security: architecture/worker-security-review.md
+      - Worker transport: architecture/worker-transport-decision.md
+      - Constrained worker ops: architecture/constrained-worker-ops-actions.md
+  - Implementation:
+      - implementation/index.md
+      - Workflow engine: implementation/workflow-engine.md
+      - DomainProgram compiler: implementation/domain-program-compiler.md
+      - Sample preparation flow: implementation/sample-preparation-flow.md
+      - Workers and gateway: implementation/workers-and-gateway.md
+      - GPU acceleration: implementation/gpu-acceleration.md
+      - Packages: implementation/packages/index.md
+  - Deployment:
+      - Operator journey: deployment/operator-journey.md
+      - Production platform: deployment/production-platform.md
+      - Production runbook: deployment/production_runbook.md
+      - Production release: deployment/production_release.md
+      - Distributed workers bootstrap: deployment/distributed-workers-bootstrap.md
+      - Worker provision: deployment/worker_provision.md
+      - Worker node: deployment/worker_node.md
+      - GPU worker: deployment/gpu_worker_runbook.md
+      - ROCm worker: deployment/worker-rocm.md
+      - Arc worker: deployment/arc_worker_runbook.md
+      - Platform matrix: deployment/platform_matrix.md
+      - Multicloud IaC: deployment/multicloud-iac.md
+      - Portal resource profile: deployment/portal_resource_profile.md
+      - Work layout migration: deployment/work_layout_migration.md
+      - Reference inventory: deployment/reference-inventory-qnap.md
+  - Reference:
+      - Documentation toolchain: reference/documentation-toolchain.md
+      - DomainProgram language: reference/domain-program-language.md
+      - DomainProgram language v2: reference/domain-program-language-v2.md
+      - Configuration reference: reference/configuration-reference.md
+      - Config parameter matrix: reference/config-parameter-matrix.md
+      - Action parameter contract: reference/action-parameter-contract.md
+      - Schema index: reference/schema-index.md
+      - Admin CLI: reference/admin-cli-methyl-study-start.md
+      - Traceability: reference/traceability-provenance.md
+      - Logging: reference/logging-observability.md
+      - Mojo fq2bam parity: reference/mojo-fq2bam-meth-parity.md
+      - Read-level pattern contract: reference/read_level_pattern_contract.md
+      - Test data registry: reference/test-data-registry.md
+      - CI sync matrix: reference/ci-sync-matrix.md
+  - Regulatory:
+      - regulatory/README.md
+      - Product and operational controls: regulatory/methylpipeline-product-and-operational-controls.md
+      - Deployment and supervision: regulatory/deployment-and-supervision.md
+      - Validation evidence index: regulatory/validation-evidence-index.md
+      - SaMD submission scaffold: regulatory/samd-submission-scaffold.md
+      - Change management: regulatory/change-management-plan.md
+      - CI and regression testing: regulatory/continuous-integration-and-regression-testing.md
+      - Traceability matrix: regulatory/traceability-matrix.md
+      - Regulatory-ready platform: "regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md"
+
+# Links into the git repo outside docs/ (workers/, workflow_engine/, packages/, …)
+# remain valid on GitHub; MkDocs cannot resolve them as site pages.
+validation:
+  nav:
+    omitted_files: info
+  links:
+    not_found: info
+    absolute_links: ignore
+    unrecognized_links: info
+    anchors: info
+
+watch:
+  - docs
+  - mkdocs.yml

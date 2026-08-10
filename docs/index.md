@@ -1,6 +1,8 @@
 # MethylPipeline Documentation
 
-Navigation hub for the three documentation pillars (Theory, Usage, Implementation) plus cross-cutting reference, architecture, deployment, and regulatory/product-control docs.
+Markdown-first documentation site (Material for MkDocs) covering Theory, Usage, Implementation, plus architecture, deployment, reference, and regulatory/product-control docs.
+
+**Build / preview:** see [Contributing](CONTRIBUTING.md) — `make docs-serve` or `mkdocs build --strict` → portable `site/`.
 
 **Quick platform overview:** [Platform Overview](overview/methylpipeline-platform-overview.md) · [companion canvas](canvas/methylpipeline-platform-overview.canvas.tsx)
 
@@ -11,11 +13,11 @@ Navigation hub for the three documentation pillars (Theory, Usage, Implementatio
 | Role | Start |
 |------|-------|
 | **Anyone new** — concise platform + SaMD fitness synthesis | [Platform Overview](overview/methylpipeline-platform-overview.md) |
-| **Operator** — run a study end-to-end | [Usage manual](usage/index.qmd) Part II (ch.05–09) · [SaMD lifecycle](usage/18-samd-study-lifecycle.qmd) |
-| **Statistician** — methods and assumptions | [Theory book](theory/index.qmd) — e.g. ch.03 DMP detection |
-| **Developer** — engine, workers, compiler | [Implementation guide](implementation/index.md) · [Sample prep (native-Mojo)](implementation/sample-preparation-flow.md) · [Mojo multi-GPU Align](architecture/mojo-multi-gpu-dual-align.md) |
-| **Workflow author** — DomainPrograms | [DomainProgram language](reference/domain-program-language.md) · [full language v2](reference/domain-program-language-v2.md) + [Architecture: layer model](architecture/layer-model.md) |
-| **DevOps** — DB, gateway, workers | [Operator journey](deployment/operator-journey.md) · [Admin CLI](reference/admin-cli-methyl-study-start.md) · [Usage ch.14](usage/14-deployment-and-distributed-workflow.qmd) |
+| **Operator** — run a study end-to-end | [Usage](usage/index.md) staged chapters · [SaMD lifecycle](usage/18-samd-study-lifecycle.md) · [Alignment engines](usage/alignment-engines.md) |
+| **Statistician** — methods and assumptions | [Theory](theory/index.md) — e.g. [DMP detection](theory/chapters/03-methyldetector.md) |
+| **Developer** — engine, workers, compiler | [Implementation](implementation/index.md) · [Sample prep (native-Mojo)](implementation/sample-preparation-flow.md) · [Mojo multi-GPU Align](architecture/mojo-multi-gpu-dual-align.md) |
+| **Workflow author** — DomainPrograms | [DomainProgram language](reference/domain-program-language.md) · [v2](reference/domain-program-language-v2.md) · [Layer model](architecture/layer-model.md) |
+| **DevOps** — DB, gateway, workers | [Operator journey](deployment/operator-journey.md) · [Admin CLI](reference/admin-cli-methyl-study-start.md) · [Usage deployment](usage/14-deployment-and-distributed-workflow.md) |
 | **Auditor** — traceability, evidence | [Traceability](reference/traceability-provenance.md) · [Regulatory](regulatory/README.md) |
 | **Package maintainer** | [implementation/packages/](implementation/packages/index.md) |
 
@@ -23,15 +25,15 @@ Navigation hub for the three documentation pillars (Theory, Usage, Implementatio
 
 ### By audience
 
-See table above. Package maintainers: [implementation/packages/](implementation/packages/index.md). Regulatory / quality: [regulatory/README.md](regulatory/README.md).
+See table above. Regulatory / quality: [regulatory/README.md](regulatory/README.md). Customer subset site: `mkdocs.customer.yml`.
 
 ### By pipeline stage
 
-[Architecture: pipeline stages](architecture/pipeline-stages.md) · **[End-to-end workflow (Mermaid)](architecture/end-to-end-workflow.md)** ↔ [Usage ch.03–09](usage/index.qmd)
+[Pipeline stages](architecture/pipeline-stages.md) · **[End-to-end workflow (Mermaid)](architecture/end-to-end-workflow.md)** ↔ [Usage](usage/index.md)
 
 ### By system layer
 
-[Architecture: layer model](architecture/layer-model.md) — manifest → profile → program → instance → worker
+[Layer model](architecture/layer-model.md) — manifest → profile → program → instance → worker
 
 ### By package
 
@@ -39,14 +41,14 @@ See table above. Package maintainers: [implementation/packages/](implementation/
 
 ### By execution mode
 
-[Architecture: orchestration paths](architecture/orchestration-paths.md) — **`methyl-workflow-run` (canonical)** vs legacy `methyl-validation`
+[Orchestration paths](architecture/orchestration-paths.md) — **`methyl-workflow-run` (canonical)** vs legacy `methyl-validation`
 
-## Three pillars
+## Pillars
 
 | Pillar | Location | Owns |
 |--------|----------|------|
-| **Theory** | [`theory/`](theory/index.qmd) | Math, statistics, assumptions, citations |
-| **Usage** | [`usage/`](usage/index.qmd) | Commands, artifacts, troubleshooting, deploy |
+| **Theory** | [`theory/`](theory/index.md) | Math, statistics, assumptions (MathJax) |
+| **Usage** | [`usage/`](usage/index.md) | Commands, artifacts, troubleshooting, deploy |
 | **Implementation** | [`implementation/`](implementation/index.md) | Engine, workers, compiler, code paths |
 
 ## Cross-cutting
@@ -54,13 +56,14 @@ See table above. Package maintainers: [implementation/packages/](implementation/
 | Area | Location |
 |------|----------|
 | Architecture | [`architecture/`](architecture/index.md) |
-| Platform overview (quick synthesis) | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) |
-| Reference lookup | [`reference/documentation-toolchain.md`](reference/documentation-toolchain.md), [`reference/configuration-reference.qmd`](reference/configuration-reference.qmd) |
-| Deployment | [`deployment/operator-journey.md`](deployment/operator-journey.md), [`deployment/production_runbook.md`](deployment/production_runbook.md) |
-| Regulatory / product controls | [`regulatory/`](regulatory/README.md) |
-| Plans | [`plans/`](plans/README.md) |
-| Cursor canvases | [`canvas/`](canvas/README.md) — versioned `.canvas.tsx`; run `scripts/sync_cursor_canvases.sh` after clone |
+| Platform overview | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) |
+| Reference | [`reference/documentation-toolchain.md`](reference/documentation-toolchain.md), [`configuration-reference.md`](reference/configuration-reference.md) |
+| Deployment | [`deployment/operator-journey.md`](deployment/operator-journey.md) |
+| Regulatory | [`regulatory/`](regulatory/README.md) |
+| Plans (internal) | [`plans/`](plans/README.md) |
+| Cursor canvases | [`canvas/`](canvas/README.md) |
 | Audit registry | [`DOCUMENTATION_AUDIT.md`](DOCUMENTATION_AUDIT.md) |
+| Contributing | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 ## Canonical workflow (DomainProgram-first)
 
@@ -70,12 +73,7 @@ methyl-workflow-run \
   --context '{"projectPath": "/work/<disease>/configs/project_*.json"}'
 ```
 
-Legacy monolithic path (`methyl-validation --stability/--freeze/--model`) is **transitional only** — see [Usage ch.04 orchestration](usage/04-orchestration-workflow-run.qmd).
-
-## Repository layout
-
-- **Repo:** profiles, DomainPrograms, schemas, docs
-- **`/work/<disease>/`:** study manifests, sample CSVs, run artifacts — see [work-config-paths rule](../.cursor/rules/work-config-paths.mdc)
+Legacy monolithic path (`methyl-validation --stability/--freeze/--model`) is **transitional only** — see [Usage orchestration](usage/04-orchestration-workflow-run.md).
 
 ## Related
 

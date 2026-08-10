@@ -149,7 +149,7 @@ methyl-study-start scenario-start <<'EOF'
 EOF
 ```
 
-Overlay → `finalize_instance_context` → one `wf` instance + `executionScopeId`. Optional cfg single-trial ledger for later score/compare. Grid search remains available via `hyperparam-grid-start`. See [portal remote control](portal-remote-control.md) and [usage ch.15](../usage/15-optional-hyperparameter-search.qmd).
+Overlay → `finalize_instance_context` → one `wf` instance + `executionScopeId`. Optional cfg single-trial ledger for later score/compare. Grid search remains available via `hyperparam-grid-start`. See [portal remote control](portal-remote-control.md) and [usage ch.15](../usage/15-optional-hyperparameter-search.md).
 
 ---
 

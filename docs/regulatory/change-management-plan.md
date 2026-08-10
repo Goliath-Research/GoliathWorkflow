@@ -1,5 +1,10 @@
 # Change Management Plan
 
+!!! warning "Claim boundary"
+    This is a proposed product-control document, not an approved QMS SOP and not
+    FDA clearance. Align with the organization's formal quality system before
+    treating it as official procedure.
+
 > Status: proposed product control. Align this with the organization's formal
 > quality management system before using it as an official SOP.
 

@@ -58,10 +58,11 @@ steps:
 
   - bash: |
       set -euo pipefail
-      bash scripts/install_quarto_ci.sh
-      quarto render docs/theory docs/usage --to pdf
-      bash scripts/check_book_freshness.sh --check
-    displayName: Build documentation PDFs and verify freshness
+      python -m pip install -r docs-requirements.txt
+      mkdocs build --strict
+      mkdocs build -f mkdocs.customer.yml --strict
+      bash scripts/build_docs_pdf.sh
+    displayName: Build MkDocs site, customer site, and PDF export
     continueOnError: true
 
   # Optional: copy to shared /work when a self-hosted agent with EPIMETHYL_ROOT is used

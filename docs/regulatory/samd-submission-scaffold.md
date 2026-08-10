@@ -11,7 +11,7 @@
 Help quality and clinical teams assemble a submission narrative by pointing each
 content area at canonical repo artifacts and on-disk study evidence.
 
-Operator study path: [`../usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd).  
+Operator study path: [`../usage/18-samd-study-lifecycle.md`](../usage/18-samd-study-lifecycle.md).  
 Evidence registry: [`validation-evidence-index.md`](validation-evidence-index.md).
 
 ## Claim gate (code-enforced)
@@ -58,5 +58,5 @@ Current prostate packages in the evidence index are **`feasibility`** with **no 
 ## Related
 
 - [`README.md`](README.md) — regulatory folder index
-- [`../usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd)
-- Theory WF2 vs WF3: [`../theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.qmd)
+- [`../usage/18-samd-study-lifecycle.md`](../usage/18-samd-study-lifecycle.md)
+- Theory WF2 vs WF3: [`../theory/chapters/12-two-workflows.md`](../theory/chapters/12-two-workflows.md)

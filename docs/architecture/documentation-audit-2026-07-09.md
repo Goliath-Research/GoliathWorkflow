@@ -1,6 +1,8 @@
 # Documentation Audit — July 2026 (comprehensive)
 
-> **Status:** IN PROGRESS (documentation-and-deployment-reliability plan, 2026-07-09).  
+> **Status:** SUPERSEDED for documentation platform (2026-08-10 Markdown-first MkDocs).  
+> Remaining operational P0/P1 items are tracked by freshness/CI guards and
+> [`DOCUMENTATION_AUDIT.md`](../DOCUMENTATION_AUDIT.md). Kept as a historical gap register.  
 > Supersedes stale findings in [`integrity-and-design-review-2026-07-01.md`](integrity-and-design-review-2026-07-01.md) where noted below.
 
 This audit covers **all project dimensions**: developer setup, production deployment, DomainProgram authoring, traceability, logging, idempotency, the database-resident agnostic workflow engine, worker-only gateway, Admin CLI, configuration layers, security, testing, release bundle, and operator workflows.
@@ -11,8 +13,8 @@ The July 2026 **config-not-code** refresh ([`documentation-audit-2026-07.md`](do
 
 | Layer | Examples | Rule |
 |-------|----------|------|
-| **Canonical** | `docs/index.md`, `docs/architecture/`, `docs/reference/`, `docs/implementation/`, Usage/Theory `.qmd`, `workflow_engine/contract/`, `contracts/openapi.yaml` | Edit here first |
-| **Generated** | `docs/theory/_book/`, `docs/usage/_book/`, `workflow_engine/docs/pipeline_architecture.qmd`, `docs/diagrams/out/*` | Regenerate from source |
+| **Canonical** | `docs/index.md`, `docs/architecture/`, `docs/reference/`, `docs/implementation/`, Usage/Theory `.md`, `workflow_engine/contract/`, `contracts/openapi.yaml` | Edit here first |
+| **Generated** | `docs/theory/_book/`, `docs/usage/_book/`, `workflow_engine/docs/pipeline_architecture.md`, `docs/diagrams/out/*` | Regenerate from source |
 | **Historical** | `docs/plans/*.plan.md`, `docs/research/`, `docs/presentations/`, Delphi docs | Do not treat as operational truth |
 | **Agent / dev tools** | Cursor MCP, `AGENTS.md` | Dev-only; not worker runtime |
 

@@ -10,7 +10,7 @@ Single navigation page for production operators. Each step links to the canonica
 |------|--------|-----------|
 | 1 | Mount shared storage at `/work/epimethyl` and study trees under `/work/projects/<study>/` | [Production platform — Phase 0](production-platform.md#phase-0--shared-storage-and-site) |
 | 2 | Install site manifest at `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | [Layer model](../architecture/layer-model.md) |
-| 3 | Production DB = Azure SQL (portal); PostgreSQL for parity/CI | [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) |
+| 3 | Production DB = Azure SQL (portal); PostgreSQL for parity/CI | [Usage ch.14](../usage/14-deployment-and-distributed-workflow.md) |
 
 ## Greenfield control plane
 
@@ -39,8 +39,8 @@ See [Production release](production_release.md).
 
 | Step | Entry | Deep dive |
 |------|-------|-----------|
-| 13 | Sample prep (FASTQ → HDF5) | Portal SQL or `methyl-study-start` | [SamplePrepFlow](../../workflow_engine/sql_mssql/SamplePrepFlow.md), [Usage ch.03](../usage/03-sample-prep-and-qc.qmd) |
-| 14 | Staged validation | `methyl-workflow-run` + DomainProgram + profile | [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd) |
+| 13 | Sample prep (FASTQ → HDF5) | Portal SQL or `methyl-study-start` | [SamplePrepFlow](../../workflow_engine/sql_mssql/SamplePrepFlow.md), [Usage ch.03](../usage/03-sample-prep-and-qc.md) |
+| 14 | Staged validation | `methyl-workflow-run` + DomainProgram + profile | [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.md) |
 | 15 | Monitor instances | Gateway poll + DB `wf.workflow_instance` | [Distributed runtime](../architecture/distributed-runtime.md) |
 
 **Presets:** copy-ready program/profile/context combos — `bash scripts/workflow_presets.sh list`.
@@ -79,10 +79,10 @@ See [Production release](production_release.md).
 | `methyl-validation --stability/--freeze/--model` | Unmigrated shell scripts only |
 | `methyl-validation plan-runs` / `run-task` | File-queue MC not yet on gateway workers |
 
-See [Usage ch.13](../usage/13-distributed-methyl-validation.qmd).
+See [Usage ch.13](../usage/13-distributed-methyl-validation.md).
 
 ## Related
 
 - [Production runbook](production_runbook.md)
-- [Usage ch.14 — Deployment and distributed workflow](../usage/14-deployment-and-distributed-workflow.qmd)
+- [Usage ch.14 — Deployment and distributed workflow](../usage/14-deployment-and-distributed-workflow.md)
 - [Operator DB canvas](../canvas/methylpipeline-db-runbook.canvas.tsx)

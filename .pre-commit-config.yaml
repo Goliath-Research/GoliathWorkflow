@@ -28,8 +28,14 @@ repos:
         language: system
         pass_filenames: false
       - id: diagram-freshness
-        name: Mermaid diagram freshness
+        name: Mermaid diagram freshness (optional Marp assets)
         entry: bash scripts/render_diagrams.sh --check
+        language: system
+        pass_filenames: false
+        stages: [manual]
+      - id: mkdocs-strict
+        name: MkDocs build --strict
+        entry: bash -c 'source .venv/bin/activate && pip install -q -r docs-requirements.txt && mkdocs build --strict'
         language: system
         pass_filenames: false
       - id: ci-preflight

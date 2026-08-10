@@ -1,0 +1,19 @@
+/* MethylPipeline docs extras */
+.md-typeset .admonition.claim-boundary,
+.md-typeset details.claim-boundary {
+  border-color: #c62828;
+}
+.md-typeset .claim-boundary > .admonition-title,
+.md-typeset .claim-boundary > summary {
+  background-color: rgba(198, 40, 40, 0.12);
+}
+.md-typeset .claim-boundary > .admonition-title::before,
+.md-typeset .claim-boundary > summary::before {
+  background-color: #c62828;
+}
+
+/* Keep wide Mermaid diagrams scrollable on narrow viewports */
+.md-typeset pre.mermaid,
+.md-typeset .mermaid {
+  overflow-x: auto;
+}

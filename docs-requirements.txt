@@ -1,0 +1,5 @@
+# Documentation site (MkDocs Material). Install into the repo .venv:
+#   source .venv/bin/activate && pip install -r docs-requirements.txt
+mkdocs-material>=9.5,<10
+playwright>=1.44,<2
+pypdf>=4.0,<6

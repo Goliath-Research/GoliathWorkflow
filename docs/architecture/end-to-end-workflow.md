@@ -10,9 +10,9 @@
 |-------|----------------|
 | Per-sample prep | [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) |
 | Study MC → freeze → model | [`full_lifecycle.program.json`](../../workflow_engine/domain/fixtures/full_lifecycle.program.json) / [`study_validation_lifecycle.program.json`](../../workflow_engine/domain/fixtures/study_validation_lifecycle.program.json) |
-| SaMD profile ladder | [`docs/usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd) |
+| SaMD profile ladder | [`docs/usage/18-samd-study-lifecycle.md`](../usage/18-samd-study-lifecycle.md) |
 
-Related stage chapters: [ch.03 Sample prep](../usage/03-sample-prep-and-qc.qmd) · [ch.05 Stability](../usage/05-stage-stability.qmd) · [ch.06 Freeze](../usage/06-stage-freeze.qmd) · [ch.07 Model](../usage/07-stage-model.qmd) · [ch.08 Post-model](../usage/08-stage-post-model-validation.qmd).
+Related stage chapters: [ch.03 Sample prep](../usage/03-sample-prep-and-qc.md) · [ch.05 Stability](../usage/05-stage-stability.md) · [ch.06 Freeze](../usage/06-stage-freeze.md) · [ch.07 Model](../usage/07-stage-model.md) · [ch.08 Post-model](../usage/08-stage-post-model-validation.md).
 
 ---
 
@@ -316,7 +316,7 @@ Houseman writes the 6 immune fractions (`CD8T CD4T NK Bcell Mono Neu`). HiTIMED 
 - Same column contract as Houseman for the ECDF/tabular `covariates_path`; HiTIMED only grows the column set (e.g. cfDNA `tumor_fraction`).
 - Listed on profile `covariates_path` for tabular / ECDF second-stage.
 - Auto-infer **excludes** `group` / `qp_status` (label leakage guard).
-- Theory: [ch.07a MethylDeconv](../theory/chapters/07a-methyldeconv.qmd). Plan: [`docs/plans/hitimed-hierarchical-deconvolution.plan.md`](../plans/hitimed-hierarchical-deconvolution.plan.md).
+- Theory: [ch.07a MethylDeconv](../theory/chapters/07a-methyldeconv.md). Plan: [`docs/plans/hitimed-hierarchical-deconvolution.plan.md`](../plans/hitimed-hierarchical-deconvolution.plan.md).
 
 ### 5.2 Information measures (read-level)
 
@@ -453,6 +453,6 @@ sequenceDiagram
 
 - Not an FDA submission or SaMD evidence package — see [`docs/regulatory/`](../regulatory/README.md).
 - Not a substitute for package THEORY/USAGE docs (centroid math, ECDF details, Ising formulas).
-- Not the storage-credential runbook — see [config registry](config-registry.md) and [Usage ch.19](../usage/19-config-registry.qmd).
+- Not the storage-credential runbook — see [config registry](config-registry.md) and [Usage ch.19](../usage/19-config-registry.md).
 
-For a shorter stage DAG only, see [pipeline-stages.md](pipeline-stages.md). For SamplePrep QC dispositions, see [Usage ch.03](../usage/03-sample-prep-and-qc.qmd).
+For a shorter stage DAG only, see [pipeline-stages.md](pipeline-stages.md). For SamplePrep QC dispositions, see [Usage ch.03](../usage/03-sample-prep-and-qc.md).

@@ -326,7 +326,7 @@ With `GATEWAY_REQUIRE_ARC_ATTEST=1`, the worker client sends `X-Arc-Resource-Id`
 | Validation | **EpiPortal UI** | Same; workers claim tasks through the gateway |
 | Local / lab only | `methyl-workflow-run` (no DB) or `methyl-study-start` (CI/parity DB) | Not the production day-2 path |
 
-See [production_runbook.md](production_runbook.md) and [Usage ch.04](../usage/04-orchestration-workflow-run.qmd).
+See [production_runbook.md](production_runbook.md) and [Usage ch.04](../usage/04-orchestration-workflow-run.md).
 
 ---
 

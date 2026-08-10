@@ -16,7 +16,7 @@ methyl-workflow-run \
 - **Programs and profiles** live in this repository (`workflow_engine/domain/`).
 - **Study manifests and artifacts** live on shared storage (`/work/<disease>/`).
 
-Legacy monolithic CLI (`methyl-validation --stability/--freeze/--model`) is **transitional only**; see [Usage ch.04 orchestration](docs/usage/04-orchestration-workflow-run.qmd).
+Legacy monolithic CLI (`methyl-validation --stability/--freeze/--model`) is **transitional only**; see [Usage orchestration](docs/usage/04-orchestration-workflow-run.md).
 
 ## What This Repository Includes
 
@@ -27,16 +27,20 @@ Legacy monolithic CLI (`methyl-validation --stability/--freeze/--model`) is **tr
 
 ## Documentation map
 
+Markdown-first site (MkDocs Material): `make docs-serve` or `mkdocs build --strict` → `site/`.
+
 | Audience | Start here |
 |----------|------------|
 | Everyone | [`docs/index.md`](docs/index.md) — five navigation lenses |
-| Operators | [`docs/usage/index.qmd`](docs/usage/index.qmd) |
-| Statisticians | [`docs/theory/index.qmd`](docs/theory/index.qmd) |
+| Operators | [`docs/usage/index.md`](docs/usage/index.md) · [alignment engines](docs/usage/alignment-engines.md) |
+| Statisticians | [`docs/theory/index.md`](docs/theory/index.md) |
 | Developers | [`docs/implementation/index.md`](docs/implementation/index.md) |
 | System design | [`docs/architecture/index.md`](docs/architecture/index.md) |
 | Workflow authors | [`docs/reference/domain-program-language.md`](docs/reference/domain-program-language.md) |
+| Contributors | [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) |
 
 - Documentation audit: [`docs/DOCUMENTATION_AUDIT.md`](docs/DOCUMENTATION_AUDIT.md)
+- Toolchain: [`docs/reference/documentation-toolchain.md`](docs/reference/documentation-toolchain.md)
 - Environment setup: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Production deployment: [`docs/deployment/production_runbook.md`](docs/deployment/production_runbook.md)
 

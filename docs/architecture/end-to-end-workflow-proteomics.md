@@ -6,7 +6,7 @@
 
 **Selected by** `regulatory.primary_modality: proteomics`. Proteomics is **not** a Parabricks drop-in: the front of the pipeline is a mass-spec search engine (GPU DIA-NN) or a direct panel-matrix ingest; the back is the shared `samples x features` seam (also used by RNA-Seq).
 
-**Sources of truth:** [`sample_prep_proteomics.program.json`](../../workflow_engine/domain/fixtures/sample_prep_proteomics.program.json), [`proteomics_study_lifecycle.program.json`](../../workflow_engine/domain/fixtures/proteomics_study_lifecycle.program.json), [`proteomics_research.profile.json`](../../workflow_engine/domain/profiles/proteomics_research.profile.json). Packages: `proteomics_features` (ingest + DE), `proteomics_qc`, shared `omics_features`. Operator guide: [Usage ch.22](../usage/22-proteomics-process-pack.qmd).
+**Sources of truth:** [`sample_prep_proteomics.program.json`](../../workflow_engine/domain/fixtures/sample_prep_proteomics.program.json), [`proteomics_study_lifecycle.program.json`](../../workflow_engine/domain/fixtures/proteomics_study_lifecycle.program.json), [`proteomics_research.profile.json`](../../workflow_engine/domain/profiles/proteomics_research.profile.json). Packages: `proteomics_features` (ingest + DE), `proteomics_qc`, shared `omics_features`. Operator guide: [Usage ch.22](../usage/22-proteomics-process-pack.md).
 
 ---
 

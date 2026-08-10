@@ -16,7 +16,7 @@ path_issues = _mod.path_issues
 
 
 def test_valid_paths_pass() -> None:
-    assert path_issues("docs/usage/index.qmd") == []
+    assert path_issues("docs/usage/index.md") == []
     assert path_issues("packages/methylcentroid/docs/IMPLEMENTATION.md") == []
 
 

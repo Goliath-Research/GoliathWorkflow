@@ -1,11 +1,11 @@
 # MethylPipeline developer shortcuts (requires repo-root .venv)
-.PHONY: help venv install test test-ci schemas diagrams docs docs-pdf check-docs check-layout bootstrap-verify
+.PHONY: help venv install test test-ci schemas diagrams docs docs-serve docs-pdf docs-customer check-docs check-layout bootstrap-verify
 
 VENV := .venv/bin
 PY := $(VENV)/python
 
 help:
-	@echo "Targets: venv install test test-ci schemas diagrams docs docs-pdf check-docs check-layout bootstrap-verify"
+	@echo "Targets: venv install test test-ci schemas diagrams docs docs-serve docs-pdf docs-customer check-docs check-layout bootstrap-verify"
 
 venv:
 	bash scripts/setup_host.sh --with-deps
@@ -26,17 +26,21 @@ diagrams:
 	bash scripts/render_diagrams.sh
 
 docs:
-	bash scripts/install_quarto_ci.sh 2>/dev/null || true
-	quarto render docs/theory docs/usage --to html
+	source .venv/bin/activate && pip install -q -r docs-requirements.txt && mkdocs build --strict
+
+docs-serve:
+	source .venv/bin/activate && pip install -q -r docs-requirements.txt && mkdocs serve
+
+docs-customer:
+	source .venv/bin/activate && pip install -q -r docs-requirements.txt && mkdocs build -f mkdocs.customer.yml --strict
 
 docs-pdf:
-	bash scripts/install_quarto_ci.sh 2>/dev/null || true
-	quarto render docs/theory docs/usage --to pdf
+	bash scripts/build_docs_pdf.sh
 
 check-docs:
 	bash scripts/check_doc_links.sh
 	bash scripts/check_doc_freshness.sh
-	bash scripts/render_diagrams.sh --check
+	source .venv/bin/activate && pip install -q -r docs-requirements.txt && mkdocs build --strict
 	python scripts/check_no_step_config.py
 
 check-layout:

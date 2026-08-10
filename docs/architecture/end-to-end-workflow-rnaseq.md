@@ -13,7 +13,7 @@
 | Per-sample prep | [`sample_prep_rnaseq.program.json`](../../workflow_engine/domain/fixtures/sample_prep_rnaseq.program.json) |
 | Study modeling | [`rnaseq_study_lifecycle.program.json`](../../workflow_engine/domain/fixtures/rnaseq_study_lifecycle.program.json) |
 | Profile | [`rnaseq_research.profile.json`](../../workflow_engine/domain/profiles/rnaseq_research.profile.json) |
-| Operator guide | [Usage ch.20 RNA-Seq process pack](../usage/20-rnaseq-process-pack.qmd) |
+| Operator guide | [Usage ch.20 RNA-Seq process pack](../usage/20-rnaseq-process-pack.md) |
 
 Packages: `rna_alignment_qc` (RNA QC), `rna_express` (expression contract + DE selection). Quantifier runners: `workers/methyl_worker/rna_fq2bam_runner.py`, `kallisto_runner.py`.
 
@@ -293,6 +293,6 @@ sequenceDiagram
 
 - Not an FDA submission or SaMD evidence package — see [`docs/regulatory/`](../regulatory/README.md).
 - Not the methylation workflow — see [end-to-end workflow](end-to-end-workflow.md).
-- Not the config-registry / credential runbook — see [config registry](config-registry.md) and [Usage ch.19](../usage/19-config-registry.qmd).
+- Not the config-registry / credential runbook — see [config registry](config-registry.md) and [Usage ch.19](../usage/19-config-registry.md).
 
-Operator detail: [Usage ch.20 RNA-Seq process pack](../usage/20-rnaseq-process-pack.qmd). Plan: [`docs/plans/rna-seq-process-pack.plan.md`](../plans/rna-seq-process-pack.plan.md).
+Operator detail: [Usage ch.20 RNA-Seq process pack](../usage/20-rnaseq-process-pack.md). Plan: [`docs/plans/rna-seq-process-pack.plan.md`](../plans/rna-seq-process-pack.plan.md).
