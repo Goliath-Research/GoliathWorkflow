@@ -70,6 +70,9 @@ class MethylGrapherWgbsBundle:
     cg_only: bool = True
     contexts: Tuple[str, ...] = ("CG",)
     read_level_enabled: bool = True
+    # When false, skip 15GB+ GAF pattern scans and use marginal_surrogate H5s.
+    # Operator-set under resolvedConfig.read_level.gaf_patterns (site/profile).
+    read_level_gaf_patterns: bool = True
     tile_size: int = 4
     batch_size: Optional[int] = None
     linear_cpg_tsv: Optional[Path] = None
@@ -247,6 +250,18 @@ def resolve_wgbs_bundle_from_resolved(
             rl,
             "enabled",
             _pick_bool(raw, "read_level_enabled", True),
+        ),
+        # Mojo GAFs are multi-GB; default skip GAF pattern scans unless the
+        # operator explicitly sets read_level.gaf_patterns=true (site/profile).
+        read_level_gaf_patterns=_pick_bool(
+            rl,
+            "gaf_patterns",
+            _pick_bool(
+                raw,
+                "read_level_gaf_patterns",
+                _normalize_align_engine(raw.get("align_engine"))
+                not in {"mojo", "mojo_giraffe", "gpu_giraffe"},
+            ),
         ),
         tile_size=int(rl.get("tile_size") or 4),
         batch_size=int(raw["batch_size"]) if raw.get("batch_size") is not None else None,
@@ -3194,24 +3209,30 @@ def run_methylgrapher_wgbs_extract(
     pattern_files: List[str] = []
     patterns_source = "none"
     if bundle.read_level_enabled:
-        offsets = None
-        try:
-            wl_path = resolve_wl_gfa_path(bundle, index_prefix)
-            if wl_path.is_file():
-                offsets = build_grch38_segment_offsets_from_gfa(wl_path)
-        except Exception as exc:
-            logger.warning("GAF pattern offsets unavailable: %s", exc)
-        if gaf_path.is_file() and offsets:
-            pattern_files = _build_patterns_from_gaf(
-                sample_path,
-                gaf_path,
-                by_chrom,
-                contexts,
-                tile_size=bundle.tile_size,
-                segment_offsets=offsets,
+        if bundle.read_level_gaf_patterns:
+            offsets = None
+            try:
+                wl_path = resolve_wl_gfa_path(bundle, index_prefix)
+                if wl_path.is_file():
+                    offsets = build_grch38_segment_offsets_from_gfa(wl_path)
+            except Exception as exc:
+                logger.warning("GAF pattern offsets unavailable: %s", exc)
+            if gaf_path.is_file() and offsets:
+                pattern_files = _build_patterns_from_gaf(
+                    sample_path,
+                    gaf_path,
+                    by_chrom,
+                    contexts,
+                    tile_size=bundle.tile_size,
+                    segment_offsets=offsets,
+                )
+                if pattern_files:
+                    patterns_source = "gaf"
+        else:
+            logger.info(
+                "read_level.gaf_patterns=false; skipping GAF pattern scan "
+                "(use marginal_surrogate)"
             )
-            if pattern_files:
-                patterns_source = "gaf"
         if not pattern_files:
             pattern_files = _build_patterns_from_linear_calls(
                 sample_path, by_chrom, contexts, tile_size=bundle.tile_size

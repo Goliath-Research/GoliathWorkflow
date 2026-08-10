@@ -85,7 +85,7 @@
             }
           ],
           "default": 0.9,
-          "description": "Fail when flagstat properly_paired_rate is below this.",
+          "description": "Fail when flagstat properly_paired_rate is below this (linear / Parabricks BAMs). Not applied to methylgrapher_wgbs QC BAMs \u2014 surjected Mojo emits historically lack proper-pair bits.",
           "title": "Min Properly Paired Rate"
         },
         "wgbs_min_mapped_rate": {

@@ -171,6 +171,15 @@ class MethylGrapherReadLevelConfig(BaseModel):
         ge=1,
         description="Pattern tile size (bp). Operator-set per site/profile.",
     )
+    gaf_patterns: Optional[bool] = Field(
+        default=None,
+        description=(
+            "Scan alignment.gaf for read-level patterns. Mojo GAFs are multi-GB; "
+            "set false to use marginal_surrogate tiles after CG H5 write. "
+            "Operator-set under actionConfig.methylgrapher_wgbs.read_level / "
+            "methyl_extract.read_level (site/profile)."
+        ),
+    )
 
 
 class MethylGrapherWgbsStepConfig(BaseModel):

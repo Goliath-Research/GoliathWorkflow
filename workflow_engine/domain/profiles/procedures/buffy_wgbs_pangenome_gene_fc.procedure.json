@@ -37,13 +37,15 @@
       "conversion_rate_enabled": true,
       "read_level": {
         "enabled": true,
-        "tile_size": 4
+        "tile_size": 4,
+        "gaf_patterns": false
       }
     },
     "methyl_extract": {
       "read_level": {
         "enabled": true,
-        "tile_size": 4
+        "tile_size": 4,
+        "gaf_patterns": false
       }
     },
     "alignment_qc": {
