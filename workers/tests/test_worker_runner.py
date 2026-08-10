@@ -5,14 +5,14 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from methyl_worker.action_execution import ActionExecutionResult
-from methyl_worker.client import TaskClaim, WorkflowRestClient
+from methyl_worker.client import TaskClaim, TaskPollResult, WorkflowRestClient
 from methyl_worker.runner import WorkerRunner
 from methyl_worker.task_models.sample_prep_models import MarkFailedTaskOutput
 
 
 def test_run_once_no_task() -> None:
     client = MagicMock(spec=WorkflowRestClient)
-    client.request_task.return_value = None
+    client.request_task.return_value = TaskPollResult(claim=None)
     runner = WorkerRunner(client, 1, "tok", poll_seconds=0.01)
     assert runner.run_once() is False
     client.request_task.assert_called_once()
@@ -27,7 +27,10 @@ def test_run_once_processes_task() -> None:
         capability="sample.mark-failed",
         input_json={"sampleId": "S1", "sampleDir": "/work/samples/S1"},
     )
-    client.request_task.return_value = claim
+    client.request_task.return_value = TaskPollResult(claim=claim)
+    client.heartbeat.return_value = MagicMock(
+        control=MagicMock(desired_state="ACTIVE", command="NONE")
+    )
     runner = WorkerRunner(client, 1, "tok", poll_seconds=0.01, heartbeat_seconds=3600)
 
     with patch(
@@ -54,7 +57,10 @@ def test_run_once_fails_task_on_input_validation_error() -> None:
         capability="methyl-centroid",
         input_json={"project": "demo"},
     )
-    client.request_task.return_value = claim
+    client.request_task.return_value = TaskPollResult(claim=claim)
+    client.heartbeat.return_value = MagicMock(
+        control=MagicMock(desired_state="ACTIVE", command="NONE")
+    )
     runner = WorkerRunner(client, 1, "tok", poll_seconds=0.01, heartbeat_seconds=3600)
 
     assert runner.run_once() is True

@@ -100,7 +100,7 @@ def test_execute_task_appends_validation_action_log(tmp_path: Path, monkeypatch)
     )
 
     class FakeAction:
-        def execute(self, _input_json):
+        def execute(self, _input_json, *, handle=None):
             from methyl_worker.action_execution import ActionExecutionResult
 
             return ActionExecutionResult(result_code=0, output=fake_output)
@@ -146,7 +146,7 @@ def test_execute_task_appends_pipeline_action_log(tmp_path: Path, monkeypatch) -
     )
 
     class FakeAction:
-        def execute(self, _input_json):
+        def execute(self, _input_json, *, handle=None):
             from methyl_worker.action_execution import ActionExecutionResult
 
             return ActionExecutionResult(result_code=0, output=fake_output)

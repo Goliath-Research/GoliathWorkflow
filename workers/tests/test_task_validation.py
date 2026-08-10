@@ -151,7 +151,7 @@ def test_cli_action_accepts_runtime_keys_on_wire() -> None:
     proc.returncode = 0
     proc.stdout = ""
     proc.stderr = ""
-    with patch("methyl_worker.actions.base.subprocess.run", return_value=proc):
+    with patch("methyl_worker.execution_handle.run_cancellable", return_value=proc):
         result = action.execute(
             {
                 "tool": "methyl-detector",

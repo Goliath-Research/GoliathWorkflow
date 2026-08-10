@@ -62,9 +62,10 @@ def test_run_cancellable_large_stdout_no_deadlock() -> None:
     """Pipe buffers are ~64 KiB; draining via communicate must not hang."""
     import sys
 
-    blob = "x" * 200_000
+    # Build the blob in the child so argv stays under Linux MAX_ARG_STRLEN
+    # (32 pages: 128 KiB on 4 KiB-page x86 CI agents).
     completed = run_cancellable(
-        [sys.executable, "-c", f"import sys; sys.stdout.write({blob!r})"],
+        [sys.executable, "-c", "import sys; sys.stdout.write('x' * 200_000)"],
         poll_seconds=0.1,
     )
     assert completed.returncode == 0

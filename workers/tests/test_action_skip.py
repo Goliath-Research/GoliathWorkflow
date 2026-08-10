@@ -311,7 +311,7 @@ def test_execute_task_honors_force_rerun_after_normalize(tmp_path: Path, monkeyp
     run_calls: list = []
 
     class FakeAction:
-        def execute(self, _input_json):
+        def execute(self, _input_json, *, handle=None):
             run_calls.append(1)
             return execution_result_from_output(
                 ValidationStabilityOutput(
