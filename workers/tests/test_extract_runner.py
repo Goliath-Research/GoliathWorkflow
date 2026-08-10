@@ -210,6 +210,30 @@ def test_idempotent_skip_when_all_h5_present(tmp_path: Path) -> None:
     sample_dir.mkdir()
     for name in ("1-CG.h5", "1-CHG.h5", "1-CHH.h5"):
         (sample_dir / name).write_bytes(b"h5")
+    for ctx in ("CG", "CHG", "CHH"):
+        (sample_dir / f"1-{ctx}.json").write_text(
+            json.dumps(
+                {
+                    "num_positions": 100,
+                    "total_methylated": 80,
+                    "total_unmethylated": 20,
+                    "avg_methylation_level": 0.8,
+                    "avg_coverage": 12.0,
+                }
+            ),
+            encoding="utf-8",
+        )
+    # Stale stub must be overwritten.
+    (sample_dir / "S3.extraction_manifest.json").write_text(
+        json.dumps(
+            {
+                "metadata": {"schema_name": "methylextractor.extraction_manifest"},
+                "summary": {"cpg_weighted_mean_coverage": 20.0},
+                "per_chromosome": {"21": {"CG": {"mean_coverage": 18.0}}},
+            }
+        ),
+        encoding="utf-8",
+    )
 
     with patch("methyl_worker.extract_runner.subprocess.run") as mock_run:
         out = runner.run_methyl_extract(
@@ -221,6 +245,38 @@ def test_idempotent_skip_when_all_h5_present(tmp_path: Path) -> None:
 
     mock_run.assert_not_called()
     assert out["h5Files"] == ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
+    manifest = json.loads((sample_dir / "S3.extraction_manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["per_chromosome"]) == {"1"}
+    assert manifest["per_chromosome"]["1"]["CG"]["mean_coverage"] == 12.0
+    assert manifest["metadata"]["extractor"] == "MethylExtractor"
+
+
+def test_build_manifest_from_stats_covers_all_chroms(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S"
+    sample_dir.mkdir()
+    for chrom in ("1", "2", "X"):
+        (sample_dir / f"{chrom}-CG.json").write_text(
+            json.dumps(
+                {
+                    "num_positions": 10 * int(chrom) if chrom.isdigit() else 5,
+                    "total_methylated": 8,
+                    "total_unmethylated": 2,
+                    "avg_methylation_level": 0.8,
+                    "avg_coverage": float(chrom) if chrom.isdigit() else 9.0,
+                }
+            ),
+            encoding="utf-8",
+        )
+    manifest = runner.build_canonical_extraction_manifest_from_stats(
+        sample_id="S",
+        sample_dir=sample_dir,
+        chromosomes=["1", "2", "X"],
+        contexts=["CG"],
+        h5_files=["1-CG.h5", "2-CG.h5", "X-CG.h5"],
+    )
+    assert set(manifest["per_chromosome"]) == {"1", "2", "X"}
+    assert manifest["summary"]["n_chromosomes"] == 3
+    assert manifest["summary"]["cpg_weighted_mean_coverage"] > 0
 
 
 def test_resolve_bam_legacy_name(tmp_path: Path) -> None:
@@ -241,6 +297,19 @@ def test_run_invokes_methyl_extractor(tmp_path: Path) -> None:
     def fake_run(cmd, **kwargs):
         for name in ("1-CG.h5", "1-CHG.h5", "1-CHH.h5"):
             (sample_dir / name).write_bytes(b"h5")
+        for ctx in ("CG", "CHG", "CHH"):
+            (sample_dir / f"1-{ctx}.json").write_text(
+                json.dumps(
+                    {
+                        "num_positions": 50,
+                        "total_methylated": 40,
+                        "total_unmethylated": 10,
+                        "avg_methylation_level": 0.8,
+                        "avg_coverage": 11.0,
+                    }
+                ),
+                encoding="utf-8",
+            )
         return type("P", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
 
     with patch.object(runner, "_extractor_bin", return_value="/usr/bin/MethylExtractor"):
@@ -253,3 +322,6 @@ def test_run_invokes_methyl_extractor(tmp_path: Path) -> None:
             )
 
     assert len(out["h5Files"]) == 3
+    manifest = json.loads((sample_dir / "S5.extraction_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["per_chromosome"]["1"]["CG"]["mean_coverage"] == 11.0
+    assert out["extractionManifest"].endswith("S5.extraction_manifest.json")
