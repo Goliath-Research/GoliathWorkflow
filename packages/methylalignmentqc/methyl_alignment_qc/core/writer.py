@@ -639,12 +639,16 @@ def build_sample_qc_v2_dict(
                     if hasattr(flagstat_metrics, "model_dump")
                     else dict(flagstat_metrics)
                 )
+            # Do not apply linear min_mapping_rate to C2T-surjected WGBS QC BAMs —
+            # that falsely forces REALIGN_TRIM and blocks methylgrapher_wgbs_extract.
             payload["guardrails"] = build_wgbs_pangenome_guardrail_report(
                 sample_id=sample_name,
                 sample_dir=sample_dir,
                 provenance=provenance or {},
                 flagstat=fs_dict,
-                min_mapped_rate=align_cfg.min_mapping_rate if align_cfg.enabled else None,
+                min_mapped_rate=(
+                    align_cfg.wgbs_min_mapped_rate if align_cfg.enabled else None
+                ),
             )
             # Optional Parabricks core votes when this WGBS Align collected a
             # complete Picard payload (quality_yield + cycle/GC/insert tables).

@@ -134,6 +134,17 @@ class AlignmentGuardrailsConfig(BaseModel):
         le=1.0,
         description="Fail when derived mapping_rate from dedup metrics is below this.",
     )
+    wgbs_min_mapped_rate: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Pangenome WGBS (methylGrapher) QC-BAM flagstat mapped-rate floor. "
+            "C2T-surjected BAMs score much lower than linear Align; leave unset to "
+            "skip wgbs_bam_mapped_rate (do not reuse min_mapping_rate). "
+            "Operator-set in site/profile actionConfig.alignment_guardrails."
+        ),
+    )
     max_secondary_supplementary_rate: Optional[float] = Field(
         default=0.05,
         ge=0.0,

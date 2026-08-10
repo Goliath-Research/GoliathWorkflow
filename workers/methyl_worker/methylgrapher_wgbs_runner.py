@@ -2802,6 +2802,26 @@ def run_methylgrapher_wgbs_extract(
         docker_cmd = [_docker_bin(), "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}"]
         for root in sorted(mount_roots, key=str):
             docker_cmd.extend(["-v", f"{root}:{root}"])
+        # Optional host overlay so Mojo GAF / MethylCall hotfixes ship without image rebuild.
+        overlay = Path(
+            os.environ.get(
+                "METHYLGRAPHER_MOJO_OVERLAY",
+                "/work/epimethyl/images/methylgrapher-mojo-overlay",
+            )
+        )
+        eng_overlay = overlay / "engine" / "mcall.py"
+        if eng_overlay.is_file():
+            docker_cmd.extend(
+                ["-v", f"{eng_overlay}:/opt/methylgrapher-mojo/engine/mcall.py:ro"]
+            )
+        src_overlay = overlay / "src"
+        if src_overlay.is_dir():
+            for name in ("giraffe_gaf_emit.mojo", "mcall.mojo"):
+                p = src_overlay / name
+                if p.is_file():
+                    docker_cmd.extend(
+                        ["-v", f"{p}:/opt/methylgrapher-mojo/src/{name}:ro"]
+                    )
         docker_cmd.extend([image, *methyl_cmd])
         _run(docker_cmd, log_path, step="methylGrapher.MethylCall")
 

@@ -87,6 +87,21 @@
           "default": 0.9,
           "description": "Fail when flagstat properly_paired_rate is below this.",
           "title": "Min Properly Paired Rate"
+        },
+        "wgbs_min_mapped_rate": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pangenome WGBS (methylGrapher) QC-BAM flagstat mapped-rate floor. C2T-surjected BAMs score much lower than linear Align; leave unset to skip wgbs_bam_mapped_rate (do not reuse min_mapping_rate). Operator-set in site/profile actionConfig.alignment_guardrails.",
+          "title": "Wgbs Min Mapped Rate"
         }
       },
       "title": "AlignmentGuardrailsConfig",
