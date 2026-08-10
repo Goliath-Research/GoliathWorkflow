@@ -890,6 +890,22 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
     hbm_frac = os.environ.get("METHYL_GPU_HBM_FREE_FRACTION", "").strip()
     if hbm_frac:
         env.append(f"METHYLGRAPHER_GPU_HBM_FRACTION={hbm_frac}")
+        # The dual-graph C2T→G2A handoff wait reads an absolute GiB floor, which a
+        # fixed number turns into an unreachable target on any GPU whose HBM is not
+        # the size it was written for. Derive it from this device's real total so the
+        # pin stays a share of what we actually have.
+        handoff_pin = os.environ.get(
+            "METHYLGRAPHER_GRAPH_HANDOFF_FREE_GIB", ""
+        ).strip()
+        if handoff_pin:
+            env.append(f"METHYLGRAPHER_GRAPH_HANDOFF_FREE_GIB={handoff_pin}")
+        elif device in {"nvidia", "cuda"}:
+            pair = _nvidia_hbm_free_total_gib()
+            if pair is not None:
+                handoff = _admission_min_free_gib(pair[1])
+                env.append(
+                    f"METHYLGRAPHER_GRAPH_HANDOFF_FREE_GIB={handoff:.2f}"
+                )
     return env
 
 
@@ -1106,6 +1122,7 @@ def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
             "qc_sam_state.py",
             "qc_sam_emit.py",
             "gpu_mem.py",
+            "alignments.py",
         ):
             p = eng_dir / name
             if p.is_file():

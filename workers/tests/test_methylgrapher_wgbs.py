@@ -150,6 +150,44 @@ def test_materialize_passes_host_hbm_fraction(tmp_path: Path, monkeypatch: pytes
     assert "METHYLGRAPHER_GPU_HBM_FRACTION=0.90" in env_pairs
 
 
+def test_graph_handoff_floor_scales_with_device_total(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C2T→G2A handoff floor tracks each GPU's real HBM, never a fixed GiB."""
+    from methyl_worker import methylgrapher_wgbs_runner as m
+
+    cfg = _touch_bundle(tmp_path)
+    cfg["giraffe_device"] = "nvidia"
+    bundle = m.resolve_wgbs_bundle_from_resolved(cfg)
+    monkeypatch.setenv("METHYL_GPU_HBM_FREE_FRACTION", "0.90")
+    monkeypatch.delenv("METHYLGRAPHER_GRAPH_HANDOFF_FREE_GIB", raising=False)
+
+    monkeypatch.setattr(m, "_nvidia_hbm_free_total_gib", lambda: (8.9, 95.58))
+    assert "METHYLGRAPHER_GRAPH_HANDOFF_FREE_GIB=86.02" in (
+        m.materialize_align_docker_env(bundle)
+    )
+
+    # Smaller card: the floor must shrink with it, not stay at the GH200 number.
+    monkeypatch.setattr(m, "_nvidia_hbm_free_total_gib", lambda: (2.0, 40.0))
+    assert "METHYLGRAPHER_GRAPH_HANDOFF_FREE_GIB=36.00" in (
+        m.materialize_align_docker_env(bundle)
+    )
+
+    # Unreadable HBM must not invent a floor.
+    monkeypatch.setattr(m, "_nvidia_hbm_free_total_gib", lambda: None)
+    assert not any(
+        p.startswith("METHYLGRAPHER_GRAPH_HANDOFF_FREE_GIB=")
+        for p in m.materialize_align_docker_env(bundle)
+    )
+
+    # Explicit operator pin still wins.
+    monkeypatch.setattr(m, "_nvidia_hbm_free_total_gib", lambda: (8.9, 95.58))
+    monkeypatch.setenv("METHYLGRAPHER_GRAPH_HANDOFF_FREE_GIB", "70")
+    assert "METHYLGRAPHER_GRAPH_HANDOFF_FREE_GIB=70" in (
+        m.materialize_align_docker_env(bundle)
+    )
+
+
 def test_orphan_gpu_matcher_covers_mojo_giraffe() -> None:
     from methyl_worker.methylgrapher_wgbs_runner import _is_orphan_gpu_container
 
