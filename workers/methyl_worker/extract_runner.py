@@ -347,6 +347,154 @@ def extract_outputs_complete(sample_dir: Path, expected_names: Sequence[str]) ->
     return all((sample_dir / name).is_file() for name in expected_names)
 
 
+def _load_context_stat_json(sample_dir: Path, chrom: str, context: str) -> Optional[Dict[str, Any]]:
+    """Load MethylExtractor ``{chrom}-{context}.json`` sidecar stats when present."""
+    path = sample_dir / f"{chrom}-{context}.json"
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def build_canonical_extraction_manifest_from_stats(
+    *,
+    sample_id: str,
+    sample_dir: Path,
+    chromosomes: Sequence[str],
+    contexts: Sequence[str],
+    h5_files: Sequence[str],
+    pattern_files: Sequence[str] | None = None,
+) -> Dict[str, Any]:
+    """Build ``methyl_extraction_qc`` canonical manifest from MethylExtractor JSON sidecars.
+
+    The installed MethylExtractor CLI writes per-chromosome ``{chrom}-{ctx}.json``
+    (``avg_coverage``, ``avg_methylation_level``, …) and HDF5s, but does **not**
+    emit ``{sampleId}.extraction_manifest.json``. The WGBS methylGrapher extract
+    path already synthesizes that file; the linear ``sample.methyl_extract`` path
+    must do the same or extraction QC will read a stale stub (e.g. chr21-only
+    ``WORKER_STUB_EXTERNAL`` leftover) and fail chromosome completeness.
+    """
+    contexts_list = [str(c) for c in contexts] or ["CG"]
+    per_chromosome: Dict[str, Dict[str, Any]] = {}
+    weighted_cov_num = 0.0
+    weighted_cov_den = 0.0
+    weighted_meth_num = 0.0
+    weighted_meth_den = 0.0
+    ctx_meth_totals: Dict[str, List[float]] = {c: [0.0, 0.0] for c in contexts_list}
+    missing: List[str] = []
+
+    for chrom in chromosomes:
+        chrom_key = str(chrom).lstrip("chr")
+        chrom_entry: Dict[str, Any] = {}
+        for ctx in contexts_list:
+            stats = _load_context_stat_json(sample_dir, chrom_key, ctx)
+            if stats is None:
+                missing.append(f"{chrom_key}-{ctx}.json")
+                continue
+            num_positions = int(stats.get("num_positions") or 0)
+            mean_coverage = stats.get("avg_coverage")
+            meth_level = stats.get("avg_methylation_level")
+            total_m = float(stats.get("total_methylated") or 0.0)
+            total_u = float(stats.get("total_unmethylated") or 0.0)
+            chrom_entry[ctx] = {
+                "num_positions": num_positions,
+                "methylation_level": meth_level,
+                "mean_coverage": mean_coverage,
+            }
+            if ctx == "CG" and num_positions and mean_coverage is not None:
+                weighted_cov_num += float(mean_coverage) * float(num_positions)
+                weighted_cov_den += float(num_positions)
+                total_cov = total_m + total_u
+                if meth_level is not None and total_cov > 0:
+                    weighted_meth_num += float(meth_level) * total_cov
+                    weighted_meth_den += total_cov
+            ctx_meth_totals[ctx][0] += total_m
+            ctx_meth_totals[ctx][1] += total_m + total_u
+        if chrom_entry:
+            per_chromosome[chrom_key] = chrom_entry
+
+    if missing:
+        raise RuntimeError(
+            "MethylExtractor per-chromosome stats incomplete for extraction manifest; "
+            f"missing {len(missing)} sidecar(s) under {sample_dir}: "
+            + ", ".join(missing[:12])
+            + ("…" if len(missing) > 12 else "")
+        )
+
+    cpg_weighted_mean_coverage = (
+        weighted_cov_num / weighted_cov_den if weighted_cov_den > 0 else 0.0
+    )
+    cpg_methylation_level = (
+        weighted_meth_num / weighted_meth_den if weighted_meth_den > 0 else None
+    )
+    summary: Dict[str, Any] = {
+        "cpg_weighted_mean_coverage": cpg_weighted_mean_coverage,
+        "cpg_methylation_level": cpg_methylation_level,
+        "n_chromosomes": len(per_chromosome),
+        "n_h5_files": len(h5_files),
+        "n_pattern_files": len(pattern_files or []),
+    }
+    for ctx in contexts_list:
+        if ctx == "CG":
+            continue
+        meth_num, meth_den = ctx_meth_totals[ctx]
+        summary[f"{ctx.lower()}_methylation_level"] = (
+            (meth_num / meth_den) if meth_den > 0 else None
+        )
+
+    return {
+        "metadata": {
+            "schema_name": "methylextractor.extraction_manifest",
+            "schema_version": "1.0.0",
+            "sample_id": sample_id,
+            "contexts_extracted": contexts_list,
+            "extractor": "MethylExtractor",
+            "action": "sample.methyl_extract",
+        },
+        "summary": summary,
+        "per_chromosome": per_chromosome,
+    }
+
+
+def write_extraction_manifest(
+    sample_dir: Path,
+    sample_id: str,
+    manifest: Mapping[str, Any],
+) -> Path:
+    """Atomically write ``{sampleId}.extraction_manifest.json`` (overwrites stubs)."""
+    path = sample_dir / f"{sample_id}.extraction_manifest.json"
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    return path
+
+
+def ensure_extraction_manifest(
+    *,
+    sample_id: str,
+    sample_dir: Path,
+    chromosomes: Sequence[str],
+    contexts: Sequence[str],
+    h5_files: Sequence[str],
+    pattern_files: Sequence[str] | None = None,
+) -> Path:
+    """Synthesize and write the canonical extraction manifest for linear extract."""
+    manifest = build_canonical_extraction_manifest_from_stats(
+        sample_id=sample_id,
+        sample_dir=sample_dir,
+        chromosomes=chromosomes,
+        contexts=contexts,
+        h5_files=h5_files,
+        pattern_files=pattern_files,
+    )
+    path = write_extraction_manifest(sample_dir, sample_id, manifest)
+    logger.info("Wrote extraction manifest for %s (%s chromosomes)", sample_id, len(chromosomes))
+    return path
+
+
 def resolve_bam_path(sample_dir: Path, sample_id: str) -> Path:
     candidates = [
         sample_dir / f"{sample_id}.bam",
@@ -547,9 +695,23 @@ def run_methyl_extract(
     )
     if marginals_ok and patterns_ok:
         logger.info("Skipping MethylExtractor; outputs already present for %s", cfg.sample_id)
+        # Still (re)write the canonical manifest — H5 skip must not leave a stale
+        # stub from WORKER_STUB_EXTERNAL / prior runs for extraction QC.
+        pattern_present = [
+            name for name in pattern_expected if (cfg.sample_dir / name).is_file()
+        ]
+        manifest_path = ensure_extraction_manifest(
+            sample_id=cfg.sample_id,
+            sample_dir=cfg.sample_dir,
+            chromosomes=cfg.chromosomes,
+            contexts=cfg.extract_contexts,
+            h5_files=expected,
+            pattern_files=pattern_present,
+        )
         return {
             "sampleId": cfg.sample_id,
             "h5Files": expected,
+            "extractionManifest": str(manifest_path),
         }
     if marginals_ok and pattern_expected and not patterns_ok:
         # Prefer re-extract when BAM is available so *.patterns.h5 can be emitted.
@@ -561,10 +723,19 @@ def run_methyl_extract(
                 "keeping existing marginal HDF5s (pipeline.info_measures will skip or partial)",
                 cfg.sample_id,
             )
+            manifest_path = ensure_extraction_manifest(
+                sample_id=cfg.sample_id,
+                sample_dir=cfg.sample_dir,
+                chromosomes=cfg.chromosomes,
+                contexts=cfg.extract_contexts,
+                h5_files=expected,
+                pattern_files=[],
+            )
             return {
                 "sampleId": cfg.sample_id,
                 "h5Files": expected,
                 "patternsIncomplete": True,
+                "extractionManifest": str(manifest_path),
             }
 
     bam_path = resolve_bam_path(cfg.sample_dir, cfg.sample_id)
@@ -618,9 +789,22 @@ def run_methyl_extract(
     if not h5_files:
         raise RuntimeError(f"MethylExtractor did not produce HDF5 files under {cfg.sample_dir}")
 
+    pattern_files = [
+        name for name in pattern_expected if (cfg.sample_dir / name).is_file()
+    ] if pattern_expected else []
+    manifest_path = ensure_extraction_manifest(
+        sample_id=cfg.sample_id,
+        sample_dir=cfg.sample_dir,
+        chromosomes=cfg.chromosomes,
+        contexts=cfg.extract_contexts,
+        h5_files=h5_files,
+        pattern_files=pattern_files,
+    )
+
     return {
         "sampleId": cfg.sample_id,
         "h5Files": h5_files,
+        "extractionManifest": str(manifest_path),
     }
 
 
