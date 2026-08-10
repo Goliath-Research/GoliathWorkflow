@@ -49,7 +49,7 @@ todos:
 
 ## Artifacts
 
-- SOP: [`docs/usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd)
+- SOP: [`docs/usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.md)
 - Profiles: `workflow_engine/domain/profiles/samd_*.profile.json`
 - CLIs: `methyl-study-init`, `methyl-study-validate-manifest`
 - Examples: [`docs/examples/samd/`](../examples/samd/)

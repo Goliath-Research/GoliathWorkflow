@@ -48,5 +48,5 @@ Neither change encodes prostate/Buffy disease logic. Neither changes DB contract
 ## Delivered follow-ups
 
 1. [`docs/deployment/buffy_gene_tier_a_cross_vm.md`](../deployment/buffy_gene_tier_a_cross_vm.md) — architecture boundary; runtime-bundle paths; release venv preferred.
-2. [`docs/usage/15-optional-hyperparameter-search.qmd`](../usage/15-optional-hyperparameter-search.qmd) and [`packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md`](../../packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md) — gene FeatureCuts metrics as first-class objective source.
+2. [`docs/usage/15-optional-hyperparameter-search.qmd`](../usage/15-optional-hyperparameter-search.md) and [`packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md`](../../packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md) — gene FeatureCuts metrics as first-class objective source.
 3. `/work/projects/prostate-cancer/experiments/Buffy_ecdf_gene_covariates_tier_a/run_slice1_search.sh` — release-first with capability probe; repo `.venv` fallback until promote includes gene-FC BA scoring.

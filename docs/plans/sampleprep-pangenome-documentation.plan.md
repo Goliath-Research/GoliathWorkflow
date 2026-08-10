@@ -50,7 +50,7 @@ todos:
 - Regenerate checked-in diagram outputs with `scripts/render_diagrams.sh` and verify `--check` passes.
 
 ## 4. Deepen canonical operator and implementation documentation
-- Expand [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd) and [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md) with:
+- Expand [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.md) and [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md) with:
   - exact stage ordering and remediation behavior;
   - linear, stock Giraffe, and WGBS pangenome selection/configuration;
   - the bisulfite-aware correction chain: dual C2T/G2A indexes → directional methylGrapher alignment → GAF (named-segment space, kept for `MethylCall`) → separate `vg giraffe -o BAM --ref-paths` C2T pass → restoration of original read sequences/qualities → sort/markdup/index → QC-compatible BAM;
@@ -61,7 +61,7 @@ todos:
 ## 5. Synchronize canonical contracts and all stale references
 - Update workflow/operator contracts in [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md), [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md), and [`workflow_engine/docs/pipeline_architecture.md`](../../workflow_engine/docs/pipeline_architecture.md) for methylGrapher actions, correct stage order, archive semantics, typed gates, and removal of retired `sample.upload_h5` wording.
 - Refresh architecture diagrams/prose in [`docs/architecture/end-to-end-workflow.md`](../architecture/end-to-end-workflow.md), including the downstream information-measure handoff.
-- Correct operator/deployment/theory terminology and setup guidance in [`docs/usage/24-methylation-application-packs.qmd`](../usage/24-methylation-application-packs.qmd), [`docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md`](../regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md), [`docs/deployment/production_runbook.md`](../deployment/production_runbook.md), [`docs/theory/chapters/09a-methylextractionqc.qmd`](../theory/chapters/09a-methylextractionqc.qmd), [`workflow_engine/domain/profiles/procedures/README.md`](../../workflow_engine/domain/profiles/procedures/README.md), and [`docs/DOCUMENTATION_AUDIT.md`](../DOCUMENTATION_AUDIT.md).
+- Correct operator/deployment/theory terminology and setup guidance in [`docs/usage/24-methylation-application-packs.qmd`](../usage/24-methylation-application-packs.md), [`docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md`](../regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md), [`docs/deployment/production_runbook.md`](../deployment/production_runbook.md), [`docs/theory/chapters/09a-methylextractionqc.qmd`](../theory/chapters/09a-methylextractionqc.md), [`workflow_engine/domain/profiles/procedures/README.md`](../../workflow_engine/domain/profiles/procedures/README.md), and [`docs/DOCUMENTATION_AUDIT.md`](../DOCUMENTATION_AUDIT.md).
 
 ## 6. Validate implementation and documentation
 - Run targeted tests in `.venv` for methylGrapher extraction, extraction QC, procedure/profile routing, and SamplePrep graph compilation.

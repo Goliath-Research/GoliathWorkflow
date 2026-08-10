@@ -108,7 +108,7 @@ Analytes (plasma, buffy-coat, tissue) differ in signal and QC; **groups, compari
 | **4** | Discovery-mapped + FeatureCuts_Genes | **Partial** | `mc_gene_featurecuts` | Conflated BA knobs; ad-hoc dmp_source flag only on gene features |
 | **5** | Genes from stable DMPs (two-phase) | **No (automated)** | `mc_two_phase_dmp_then_gene` | Stable panel feeds freeze/detector, not Phase B gene FC |
 
-Reference implementation today lives in [`pipeline_profiles.py`](workflow_engine/domain/pipeline_profiles.py) presets and [`stability.py`](packages/methylvalidation/methyl_validation/stability.py)—not in study domain folders.
+Reference implementation today lives in [`pipeline_profiles.py`](../../workflow_engine/domain/pipeline_profiles.py) presets and [`stability.py`](../../packages/methylvalidation/methyl_validation/stability.py)—not in study domain folders.
 
 ---
 
@@ -116,7 +116,7 @@ Reference implementation today lives in [`pipeline_profiles.py`](workflow_engine
 
 ### 1. Three consumer-facing DMP tiers (discovery / core / extended)
 
-[`methyldetector.py`](packages/methyldetector/methyl_detector/core/methyldetector.py) exports discovery, classifier core, and extended margin panels. Downstream tools disagree on which to read. For a process-agnostic API, consumers should see:
+[`methyldetector.py`](../../packages/methyldetector/methyl_detector/core/methyldetector.py) exports discovery, classifier core, and extended margin panels. Downstream tools disagree on which to read. For a process-agnostic API, consumers should see:
 
 - **Raw pool** — detector output (`dmps-*-discovery.csv`; not a "mode")
 - **Selected panel** — one artifact after optional FeatureCuts (`dmps-*-selected.csv`)
@@ -137,20 +137,20 @@ Defaults belong in **profile templates**, tuned per study in manifest overrides�
 
 ### 4. Stability aggregation axes are incomplete
 
-[`compute_gene_stability`](packages/methylvalidation/methyl_validation/stability.py) supports enricher genes or FeatureCuts gene panels—not mapper-ranked genes (mode 3) or stable-DMP-mapped genes (mode 5 Phase B).
+[`compute_gene_stability`](../../packages/methylvalidation/methyl_validation/stability.py) supports enricher genes or FeatureCuts gene panels—not mapper-ranked genes (mode 3) or stable-DMP-mapped genes (mode 5 Phase B).
 
 ---
 
 ## Target configuration model (engine-level)
 
-Two independent axes in [`MonteCarloConfig`](packages/methylvalidation/methyl_validation/config.py), seeded by **generic profiles** only:
+Two independent axes in [`MonteCarloConfig`](../../packages/methylvalidation/methyl_validation/config.py), seeded by **generic profiles** only:
 
 ```yaml
 dmp_modeling_mode: raw_pool | featurecuts | stable_panel
 gene_modeling_mode: none | mapper_ranked | featurecuts | from_stable_dmp_panel
 ```
 
-Derived IF flags (`runDmpSelection`, `runGeneFeaturecuts`, etc.) remain for [`DomainProgram`](workflow_engine/domain/) compatibility—programs stay topology-only; they must not embed study thresholds.
+Derived IF flags (`runDmpSelection`, `runGeneFeaturecuts`, etc.) remain for [`DomainProgram`](../../workflow_engine/domain/) compatibility—programs stay topology-only; they must not embed study thresholds.
 
 | Mode | `dmp_modeling_mode` | `gene_modeling_mode` | `runDmpSelection` | `runGeneFeaturecuts` |
 |------|---------------------|------------------------|-------------------|----------------------|
@@ -199,7 +199,7 @@ User-selected pattern: **two explicit phases**, not an in-loop switch inside one
 
 **Phase B profile** (`phase_b_gene_from_stable_dmps`): Context references Phase A artifact path; mapper + optional gene FeatureCuts; gene stability on classifier panels or mapper ranks.
 
-No new domain check per study—same [`mc_stability.program.json`](workflow_engine/domain/fixtures/mc_stability_staged.program.json) topology with different profile + context. Study manifests supply paths and regulatory metadata only.
+No new domain check per study—same [`mc_stability.program.json`](../../workflow_engine/domain/fixtures/mc_stability_staged.program.json) topology with different profile + context. Study manifests supply paths and regulatory metadata only.
 
 ```mermaid
 flowchart LR
@@ -214,11 +214,11 @@ flowchart LR
 
 ## Documentation scope (generic only)
 
-Update [`docs/reference/domain-program-language.md`](docs/reference/domain-program-language.md) and [`docs/plans/composable-pipeline-flexibility.plan.md`](docs/plans/composable-pipeline-flexibility.plan.md):
+Update [`docs/reference/domain-program-language.md`](../reference/domain-program-language.md) and [`docs/plans/composable-pipeline-flexibility.plan.md`](../plans/composable-pipeline-flexibility.plan.md):
 
 - Artifact ladder: program → profile → manifest → context
 - Profile matrix keyed by **statistical mode**, not Buffy / H_PCa / prostate-cancer
-- Regulatory narrative: MC stability, BA gates, panel freeze—cite [`docs/theory/chapters/12-two-workflows.qmd`](docs/theory/chapters/12-two-workflows.qmd) patterns
+- Regulatory narrative: MC stability, BA gates, panel freeze—cite [`docs/theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.qmd) patterns
 - Example commands use **fixture** manifests under `workflow_engine/domain/fixtures/`
 
 **Do not add** study-specific runbooks to domain check READMEs as part of this work; studies may document their chosen profile + overrides locally under `/work/projects/...` if needed.
@@ -230,7 +230,7 @@ Update [`docs/reference/domain-program-language.md`](docs/reference/domain-progr
 ### Phase 1 — Engine config and generic profiles
 
 - `dmp_modeling_mode`, `gene_modeling_mode`, split BA targets
-- Rename/organize profiles in [`workflow_engine/domain/profiles/`](workflow_engine/domain/profiles/) by statistical role
+- Rename/organize profiles in [`workflow_engine/domain/profiles/`](../../workflow_engine/domain/profiles/) by statistical role
 - `pipeline_profiles.py` seeds IF flags from modes; deprecate analyte-named profile aliases gradually (`buffy_mc_gene_fc` → pointer to `mc_gene_fc`)
 
 ### Phase 2 — DMP export and strict gating semantics

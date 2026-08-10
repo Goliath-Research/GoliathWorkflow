@@ -49,17 +49,17 @@ isProject: false
 MethylPipeline turns WGBS samples into three model-ready surfaces, all of which are good insertion points:
 
 - **Per-DMP betas** at frozen loci (production ECDF path).
-- **Observed-hybrid per-sample aggregates** over the DMP panel (already includes a weighted Jensen-Shannon distance to class centroids, cosine similarity, directional agreement, tail evidence) in [`observed_feature_builder.py`](packages/methylvalidation/methyl_validation/observed_feature_builder.py).
+- **Observed-hybrid per-sample aggregates** over the DMP panel (already includes a weighted Jensen-Shannon distance to class centroids, cosine similarity, directional agreement, tail evidence) in [`observed_feature_builder.py`](../../packages/methylvalidation/methyl_validation/observed_feature_builder.py).
 - **Per-gene / per-region tables** from the mapper.
 
 Two facts make this task low-friction:
 
-1. **The distance math already exists** (used only for clustering, not modeling): `compute_entropy`, `compute_hellinger_distance`, `compute_jensen_shannon_distance`, `compute_wasserstein_distance`, `compute_sample_centroid_jsd`, `get_sample_beta_mom` in [`packages/methylutils/methyl_utils/metrics_core.py`](packages/methylutils/methyl_utils/metrics_core.py).
-2. **The schema already reserves the hooks.** `build_observed_hybrid_feature_table` accepts `include_chromosome_features` / `include_dmr_features` / `dmr_window_bp` / `max_dmr_features` but currently discards them (`del ...` at [observed_feature_builder.py:1314-1316](packages/methylvalidation/methyl_validation/observed_feature_builder.py)) and reports `"chromosome": False, "dmr": False` at [line 1967-1975](packages/methylvalidation/methyl_validation/observed_feature_builder.py). The family enum `HYBRID_FEATURE_FAMILY_SETS` ([line 45](packages/methylvalidation/methyl_validation/observed_feature_builder.py)) has no `chromosome` member yet.
+1. **The distance math already exists** (used only for clustering, not modeling): `compute_entropy`, `compute_hellinger_distance`, `compute_jensen_shannon_distance`, `compute_wasserstein_distance`, `compute_sample_centroid_jsd`, `get_sample_beta_mom` in [`packages/methylutils/methyl_utils/metrics_core.py`](../../packages/methylutils/methyl_utils/metrics_core.py).
+2. **The schema already reserves the hooks.** `build_observed_hybrid_feature_table` accepts `include_chromosome_features` / `include_dmr_features` / `dmr_window_bp` / `max_dmr_features` but currently discards them (`del ...` at [observed_feature_builder.py:1314-1316](../../packages/methylvalidation/methyl_validation/observed_feature_builder.py)) and reports `"chromosome": False, "dmr": False` at [line 1967-1975](../../packages/methylvalidation/methyl_validation/observed_feature_builder.py). The family enum `HYBRID_FEATURE_FAMILY_SETS` ([line 45](../../packages/methylvalidation/methyl_validation/observed_feature_builder.py)) has no `chromosome` member yet.
 
 Existing model consumers we will target:
-- **Tabular** (`RandomForest`/`HistGradientBoosting`/`LogisticRegression`/`XGBoost`) and **generative (torch)** backends already merge external covariates via `fit_covariates` -> `np.concatenate([X, cov], axis=1)` ([`tabular_backend.py`](packages/methylvalidation/methyl_validation/tabular_backend.py) covariate seam ~L842-860; [`covariate_preprocessor.py`](packages/methylvalidation/methyl_validation/covariate_preprocessor.py)).
-- **Production ECDF blind predictor** ([`methyl_predictor/core/predictor.py`](packages/methylpredictor/methyl_predictor/core/predictor.py)) has **no** covariate hook - its features are strictly methylation at frozen DMP loci ([`data_loader.py`](packages/methylclassifier/methyl_classifier/utils/data_loader.py)).
+- **Tabular** (`RandomForest`/`HistGradientBoosting`/`LogisticRegression`/`XGBoost`) and **generative (torch)** backends already merge external covariates via `fit_covariates` -> `np.concatenate([X, cov], axis=1)` ([`tabular_backend.py`](../../packages/methylvalidation/methyl_validation/tabular_backend.py) covariate seam ~L842-860; [`covariate_preprocessor.py`](../../packages/methylvalidation/methyl_validation/covariate_preprocessor.py)).
+- **Production ECDF blind predictor** ([`methyl_predictor/core/predictor.py`](../../packages/methylpredictor/methyl_predictor/core/predictor.py)) has **no** covariate hook - its features are strictly methylation at frozen DMP loci ([`data_loader.py`](../../packages/methylclassifier/methyl_classifier/utils/data_loader.py)).
 
 ## 2. Recommended design: two complementary seams
 
@@ -91,9 +91,9 @@ Compute chromosome-level and genome-wide summaries **over the existing DMP-panel
 ### Seam B (genome-wide, higher ceiling): new `pipeline.derived_measures` action
 For measures that need the **whole sample**, not just the DMP panel (global hypomethylation blocks/PMDs, arm-level coverage CN shadow, PDR, imprinting/X signals). Emit a per-sample `derived_measures.csv` keyed by `sample_id`.
 
-- New package `packages/methylderivedmeasures/` with `methyl-derived-measures` CLI using the standard `--resolved-config` contract (mirror [`methyl_mapper/cli.py`](packages/methylmapper/methyl_mapper/cli.py)).
-- Typed I/O `DerivedMeasuresTaskInput/Output` in [`pipeline_models.py`](workers/methyl_worker/task_models/pipeline_models.py); step-config Pydantic model registered in [`config_schema_registry.py`](packages/methylvalidation/methyl_validation/config_schema_registry.py) -> `schemas/config/derived_measures.schema.json` (config-not-code: knobs `default=None`, profile/site set values).
-- Catalog entry in [`action_catalog.py`](workers/methyl_worker/action_catalog.py) with `action_config_key="derived_measures"`; export + seed via the standard scripts.
+- New package `packages/methylderivedmeasures/` with `methyl-derived-measures` CLI using the standard `--resolved-config` contract (mirror [`methyl_mapper/cli.py`](../../packages/methylmapper/methyl_mapper/cli.py)).
+- Typed I/O `DerivedMeasuresTaskInput/Output` in [`pipeline_models.py`](../../workers/methyl_worker/task_models/pipeline_models.py); step-config Pydantic model registered in [`config_schema_registry.py`](../../packages/methylvalidation/methyl_validation/config_schema_registry.py) -> `schemas/config/derived_measures.schema.json` (config-not-code: knobs `default=None`, profile/site set values).
+- Catalog entry in [`action_catalog.py`](../../workers/methyl_worker/action_catalog.py) with `action_config_key="derived_measures"`; export + seed via the standard scripts.
 - **Incorporation with zero model change:** point the tabular/generative backend `covariates_path` at `derived_measures.csv` (optionally merged with clinical age/BMI). The existing `fit_covariates`/`transform_covariates` join handles train/predict schema freezing.
 
 ## 3. Measure menu (prioritized; synthesis of code review + GPT-5.5 + Grok 4.3)
@@ -121,12 +121,12 @@ Full annotated menus (with formulas, robustness, and generative-vs-tabular suita
 - **Fusion strategy:** start with regularized early concatenation (family-grouped), then evaluate meta-stacking (DMP expert + global/chromosome expert) - both consulted models independently ranked stacking highest for letting the model discount global scalars when tumor fraction is low.
 
 ## 5. Leakage & normalization guardrails (must-have)
-- Any centroid-referenced or quantile-referenced measure must be computed with **train-fold-only** centroids/quantiles. The MC stability loop already refits per fold ([`pipeline_runner.py`](packages/methylvalidation/methyl_validation/pipeline_runner.py)); derived measures must be computed inside that loop, and the predict path must reuse frozen references (same pattern as `CovariatePreprocessor.transform_covariates`).
+- Any centroid-referenced or quantile-referenced measure must be computed with **train-fold-only** centroids/quantiles. The MC stability loop already refits per fold ([`pipeline_runner.py`](../../packages/methylvalidation/methyl_validation/pipeline_runner.py)); derived measures must be computed inside that loop, and the predict path must reuse frozen references (same pattern as `CovariatePreprocessor.transform_covariates`).
 - Coverage-aware aggregation (`sum(mC)/sum(n)`, capped per-site weights), minimum-depth handling, and explicit missingness indicators for low-coverage chromosomes.
 - Batch/technical confounds: keep conversion-efficiency/depth as covariates; prefer grouped/leave-batch-out CV; never fit correction on the full dataset.
 
 ## 6. Config-not-code compliance
-All thresholds (beta cutoffs, `dmr_window_bp`, min depth, which distances, which chromosomes) live in `schemas/config/*.schema.json` with `default=None`, set in [`mc_gene_fc.profile.json`](workflow_engine/domain/profiles/mc_gene_fc.profile.json) `actionConfig` and site manifest - not as Python constants. Regenerate schemas via `scripts/export_config_schemas.sh` and re-seed the catalog.
+All thresholds (beta cutoffs, `dmr_window_bp`, min depth, which distances, which chromosomes) live in `schemas/config/*.schema.json` with `default=None`, set in [`mc_gene_fc.profile.json`](../../workflow_engine/domain/profiles/mc_gene_fc.profile.json) `actionConfig` and site manifest - not as Python constants. Regenerate schemas via `scripts/export_config_schemas.sh` and re-seed the catalog.
 
 ## 7. Validation
 - Unit tests for each `metrics_core`-backed measure and for train/predict schema freezing (fixture manifests only).
@@ -138,9 +138,9 @@ All thresholds (beta cutoffs, `dmr_window_bp`, min depth, which distances, which
 - **Data contract:** each sample stores `(mC, uC)` per position; keep coverage `n = mC + uC` (not just point beta). Distances to centroids use the Beta method-of-moments path (`get_sample_beta_mom(m, n)` + `compute_sample_centroid_jsd`) so low-coverage positions are downweighted naturally.
 
 ### ECDF pickle extension — concrete anchors (confirmed)
-- `ECDFClassifier` ([`packages/methylutils/methyl_utils/ecdf_classifier.py`](packages/methylutils/methyl_utils/ecdf_classifier.py)) already carries per-locus `dmpDF` (columns `pos`, `weight`, `delta_sign`/`mean1`,`mean2`, `context`) plus `bin_counts_c1/c2`; `to_dict`/`from_dict` (L355-391), `from_dmp_dataframe` (L409+), and `get_feature_info` (L474) are the persistence/schema seams to extend with a `derived_measures` block (ordered names, train-fold reference means/quantiles, per-locus `effect_size` + region weight).
-- Detector export path `MethylDetector._save_unified_model` in [`methyldetector.py`](packages/methyldetector/methyl_detector/core/methyldetector.py) already has `effect_size` on the DMP frame (biological filter at L67-90, L1097-1103) — reuse it as the stored weight vector rather than recomputing.
-- Blind assembly extends `data_loader.extract_sample_features` + the batch predict seam in [`methyl_classifier/cli/main.py`](packages/methylclassifier/methyl_classifier/cli/main.py); append the derived block after the DMP methylation vector and validate against the stored fingerprint.
+- `ECDFClassifier` ([`packages/methylutils/methyl_utils/ecdf_classifier.py`](../../packages/methylutils/methyl_utils/ecdf_classifier.py)) already carries per-locus `dmpDF` (columns `pos`, `weight`, `delta_sign`/`mean1`,`mean2`, `context`) plus `bin_counts_c1/c2`; `to_dict`/`from_dict` (L355-391), `from_dmp_dataframe` (L409+), and `get_feature_info` (L474) are the persistence/schema seams to extend with a `derived_measures` block (ordered names, train-fold reference means/quantiles, per-locus `effect_size` + region weight).
+- Detector export path `MethylDetector._save_unified_model` in [`methyldetector.py`](../../packages/methyldetector/methyl_detector/core/methyldetector.py) already has `effect_size` on the DMP frame (biological filter at L67-90, L1097-1103) — reuse it as the stored weight vector rather than recomputing.
+- Blind assembly extends `data_loader.extract_sample_features` + the batch predict seam in [`methyl_classifier/cli/main.py`](../../packages/methylclassifier/methyl_classifier/cli/main.py); append the derived block after the DMP methylation vector and validate against the stored fingerprint.
 
 ## Weighting principle (user) — effect_size drives biological importance
 Statistical significance (p/q) only gates candidacy; **`effect_size` is the effective biological filter** and is already what the mapper turns into gene / gene-feature importance (`|effect_size| x region_weight`, gene_importance). Therefore every panel-scoped derived measure must be **effect_size-weighted**, consistent with existing observed-hybrid and gene aggregation:

@@ -90,7 +90,7 @@ GPU and slow smokes were **not** run (live MC workflow on GPU during review).
 
 **Status: Mostly consistent**
 
-The implementation in [project_gen.py](packages/methylvalidation/methyl_validation/project_gen.py), [workflow_planner.py](packages/methylvalidation/methyl_validation/workflow_planner.py), and [action_config_resolver.py](packages/methylutils/methyl_utils/action_config_resolver.py) correctly separates:
+The implementation in [project_gen.py](../../packages/methylvalidation/methyl_validation/project_gen.py), [workflow_planner.py](../../packages/methylvalidation/methyl_validation/workflow_planner.py), and [action_config_resolver.py](../../packages/methylutils/methyl_utils/action_config_resolver.py) correctly separates:
 
 - Study manifest (`project.json` / `run_XXXX/project.json`)
 - Profile (`*.profile.json`)
@@ -108,9 +108,9 @@ MC iteration centroids use `build_cohort_relative_centroid_scope()` with `centro
 | Pattern | Finding |
 |---------|---------|
 | `apply_*_defaults()` | **None found** (good) |
-| Gene FC caps ([caps.py](packages/methylgeneselect/methyl_gene_select/caps.py)) | **Compliant** — returns `(None, None)` when unset |
+| Gene FC caps ([caps.py](../../packages/methylgeneselect/methyl_gene_select/caps.py)) | **Compliant** — returns `(None, None)` when unset |
 | `MonteCarloConfig` caps | `stability_gene_featurecuts_max_dmps/max_genes` use `Optional[int] = Field(default=None)` (good); `observed_feature_max_genes: int = Field(default=32)` remains a code default |
-| `DEFAULT_*` constants | Present in deployment/infra paths (`DEFAULT_SITE_PATH`, `DEFAULT_EPIMETHYL_ROOT`) — acceptable. **Science/ops knobs** remain in [gene_disease_enricher.py](packages/methylmapper/methyl_mapper/gene_disease_enricher.py) (`DEFAULT_GROK_BATCH_SIZE`, cache TTLs, worker counts) and [methyl_enricher](packages/methylenricher/methyl_enricher/) — should migrate to site/profile |
+| `DEFAULT_*` constants | Present in deployment/infra paths (`DEFAULT_SITE_PATH`, `DEFAULT_EPIMETHYL_ROOT`) — acceptable. **Science/ops knobs** remain in [gene_disease_enricher.py](../../packages/methylmapper/methyl_mapper/gene_disease_enricher.py) (`DEFAULT_GROK_BATCH_SIZE`, cache TTLs, worker counts) and [methyl_enricher](../../packages/methylenricher/methyl_enricher/) — should migrate to site/profile |
 | Study `step_config` | **Rejected at runtime** by `ProjectConfig`; guard script passes on tracked manifests but **tests still use legacy fixtures** |
 
 ### 3. Recent-change coherence (~31 commits)
@@ -128,13 +128,13 @@ flowchart LR
 
 | Change | Assessment |
 |--------|------------|
-| `group_token_requests_all_groups()` + CLI fix ([97ddbd45](https://github.com/)) | **Critical fix.** `--group all` now targets cohort label `all` when present. Covered by [test_cli_group_all_disambiguation.py](packages/methylcentroid/methyl_centroid/tests/test_cli_group_all_disambiguation.py). **Production confirmed:** `run_0001` wrote 24+24 HDF5, detector stage reached. |
+| `group_token_requests_all_groups()` + CLI fix ([97ddbd45](https://github.com/)) | **Critical fix.** `--group all` now targets cohort label `all` when present. Covered by [test_cli_group_all_disambiguation.py](../../packages/methylcentroid/methyl_centroid/tests/test_cli_group_all_disambiguation.py). **Production confirmed:** `run_0001` wrote 24+24 HDF5, detector stage reached. |
 | `output_dir` / `--chromosome` / `--context` in project mode | **Working** — single-combination runs (`Processing 1/1`) |
-| `build_cohort_relative_centroid_scope` + seed copy in [centroid.py](workers/methyl_worker/actions/centroid.py) | **Correct design** — seed HDF5 copied before incremental methyl-centroid |
-| Unified [action_run_log.py](workers/methyl_worker/action_run_log.py) | **Implemented** — all ACTION categories log when log root resolves; docs updated in [domain-program-language.md](../reference/domain-program-language.md) and [WORKER_PROTOCOL.md](../../workers/WORKER_PROTOCOL.md) |
-| Typed models (`CentroidGroupScope`, `CentroidSeedGroup` in [types.py](packages/methyldomain/methyl_domain/types.py)) | **Present** with `extra="forbid"` on wire models |
+| `build_cohort_relative_centroid_scope` + seed copy in [centroid.py](../../workers/methyl_worker/actions/centroid.py) | **Correct design** — seed HDF5 copied before incremental methyl-centroid |
+| Unified [action_run_log.py](../../workers/methyl_worker/action_run_log.py) | **Implemented** — all ACTION categories log when log root resolves; docs updated in [domain-program-language.md](../reference/domain-program-language.md) and [WORKER_PROTOCOL.md](../../workers/WORKER_PROTOCOL.md) |
+| Typed models (`CentroidGroupScope`, `CentroidSeedGroup` in [types.py](../../packages/methyldomain/methyl_domain/types.py)) | **Present** with `extra="forbid"` on wire models |
 
-**Remaining loose end:** `copy_centroid_seed_baseline()` ([project_gen.py:539](packages/methylvalidation/methyl_validation/project_gen.py)) copies the tree unconditionally and returns `True` if `src.is_dir()` — **does not verify any `*.h5` exist**. This allowed the original MC failure (empty seed dir, `start=0`).
+**Remaining loose end:** `copy_centroid_seed_baseline()` ([project_gen.py:539](../../packages/methylvalidation/methyl_validation/project_gen.py)) copies the tree unconditionally and returns `True` if `src.is_dir()` — **does not verify any `*.h5` exist**. This allowed the original MC failure (empty seed dir, `start=0`).
 
 ### 4. Idempotency and collectors
 
@@ -142,9 +142,9 @@ flowchart LR
 
 | Component | Behavior | Risk |
 |-----------|----------|------|
-| [CentroidLegacyCollector](workers/methyl_worker/collectors.py) | Sets `"status": "ok"` unconditionally; `centroid_h5_path` only set if `*.h5` found in `outputDir` | Manifest can show success with no HDF5 |
-| [verify_artifacts()](workers/methyl_worker/action_skip.py) | Returns `True` for **empty** `artifacts` list | Skip replay accepts false-success manifests |
-| [maybe_skip_action()](workers/methyl_worker/action_skip.py) | Requires `result_code == 0` + signature match + `verify_artifacts` | Empty artifacts pass verification |
+| [CentroidLegacyCollector](../../workers/methyl_worker/collectors.py) | Sets `"status": "ok"` unconditionally; `centroid_h5_path` only set if `*.h5` found in `outputDir` | Manifest can show success with no HDF5 |
+| [verify_artifacts()](../../workers/methyl_worker/action_skip.py) | Returns `True` for **empty** `artifacts` list | Skip replay accepts false-success manifests |
+| [maybe_skip_action()](../../workers/methyl_worker/action_skip.py) | Requires `result_code == 0` + signature match + `verify_artifacts` | Empty artifacts pass verification |
 
 **Observed in production:** Control seed manifests at `_centroid_seed/.../healthy/all/.action_results/` had `result_code: 0`, `artifacts: []`, `centroid_h5_path: null` while HDF5 were written to the wrong study-root path.
 
@@ -161,7 +161,7 @@ flowchart LR
 | `methyl-export-action-catalog --check` | 37 actions | **PASS** |
 | PostgreSQL `wf.workflow_action_schema` | 33 input + 33 output = 66 rows | **PASS** (2 rows per action) |
 | Azure SQL `wf.workflow_action_schema` | Query succeeded; direction/group count returned | **Likely PASS** (row data not fully captured in MCP response) |
-| Compiled workflow vs program | `buffy_mc_stability` compiled JSON includes `centroid_seed`, `centroidSeedDir` bindings | **Consistent** with [mc_stability.program.json](workflow_engine/domain/fixtures/mc_stability.program.json) |
+| Compiled workflow vs program | `buffy_mc_stability` compiled JSON includes `centroid_seed`, `centroidSeedDir` bindings | **Consistent** with [mc_stability.program.json](../../workflow_engine/domain/fixtures/mc_stability.program.json) |
 
 Task schema export: 66 artifacts — aligns with typed task input/output models.
 
@@ -188,27 +188,27 @@ None for the currently running Buffy MC path after `--group all` fix.
 | ID | Finding | Location | Recommendation |
 |----|---------|----------|----------------|
 | H1 | `test_runner.py` module name collision blocks full pytest collection | `packages/methyldmpselect/tests/test_runner.py` vs `workers/tests/test_runner.py` | Rename `workers/tests/test_runner.py` → `test_worker_runner.py` |
-| H2 | Centroid idempotency accepts empty artifacts | [action_skip.py:294-305](workers/methyl_worker/action_skip.py), [collectors.py:336-370](workers/methyl_worker/collectors.py) | Require HDF5 artifact for `pipeline.centroid`; fail skip when `artifacts` empty |
-| H3 | Seed copy does not validate HDF5 presence | [project_gen.py:539-554](packages/methylvalidation/methyl_validation/project_gen.py) | Raise clear error if seed dir has zero `*.h5` before iteration deltas |
+| H2 | Centroid idempotency accepts empty artifacts | [action_skip.py:294-305](../../workers/methyl_worker/action_skip.py), [collectors.py:336-370](../../workers/methyl_worker/collectors.py) | Require HDF5 artifact for `pipeline.centroid`; fail skip when `artifacts` empty |
+| H3 | Seed copy does not validate HDF5 presence | [project_gen.py:539-554](../../packages/methylvalidation/methyl_validation/project_gen.py) | Raise clear error if seed dir has zero `*.h5` before iteration deltas |
 
 ### Medium
 
 | ID | Finding | Location | Recommendation |
 |----|---------|----------|----------------|
 | M1 | 45 tests fail — mostly stale `step_config` fixtures | `methylvalidation/tests/test_sample_prep_planner.py`, enricher/predictor tests | Batch-migrate test project JSON; run `migrate_project_config.py` on fixtures |
-| M2 | Golden output fixture stale for `validation.plan_iterations` | [workers/tests/test_golden_task_outputs.py](workers/tests/test_golden_task_outputs.py) | Regenerate golden after `centroidSeedGroups` schema change |
-| M3 | Workflow profile tests require missing `/work` CSVs | [test_pipeline_profiles.py](workflow_engine/tests/test_pipeline_profiles.py) | Use tmp_path fixtures instead of production paths |
+| M2 | Golden output fixture stale for `validation.plan_iterations` | [workers/tests/test_golden_task_outputs.py](../../workers/tests/test_golden_task_outputs.py) | Regenerate golden after `centroidSeedGroups` schema change |
+| M3 | Workflow profile tests require missing `/work` CSVs | [test_pipeline_profiles.py](../../workflow_engine/tests/test_pipeline_profiles.py) | Use tmp_path fixtures instead of production paths |
 | M4 | `methyl_cluster` import broken | `methyl_cluster` → `methyl_utils.beta_analytics` | Add missing module or make import optional |
 | M5 | Doc precedence lists "package defaults" | [layer-model.md:19](layer-model.md) | Align with config-not-code: site/profile only, no package science defaults |
-| M6 | Grok/mapper operational defaults in code | [gene_disease_enricher.py](packages/methylmapper/methyl_mapper/gene_disease_enricher.py) | Move to site `actionConfig` or profile |
+| M6 | Grok/mapper operational defaults in code | [gene_disease_enricher.py](../../packages/methylmapper/methyl_mapper/gene_disease_enricher.py) | Move to site `actionConfig` or profile |
 
 ### Low
 
 | ID | Finding | Location | Recommendation |
 |----|---------|----------|----------------|
 | L1 | Pydantic v2 `class Config` deprecation warnings | methylclassifier, methylpredictor, sqlmodel | Migrate to `ConfigDict` |
-| L2 | `methyldomain` test missing required `taskConfig` fields | [test_domain_types.py](packages/methyldomain/tests/test_domain_types.py) | Update fixture to match `StratifiedCohortDraw` schema |
-| L3 | CI PR pipeline does not run full pytest | [azure-pipelines-pr.yml](ci/azure-pipelines-pr.yml) | Add pytest job (or document intentional omission) |
+| L2 | `methyldomain` test missing required `taskConfig` fields | [test_domain_types.py](../../packages/methyldomain/tests/test_domain_types.py) | Update fixture to match `StratifiedCohortDraw` schema |
+| L3 | CI PR pipeline does not run full pytest | [azure-pipelines-pr.yml](../../ci/azure-pipelines-pr.yml) | Add pytest job (or document intentional omission) |
 
 ---
 

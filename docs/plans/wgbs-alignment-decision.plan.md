@@ -56,7 +56,7 @@ flowchart TD
 Concrete doc/procedure flips (no science code yet):
 
 - [`workflow_engine/domain/profiles/procedures/README.md`](../../workflow_engine/domain/profiles/procedures/README.md): default buffy = linear; pangenome = experimental / pending acceptance.
-- [`docs/usage/24-methylation-application-packs.qmd`](../usage/24-methylation-application-packs.qmd), [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md), [`docs/deployment/production_runbook.md`](../deployment/production_runbook.md): same wording; point operators at `buffy_wgbs_linear_gene_fc`.
+- [`docs/usage/24-methylation-application-packs.qmd`](../usage/24-methylation-application-packs.md), [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.md), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md), [`docs/deployment/production_runbook.md`](../deployment/production_runbook.md): same wording; point operators at `buffy_wgbs_linear_gene_fc`.
 - Decision memo: `/work/samples/_comparisons/20260728Tinterim/interim_alignment_recommendation.md` (mirrored in [`linear-vs-wgbs-sampleprep-compare.plan.md`](linear-vs-wgbs-sampleprep-compare.plan.md)).
 
 Do **not** delete the pangenome procedure or SamplePrep branch — only demote its “default” status.

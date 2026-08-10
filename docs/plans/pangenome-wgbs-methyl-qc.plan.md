@@ -83,4 +83,4 @@ Primary code: `/home/ubuntu/methylGrapher-mojo`
 ## Cross-links
 
 - [`methylgrapher-mojo-cutover.plan.md`](methylgrapher-mojo-cutover.plan.md) Phase 4 / [`methylgrapher-mojo-cutover-gate.md`](methylgrapher-mojo-cutover-gate.md)
-- Usage: [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd)
+- Usage: [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.md)

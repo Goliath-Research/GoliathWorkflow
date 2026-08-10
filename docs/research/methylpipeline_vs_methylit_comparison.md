@@ -874,12 +874,12 @@ is propagated from each DMP up to the objects being ranked, rather than a gene s
    of the mapped DMP p-values gives `gene_p_value` → Storey `gene_q_value` (with the honest caveat
    that mapped DMPs in one gene are spatially correlated, so the independence assumption is only
    approximate). Spec: `packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md`; theory
-   [`docs/theory/chapters/07-methylmapper.qmd`](../theory/chapters/07-methylmapper.qmd).
+   [`docs/theory/chapters/07-methylmapper.qmd`](../theory/chapters/07-methylmapper.md).
 4. **Downstream biology (summary only).** Once genes carry `gene_importance`, `methylenricher`
    can prioritize via PPI hubs (signal-weighted), CIS-BP annotate / motif_scan, and Enrichr library
    presets (`cancer-core`, …), optionally with disease-evidence boosts. Those layers **reuse** the
    propagated DMP weight rather than discarding it. Details live in theory
-   [`08-methylenricher.qmd`](../theory/chapters/08-methylenricher.qmd) — not duplicated here.
+   [`08-methylenricher.qmd`](../theory/chapters/08-methylenricher.md) — not duplicated here.
 5. **Weights into selection.** `methyl-gene-select` / `methyl-gene-feature-select` consume
    `gene_importance` and `feature_importance_*` so the signed, feature-resolved DMP weight orders
    the gene/feature panel that gets classified.

@@ -54,7 +54,7 @@ todos:
 
 ## Problem
 
-Today [`workflow_planner.py`](packages/methylvalidation/methyl_validation/workflow_planner.py) chains iterations via `previous_train_by_label` and `prepare_incremental_centroid_baseline(previous_run_dir, …)`. MC DomainPrograms set `"parallel": false` on the outer `iterations` FOR loop ([`mc_stability_staged.program.json`](workflow_engine/domain/fixtures/mc_stability_staged.program.json)) because parallel workers would race on incomplete centroids copied from the prior run.
+Today [`workflow_planner.py`](../../packages/methylvalidation/methyl_validation/workflow_planner.py) chains iterations via `previous_train_by_label` and `prepare_incremental_centroid_baseline(previous_run_dir, …)`. MC DomainPrograms set `"parallel": false` on the outer `iterations` FOR loop ([`mc_stability_staged.program.json`](../../workflow_engine/domain/fixtures/mc_stability_staged.program.json)) because parallel workers would race on incomplete centroids copied from the prior run.
 
 **Target behavior (engine-agnostic):** `validation.plan_iterations` materializes a **shared per-group seed** once, then each iteration applies cohort-relative deltas (`removeSamples = full_cohort \ train`) by copying that seed into the run’s `centroidDir` before `methyl-centroid` runs.
 
@@ -86,7 +86,7 @@ flowchart TD
 | DB — workflows | `wf.workflow_def` / `wf.workflow_version` / nodes / `wf.variable_output_binding` | Deploy **new compiled** MC/lifecycle programs (graph topology change) |
 | DB — instances | `wf.workflow_instance.context_json` | Opaque JSON; gains `centroidSeedGroups` at plan time via `wf_apply_validation_plan` or ACTION output bindings |
 
-**No new `wf` tables or columns** — MC semantics stay in `context_json` and task `input_json` ([`db_objects.md`](workflow_engine/contract/db_objects.md)).
+**No new `wf` tables or columns** — MC semantics stay in `context_json` and task `input_json` ([`db_objects.md`](../../workflow_engine/contract/db_objects.md)).
 
 ## Cross-cutting: typed models (no generic `Dict`)
 
@@ -113,7 +113,7 @@ flowchart TD
 | `build_group_centroid_scope` → `List[Dict[str, Any]]` | `List[CentroidGroupScope]` |
 | `_attach_iteration_centroid_scope(iteration: Dict, …)` | `ValidationPlannedIteration` in/out (or builder that returns model) |
 | `plan_validation_context` `iterations: List[Dict[str, Any]]` | `List[ValidationPlannedIteration]` |
-| `StratifiedCohortDraw.taskConfig: Optional[Dict]` | `Optional[McIterationTaskConfig]` (update [`methyldomain/types.py`](packages/methyldomain/methyl_domain/types.py) + domain schema export) |
+| `StratifiedCohortDraw.taskConfig: Optional[Dict]` | `Optional[McIterationTaskConfig]` (update [`methyldomain/types.py`](../../packages/methyldomain/methyl_domain/types.py) + domain schema export) |
 | `DiscoveryRunTaskV1` `extra="allow"` + `detector_step_override: Dict` | Explicit optional fields; `detector_step_override` → `DetectorStepOverride` or dedicated queue override model |
 | Handler `_normalize_validation_iteration_payload` strip | **Delete** — validate full `ValidationPlannedIteration` instead |
 
@@ -121,14 +121,14 @@ flowchart TD
 
 - Task I/O: `methyl-export-task-schemas` → `schemas/tasks/validation_plan_iterations.output.schema.json` gains `$defs` for all nested models.
 - Domain: `methyl-export-domain-schemas` → `schemas/domain/centroid_seed_group.schema.json` (and update `registry.json`) when seed groups appear in scope contract.
-- Queue: register `DiscoveryRunTaskV1` refresh in [`config_schema_registry.py`](packages/methylvalidation/methyl_validation/config_schema_registry.py) → `schemas/config/queue_discovery_task_v1.schema.json`.
+- Queue: register `DiscoveryRunTaskV1` refresh in [`config_schema_registry.py`](../../packages/methylvalidation/methyl_validation/config_schema_registry.py) → `schemas/config/queue_discovery_task_v1.schema.json`.
 - CI: `methyl-export-task-schemas --check`, `methyl-export-domain-schemas --check` (if domain types added), existing worker schema validation tests.
 
 Internal helpers that today accept `project: Dict[str, Any]` for raw `project.json` parsing in `project_gen.py` may remain dict-based at the JSON load boundary, but **any value crossing planner ↔ worker ↔ workflow scope ↔ DB seed boundary** must be a typed model.
 
 ## 1. Planner and project_gen
 
-**Files:** [`workflow_planner.py`](packages/methylvalidation/methyl_validation/workflow_planner.py), [`project_gen.py`](packages/methylvalidation/methyl_validation/project_gen.py)
+**Files:** [`workflow_planner.py`](../../packages/methylvalidation/methyl_validation/workflow_planner.py), [`project_gen.py`](../../packages/methylvalidation/methyl_validation/project_gen.py)
 
 - Add Pydantic models:
   - `CentroidGroupScope` — `label`, `addSamples`, `removeSamples`, `centroidDir`, `centroidSeedDir` (iteration groups only)
@@ -145,27 +145,27 @@ Internal helpers that today accept `project: Dict[str, Any]` for raw `project.js
 
 ## 2. Fix validation.plan_iterations handler output (critical)
 
-**File:** [`handlers.py`](workers/methyl_worker/handlers.py)
+**File:** [`handlers.py`](../../workers/methyl_worker/handlers.py)
 
-Today `_handle_validation_plan_iterations` maps iterations through `_normalize_validation_iteration_payload` into slim [`ValidationIterationRef`](workers/methyl_worker/task_models/validation_models.py), **dropping** `centroidGroups`, `centroid1Dir`, `taskConfig`, etc. That breaks cold-start workflows where `scope_bindings` populate `iterations` from ACTION output (pre-planned instances via [`study_lifecycle.py`](workflow_engine/rest/study_lifecycle.py) work only because full context is written before start).
+Today `_handle_validation_plan_iterations` maps iterations through `_normalize_validation_iteration_payload` into slim [`ValidationIterationRef`](../../workers/methyl_worker/task_models/validation_models.py), **dropping** `centroidGroups`, `centroid1Dir`, `taskConfig`, etc. That breaks cold-start workflows where `scope_bindings` populate `iterations` from ACTION output (pre-planned instances via [`study_lifecycle.py`](../../workflow_engine/rest/study_lifecycle.py) work only because full context is written before start).
 
 **Fix:**
 - Extend `ValidationPlanTaskOutput` with `centroidSeedGroups: List[CentroidSeedGroup]` and `iterations: List[ValidationPlannedIteration]` (strict models; `extra="forbid"`).
 - Handler returns `ValidationPlanContext` subset via `.model_dump(mode="json")` on typed models — **remove** `_normalize_validation_iteration_payload` / `ValidationIterationRef` stripping.
-- Update [`action_catalog.py`](workers/methyl_worker/action_catalog.py) `_DE_PLAN_ITERATIONS.scope_bindings`.
+- Update [`action_catalog.py`](../../workers/methyl_worker/action_catalog.py) `_DE_PLAN_ITERATIONS.scope_bindings`.
 - Relocate shared iteration/seed models to a single module (e.g. `packages/methylvalidation/methyl_validation/planner_models.py`) imported by both `workflow_planner.py` and `workers/.../validation_models.py` to avoid drift.
 
 ## 3. Centroid worker: seed copy hook
 
-**Files:** [`actions/base.py`](workers/methyl_worker/actions/base.py) (or dedicated `centroid.py`), [`action_skip.py`](workers/methyl_worker/action_skip.py)
+**Files:** [`actions/base.py`](../../workers/methyl_worker/actions/base.py) (or dedicated `centroid.py`), [`action_skip.py`](../../workers/methyl_worker/action_skip.py)
 
 Before `methyl-centroid` subprocess (in `CliAction.execute` or centroid-specific subclass):
 
 1. If `centroidSeedDir` is set and `outputDir` is set, copy seed tree → `outputDir` (reuse `carry_forward_centroids_from_previous_run` or thin wrapper `copy_centroid_seed_baseline(seed_dir, output_dir)`).
 2. Then run CLI with `addSamples` / `removeSamples` from wire (or `stepOverride`).
-3. Idempotency: extend [`action_skip.py`](workers/methyl_worker/action_skip.py) signature to include seed dir + delta lists so re-claim after partial parallel completion is safe.
+3. Idempotency: extend [`action_skip.py`](../../workers/methyl_worker/action_skip.py) signature to include seed dir + delta lists so re-claim after partial parallel completion is safe.
 
-Mirror in [`pipeline_runner.py`](packages/methylvalidation/methyl_validation/pipeline_runner.py) and [`executor.py`](packages/methylvalidation/methyl_validation/executor.py) for queue/`run-task` paths.
+Mirror in [`pipeline_runner.py`](../../packages/methylvalidation/methyl_validation/pipeline_runner.py) and [`executor.py`](../../packages/methylvalidation/methyl_validation/executor.py) for queue/`run-task` paths.
 
 ## 4. DomainProgram JSON (no engine changes)
 
@@ -187,14 +187,14 @@ Mirror in [`pipeline_runner.py`](packages/methylvalidation/methyl_validation/pip
 
 **Programs to update** (configs + recompile):
 
-- [`mc_stability_staged.program.json`](workflow_engine/domain/fixtures/mc_stability_staged.program.json) (+ smoke)
-- [`mc_stability.program.json`](workflow_engine/domain/fixtures/mc_stability.program.json)
-- [`h_pca_good_mc_stability.program.json`](workflow_engine/domain/fixtures/mc_stability.program.json)
-- [`healthy_pca_mc_stability.program.json`](workflow_engine/domain/fixtures/mc_stability.program.json)
-- [`mc_gene_enricher_stability.program.json`](workflow_engine/domain/fixtures/mc_gene_enricher_stability.program.json)
-- [`pca1_5_full_lifecycle.program.json`](workflow_engine/domain/fixtures/full_lifecycle.program.json), [`study_validation_lifecycle.program.json`](workflow_engine/domain/fixtures/study_validation_lifecycle.program.json)
+- [`mc_stability_staged.program.json`](../../workflow_engine/domain/fixtures/mc_stability_staged.program.json) (+ smoke)
+- [`mc_stability.program.json`](../../workflow_engine/domain/fixtures/mc_stability.program.json)
+- [`h_pca_good_mc_stability.program.json`](../../workflow_engine/domain/fixtures/mc_stability.program.json)
+- [`healthy_pca_mc_stability.program.json`](../../workflow_engine/domain/fixtures/mc_stability.program.json)
+- [`mc_gene_enricher_stability.program.json`](../../workflow_engine/domain/fixtures/mc_gene_enricher_stability.program.json)
+- [`pca1_5_full_lifecycle.program.json`](../../workflow_engine/domain/fixtures/full_lifecycle.program.json), [`study_validation_lifecycle.program.json`](../../workflow_engine/domain/fixtures/study_validation_lifecycle.program.json)
 
-Recompile via [`check_pipeline.py`](workflow_engine/domain/checks/pca1_5_cg/check_pipeline.py) / `compile_workflow_program.py`; commit updated `compiled_workflow.json` trees.
+Recompile via [`check_pipeline.py`](../../workflow_engine/domain/checks/pca1_5_cg/check_pipeline.py) / `compile_workflow_program.py`; commit updated `compiled_workflow.json` trees.
 
 ## 5. Pydantic + JSON schema export
 
@@ -207,11 +207,11 @@ See **Cross-cutting: typed models** above for the full model inventory. Implemen
 
 | Model | File |
 |-------|------|
-| `CentroidTaskInput` (+ wire fields) | [`pipeline_models.py`](workers/methyl_worker/task_models/pipeline_models.py) |
-| `CentroidSeedGroup`, `CentroidGroupScope`, `McIterationTaskConfig`, `ValidationPlannedIteration`, `ValidationPlanContext`, `ValidationPlanSummary` | new [`planner_models.py`](packages/methylvalidation/methyl_validation/planner_models.py) |
-| `ValidationPlanTaskOutput` | [`validation_models.py`](workers/methyl_worker/task_models/validation_models.py) — imports from `planner_models` |
-| `DiscoveryRunTaskV1` (strict) | [`task_schema.py`](packages/methylvalidation/methyl_validation/task_schema.py) |
-| `CentroidSeedGroup`, `StratifiedCohortDraw.taskConfig` | [`methyldomain/types.py`](packages/methyldomain/methyl_domain/types.py) |
+| `CentroidTaskInput` (+ wire fields) | [`pipeline_models.py`](../../workers/methyl_worker/task_models/pipeline_models.py) |
+| `CentroidSeedGroup`, `CentroidGroupScope`, `McIterationTaskConfig`, `ValidationPlannedIteration`, `ValidationPlanContext`, `ValidationPlanSummary` | new [`planner_models.py`](../../packages/methylvalidation/methyl_validation/planner_models.py) |
+| `ValidationPlanTaskOutput` | [`validation_models.py`](../../workers/methyl_worker/task_models/validation_models.py) — imports from `planner_models` |
+| `DiscoveryRunTaskV1` (strict) | [`task_schema.py`](../../packages/methylvalidation/methyl_validation/task_schema.py) |
+| `CentroidSeedGroup`, `StratifiedCohortDraw.taskConfig` | [`methyldomain/types.py`](../../packages/methyldomain/methyl_domain/types.py) |
 
 **Export pipeline** (CI must pass `--check`):
 
@@ -228,9 +228,9 @@ Affected artifacts:
 - `schemas/tasks/pipeline_centroid.input.schema.json`
 - `schemas/tasks/validation_plan_iterations.output.schema.json`
 - `schemas/actions/catalog.json` (`domain_effects.scope_bindings`, `context_vars` for `pipeline.centroid`)
-- Optional: `schemas/config/queue_discovery_task_v1.schema.json` via [`config_schema_registry.py`](packages/methylvalidation/methyl_validation/config_schema_registry.py)
+- Optional: `schemas/config/queue_discovery_task_v1.schema.json` via [`config_schema_registry.py`](../../packages/methylvalidation/methyl_validation/config_schema_registry.py)
 
-Update [`action_catalog.py`](workers/methyl_worker/action_catalog.py) `context_vars` for `pipeline.centroid` to include `centroidSeedDir`, `addSamples`, `removeSamples`.
+Update [`action_catalog.py`](../../workers/methyl_worker/action_catalog.py) `context_vars` for `pipeline.centroid` to include `centroidSeedDir`, `addSamples`, `removeSamples`.
 
 ## 6. Azure SQL + PostgreSQL propagation
 
@@ -239,13 +239,13 @@ Both databases are **reachable via MCP** in the current environment. Use MCP for
 | Role | Azure SQL | PostgreSQL |
 |------|-----------|------------|
 | MCP server | `user-azure-sql-dev` — `mcp_execute_query`, `mcp_paginated_query`, `mcp_discover_tables`, … | Operator PostgreSQL MCP (e.g. `epimethyl` / `postgres_dba` profile) |
-| Bulk catalog seed | [`seed_action_catalog.py`](workflow_engine/sql/seed_action_catalog.py) with `BACKEND_DB=mssql`, or `POST /v1/admin/catalog/seed` | Same script with `--dsn` / `POSTGRES_*`, or gateway admin seed |
+| Bulk catalog seed | [`seed_action_catalog.py`](../../workflow_engine/sql/seed_action_catalog.py) with `BACKEND_DB=mssql`, or `POST /v1/admin/catalog/seed` | Same script with `--dsn` / `POSTGRES_*`, or gateway admin seed |
 | Bulk workflow deploy | `POST /v1/workflows/definitions` / `check_pipeline.py --deploy` | Same gateway path (dialect-agnostic) |
 | Post-deploy verify | MCP `mcp_execute_query` | MCP SQL execute (parity queries below) |
 
 ### 6a. Action catalog + schemas (both DBs)
 
-**Write path:** [`workflow_engine/sql/seed_action_catalog.py`](workflow_engine/sql/seed_action_catalog.py) (idempotent upsert of all actions + schemas from `schemas/actions/catalog.json` and `schemas/tasks/`).
+**Write path:** [`workflow_engine/sql/seed_action_catalog.py`](../../workflow_engine/sql/seed_action_catalog.py) (idempotent upsert of all actions + schemas from `schemas/actions/catalog.json` and `schemas/tasks/`).
 
 ```bash
 source .venv/bin/activate
@@ -291,8 +291,8 @@ Compiled graphs change (new FOREACH over `centroidSeedGroups`, `parallel: true` 
 
 **Paths:**
 
-- Dev/local: [`scripts/deploy_workflow_definitions.sh`](scripts/deploy_workflow_definitions.sh) (sample prep + lifecycle) — **extend** or add `scripts/deploy_mc_workflow_definitions.sh` for MC programs.
-- Per-check: `check_pipeline.py --deploy` or POST `compiled_workflow.json` to `POST /v1/workflows/definitions` ([`gateway.py`](workflow_engine/rest/gateway.py)).
+- Dev/local: [`scripts/deploy_workflow_definitions.sh`](../../scripts/deploy_workflow_definitions.sh) (sample prep + lifecycle) — **extend** or add `scripts/deploy_mc_workflow_definitions.sh` for MC programs.
+- Per-check: `check_pipeline.py --deploy` or POST `compiled_workflow.json` to `POST /v1/workflows/definitions` ([`gateway.py`](../../workflow_engine/rest/gateway.py)).
 - Creates new `workflow_version_id`; existing instances keep old versions until restarted with new version.
 
 **Verify via MCP** (both DBs):
@@ -330,11 +330,11 @@ Document MCP verification outcomes in the implementation PR / commit notes (whic
 
 No SQL migration. New runs get `centroidSeedGroups` via:
 
-- `POST /v1/studies/validation/start` ([`study_lifecycle.py`](workflow_engine/rest/study_lifecycle.py)), or
+- `POST /v1/studies/validation/start` ([`study_lifecycle.py`](../../workflow_engine/rest/study_lifecycle.py)), or
 - `POST /v1/validation/plan-iterations` + `wf_apply_validation_plan`, or
 - In-workflow `plan_iterations` ACTION (after handler fix).
 
-Update example: [`workflow_engine/sql/instance_context_examples/validation_mc.json`](workflow_engine/sql/instance_context_examples/validation_mc.json).
+Update example: [`workflow_engine/sql/instance_context_examples/validation_mc.json`](../../workflow_engine/sql/instance_context_examples/validation_mc.json).
 
 ## 7. Tests
 
@@ -351,11 +351,11 @@ Update example: [`workflow_engine/sql/instance_context_examples/validation_mc.js
 
 ## 8. Documentation
 
-- [`validation_planner_capabilities.md`](workflow_engine/contract/validation_planner_capabilities.md) — document `centroidSeedGroups`, parallel iteration contract, deprecate `previousRunDir` for parallel MC.
-- [`domain_types.md`](workflow_engine/contract/domain_types.md) — planner writes `centroidSeedGroups` + enriched `iterations[]`.
-- [`packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`](packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md) — queue task seed fields.
-- [`pca1_5_cg/README.md`](workflow_engine/domain/checks/pca1_5_cg/README.md) — operator note: enable parallel iterations after seed phase.
-- Promote this plan to [`docs/plans/parallel-mc-centroid-seed.plan.md`](docs/plans/parallel-mc-centroid-seed.plan.md) on approval; add row to [`docs/plans/README.md`](docs/plans/README.md).
+- [`validation_planner_capabilities.md`](../../workflow_engine/contract/validation_planner_capabilities.md) — document `centroidSeedGroups`, parallel iteration contract, deprecate `previousRunDir` for parallel MC.
+- [`domain_types.md`](../../workflow_engine/contract/domain_types.md) — planner writes `centroidSeedGroups` + enriched `iterations[]`.
+- [`packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`](../../packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md) — queue task seed fields.
+- [`pca1_5_cg/README.md`](../../workflow_engine/domain/checks/pca1_5_cg/README.md) — operator note: enable parallel iterations after seed phase.
+- Promote this plan to [`docs/plans/parallel-mc-centroid-seed.plan.md`](../plans/parallel-mc-centroid-seed.plan.md) on approval; add row to [`docs/plans/README.md`](../plans/README.md).
 
 ## 9. Rollout order
 

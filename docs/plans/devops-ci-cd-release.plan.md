@@ -68,7 +68,7 @@ flowchart LR
   end
 ```
 
-This matches your existing scripts ([`build_release.sh`](scripts/build_release.sh), [`download_methyl_extractor_artifacts.sh`](scripts/download_methyl_extractor_artifacts.sh), [`promote_release.sh`](scripts/promote_release.sh)) and extends them rather than replacing the production layout in [`docs/deployment/production_release.md`](docs/deployment/production_release.md).
+This matches your existing scripts ([`build_release.sh`](../../scripts/build_release.sh), [`download_methyl_extractor_artifacts.sh`](../../scripts/download_methyl_extractor_artifacts.sh), [`promote_release.sh`](../../scripts/promote_release.sh)) and extends them rather than replacing the production layout in [`docs/deployment/production_release.md`](../deployment/production_release.md).
 
 ---
 
@@ -113,8 +113,8 @@ Steps:
 
 1. Create output dir.
 2. Pull MP release: download pipeline artifact **or** copy wheels from PyPI feed + fetch runtime-bundle from artifact.
-3. Call existing [`download_methyl_extractor_artifacts.sh`](scripts/download_methyl_extractor_artifacts.sh) (or inline `az artifacts universal download`) for both arches.
-4. Compute sha256 for tarballs; write final [`manifest.json`](schemas/deployment/epimethyl_release_manifest.schema.json) with **component pins**:
+3. Call existing [`download_methyl_extractor_artifacts.sh`](../../scripts/download_methyl_extractor_artifacts.sh) (or inline `az artifacts universal download`) for both arches.
+4. Compute sha256 for tarballs; write final [`manifest.json`](../../schemas/deployment/epimethyl_release_manifest.schema.json) with **component pins**:
 
 ```json
 {
@@ -131,7 +131,7 @@ Steps:
 
 ### Schema update
 
-Extend [`schemas/deployment/epimethyl_release_manifest.schema.json`](schemas/deployment/epimethyl_release_manifest.schema.json) with optional `components` object (backward compatible). `version` remains the **deploy bundle id** used by `promote_release.sh` and `current` symlink.
+Extend [`schemas/deployment/epimethyl_release_manifest.schema.json`](../../schemas/deployment/epimethyl_release_manifest.schema.json) with optional `components` object (backward compatible). `version` remains the **deploy bundle id** used by `promote_release.sh` and `current` symlink.
 
 ### New pipeline: `ci/azure-pipelines-release-assemble.yml`
 
@@ -157,10 +157,10 @@ Extend [`schemas/deployment/epimethyl_release_manifest.schema.json`](schemas/dep
 - **Stage 1:** download `epimethyl-release-<version>` artifact to agent.
 - **Stage 2 (Environment `production-work`, approval required):**
   - Rsync artifact → `/work/epimethyl/releases/<version>/`
-  - Run [`promote_release.sh`](scripts/promote_release.sh) per arch (`aarch64`, `amd64`) with `--pull-parabricks` only when Parabricks tag changed in manifest.
+  - Run [`promote_release.sh`](../../scripts/promote_release.sh) per arch (`aarch64`, `amd64`) with `--pull-parabricks` only when Parabricks tag changed in manifest.
   - Optional: smoke `verify_e2e_node.sh` on agent before flipping `current` (or after, with rollback doc).
 
-Keep [`docs/deployment/production_release.md`](docs/deployment/production_release.md) rollback path: re-run deploy pipeline with previous bundle version + approval.
+Keep [`docs/deployment/production_release.md`](../deployment/production_release.md) rollback path: re-run deploy pipeline with previous bundle version + approval.
 
 ---
 
@@ -198,9 +198,9 @@ Use the **same** `releaseVersion` for the bundle even when component versions di
 | MethylExtractor `ci/azure-pipelines-release-*.yml` | Per-arch Universal Package publish; multi-repo checkout |
 | `ci/azure-pipelines-release-assemble.yml` | New: compose release bundle |
 | `ci/azure-pipelines-release-deploy.yml` | New: gated promote to `/work` |
-| [`scripts/assemble_release.sh`](scripts/assemble_release.sh) | New: version-pinned assembly |
-| [`schemas/deployment/epimethyl_release_manifest.schema.json`](schemas/deployment/epimethyl_release_manifest.schema.json) | Optional `components` block |
-| [`docs/deployment/production_release.md`](docs/deployment/production_release.md) | Document CI/CD flow; deprecate client-side build as primary path |
+| [`scripts/assemble_release.sh`](../../scripts/assemble_release.sh) | New: version-pinned assembly |
+| [`schemas/deployment/epimethyl_release_manifest.schema.json`](../../schemas/deployment/epimethyl_release_manifest.schema.json) | Optional `components` block |
+| [`docs/deployment/production_release.md`](../deployment/production_release.md) | Document CI/CD flow; deprecate client-side build as primary path |
 
 ---
 

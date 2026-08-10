@@ -50,11 +50,11 @@ todos:
 
 Infrastructure is already in place:
 
-- Manifest convention: `{output_dir}/.action_results/{action_name}.{run_key}.json` via [`packages/methyldomain/methyl_domain/action_result.py`](packages/methyldomain/methyl_domain/action_result.py)
-- Worker collectors: [`ManifestFirstCollector`](workers/methyl_worker/collectors.py) reads manifests first, falls back to legacy scrapers
+- Manifest convention: `{output_dir}/.action_results/{action_name}.{run_key}.json` via [`packages/methyldomain/methyl_domain/action_result.py`](../../packages/methyldomain/methyl_domain/action_result.py)
+- Worker collectors: [`ManifestFirstCollector`](../../workers/methyl_worker/collectors.py) reads manifests first, falls back to legacy scrapers
 - **Done:** `pipeline.dmp_select`, `pipeline.mapper` write manifests; worker wired with manifest-first collectors
-- **Pending:** `pipeline.detector`, `pipeline.centroid` have legacy collectors only; `pipeline.enricher` uses [`GenericPipelineCollector`](workers/methyl_worker/collectors.py) (stdout-only)
-- **Pending:** ~17 in-process handlers in [`handlers.py`](workers/methyl_worker/handlers.py) still return `Dict[str, Any]`; [`InProcessAction`](workers/methyl_worker/actions/base.py) accepts dict or `BaseModel` and runs `finalize_output`
+- **Pending:** `pipeline.detector`, `pipeline.centroid` have legacy collectors only; `pipeline.enricher` uses [`GenericPipelineCollector`](../../workers/methyl_worker/collectors.py) (stdout-only)
+- **Pending:** ~17 in-process handlers in [`handlers.py`](../../workers/methyl_worker/handlers.py) still return `Dict[str, Any]`; [`InProcessAction`](../../workers/methyl_worker/actions/base.py) accepts dict or `BaseModel` and runs `finalize_output`
 
 ```mermaid
 flowchart LR
@@ -79,7 +79,7 @@ flowchart LR
 
 ## Phase A — CLI manifest writers
 
-Follow the established pattern from [`packages/methyldmpselect/methyl_dmp_select/core/runner.py`](packages/methyldmpselect/methyl_dmp_select/core/runner.py) and [`packages/methylmapper/methyl_mapper/mapper.py`](packages/methylmapper/methyl_mapper/mapper.py):
+Follow the established pattern from [`packages/methyldmpselect/methyl_dmp_select/core/runner.py`](../../packages/methyldmpselect/methyl_dmp_select/core/runner.py) and [`packages/methylmapper/methyl_mapper/mapper.py`](../../packages/methylmapper/methyl_mapper/mapper.py):
 
 ```python
 from methyl_domain.action_result import atomic_write_json, manifest_path_for
@@ -87,21 +87,21 @@ manifest = manifest_path_for(out_dir, "pipeline.detector", run_key)
 atomic_write_json(manifest, {..., "result_code": 0})
 ```
 
-**Run key must match worker `_run_key()`** in [`collectors.py`](workers/methyl_worker/collectors.py): join non-empty `{chromosome, context, group|comparison, sampleId}` with `_`.
+**Run key must match worker `_run_key()`** in [`collectors.py`](../../workers/methyl_worker/collectors.py): join non-empty `{chromosome, context, group|comparison, sampleId}` with `_`.
 
 ### A1. Add `methyl-domain` dependency
 
 Add to pyproject (same as dmp_select):
 
-- [`packages/methyldetector/pyproject.toml`](packages/methyldetector/pyproject.toml)
-- [`packages/methylcentroid/pyproject.toml`](packages/methylcentroid/pyproject.toml)
-- [`packages/methylenricher/pyproject.toml`](packages/methylenricher/pyproject.toml)
+- [`packages/methyldetector/pyproject.toml`](../../packages/methyldetector/pyproject.toml)
+- [`packages/methylcentroid/pyproject.toml`](../../packages/methylcentroid/pyproject.toml)
+- [`packages/methylenricher/pyproject.toml`](../../packages/methylenricher/pyproject.toml)
 
-### A2. `pipeline.detector` — [`packages/methyldetector`](packages/methyldetector)
+### A2. `pipeline.detector` — [`packages/methyldetector`](../../packages/methyldetector)
 
-**Hook:** [`MethylDetector._save_results()`](packages/methyldetector/methyl_detector/core/methyldetector.py) (after `result-{chrom}-{ctx}.json` is written; discovery CSV already on disk).
+**Hook:** [`MethylDetector._save_results()`](../../packages/methyldetector/methyl_detector/core/methyldetector.py) (after `result-{chrom}-{ctx}.json` is written; discovery CSV already on disk).
 
-**Payload** (maps to [`DetectorTaskOutput`](workers/methyl_worker/task_models/pipeline_models.py)):
+**Payload** (maps to [`DetectorTaskOutput`](../../workers/methyl_worker/task_models/pipeline_models.py)):
 
 | Field | Source |
 |-------|--------|
@@ -115,11 +115,11 @@ Add to pyproject (same as dmp_select):
 
 Wrap in try/except + debug log (same as mapper) so manifest failure never fails the run.
 
-### A3. `pipeline.centroid` — [`packages/methylcentroid`](packages/methylcentroid)
+### A3. `pipeline.centroid` — [`packages/methylcentroid`](../../packages/methylcentroid)
 
-**Hook:** [`run_single_processing()`](packages/methylcentroid/methyl_centroid/cli.py) immediately after `mc.build_centroid()` returns [`CentroidResults`](packages/methylcentroid/methyl_centroid/config.py).
+**Hook:** [`run_single_processing()`](../../packages/methylcentroid/methyl_centroid/cli.py) immediately after `mc.build_centroid()` returns [`CentroidResults`](../../packages/methylcentroid/methyl_centroid/config.py).
 
-**Payload** (maps to [`CentroidTaskOutput`](workers/methyl_worker/task_models/pipeline_models.py)):
+**Payload** (maps to [`CentroidTaskOutput`](../../workers/methyl_worker/task_models/pipeline_models.py)):
 
 | Field | Source |
 |-------|--------|
@@ -132,11 +132,11 @@ Wrap in try/except + debug log (same as mapper) so manifest failure never fails 
 
 Batch path (`run_batch_processing`) already calls `run_single_processing` per chrom×ctx, so one manifest per workflow-scoped combination is emitted automatically.
 
-### A4. `pipeline.enricher` — [`packages/methylenricher`](packages/methylenricher)
+### A4. `pipeline.enricher` — [`packages/methylenricher`](../../packages/methylenricher)
 
-**Hook:** [`write_project_completeness_manifest()`](packages/methylenricher/methyl_enricher/ensure_complete.py) (primary worker path via `--ensure-complete`) and, if needed, the end of the standard single-comparison CLI run in [`cli.py`](packages/methylenricher/methyl_enricher/cli.py).
+**Hook:** [`write_project_completeness_manifest()`](../../packages/methylenricher/methyl_enricher/ensure_complete.py) (primary worker path via `--ensure-complete`) and, if needed, the end of the standard single-comparison CLI run in [`cli.py`](../../packages/methylenricher/methyl_enricher/cli.py).
 
-**Payload** (maps to [`EnricherTaskOutput`](workers/methyl_worker/task_models/pipeline_models.py)):
+**Payload** (maps to [`EnricherTaskOutput`](../../workers/methyl_worker/task_models/pipeline_models.py)):
 
 | Field | Source |
 |-------|--------|
@@ -146,7 +146,7 @@ Batch path (`run_batch_processing`) already calls `run_single_processing` per ch
 | `completeness_manifest_path` | existing manifest path (keep legacy location; also write typed manifest under `.action_results/`) |
 | `n_comparisons` | `len(comparison_reports)` |
 
-**Worker wiring:** In [`actions/base.py`](workers/methyl_worker/actions/base.py), replace `GenericPipelineCollector` for `pipeline.enricher` with:
+**Worker wiring:** In [`actions/base.py`](../../workers/methyl_worker/actions/base.py), replace `GenericPipelineCollector` for `pipeline.enricher` with:
 
 ```python
 ManifestFirstCollector(
@@ -156,7 +156,7 @@ ManifestFirstCollector(
 )
 ```
 
-Add `EnricherLegacyCollector` in [`collectors.py`](workers/methyl_worker/collectors.py) mirroring [`DetectorLegacyCollector`](workers/methyl_worker/collectors.py) (read existing completeness JSON, map fields).
+Add `EnricherLegacyCollector` in [`collectors.py`](../../workers/methyl_worker/collectors.py) mirroring [`DetectorLegacyCollector`](../../workers/methyl_worker/collectors.py) (read existing completeness JSON, map fields).
 
 ---
 
@@ -164,11 +164,11 @@ Add `EnricherLegacyCollector` in [`collectors.py`](workers/methyl_worker/collect
 
 ### Pattern (copy from completed handlers)
 
-Reference: [`_handle_validation_stability`](workers/methyl_worker/handlers.py) returns `ValidationStabilityOutput`; [`_handle_methyl_qc`](workers/methyl_worker/handlers.py) returns `MethylQcTaskOutput` with nested `GuardrailsOutput`.
+Reference: [`_handle_validation_stability`](../../workers/methyl_worker/handlers.py) returns `ValidationStabilityOutput`; [`_handle_methyl_qc`](../../workers/methyl_worker/handlers.py) returns `MethylQcTaskOutput` with nested `GuardrailsOutput`.
 
 For each remaining handler:
 
-1. Import the catalog output model from [`task_models/sample_prep_models.py`](workers/methyl_worker/task_models/sample_prep_models.py) or [`task_models/validation_models.py`](workers/methyl_worker/task_models/validation_models.py)
+1. Import the catalog output model from [`task_models/sample_prep_models.py`](../../workers/methyl_worker/task_models/sample_prep_models.py) or [`task_models/validation_models.py`](../../workers/methyl_worker/task_models/validation_models.py)
 2. Replace `return {"status": "ok", ...}` with `return SomeTaskOutput(...)` — map existing dict keys to model field names (models already exist for every action)
 3. Optionally validate input with the catalog input model at the top (like `_handle_download_fastq` already does for input)
 
@@ -197,7 +197,7 @@ For each remaining handler:
 After all handlers return `BaseModel`:
 
 1. Change handler return type annotation to `BaseModel`
-2. Remove the `elif isinstance(raw, dict)` branch in [`InProcessAction.execute()`](workers/methyl_worker/actions/base.py)
+2. Remove the `elif isinstance(raw, dict)` branch in [`InProcessAction.execute()`](../../workers/methyl_worker/actions/base.py)
 3. Simplify to: `output = raw` then attach telemetry via a small helper (either call `finalize_output` with `raw.model_dump()` or add `enrich_telemetry(output, timer)` that returns a new validated copy with `duration_ms`, etc.)
 
 **Do not** change handler input from `dict` to `BaseModel` in this pass unless trivial — input validation already happens in `InProcessAction` via `validate_input`.
@@ -238,7 +238,7 @@ Update any handler tests that assert on raw dict keys to assert `isinstance(resu
 
 ## Out of scope (optional later)
 
-- [`docs/reference/domain-program-language.md`](docs/reference/domain-program-language.md) result_code section (WORKER_PROTOCOL + user manual already updated)
+- [`docs/reference/domain-program-language.md`](../reference/domain-program-language.md) result_code section (WORKER_PROTOCOL + user manual already updated)
 - CI golden-fixture test per catalog action
 - `action_run_log.jsonl` for MC run dirs
 - Passing validated `InputModel` directly to handlers instead of `model_dump()`

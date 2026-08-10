@@ -2,7 +2,7 @@
 name: HiTIMED theory docs
 overview: Document Houseman and HiTIMED cell deconvolution in the architecture end-to-end workflow, add a Theory chapter for the math and analyte trees, and extend Theory workflow coverage with a per-analyte action inventory for cfDNA, buffy_coat, and tissue.
 
-> **Status: IMPLEMENTED.** Documentation-only: end-to-end workflow section 5 now describes the `method: houseman | hitimed` switch and analyte trees; Theory adds [`docs/theory/chapters/07a-methyldeconv.qmd`](../theory/chapters/07a-methyldeconv.qmd) (`@sec-methyldeconv`) plus a post-freeze covariate stage and per-analyte action matrix in [`docs/theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.qmd). Companion implementation plan: [`hitimed-hierarchical-deconvolution.plan.md`](hitimed-hierarchical-deconvolution.plan.md).
+> **Status: IMPLEMENTED.** Documentation-only: end-to-end workflow section 5 now describes the `method: houseman | hitimed` switch and analyte trees; Theory adds [`docs/theory/chapters/07a-methyldeconv.qmd`](../theory/chapters/07a-methyldeconv.md) (`@sec-methyldeconv`) plus a post-freeze covariate stage and per-analyte action matrix in [`docs/theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.md). Companion implementation plan: [`hitimed-hierarchical-deconvolution.plan.md`](hitimed-hierarchical-deconvolution.plan.md).
 
 azure_devops:
   type: Feature
@@ -51,11 +51,11 @@ Updated [`docs/architecture/end-to-end-workflow.md`](../architecture/end-to-end-
 
 ## 2. Theory Part I: methyldeconv chapter
 
-Added [`docs/theory/chapters/07a-methyldeconv.qmd`](../theory/chapters/07a-methyldeconv.qmd) (`@sec-methyldeconv`), after mapper and before enricher. Covers the Houseman constrained-projection QP, marker extraction, the HiTIMED path-product tree, analyte-driven roots, config knobs, and category/reference-basis caveats. Wired into [`_quarto.yml`](../theory/_quarto.yml), both package-map tables in [`index.qmd`](../theory/index.qmd), and [`README.md`](../theory/README.md). Added a reference-basis caveat and deprecation-snapshot row in [`10-limitations-and-open-questions.qmd`](../theory/chapters/10-limitations-and-open-questions.qmd).
+Added [`docs/theory/chapters/07a-methyldeconv.qmd`](../theory/chapters/07a-methyldeconv.md) (`@sec-methyldeconv`), after mapper and before enricher. Covers the Houseman constrained-projection QP, marker extraction, the HiTIMED path-product tree, analyte-driven roots, config knobs, and category/reference-basis caveats. Wired into [`_quarto.yml`](../theory/_quarto.yml), both package-map tables in [`index.qmd`](../theory/index.md), and [`README.md`](../theory/README.md). Added a reference-basis caveat and deprecation-snapshot row in [`10-limitations-and-open-questions.qmd`](../theory/chapters/10-limitations-and-open-questions.md).
 
 ## 3. Theory Part II: analyte action inventory
 
-Expanded [`docs/theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.qmd) with a post-freeze covariate stage (`@sec-post-freeze-covariates`) and a per-analyte action matrix (`@sec-analyte-actions`) covering `cfdna`, `buffy_coat`, and `tissue`, including the two caveats (no `tissue` analyte pack in `analyte_profiles.py`; flat Houseman is blood-oriented so tissue composition needs HiTIMED).
+Expanded [`docs/theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.md) with a post-freeze covariate stage (`@sec-post-freeze-covariates`) and a per-analyte action matrix (`@sec-analyte-actions`) covering `cfdna`, `buffy_coat`, and `tissue`, including the two caveats (no `tissue` analyte pack in `analyte_profiles.py`; flat Houseman is blood-oriented so tissue composition needs HiTIMED).
 
 ## 4. Supporting operator docs
 

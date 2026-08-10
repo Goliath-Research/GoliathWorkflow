@@ -47,7 +47,7 @@ todos:
 
 ## Framing: disease pack, not a new modality
 
-> **Terminology (2026-07):** The umbrella term is now **application pack** (config overlay on an existing process). Alzheimer is a *disease application* instance; see [Usage ch.24](../usage/24-methylation-application-packs.qmd). Historical “disease pack” wording below is unchanged.
+> **Terminology (2026-07):** The umbrella term is now **application pack** (config overlay on an existing process). Alzheimer is a *disease application* instance; see [Usage ch.24](../usage/24-methylation-application-packs.md). Historical “disease pack” wording below is unchanged.
 
 Unlike RNA-Seq (a new omics modality with new aligners/actions), Alzheimer detection is the **existing DNA-methylation process** applied to a new disease. It reuses `sample_prep.program.json`, `study_validation_lifecycle.program.json` / `mc_stability_staged.program.json`, the `samd_research -> samd_holdout_enrichment -> samd_pivotal` ladder, and the cfDNA analyte profile.
 

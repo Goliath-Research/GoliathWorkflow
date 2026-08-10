@@ -31,11 +31,11 @@ todos:
 
 ## Deliverable
 
-New file: [`docs/research/methylit.md`](docs/research/methylit.md)
+New file: [`docs/research/methylit.md`](../research/methylit.md)
 
-Update index row in [`docs/research/README.md`](docs/research/README.md).
+Update index row in [`docs/research/README.md`](../research/README.md).
 
-Leave [`docs/research/methylpipeline_vs_methylit_comparison.md`](docs/research/methylpipeline_vs_methylit_comparison.md) unchanged (still the head-to-head).
+Leave [`docs/research/methylpipeline_vs_methylit_comparison.md`](../research/methylpipeline_vs_methylit_comparison.md) unchanged (still the head-to-head).
 
 ## Content outline (no MethylPipeline mentions)
 

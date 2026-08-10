@@ -35,7 +35,7 @@ todos:
 > [`workflow_engine/domain/profiles/procedures/`](../../workflow_engine/domain/profiles/procedures/),
 > resolver merge in `pipeline_profiles` / `enrich_instance_context`, EM-Seq SamplePrep
 > + panel BAM filter seam, and Alzheimer/plant overlays retargeted to procedure ids.
-> Operator guide: [Usage ch.24](../usage/24-methylation-application-packs.qmd).
+> Operator guide: [Usage ch.24](../usage/24-methylation-application-packs.md).
 
 ## Recommendation (short answer)
 

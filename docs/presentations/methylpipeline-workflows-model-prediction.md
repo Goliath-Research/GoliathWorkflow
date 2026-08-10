@@ -1,7 +1,7 @@
 # MethylPipeline
 ## Workflows for Model Creation and Prediction
 
-> **Note (2026-07):** New studies use **`methyl-workflow-run`** with DomainPrograms. This deck still shows legacy `methyl-validation` stage flags for audiences on transitional scripts. Canonical path: [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd).
+> **Note (2026-07):** New studies use **`methyl-workflow-run`** with DomainPrograms. This deck still shows legacy `methyl-validation` stage flags for audiences on transitional scripts. Canonical path: [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.md).
 
 Operational runbook deck (mixed audience)
 

@@ -90,7 +90,7 @@ flowchart TB
 
 **Design principle:** Treat fast shared storage as the single runtime store for all heavy artifacts. GPU VMs only need drivers, Docker daemon config, and NVIDIA Container Toolkit locally.
 
-*(Assumption: “MethylExplorer” in your note means **MethylExtractor**, the native extract binary documented in [`workers/docs/methyl_extractor.md`](workers/docs/methyl_extractor.md).)*
+*(Assumption: “MethylExplorer” in your note means **MethylExtractor**, the native extract binary documented in [`workers/docs/methyl_extractor.md`](../../workers/docs/methyl_extractor.md).)*
 
 ---
 
@@ -149,11 +149,11 @@ Use a **release pointer** so workers never depend on git paths:
 | Component | Purpose | Notes |
 |-----------|---------|-------|
 | **NVIDIA driver** | `nvidia-smi`, GPU passthrough to Docker | Pin driver version in runbook; upgrade window separate from app releases |
-| **Docker Engine** | Run Parabricks container | Installed by [`setup_gpu_node.sh`](scripts/setup_gpu_node.sh) |
+| **Docker Engine** | Run Parabricks container | Installed by [`setup_gpu_node.sh`](../../scripts/setup_gpu_node.sh) |
 | **NVIDIA Container Toolkit** | `--gpus all` in Docker | Same script; run `nvidia-ctk runtime configure` |
-| **libnvrtc12** (optional) | Host-side CuPy/NVRTC for centroid GPU paths | [`setup_host.sh`](scripts/setup_host.sh) `--system-deps --gpu` installs via apt when needed |
+| **libnvrtc12** (optional) | Host-side CuPy/NVRTC for centroid GPU paths | [`setup_host.sh`](../../scripts/setup_host.sh) `--system-deps --gpu` installs via apt when needed |
 
-**Alignment does not need a full host CUDA toolkit.** Parabricks ships CUDA inside the container. Image tag comes from [`scripts/platform_matrix.env`](scripts/platform_matrix.env) (`PARABRICKS_IMAGE_amd64`, `PARABRICKS_IMAGE_aarch64`); override with `METHYL_PARABRICKS_IMAGE` in [`worker.env`](docs/deployment/worker_node.md).
+**Alignment does not need a full host CUDA toolkit.** Parabricks ships CUDA inside the container. Image tag comes from [`scripts/platform_matrix.env`](../../scripts/platform_matrix.env) (`PARABRICKS_IMAGE_amd64`, `PARABRICKS_IMAGE_aarch64`); override with `METHYL_PARABRICKS_IMAGE` in [`worker.env`](../deployment/worker_node.md).
 
 ### Shared Docker data-root (Parabricks on `/work`)
 
@@ -214,7 +214,7 @@ bash /work/epimethyl/current/runtime-bundle/scripts/setup_gpu_node.sh \
 
 ### CI build (MethylExtractor repo — separate Azure DevOps pipeline)
 
-For **each release tag** and **each arch** (`arm64`, `x64` per [`platform_matrix.env`](scripts/platform_matrix.env)):
+For **each release tag** and **each arch** (`arm64`, `x64` per [`platform_matrix.env`](../../scripts/platform_matrix.env)):
 
 1. Build on native agent (`make`)
 2. Package tarball:
@@ -248,7 +248,7 @@ METHYL_EXTRACTOR_BIN=/work/epimethyl/methyl-extractor-aarch64/bin/MethylExtracto
 HDF5_PLUGIN_PATH=/work/epimethyl/methyl-extractor-aarch64/lib/hdf5_zstd_plugin
 ```
 
-Smoke test: [`scripts/verify_methyl_extractor.sh`](scripts/verify_methyl_extractor.sh).
+Smoke test: [`scripts/verify_methyl_extractor.sh`](../../scripts/verify_methyl_extractor.sh).
 
 ---
 
@@ -256,10 +256,10 @@ Smoke test: [`scripts/verify_methyl_extractor.sh`](scripts/verify_methyl_extract
 
 ### What must be in the venv
 
-From [`scripts/packages.list`](scripts/packages.list) + [`workers/pyproject.toml`](workers/pyproject.toml):
+From [`scripts/packages.list`](../../scripts/packages.list) + [`workers/pyproject.toml`](../../workers/pyproject.toml):
 
 - All `packages/*` CLIs (`methyl-centroid`, `methyl-detector`, `methyl-validation`, …)
-- **`methyl-worker`** and in-process handlers (import monorepo packages — see [`workers/WORKER_PROTOCOL.md`](workers/WORKER_PROTOCOL.md))
+- **`methyl-worker`** and in-process handlers (import monorepo packages — see [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md))
 
 Third-party stack from [`requirements-pipeline.txt`](requirements-pipeline.txt) + [`requirements-gpu-cuda12.txt`](requirements-gpu-cuda12.txt) (CuPy/cuDF for GPU centroid paths).
 
@@ -285,9 +285,9 @@ pip install --no-index --find-links "$RELEASE/wheels" -r "$RELEASE/requirements-
 # Installs methyl-* packages non-editable (code copied into site-packages)
 ```
 
-Today [`install_packages.sh`](scripts/install_packages.sh) only supports `-e`; add a **`install_release.sh`** (or `--release` flag) that installs wheels without editable mode — small repo change for production path.
+Today [`install_packages.sh`](../../scripts/install_packages.sh) only supports `-e`; add a **`install_release.sh`** (or `--release` flag) that installs wheels without editable mode — small repo change for production path.
 
-Host deps still need [`setup_host.sh --system-deps`](scripts/setup_host.sh) once per VM (bedtools, hdf5, ODBC, libnvrtc, etc.).
+Host deps still need [`setup_host.sh --system-deps`](../../scripts/setup_host.sh) once per VM (bedtools, hdf5, ODBC, libnvrtc, etc.).
 
 ### Phase 2 — Azure Artifacts PyPI feed
 
@@ -306,12 +306,12 @@ Even with wheels, ship a thin **runtime-bundle** tarball with:
 
 | Path | Why |
 |------|-----|
-| [`schemas/`](schemas/) | Task I/O validation, action catalog JSON export |
-| [`scripts/verify_*.sh`](scripts/) | Node acceptance tests |
-| [`deploy/systemd/`](deploy/systemd/) | Worker units |
-| [`workflow_engine/domain/`](workflow_engine/domain/) | Only for **control-plane** compile, not every worker |
+| [`schemas/`](../../schemas/) | Task I/O validation, action catalog JSON export |
+| [`scripts/verify_*.sh`](../../scripts/) | Node acceptance tests |
+| [`deploy/systemd/`](../../deploy/systemd/) | Worker units |
+| [`workflow_engine/domain/`](../../workflow_engine/domain/) | Only for **control-plane** compile, not every worker |
 
-Workers do **not** need the full git tree at runtime; action dispatch is in Python ([`action_catalog.py`](workers/methyl_worker/action_catalog.py)). Control-plane one-time: [`deploy_workflow_definitions.sh`](scripts/deploy_workflow_definitions.sh) → `env/workflow_versions.json`.
+Workers do **not** need the full git tree at runtime; action dispatch is in Python ([`action_catalog.py`](../../workers/methyl_worker/action_catalog.py)). Control-plane one-time: [`deploy_workflow_definitions.sh`](../../scripts/deploy_workflow_definitions.sh) → `env/workflow_versions.json`.
 
 ---
 
@@ -376,11 +376,11 @@ sequenceDiagram
 
 ## systemd and env files
 
-Keep using [`deploy/systemd/methyl-worker.service`](deploy/systemd/methyl-worker.service) with paths parameterized to your root:
+Keep using [`deploy/systemd/methyl-worker.service`](../../deploy/systemd/methyl-worker.service) with paths parameterized to your root:
 
 - `ExecStart=/work/epimethyl/venv-aarch64/bin/methyl-worker`
 - `EnvironmentFile=/work/epimethyl/env/worker.env`
-- Literal `PATH=` line (systemd does not expand `$PATH` — see [`worker_node.md`](docs/deployment/worker_node.md))
+- Literal `PATH=` line (systemd does not expand `$PATH` — see [`worker_node.md`](../deployment/worker_node.md))
 
 Generate `worker.env` from manifest + arch (not from `bootstrap_epimethyl.sh` git clone flow). Extend bootstrap later with `--release /work/epimethyl/current` mode.
 
@@ -390,9 +390,9 @@ Generate `worker.env` from manifest + arch (not from `bootstrap_epimethyl.sh` gi
 
 1. **MethylExtractor pipeline** — build + tarball per arch; publish to `/work/.../releases/` then Azure Artifacts
 2. **MethylPipeline release pipeline** — build wheels, `pip compile` lockfile, runtime-bundle tarball
-3. **`scripts/install_release.sh`** — non-editable install from wheelhouse or Azure feed; replaces editable path in [`install_packages.sh`](scripts/install_packages.sh)
-4. **Refactor [`bootstrap_epimethyl.sh`](scripts/bootstrap_epimethyl.sh)** — add `--release-dir`, `--arch`, skip git clones; write `worker.env` from manifest
-5. **Extend [`setup_gpu_node.sh`](scripts/setup_gpu_node.sh)** — `--docker-data-root`, write `daemon.json` snippet; split **pull** (release job) from **install** (node join)
+3. **`scripts/install_release.sh`** — non-editable install from wheelhouse or Azure feed; replaces editable path in [`install_packages.sh`](../../scripts/install_packages.sh)
+4. **Refactor [`bootstrap_epimethyl.sh`](../../scripts/bootstrap_epimethyl.sh)** — add `--release-dir`, `--arch`, skip git clones; write `worker.env` from manifest
+5. **Extend [`setup_gpu_node.sh`](../../scripts/setup_gpu_node.sh)** — `--docker-data-root`, write `daemon.json` snippet; split **pull** (release job) from **install** (node join)
 6. **Docs** — new `docs/deployment/production_release.md` with driver/Parabricks matrix, shared Docker data-root setup, promote/rollback
 7. **Version alignment** — bump package versions in `pyproject.toml` files coherently on release tags
 

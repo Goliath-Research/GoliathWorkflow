@@ -76,8 +76,8 @@ Existing DMP/gene SaMD MC remains a separate track for methylation signatures.
 
 Do **not** invent a separate CUDA path. Follow the existing MethylUtils pattern used by centroid and metrics:
 
-- [`methyl_utils/gpu_detection.py`](packages/methylutils/methyl_utils/gpu_detection.py) — `is_gpu_available()`, `get_cupy()`, cleanup / optional NVML
-- [`methyl_utils/gpu_utils.py`](packages/methylutils/methyl_utils/gpu_utils.py) — backend array prep
+- [`methyl_utils/gpu_detection.py`](../../packages/methylutils/methyl_utils/gpu_detection.py) — `is_gpu_available()`, `get_cupy()`, cleanup / optional NVML
+- [`methyl_utils/gpu_utils.py`](../../packages/methylutils/methyl_utils/gpu_utils.py) — backend array prep
 - Config: `use_gpu: Optional[bool] = Field(default=None, …)` on `CellDeconvStepConfig` (operator-set; same style as centroid `use_gpu`), honor `METHYL_DISABLE_GPU` via detection helpers
 - Runtime: prefer batched per-sample (or mini-batch) QP over the cohort so **thousands of samples** stay practical; CuPy when `use_gpu` for shared matrix ops / batching; else NumPy/SciPy. Per-sample QP is ~450×6 — cost is dominated by H5 marker extract × N, not the QP.
 

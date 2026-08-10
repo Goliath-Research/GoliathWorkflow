@@ -39,7 +39,7 @@ todos:
 
 ## Implemented
 
-- [`docs/usage/24-methylation-application-packs.qmd`](../usage/24-methylation-application-packs.qmd) — process vs application, artifacts, overlay knobs, checklist, pointers to instances
+- [`docs/usage/24-methylation-application-packs.qmd`](../usage/24-methylation-application-packs.md) — process vs application, artifacts, overlay knobs, checklist, pointers to instances
 - Alzheimer ch.21 and plant ch.23 reframed as disease / trait application instances; example READMEs link to ch.24
 - Hub updates: ANALYTE_PROFILES, SaMD examples README, usage index + ch.18, regulatory overview, platform overview
 - Light terminology notes on historical Alzheimer / plant plan Framing sections

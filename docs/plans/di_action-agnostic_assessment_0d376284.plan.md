@@ -51,9 +51,9 @@ flowchart LR
   Worker --> CLIs
 ```
 
-- **Primitives** live in [`workflow_engine/contract/workflow_definition_spec.py`](workflow_engine/contract/workflow_definition_spec.py); the SQL engine never branches on pipeline meaning ([`docs/architecture/component-boundaries.md`](docs/architecture/component-boundaries.md)).
-- **Process actions** are data: [`workers/methyl_worker/action_catalog.py`](workers/methyl_worker/action_catalog.py) → [`schemas/actions/catalog.json`](schemas/actions/catalog.json) → `wf.workflow_action`.
-- **Config injection** is already instance-time baking: `resolvedConfig__*` via [`finalize_instance_context`](workflow_engine/domain/workflow_context.py) / Universal Action Input Contract — workers must not re-read profiles.
+- **Primitives** live in [`workflow_engine/contract/workflow_definition_spec.py`](../../workflow_engine/contract/workflow_definition_spec.py); the SQL engine never branches on pipeline meaning ([`docs/architecture/component-boundaries.md`](../architecture/component-boundaries.md)).
+- **Process actions** are data: [`workers/methyl_worker/action_catalog.py`](../../workers/methyl_worker/action_catalog.py) → [`schemas/actions/catalog.json`](../../schemas/actions/catalog.json) → `wf.workflow_action`.
+- **Config injection** is already instance-time baking: `resolvedConfig__*` via [`finalize_instance_context`](../../workflow_engine/domain/workflow_context.py) / Universal Action Input Contract — workers must not re-read profiles.
 
 So the split you described (engine primitives vs process-registered actions) is the intended architecture and largely works.
 
@@ -61,13 +61,13 @@ So the split you described (engine primitives vs process-registered actions) is 
 
 | Coupling | Location | Would `fast_depends` help? | Better fix |
 |----------|----------|----------------------------|------------|
-| Growing `if action_name == …` for CLI subclasses | [`build_action_from_catalog`](workers/methyl_worker/actions/base.py) | No | Catalog field / registry: `action_class` or decorator map |
-| Monolithic string-named handlers | [`handlers.py`](workers/methyl_worker/handlers.py) (~1500 lines) | Marginally (inject `runtime`) | Split modules + registry keyed by catalog `in_process_handler` |
-| Compiler special-cases centroid/detector templates | [`compiler.py`](workflow_engine/domain/compiler.py) `_action_template` | No | Catalog-driven template/binding rules (`domain_effects`, argv/template metadata) |
-| Hardcoded capability lists | [`capabilities.py`](workers/methyl_worker/capabilities.py) | No | Derive from catalog |
+| Growing `if action_name == …` for CLI subclasses | [`build_action_from_catalog`](../../workers/methyl_worker/actions/base.py) | No | Catalog field / registry: `action_class` or decorator map |
+| Monolithic string-named handlers | [`handlers.py`](../../workers/methyl_worker/handlers.py) (~1500 lines) | Marginally (inject `runtime`) | Split modules + registry keyed by catalog `in_process_handler` |
+| Compiler special-cases centroid/detector templates | [`compiler.py`](../../workflow_engine/domain/compiler.py) `_action_template` | No | Catalog-driven template/binding rules (`domain_effects`, argv/template metadata) |
+| Hardcoded capability lists | [`capabilities.py`](../../workers/methyl_worker/capabilities.py) | No | Derive from catalog |
 | Adding an action touches many files | catalog + models + export + handler + seed | No | Scaffold from catalog metadata; keep explicit catalog (no silent entry-point discovery) |
 
-`fast_depends` would mainly tidy **in-process handler signatures** (e.g. inject `TaskRuntimeContext`, artifact collectors). That is a local ergonomics win inside the worker, not an engine-boundary win. The worker already has a small version of this via `inspect.signature` / `_handler_accepts_runtime` in [`actions/base.py`](workers/methyl_worker/actions/base.py).
+`fast_depends` would mainly tidy **in-process handler signatures** (e.g. inject `TaskRuntimeContext`, artifact collectors). That is a local ergonomics win inside the worker, not an engine-boundary win. The worker already has a small version of this via `inspect.signature` / `_handler_accepts_runtime` in [`actions/base.py`](../../workers/methyl_worker/actions/base.py).
 
 ## Recommended direction (if you pursue this)
 
@@ -86,7 +86,7 @@ No new dependency. Preserves explicit catalog as source of truth (important for 
 
 ### Phase 2 — Catalog-driven compiler bindings (medium value)
 
-Push remaining `_action_template` special cases into catalog `domain_effects` / template rules so [`compiler.py`](workflow_engine/domain/compiler.py) only knows: look up entry → emit ACTION node + generic template fields (`resolvedConfig`, `context_vars`, `with` overlays).
+Push remaining `_action_template` special cases into catalog `domain_effects` / template rules so [`compiler.py`](../../workflow_engine/domain/compiler.py) only knows: look up entry → emit ACTION node + generic template fields (`resolvedConfig`, `context_vars`, `with` overlays).
 
 ### Phase 3 — Optional DI for in-process handlers only (low priority)
 
@@ -121,5 +121,5 @@ Pursue Phase 1–2 when the next wave of actions would otherwise grow `build_act
 
 ## Docs touch (if implemented later)
 
-- Short note in [`docs/architecture/component-boundaries.md`](docs/architecture/component-boundaries.md): engine vs process-pack registry.
+- Short note in [`docs/architecture/component-boundaries.md`](../architecture/component-boundaries.md): engine vs process-pack registry.
 - Optionally a small ADR under `docs/architecture/` recording “registry over DI for action dispatch.”

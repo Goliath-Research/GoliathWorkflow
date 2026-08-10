@@ -76,7 +76,7 @@ flowchart TB
 
 ## 1. DMP layer — unchanged foundation
 
-**Where:** [`packages/methylutils/methyl_utils/statistical_tests.py`](packages/methylutils/methyl_utils/statistical_tests.py), [`packages/methyldetector/methyl_detector/core/methyldetector.py`](packages/methyldetector/methyl_detector/core/methyldetector.py)
+**Where:** [`packages/methylutils/methyl_utils/statistical_tests.py`](../../packages/methylutils/methyl_utils/statistical_tests.py), [`packages/methyldetector/methyl_detector/core/methyldetector.py`](../../packages/methyldetector/methyl_detector/core/methyldetector.py)
 
 Per-position biological unit:
 
@@ -92,7 +92,7 @@ Statistical testing: ECDF KS → `p_value` / `q_value`. Biological filter: `effe
 
 ## 2. Biology-weight matrix (Option C) — core new behavior
 
-**Where:** [`packages/methylmapper/methyl_mapper/config.py`](packages/methylmapper/methyl_mapper/config.py), [`packages/methylmapper/methyl_mapper/bedtools_mapper.py`](packages/methylmapper/methyl_mapper/bedtools_mapper.py) (`_build_compound_effect_metrics`)
+**Where:** [`packages/methylmapper/methyl_mapper/config.py`](../../packages/methylmapper/methyl_mapper/config.py), [`packages/methylmapper/methyl_mapper/bedtools_mapper.py`](../../packages/methylmapper/methyl_mapper/bedtools_mapper.py) (`_build_compound_effect_metrics`)
 
 ### Per-DMP weight
 
@@ -168,10 +168,10 @@ This is a **sum of biology-aware feature burdens**, not a separate heuristic pat
 
 | Item | Location | Reason |
 |------|----------|--------|
-| `calculate_biological_importance()` | [`bedtools_mapper.py`](packages/methylmapper/methyl_mapper/bedtools_mapper.py) ~line 31 | Re-implements biology without DMP `effect_size` |
+| `calculate_biological_importance()` | [`bedtools_mapper.py`](../../packages/methylmapper/methyl_mapper/bedtools_mapper.py) ~line 31 | Re-implements biology without DMP `effect_size` |
 | `_build_feature_effect_scores()` | same file ~line 1168 | Parallel score family; superseded by compound + biology matrix |
 | `_directional_effect_from_effect_sizes()` | same file ~line 1147 | Only used by legacy feature scores |
-| `w_promoter`, `w_exon`, … config fields | [`config.py`](packages/methylmapper/methyl_mapper/config.py) | Replaced by biology matrix |
+| `w_promoter`, `w_exon`, … config fields | [`config.py`](../../packages/methylmapper/methyl_mapper/config.py) | Replaced by biology matrix |
 | `gene_feature_effect_compound` computation | `aggregate_by_feature` | Redundant composed scalar |
 
 ### Export columns to remove from gene summary CSV
@@ -200,10 +200,10 @@ This is a **sum of biology-aware feature burdens**, not a separate heuristic pat
 
 | Package | Change |
 |---------|--------|
-| [`methylgenefeatureselect`](packages/methylgenefeatureselect/methyl_gene_feature_select/core/runner.py) | Read gene summary export; rank by `feature_importance_{feature_type}`; drop intersection-CSV fallback chain |
-| [`methylgeneselect`](packages/methylgeneselect/methyl_gene_select/core/gene_featurecuts.py), [`raw_gene_features.py`](packages/methylgeneselect/methyl_gene_select/core/raw_gene_features.py) | Default weight column `gene_importance`; remove `mean_effect_size` defaults and fallbacks |
-| [`methylenricher`](packages/methylenricher/methyl_enricher/cli.py), [`module_pipeline.py`](packages/methylenricher/methyl_enricher/module_pipeline.py) | Sort/filter on `gene_importance`; remove `min_mean_effect_size` CLI flag and config field |
-| [`methylvalidation`](packages/methylvalidation/) tests | Update fixtures to use `gene_importance` instead of `mean_effect_size` |
+| [`methylgenefeatureselect`](../../packages/methylgenefeatureselect/methyl_gene_feature_select/core/runner.py) | Read gene summary export; rank by `feature_importance_{feature_type}`; drop intersection-CSV fallback chain |
+| [`methylgeneselect`](../../packages/methylgeneselect/methyl_gene_select/core/gene_featurecuts.py), [`raw_gene_features.py`](../../packages/methylgeneselect/methyl_gene_select/core/raw_gene_features.py) | Default weight column `gene_importance`; remove `mean_effect_size` defaults and fallbacks |
+| [`methylenricher`](../../packages/methylenricher/methyl_enricher/cli.py), [`module_pipeline.py`](../../packages/methylenricher/methyl_enricher/module_pipeline.py) | Sort/filter on `gene_importance`; remove `min_mean_effect_size` CLI flag and config field |
+| [`methylvalidation`](../../packages/methylvalidation/) tests | Update fixtures to use `gene_importance` instead of `mean_effect_size` |
 | Project JSON / enricher config | Remove `min_mean_effect_size`; add optional `biology_weights` override block |
 
 No downstream package should reference removed column names. CI grep check recommended: fail if `mean_effect_size`, `gene_score`, or `calculate_biological_importance` appear outside migration notes.
@@ -222,7 +222,7 @@ No downstream package should reference removed column names. CI grep check recom
 
 - Remove `_build_feature_effect_scores`, merge logic for legacy columns, and `calculate_biological_importance` call sites.
 - Prune `_prune_gene_output_columns` to canonical set only.
-- Update [`test_gene_stat_export.py`](packages/methylmapper/tests/test_gene_stat_export.py): replace legacy assertions with biology-matrix cases (e.g. promoter hyper DMP ranks above equal-magnitude intron hypo DMP).
+- Update [`test_gene_stat_export.py`](../../packages/methylmapper/tests/test_gene_stat_export.py): replace legacy assertions with biology-matrix cases (e.g. promoter hyper DMP ranks above equal-magnitude intron hypo DMP).
 
 ### Phase 3 — Downstream purge
 
@@ -233,8 +233,8 @@ No downstream package should reference removed column names. CI grep check recom
 
 ### Phase 4 — Documentation
 
-- Rewrite [`BIOLOGICAL_IMPORTANCE_AUDIT.md`](packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md) as the canonical spec (not “audit of legacy”).
-- Update [`IMPLEMENTATION.md`](packages/methylmapper/docs/IMPLEMENTATION.md), theory config reference, and usage artifact glossary: one propagation story from CpG → DMP `effect_size` → biology-weighted gene/feature importance.
+- Rewrite [`BIOLOGICAL_IMPORTANCE_AUDIT.md`](../../packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md) as the canonical spec (not “audit of legacy”).
+- Update [`IMPLEMENTATION.md`](../../packages/methylmapper/docs/IMPLEMENTATION.md), theory config reference, and usage artifact glossary: one propagation story from CpG → DMP `effect_size` → biology-weighted gene/feature importance.
 
 ---
 

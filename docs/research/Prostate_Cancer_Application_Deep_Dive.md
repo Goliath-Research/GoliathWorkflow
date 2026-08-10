@@ -2,7 +2,7 @@
 
 **Status:** research / application synthesis (not an operator runbook).  
 **Audience:** scientists, physicians, and insurance / medical-director readers who need to understand **why** MethylPipeline’s analyte, assay, and validation choices matter for prostate cancer.  
-**Follow-on operator surface:** [Methylation application packs](../usage/24-methylation-application-packs.qmd) (Alzheimer-style pack pattern); a dedicated `docs/usage/25-prostate-cancer-pack.qmd` is **not** in this note.
+**Follow-on operator surface:** [Methylation application packs](../usage/24-methylation-application-packs.md) (Alzheimer-style pack pattern); a dedicated `docs/usage/25-prostate-cancer-pack.qmd` is **not** in this note.
 
 **Related notes**
 
@@ -13,7 +13,7 @@
 | [Prostate_Cancer_Detection_MethylPipeline_Fitness.md](Prostate_Cancer_Detection_MethylPipeline_Fitness.md) | What the platform can / cannot claim today |
 | [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md) | Operator analyte config |
 | [validation-evidence-index.md](../regulatory/validation-evidence-index.md) | EV-PCA-* feasibility packages |
-| [SaMD study lifecycle](../usage/18-samd-study-lifecycle.qmd) | Research → holdout → pivotal ladder |
+| [SaMD study lifecycle](../usage/18-samd-study-lifecycle.md) | Research → holdout → pivotal ladder |
 
 ---
 
@@ -140,7 +140,7 @@ Physician-facing meaning: methylation **heterogeneity and information content**,
 | **Houseman** | Buffy six-cell Ω fractions → ALR covariates |
 | **HiTIMED** | Hierarchical / analyte-driven leaves (e.g. cfDNA tumor_fraction leaves when configured) |
 
-Action: `pipeline.cell_deconvolution` → `cell_fractions/cell_fractions.csv`. Buffy research procedures enable Houseman by default; plasma WGBS / EM-Seq gatekeeper procedures often use the **no-deconv** lifecycle (fragmentomics / panel depth carry more of the noise story). Theory: [ch.07a methyldeconv](../theory/chapters/07a-methyldeconv.qmd).
+Action: `pipeline.cell_deconvolution` → `cell_fractions/cell_fractions.csv`. Buffy research procedures enable Houseman by default; plasma WGBS / EM-Seq gatekeeper procedures often use the **no-deconv** lifecycle (fragmentomics / panel depth carry more of the noise story). Theory: [ch.07a methyldeconv](../theory/chapters/07a-methyldeconv.md).
 
 ### Stacking into the model
 
@@ -187,7 +187,7 @@ Translate the platform’s statistical honesty into plain language.
 
 ### Stability Monte Carlo (WF1)
 
-Repeated random train/validation splits discover DMPs/genes; **recurrence** across iterations filters features that appear only because of a lucky split. BA-gated FeatureCuts (`dmp_fc`, `gene_fc`, `dual_fc`) further require that panels meet held-out balanced accuracy inside discovery. Operator detail: [usage ch.05](../usage/05-stage-stability.qmd); theory: [ch.12](../theory/chapters/12-two-workflows.qmd).
+Repeated random train/validation splits discover DMPs/genes; **recurrence** across iterations filters features that appear only because of a lucky split. BA-gated FeatureCuts (`dmp_fc`, `gene_fc`, `dual_fc`) further require that panels meet held-out balanced accuracy inside discovery. Operator detail: [usage ch.05](../usage/05-stage-stability.md); theory: [ch.12](../theory/chapters/12-two-workflows.md).
 
 > A locus that survives a high fraction of random splits is more likely biology than noise—still not a clinical claim until holdout and pivotal stages pass.
 
@@ -203,7 +203,7 @@ WF2 evaluates a frozen model under Monte Carlo on the development world; WF3 is 
 
 ### Claim gates
 
-Code blocks clinical-performance claims until `regulatory.stage` reaches pivotal (or later) and `allow_clinical_performance_claims` is permitted. SaMD ladder: `samd_research` → `samd_holdout_enrichment` → `samd_pivotal` ([usage ch.18](../usage/18-samd-study-lifecycle.qmd)).
+Code blocks clinical-performance claims until `regulatory.stage` reaches pivotal (or later) and `allow_clinical_performance_claims` is permitted. SaMD ladder: `samd_research` → `samd_holdout_enrichment` → `samd_pivotal` ([usage ch.18](../usage/18-samd-study-lifecycle.md)).
 
 ---
 
@@ -236,7 +236,7 @@ Honest limitation: some buffy packages show empty gene panels at threshold despi
 | **tabular_sklearn** | Feature-matrix alternatives; useful in model-MC comparisons |
 | Generative / hybrid | Research backends when enabled |
 
-Model-MC ranks backends on held-out metrics (e.g. median BA); `select_best_model` records the winner. Post-model validation consumes **frozen** artifacts without retraining ([usage ch.07–08](../usage/07-stage-model.qmd)).
+Model-MC ranks backends on held-out metrics (e.g. median BA); `select_best_model` records the winner. Post-model validation consumes **frozen** artifacts without retraining ([usage ch.07–08](../usage/07-stage-model.md)).
 
 ### What “good” means for a gatekeeper vs current runs
 
@@ -247,7 +247,7 @@ Model-MC ranks backends on held-out metrics (e.g. median BA); `select_best_model
 | Holdout | Locked + pivotal partitions | Missing |
 | Acceptance | NPV LCB / operating-point policy (product gaps) | BA gates inside FeatureCuts |
 
-Gleason-staged manifests are already supported ([usage ch.16](../usage/16-tutorial-healthy-vs-cancer-stages.qmd)); defining GG≥2 as the screening positive class and NPV LCB acceptance gates are called out as small, disease-agnostic extensions in the fitness note—not as present production claims.
+Gleason-staged manifests are already supported ([usage ch.16](../usage/16-tutorial-healthy-vs-cancer-stages.md)); defining GG≥2 as the screening positive class and NPV LCB acceptance gates are called out as small, disease-agnostic extensions in the fitness note—not as present production claims.
 
 ### SaMD ladder as the validation program
 
@@ -257,7 +257,7 @@ Gleason-staged manifests are already supported ([usage ch.16](../usage/16-tutori
 | Holdout enrichment | `samd_holdout_enrichment` | Internal locked-test enrichment |
 | Pivotal | `samd_pivotal` | Clinical performance claims (when evidence filled) |
 
-Operator SOP: [usage ch.18](../usage/18-samd-study-lifecycle.qmd). Evidence registry: [validation-evidence-index.md](../regulatory/validation-evidence-index.md).
+Operator SOP: [usage ch.18](../usage/18-samd-study-lifecycle.md). Evidence registry: [validation-evidence-index.md](../regulatory/validation-evidence-index.md).
 
 ---
 
@@ -289,7 +289,7 @@ Canonical analyte encoding: [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md). Produ
 ## Appendix B — Further reading
 
 - Stability / freeze / model / post-model: usage ch.05–08  
-- Two workflows (WF1–3): [theory ch.12](../theory/chapters/12-two-workflows.qmd)  
-- Model creation: [theory ch.15](../theory/chapters/15-model-creation-and-validation.qmd)  
+- Two workflows (WF1–3): [theory ch.12](../theory/chapters/12-two-workflows.md)  
+- Model creation: [theory ch.15](../theory/chapters/15-model-creation-and-validation.md)  
 - SamplePrep linear vs WGBS compare: [sample_prep_test_bed.md](../../workflow_engine/docs/sample_prep_test_bed.md)  
 - Interactive canvases: [analyte-comparison](../canvas/analyte-comparison.canvas.tsx), [pca-detection-fitness](../canvas/pca-detection-fitness.canvas.tsx)

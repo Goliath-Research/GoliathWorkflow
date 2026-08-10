@@ -48,13 +48,13 @@ The worker contract *looks* typed (catalog → Pydantic schemas → JSON Schema 
 
 | Layer | Today | Why observability is lost |
 |-------|--------|---------------------------|
-| Handler boundary | `HandlerResult = Dict[str, Any]` in [`workers/methyl_worker/actions/base.py`](workers/methyl_worker/actions/base.py) and [`handlers.py`](workers/methyl_worker/handlers.py) | No compile-time or runtime guarantee on shape |
-| 8 pipeline CLIs | Share [`PipelineCliTaskOutput`](workers/methyl_worker/task_models.py) (`status`, `tool`, `stdout_tail`, `extra="allow"`) | Success submits almost nothing; [`pipeline_centroid.output.schema.json`](schemas/tasks/pipeline_centroid.output.schema.json) allows any extra field |
-| CLI subprocess | [`CliAction.execute`](workers/methyl_worker/actions/base.py) returns generic dict after exit 0 | Core library already computed rich results but CLI only prints them (e.g. [`run_dmp_selection`](packages/methyldmpselect/methyl_dmp_select/core/runner.py) returns audit dict; [`DMPMapper.run`](packages/methylmapper/methyl_mapper/mapper.py) returns counts) |
-| `result_code` | Worker always submits `0` or `-1` ([`runner.py`](workers/methyl_worker/runner.py)) | Engine supports `0..N` for IF/SWITCH via [`wf_try_task_result_code`](workflow_engine/sql/MethylPipelineDB_Script.sql), but actions never populate meaningful codes |
-| Validation actions | [`ValidationTaskOutput`](workers/methyl_worker/task_models.py) with `summary: Dict[str, Any]` | Counts/paths stay opaque blobs |
+| Handler boundary | `HandlerResult = Dict[str, Any]` in [`workers/methyl_worker/actions/base.py`](../../workers/methyl_worker/actions/base.py) and [`handlers.py`](../../workers/methyl_worker/handlers.py) | No compile-time or runtime guarantee on shape |
+| 8 pipeline CLIs | Share [`PipelineCliTaskOutput`](../../workers/methyl_worker/task_models.py) (`status`, `tool`, `stdout_tail`, `extra="allow"`) | Success submits almost nothing; [`pipeline_centroid.output.schema.json`](../../schemas/tasks/pipeline_centroid.output.schema.json) allows any extra field |
+| CLI subprocess | [`CliAction.execute`](../../workers/methyl_worker/actions/base.py) returns generic dict after exit 0 | Core library already computed rich results but CLI only prints them (e.g. [`run_dmp_selection`](../../packages/methyldmpselect/methyl_dmp_select/core/runner.py) returns audit dict; [`DMPMapper.run`](../../packages/methylmapper/methyl_mapper/mapper.py) returns counts) |
+| `result_code` | Worker always submits `0` or `-1` ([`runner.py`](../../workers/methyl_worker/runner.py)) | Engine supports `0..N` for IF/SWITCH via [`wf_try_task_result_code`](../../workflow_engine/sql/MethylPipelineDB_Script.sql), but actions never populate meaningful codes |
+| Validation actions | [`ValidationTaskOutput`](../../workers/methyl_worker/task_models.py) with `summary: Dict[str, Any]` | Counts/paths stay opaque blobs |
 
-**Good partial precedent:** [`split_detector_task_models.py`](workers/methyl_worker/split_detector_task_models.py) (`extra="forbid"`) + worker adapters that scrape `/work` audit files ([`dmp_select.py`](workers/methyl_worker/actions/dmp_select.py)). Sample prep uses [`sample_prep_log.jsonl`](workers/methyl_worker/sample_prep_log.py) for per-action traceability.
+**Good partial precedent:** [`split_detector_task_models.py`](../../workers/methyl_worker/split_detector_task_models.py) (`extra="forbid"`) + worker adapters that scrape `/work` audit files ([`dmp_select.py`](../../workers/methyl_worker/actions/dmp_select.py)). Sample prep uses [`sample_prep_log.jsonl`](../../workers/methyl_worker/sample_prep_log.py) for per-action traceability.
 
 ---
 
@@ -97,7 +97,7 @@ sequenceDiagram
 
 ### Shared telemetry base (new module)
 
-Add [`packages/methyldomain/methyl_domain/action_result.py`](packages/methyldomain/methyl_domain/action_result.py):
+Add [`packages/methyldomain/methyl_domain/action_result.py`](../../packages/methyldomain/methyl_domain/action_result.py):
 
 ```python
 class ActionTelemetry(BaseModel):
@@ -142,11 +142,11 @@ For each `methyl-*` tool:
 | `pipeline.detector` | Rich result object, printed only | Add `DetectorActionResult` (n_stat_dmps, n_bio_dmps, csv paths, per-comparison timings) |
 | `pipeline.mapper` | `mapper.run()` dict | `n_input_dmps`, `n_output_genes`, csv/json paths |
 | `pipeline.centroid` | HDF5 + logs only | Add result builder: n_samples, n_positions, centroid paths |
-| `pipeline.enricher` | completeness manifest exists ([`write_project_completeness_manifest`](packages/methylenricher/methyl_enricher/ensure_complete.py)) | Wrap/enrich into typed output |
+| `pipeline.enricher` | completeness manifest exists ([`write_project_completeness_manifest`](../../packages/methylenricher/methyl_enricher/ensure_complete.py)) | Wrap/enrich into typed output |
 
 ### Phase B — Worker collectors (fallback + enrichment)
 
-Refactor [`CliAction`](workers/methyl_worker/actions/base.py):
+Refactor [`CliAction`](../../workers/methyl_worker/actions/base.py):
 
 ```python
 class CliAction:
@@ -173,7 +173,7 @@ In-process handlers return `OutputModel` directly (no manifest required), but sh
 
 ### 1. Typed execution pipeline
 
-[`workers/methyl_worker/runner.py`](workers/methyl_worker/runner.py):
+[`workers/methyl_worker/runner.py`](../../workers/methyl_worker/runner.py):
 
 ```python
 input_model = load_input_model(action_name).model_validate(claim.input_json)
@@ -186,15 +186,15 @@ Remove bare `Dict` from `ActionBase`, `InProcessCallable`, `execute_task`.
 
 ### 2. Replace generic pipeline schemas
 
-Retire `_PIPELINE_IN` / `_PIPELINE_OUT` from [`action_catalog.py`](workers/methyl_worker/action_catalog.py) for:
+Retire `_PIPELINE_IN` / `_PIPELINE_OUT` from [`action_catalog.py`](../../workers/methyl_worker/action_catalog.py) for:
 
 - `pipeline.centroid`, `pipeline.detector`, `pipeline.mapper`, `pipeline.enricher`, `pipeline.progression`, `pipeline.classifier`, `pipeline.predictor`, `pipeline.cluster`
 
-Add per-action modules mirroring [`split_detector_task_models.py`](workers/methyl_worker/split_detector_task_models.py) (or split into `workers/methyl_worker/task_models/pipeline/`).
+Add per-action modules mirroring [`split_detector_task_models.py`](../../workers/methyl_worker/split_detector_task_models.py) (or split into `workers/methyl_worker/task_models/pipeline/`).
 
 ### 3. Tighten validation actions
 
-Replace shared loose [`ValidationTaskOutput`](workers/methyl_worker/task_models.py) with one output model per validation action (e.g. `ValidationStabilityOutput` with typed stability counts, tier breakdown, output paths — sourced from [`run_stability_analysis`](packages/methylvalidation/methyl_validation/stability.py) return value, not `summary: dict`).
+Replace shared loose [`ValidationTaskOutput`](../../workers/methyl_worker/task_models.py) with one output model per validation action (e.g. `ValidationStabilityOutput` with typed stability counts, tier breakdown, output paths — sourced from [`run_stability_analysis`](../../packages/methylvalidation/methyl_validation/stability.py) return value, not `summary: dict`).
 
 ### 4. Tighten sample prep nested dicts
 
@@ -221,7 +221,7 @@ Worker sets `result_code` from `OutputModel.result_code`; workflows can migrate 
 | `output_json` on `node_execution` | Portal/API query, output_bindings |
 | `.action_results/*.json` on `/work` | Operator inspection, re-validation, replay |
 | `sample_prep_log.jsonl` (sample stage) | Append-only timeline (extend pattern to MC run dirs as `action_run_log.jsonl`) |
-| JSON Schema artifacts | [`methyl-export-task-schemas`](workers/methyl_worker/task_schema_export.py) CI check — fail if drift |
+| JSON Schema artifacts | [`methyl-export-task-schemas`](../../workers/methyl_worker/task_schema_export.py) CI check — fail if drift |
 
 Add CI test: for each catalog action, golden fixture input → execute (or mock collector) → output validates against exported JSON Schema with `additionalProperties: false`.
 
@@ -248,7 +248,7 @@ Add CI test: for each catalog action, golden fixture input → execute (or mock 
 - `methyl_qc` emits `result_code` 0/1/2; update sample prep program IF nodes
 
 ### Phase 4 — Docs + portal
-- Update [`workers/WORKER_PROTOCOL.md`](workers/WORKER_PROTOCOL.md) and [`docs/reference/domain-program-language.md`](docs/reference/domain-program-language.md) with result_code table and manifest convention
+- Update [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md) and [`docs/reference/domain-program-language.md`](../reference/domain-program-language.md) with result_code table and manifest convention
 - Usage manual: where to find `.action_results/` and `action_run_log.jsonl` on `/work`
 
 ---

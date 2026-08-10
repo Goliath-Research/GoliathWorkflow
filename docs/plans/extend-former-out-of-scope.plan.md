@@ -77,7 +77,7 @@ flowchart TD
 ### 4. Docs
 
 - [`pangenome-wgbs-methyl-qc.plan.md`](pangenome-wgbs-methyl-qc.plan.md) follow-on table
-- [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd)
+- [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.md)
 - [`methylgrapher-mojo-cutover-gate.md`](methylgrapher-mojo-cutover-gate.md)
 
 ## Out of scope (hard deferrals)

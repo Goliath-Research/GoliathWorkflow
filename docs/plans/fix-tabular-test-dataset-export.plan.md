@@ -42,7 +42,7 @@ Train-time export called `resolve_eval_paths_and_labels` without `evaluation_par
 
 1. [`tabular_backend.py`](../../packages/methylvalidation/methyl_validation/tabular_backend.py): `save_test_dataset` → `evaluation_partition="test"`; removed `_has_explicit_eval_split` gate; fail closed without `test_groups.json`; raise on train/test `sample_id` overlap.
 2. Regression in [`test_model_bundle_tabular_backend.py`](../../packages/methylvalidation/tests/test_model_bundle_tabular_backend.py).
-3. Docs: [`docs/usage/07-stage-model.qmd`](../usage/07-stage-model.qmd), [`IMPLEMENTATION.md`](../../packages/methylvalidation/docs/IMPLEMENTATION.md).
+3. Docs: [`docs/usage/07-stage-model.qmd`](../usage/07-stage-model.md), [`IMPLEMENTATION.md`](../../packages/methylvalidation/docs/IMPLEMENTATION.md).
 
 ## Operator follow-up
 

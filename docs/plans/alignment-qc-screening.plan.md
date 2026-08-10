@@ -2,7 +2,7 @@
 name: Alignment QC screening
 overview: Extend MethylAlignmentQC with read-end-aware cycle screening and structured remediation dispositions, then wire fastp Read-2 trimming and forced realign into SamplePrep (plus a remediation workflow for the existing prostate cohort).
 
-> **Status: IMPLEMENTED.** This plan is historical reference. The live workflow is [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (deploy via `scripts/deploy_workflow_definitions.sh`). Operator guide: usage ch.03 [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd) and [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md).
+> **Status: IMPLEMENTED.** This plan is historical reference. The live workflow is [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (deploy via `scripts/deploy_workflow_definitions.sh`). Operator guide: usage ch.03 [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.md) and [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md).
 
 azure_devops:
   type: Feature
@@ -41,7 +41,7 @@ isProject: false
 
 ## Problem diagnosis
 
-Today's alignment QC ([`packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py`](packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py)) is **too coarse** for the prostate cohort findings:
+Today's alignment QC ([`packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py)) is **too coarse** for the prostate cohort findings:
 
 | Report category | Count | Current pipeline behavior |
 |-----------------|-------|---------------------------|
@@ -50,11 +50,11 @@ Today's alignment QC ([`packages/methylalignmentqc/methyl_alignment_qc/core/wgbs
 | Multi-region low quality | 6 | Same generic fail — no `SLIDINGWINDOW`/tail guidance |
 | Guardrail-only fail (cycles OK) | 7 | Fails on insert/dropout/deam but **duplication rate is not a guardrail** despite being in `summary_stats` |
 
-**Root cause:** Parabricks `mean_quality_by_cycle` already contains per-cycle Phred (302 cycles = 151 R1 + 151 R2; R2 starts at cycle **152** — visible dip in repo fixture [`packages/methylalignmentqc/data/003772_8C9_3/003772_8C9_3.json`](packages/methylalignmentqc/data/003772_8C9_3/003772_8C9_3.json) at cycle 152), but the code only computes `min(mq[20:])` over the **combined** series and emits free-text recommendations.
+**Root cause:** Parabricks `mean_quality_by_cycle` already contains per-cycle Phred (302 cycles = 151 R1 + 151 R2; R2 starts at cycle **152** — visible dip in repo fixture [`packages/methylalignmentqc/data/003772_8C9_3/003772_8C9_3.json`](../../packages/methylalignmentqc/data/003772_8C9_3/003772_8C9_3.json) at cycle 152), but the code only computes `min(mq[20:])` over the **combined** series and emits free-text recommendations.
 
-There is **no** `fastp`/trim step and **no** remediation branch in [`workflow_engine/domain/fixtures/sample_prep.program.json`](workflow_engine/domain/fixtures/sample_prep.program.json).
+There is **no** `fastp`/trim step and **no** remediation branch in [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json).
 
-**Critical ordering bug (current + prior plan draft):** [`sample_prep.program.json`](workflow_engine/domain/fixtures/sample_prep.program.json) runs `delete_fastqs` **before** `methyl_qc`. That makes Read-2 trimming impossible on the remediation path, because `fastp` requires the original FASTQs. **FASTQs must stay on disk until QC is fully resolved** (pass, or final reject after any trim/realign retry).
+**Critical ordering bug (current + prior plan draft):** [`sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) runs `delete_fastqs` **before** `methyl_qc`. That makes Read-2 trimming impossible on the remediation path, because `fastp` requires the original FASTQs. **FASTQs must stay on disk until QC is fully resolved** (pass, or final reject after any trim/realign retry).
 
 ```mermaid
 flowchart TB
@@ -94,7 +94,7 @@ flowchart TB
 
 ### 1a. New screening module
 
-Add [`packages/methylalignmentqc/methyl_alignment_qc/core/cycle_quality_screening.py`](packages/methylalignmentqc/methyl_alignment_qc/core/cycle_quality_screening.py):
+Add [`packages/methylalignmentqc/methyl_alignment_qc/core/cycle_quality_screening.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/cycle_quality_screening.py):
 
 **Inputs:** V2 `mean_quality_by_cycle.rows` (or V1 parallel arrays).
 
@@ -118,7 +118,7 @@ Add [`packages/methylalignmentqc/methyl_alignment_qc/core/cycle_quality_screenin
 
 ### 1b. Extend models and schema — screening + audit trail
 
-Extend [`GuardrailReport`](packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc.py) with optional `screening` block:
+Extend [`GuardrailReport`](../../packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc.py) with optional `screening` block:
 
 ```python
 class QcScreeningReport(BaseModel):
@@ -160,13 +160,13 @@ Workflow passes retry context via `input_json` on the second `methyl_qc` task:
 - `qcAttemptReason` (string, built from prior screening message + trim params)
 - `remediationTrigger` (object: disposition, trimFront2, priorOverallPass)
 
-Update [`schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`](schemas/config/alignment_qc/exported_sample_qc_v2.schema.json) and regenerate if using export script.
+Update [`schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`](../../schemas/config/alignment_qc/exported_sample_qc_v2.schema.json) and regenerate if using export script.
 
-Add `cycle_screening` config to [`schemas/config/alignment_qc.schema.json`](schemas/config/alignment_qc.schema.json) (thresholds, window sizes, max trim).
+Add `cycle_screening` config to [`schemas/config/alignment_qc.schema.json`](../../schemas/config/alignment_qc.schema.json) (thresholds, window sizes, max trim).
 
 ### 1c. Wire into writer
 
-In [`writer.py`](packages/methylalignmentqc/methyl_alignment_qc/core/writer.py), after `check_wgbs_guardrails` (+ fragmentomics/bisulfite):
+In [`writer.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/writer.py), after `check_wgbs_guardrails` (+ fragmentomics/bisulfite):
 
 1. Run `screen_cycle_quality(payload, config)`
 2. Attach `guardrails.screening`
@@ -182,7 +182,7 @@ In addition to QC JSON history, every SamplePrep worker action appends one JSON 
 
 **`{sampleDir}/{sampleId}.sample_prep_log.jsonl`**
 
-Shared helper: [`workers/methyl_worker/sample_prep_log.py`](workers/methyl_worker/sample_prep_log.py) (or under `methylalignmentqc` if QC-only — prefer workers so all prep actions use it):
+Shared helper: [`workers/methyl_worker/sample_prep_log.py`](../../workers/methyl_worker/sample_prep_log.py) (or under `methylalignmentqc` if QC-only — prefer workers so all prep actions use it):
 
 ```python
 {
@@ -216,16 +216,16 @@ This explains the 7 “cycles OK but failed” samples without changing default 
 ### 1e. Tests
 
 - Unit tests with synthetic cycle profiles: R2-start dip only, multi-region, clean pass
-- Regression on [`003772_8C9_3.json`](packages/methylalignmentqc/data/003772_8C9_3/003772_8C9_3.json) — expect non-zero `trim_front2` at cycle-152 dip
+- Regression on [`003772_8C9_3.json`](../../packages/methylalignmentqc/data/003772_8C9_3/003772_8C9_3.json) — expect non-zero `trim_front2` at cycle-152 dip
 - **Retry merge test:** write QC attempt 1 → re-run writer with attempt 2 + reason → assert `qc_history` length 2 and reason preserved
 - **JSONL append test:** trim + qc handlers append lines without clobbering prior entries
-- Update [`test_writer_guardrails.py`](packages/methylalignmentqc/tests/test_writer_guardrails.py)
+- Update [`test_writer_guardrails.py`](../../packages/methylalignmentqc/tests/test_writer_guardrails.py)
 
 ---
 
 ## Phase 2 — Cohort screening report (prostate 240)
 
-Add [`scripts/alignment_qc_cohort_screening.py`](scripts/alignment_qc_cohort_screening.py):
+Add [`scripts/alignment_qc_cohort_screening.py`](../../scripts/alignment_qc_cohort_screening.py):
 
 - Input: `--qc-dir` (default `/work/AlignmentQC` or `{project}/alignment_qc`), sample list CSV(s) with group column
 - Re-run screening on existing V2 JSONs (no re-align required for classification)
@@ -235,7 +235,7 @@ Add [`scripts/alignment_qc_cohort_screening.py`](scripts/alignment_qc_cohort_scr
   - `investigate_manifest.csv` — multi-region and guardrail-only samples with failing metric keys
   - Batch prefix summary table (`DBCST`, `HBCST`, `5929`, `1401`) for operator validation against known 5/2-3/1-4 bp patterns
 
-Extend [`scripts/compare_alignment_qc_groups.py`](scripts/compare_alignment_qc_groups.py) to include `screening_disposition` and `trim_front2` columns when present.
+Extend [`scripts/compare_alignment_qc_groups.py`](../../scripts/compare_alignment_qc_groups.py) to include `screening_disposition` and `trim_front2` columns when present.
 
 ---
 
@@ -245,9 +245,9 @@ Extend [`scripts/compare_alignment_qc_groups.py`](scripts/compare_alignment_qc_g
 
 | Piece | Location |
 |-------|----------|
-| Runner | [`workers/methyl_worker/fastq_trim_runner.py`](workers/methyl_worker/fastq_trim_runner.py) — invoke `fastp` |
-| Handler | [`handlers.py`](workers/methyl_worker/handlers.py) `_handle_trim_fastq` |
-| Catalog | [`action_catalog.py`](workers/methyl_worker/action_catalog.py) — `sample.trim_fastq` / `sample.trim-fastq` |
+| Runner | [`workers/methyl_worker/fastq_trim_runner.py`](../../workers/methyl_worker/fastq_trim_runner.py) — invoke `fastp` |
+| Handler | [`handlers.py`](../../workers/methyl_worker/handlers.py) `_handle_trim_fastq` |
+| Catalog | [`action_catalog.py`](../../workers/methyl_worker/action_catalog.py) — `sample.trim_fastq` / `sample.trim-fastq` |
 | Schema | `schemas/tasks/sample.trim_fastq.*.json` |
 
 **CLI pattern** (from your report):
@@ -264,11 +264,11 @@ fastp -i "${sampleId}_1.fastq.gz" -I "${sampleId}_2.fastq.gz" \
 - Append `sample_prep_log.jsonl` with reason from `input_json.remediationReason` / workflow scope
 - Return `output_json` including `trimFront2`, `trimmedPaths`, and `logReason` for downstream methyl_qc binding
 
-**Dependency:** document `fastp` in [`scripts/setup_host.sh`](scripts/setup_host.sh) `--system-deps` (apt package `fastp` on Ubuntu 22.04+).
+**Dependency:** document `fastp` in [`scripts/setup_host.sh`](../../scripts/setup_host.sh) `--system-deps` (apt package `fastp` on Ubuntu 22.04+).
 
 ### 3b. Parabricks forced realign
 
-Extend [`parabricks_runner.py`](workers/methyl_worker/parabricks_runner.py):
+Extend [`parabricks_runner.py`](../../workers/methyl_worker/parabricks_runner.py):
 
 - `forceRealign: true` in `input_json` bypasses `alignment_outputs_complete()` idempotency skip
 - Deletes or ignores existing `{sampleId}.bam` + QC artifacts before `docker run`
@@ -280,7 +280,7 @@ Extend [`parabricks_runner.py`](workers/methyl_worker/parabricks_runner.py):
 
 ### 4a. Reorder `delete_fastqs` (prerequisite for trimming)
 
-**Change the canonical step order** in [`sample_prep.program.json`](workflow_engine/domain/fixtures/sample_prep.program.json) (legacy SQL seed [`workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql`](workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql) is deprecated):
+**Change the canonical step order** in [`sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (legacy SQL seed [`workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql`](../../workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql) is deprecated):
 
 | Before (current) | After (required) |
 |------------------|------------------|
@@ -331,11 +331,11 @@ ELSE →
 
 Note: `trim_fastq` reads **original** `*_1.fastq.gz` / `*_2.fastq.gz`; Parabricks then uses trimmed outputs (see Phase 3). Originals are removed only at `delete_fastqs` after the retry QC outcome is known.
 
-Compiler output bindings in [`domain/compiler.py`](workflow_engine/domain/compiler.py) for the new scope vars.
+Compiler output bindings in [`domain/compiler.py`](../../workflow_engine/domain/compiler.py) for the new scope vars.
 
 ### 4c. SamplePrepRemediationPipeline (cohort batch)
 
-New [`workflow_engine/domain/fixtures/sample_prep_remediate.program.json`](workflow_engine/domain/fixtures/sample_prep_remediate.program.json) for the **148-sample rerun** (re-download FASTQs because prior runs deleted them):
+New [`workflow_engine/domain/fixtures/sample_prep_remediate.program.json`](../../workflow_engine/domain/fixtures/sample_prep_remediate.program.json) for the **148-sample rerun** (re-download FASTQs because prior runs deleted them):
 
 ```
 download_fastq → trim_fastq (trimFront2 from manifest) → parabricks → methyl_qc →
@@ -345,13 +345,13 @@ download_fastq → trim_fastq (trimFront2 from manifest) → parabricks → meth
 
 Same rule: **no `delete_fastqs` until after final `methyl_qc`**. Instance `context_json.samples[]` includes `trimFront2` per sample. Samples in `USE_CURRENT_ALIGNMENT` are excluded.
 
-Deploy via [`scripts/deploy_workflow_definitions.sh`](scripts/deploy_workflow_definitions.sh) (add third program).
+Deploy via [`scripts/deploy_workflow_definitions.sh`](../../scripts/deploy_workflow_definitions.sh) (add third program).
 
 ### 4d. Handler / domain updates
 
-- [`handlers.py`](workers/methyl_worker/handlers.py) `_handle_methyl_qc`: pass attempt/reason into writer; return `screening` + `qcHistory` summary in output for bindings
-- [`methyl_domain/helpers.py`](packages/methyldomain/methyl_domain/helpers.py): map disposition + latest `qc_history` entry into `AlignmentQcRef.guardrails`
-- [`sample_prep_capabilities.md`](workflow_engine/contract/sample_prep_capabilities.md): document FASTQ retention policy, trim + remediation branch, **`sample_prep_log.jsonl` contract**, and **`qc_history` on retry**
+- [`handlers.py`](../../workers/methyl_worker/handlers.py) `_handle_methyl_qc`: pass attempt/reason into writer; return `screening` + `qcHistory` summary in output for bindings
+- [`methyl_domain/helpers.py`](../../packages/methyldomain/methyl_domain/helpers.py): map disposition + latest `qc_history` entry into `AlignmentQcRef.guardrails`
+- [`sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md): document FASTQ retention policy, trim + remediation branch, **`sample_prep_log.jsonl` contract**, and **`qc_history` on retry**
 
 ---
 
@@ -361,7 +361,7 @@ Deploy via [`scripts/deploy_workflow_definitions.sh`](scripts/deploy_workflow_de
 2. Spot-check batch medians: `DBCST`/`HBCST` → trim ≈ 5; `5929` → 2–3; `1401` → 1–4
 3. Pilot **5 samples** (one per batch prefix) through `SamplePrepRemediationPipeline` with `WORKER_STUB_EXTERNAL=0`
 4. Compare pre/post `guardrails.details` and mapping rates
-5. Document operator flow in [`docs/deployment/production_runbook.md`](docs/deployment/production_runbook.md) and [`packages/methylalignmentqc/docs/USAGE.md`](packages/methylalignmentqc/docs/USAGE.md)
+5. Document operator flow in [`docs/deployment/production_runbook.md`](../deployment/production_runbook.md) and [`packages/methylalignmentqc/docs/USAGE.md`](../../packages/methylalignmentqc/docs/USAGE.md)
 
 ---
 

@@ -27,6 +27,6 @@ flowchart LR
 
 Pre-rendered figure: [`../diagrams/out/pipeline-stages.svg`](../diagrams/out/pipeline-stages.svg)
 
-**Example study diagram pack:** [`WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md`](../WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md)
+**Example study diagram pack:** [`WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md`](end-to-end-workflow.md)
 
 **Theory:** [two workflows](../theory/chapters/12-two-workflows.md), [model creation theory](../theory/chapters/15-model-creation-and-validation.md).

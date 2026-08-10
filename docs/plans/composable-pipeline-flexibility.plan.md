@@ -93,19 +93,19 @@ flowchart TB
 
 | Gap | Impact |
 |-----|--------|
-| [buffy_data_driven.program.json](workflow_engine/domain/fixtures/data_driven.program.json) uses **legacy inline detector** only | No composable split path for Buffy |
-| [mc_stability_staged.program.json](workflow_engine/domain/fixtures/mc_stability_staged.program.json) uses **invalid IF syntax** (`{ condition: { ref } }` + single `do`) | Optional `gene_select` / `biomarker_filter` never compile ([IfStep](packages/methyldomain/methyl_domain/program.py) requires `"if": "${var}"`, `then`/`else` lists) |
+| [buffy_data_driven.program.json](../../workflow_engine/domain/fixtures/data_driven.program.json) uses **legacy inline detector** only | No composable split path for Buffy |
+| [mc_stability_staged.program.json](../../workflow_engine/domain/fixtures/mc_stability_staged.program.json) uses **invalid IF syntax** (`{ condition: { ref } }` + single `do`) | Optional `gene_select` / `biomarker_filter` never compile ([IfStep](../../packages/methyldomain/methyl_domain/program.py) requires `"if": "${var}"`, `then`/`else` lists) |
 | Scope flags like `project.stabilityGeneFeaturecutsEnabled` are **not seeded** from `step_config.validation` | IF branches cannot resolve |
 | `step_config.dmp_selection` / `gene_selection` **absent** from bundle project JSONs | Split CLIs fall back to legacy `detection` keys inconsistently |
-| `pipeline.gene_feature_select` is a **Phase 3 scaffold** ([runner.py](packages/methylgenefeatureselect/methyl_gene_feature_select/core/runner.py)) | Promoter/exon/intron/terminator k-search not production-ready |
-| `validation.biomarker_filter` **requires** `stability_gene_featurecuts_enabled` ([mc_config_load.py](packages/methylvalidation/methyl_validation/mc_config_load.py)) | PPI-only pre-filter cannot run on mapper genes alone |
+| `pipeline.gene_feature_select` is a **Phase 3 scaffold** ([runner.py](../../packages/methylgenefeatureselect/methyl_gene_feature_select/core/runner.py)) | Promoter/exon/intron/terminator k-search not production-ready |
+| `validation.biomarker_filter` **requires** `stability_gene_featurecuts_enabled` ([mc_config_load.py](../../packages/methylvalidation/methyl_validation/mc_config_load.py)) | PPI-only pre-filter cannot run on mapper genes alone |
 
 **Already works today** for your chosen gene path (enricher frequency):
 
 - Detector exports `dmps-*-discovery.csv` (`detection_mode: discovery_only` or legacy dual export).
 - Mapper reads discovery pattern (`step_config.mapper.csv_pattern: "dmps-*-discovery.csv"`).
-- Enricher applies disease filters statically via [project enricher block](workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json).
-- `validation.stability` with `stability_featurecuts_enabled: false` and `stability_gene_featurecuts_enabled: false` aggregates genes via `load_enricher_genes()` ([stability.py](packages/methylvalidation/methyl_validation/stability.py) ~L1234).
+- Enricher applies disease filters statically via [project enricher block](../../workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json).
+- `validation.stability` with `stability_featurecuts_enabled: false` and `stability_gene_featurecuts_enabled: false` aggregates genes via `load_enricher_genes()` ([stability.py](../../packages/methylvalidation/methyl_validation/stability.py) ~L1234).
 
 ---
 
@@ -149,14 +149,14 @@ PPI / disease filtering without full enricher ORA:
 
 Region filtering (promoter, gene_body, exon, intron, terminator):
 
-- **Today**: `stability_gene_region_hits` in biomarker/gene_select config ([biomarker_gene_pool.py](packages/methylgeneselect/methyl_gene_select/core/biomarker_gene_pool.py)).
-- **Phase 2**: complete `pipeline.gene_feature_select` using mapper `*-intersections.csv` ([REGION_TYPES](packages/methylgenefeatureselect/methyl_gene_feature_select/core/runner.py)).
+- **Today**: `stability_gene_region_hits` in biomarker/gene_select config ([biomarker_gene_pool.py](../../packages/methylgeneselect/methyl_gene_select/core/biomarker_gene_pool.py)).
+- **Phase 2**: complete `pipeline.gene_feature_select` using mapper `*-intersections.csv` ([REGION_TYPES](../../packages/methylgenefeatureselect/methyl_gene_feature_select/core/runner.py)).
 
 ---
 
 ## DomainProgram library (composable fragments)
 
-Add under [workflow_engine/domain/fixtures/](workflow_engine/domain/fixtures/) and [workflow_engine/domain/checks/](workflow_engine/domain/checks/):
+Add under [workflow_engine/domain/fixtures/](../../workflow_engine/domain/fixtures/) and [workflow_engine/domain/checks/](../../workflow_engine/domain/checks/):
 
 | Program | Purpose |
 |---------|---------|
@@ -186,7 +186,7 @@ Instance context / profile sets booleans: `runDmpSelection`, `runGeneFeaturecuts
 
 ### 1. Scope seeding for profile flags
 
-Extend [workflow_context.py](workflow_engine/domain/workflow_context.py) `enrich_instance_context()` to flatten validation/gene_selection keys into camelCase scope vars used by IF:
+Extend [workflow_context.py](../../workflow_engine/domain/workflow_context.py) `enrich_instance_context()` to flatten validation/gene_selection keys into camelCase scope vars used by IF:
 
 - `stabilityFeaturecutsEnabled` ← `validation.stability_featurecuts_enabled`
 - `stabilityGeneFeaturecutsEnabled` ← `validation.stability_gene_featurecuts_enabled`
@@ -197,11 +197,11 @@ Alternatively add `collection_bindings` jsonPath reads from inline `project` for
 
 ### 2. Fix mc_stability programs
 
-Rewrite [mc_stability_staged.program.json](workflow_engine/domain/fixtures/mc_stability_staged.program.json) and [healthy_pca_mc_stability.program.json](workflow_engine/domain/fixtures/mc_stability.program.json):
+Rewrite [mc_stability_staged.program.json](../../workflow_engine/domain/fixtures/mc_stability_staged.program.json) and [healthy_pca_mc_stability.program.json](../../workflow_engine/domain/fixtures/mc_stability.program.json):
 
 - Replace invalid IF blocks with `"if": "${flag}"`, `"then": [...]`, `"else": []`.
 - Add sibling program `mc_gene_enricher_stability.program.json` without dmp_select/gene_select.
-- Recompile and verify compiled workflow contains IF + optional actions (today [compiled artifact](workflow_engine/domain/checks/pca1_5_cg/compiled/pca1_5_mc_stability/compiled_workflow.json) omits them).
+- Recompile and verify compiled workflow contains IF + optional actions (today [compiled artifact](../../workflow_engine/domain/checks/pca1_5_cg/compiled/pca1_5_mc_stability/compiled_workflow.json) omits them).
 
 ### 3. Optional: detector → mapper handoff bindings
 
@@ -209,10 +209,10 @@ Low priority for discovery path (mapper globs by pattern). Add `domain_effects.o
 
 ### 4. Project config migration
 
-Run [migrate_detection_config.py](packages/methylvalidation/methyl_validation/utils/migrate_detection_config.py) on bundle projects:
+Run [migrate_detection_config.py](../../packages/methylvalidation/methyl_validation/utils/migrate_detection_config.py) on bundle projects:
 
-- [project_Buffy_healthy_vs_PCa.json](workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json)
-- [project_Healthy_vs_PCa1-5-CG.json](workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG.json)
+- [project_Buffy_healthy_vs_PCa.json](../../workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json)
+- [project_Healthy_vs_PCa1-5-CG.json](../../workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG.json)
 
 Move FeatureCuts keys to `dmp_selection`; MC gene keys to `gene_selection`; keep `detection` for statistical discovery only.
 
@@ -224,7 +224,7 @@ Move FeatureCuts keys to `dmp_selection`; MC gene keys to `gene_selection`; keep
 |-------------|--------|
 | `methyl-validation run-workflow --program ...` | Document profile context files |
 | `methyl-validation --via-workflow --stability` | Map CLI flags → instance context booleans (`runDmpSelection`, etc.) |
-| [mc_manifest.py](packages/methylvalidation/methyl_validation/mc_manifest.py) | Only write `detector_step_override.json` when `stability_featurecuts_enabled`; skip when gene-enricher-only profile |
+| [mc_manifest.py](../../packages/methylvalidation/methyl_validation/mc_manifest.py) | Only write `detector_step_override.json` when `stability_featurecuts_enabled`; skip when gene-enricher-only profile |
 | Stability summary | Document which axis is active in `stability_summary.json` metadata (`dmp_axis: none|discovery|classifier`, `gene_axis: enricher|classifier`) |
 
 ---
@@ -234,14 +234,14 @@ Move FeatureCuts keys to `dmp_selection`; MC gene keys to `gene_selection`; keep
 Not required for initial gene-enricher stability, but completes “maximum flexibility”:
 
 1. **Finish `pipeline.gene_feature_select`**: ECDF OvR k-search on `(gene_name, feature_type)` from mapper intersections; wire into MC program behind `${runGeneFeatureSelect}`.
-2. **Decouple biomarker filter**: Allow `validation.biomarker_filter` when `stability_gene_biomarker_filter_enabled` without requiring `stability_gene_featurecuts_enabled`; input = mapper `all-gene_name-combined.csv`; modes `ppi_only`, `disease_only`, `disease_and_ppi` ([config.py](packages/methylvalidation/methyl_validation/config.py)).
+2. **Decouple biomarker filter**: Allow `validation.biomarker_filter` when `stability_gene_biomarker_filter_enabled` without requiring `stability_gene_featurecuts_enabled`; input = mapper `all-gene_name-combined.csv`; modes `ppi_only`, `disease_only`, `disease_and_ppi` ([config.py](../../packages/methylvalidation/methyl_validation/config.py)).
 3. **Stability aggregation for structural features**: New loader for `gene-features-classifier.csv` when present.
 
 ---
 
 ## Documentation and user manual
 
-Update [docs/reference/domain-program-language.md](docs/reference/domain-program-language.md) and usage chapters:
+Update [docs/reference/domain-program-language.md](../reference/domain-program-language.md) and usage chapters:
 
 - **Pipeline profile matrix** (table above).
 - **When to use discovery vs classifier CSVs** for mapper.
@@ -257,7 +257,7 @@ Update [docs/reference/domain-program-language.md](docs/reference/domain-program
 |------|-----------|
 | Compile all new programs + assert IF nodes present | Compiler fix |
 | `test_mc_gene_enricher_stability_program.py` (dry-run) | discovery → mapper → enricher → stability trace |
-| Extend [test_check_pipeline.py](workflow_engine/domain/checks/pca1_5_cg/test_check_pipeline.py) | gene_select remains iteration-scoped; new program skips it |
+| Extend [test_check_pipeline.py](../../workflow_engine/domain/checks/pca1_5_cg/test_check_pipeline.py) | gene_select remains iteration-scoped; new program skips it |
 | Stability unit test: `prefer_classifier_gene_panels=False` uses enricher genes | Gene path without DMP FC |
 | Profile migration smoke on Buffy JSON | Split step_config |
 

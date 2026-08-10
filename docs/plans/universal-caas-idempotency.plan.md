@@ -2,7 +2,7 @@
 name: Universal CAAS Idempotency
 overview: Deep analysis and phased plan to make content-addressed idempotency the default for every atomic DomainProgram ACTION on the worker, with FOREACH-aware short-circuit so distributed claim/execute loops stop paying for work whose content keys already hit.
 
-> **Status: IMPLEMENTED.** Phases 0–3 landed in-tree; Phase 4 sample-scoped CAAS is scaffolded behind `METHYL_SAMPLE_CAAS_ENABLED`. Operator guide: [`docs/usage/17-content-addressed-action-store.qmd`](../usage/17-content-addressed-action-store.qmd).
+> **Status: IMPLEMENTED.** Phases 0–3 landed in-tree; Phase 4 sample-scoped CAAS is scaffolded behind `METHYL_SAMPLE_CAAS_ENABLED`. Operator guide: [`docs/usage/17-content-addressed-action-store.qmd`](../usage/17-content-addressed-action-store.md).
 
 azure_devops:
   type: Feature

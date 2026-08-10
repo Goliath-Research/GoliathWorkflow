@@ -64,15 +64,15 @@ flowchart TB
 
 ## 1. `docs/reference/domain-program-language.md` — result_code section
 
-**Gap:** [`docs/reference/domain-program-language.md`](docs/reference/domain-program-language.md) documents IF on boolean scope vars (`qcPass`, `runDmpSelection`) but not integer **`result_code`** branching. [`workers/WORKER_PROTOCOL.md`](workers/WORKER_PROTOCOL.md) and [`docs/usage/09-artifacts-and-qa-checks.qmd`](docs/usage/09-artifacts-and-qa-checks.qmd) already cover worker/operator view.
+**Gap:** [`docs/reference/domain-program-language.md`](../reference/domain-program-language.md) documents IF on boolean scope vars (`qcPass`, `runDmpSelection`) but not integer **`result_code`** branching. [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md) and [`docs/usage/09-artifacts-and-qa-checks.qmd`](../usage/09-artifacts-and-qa-checks.qmd) already cover worker/operator view.
 
 **Add (~40 lines) after the "Conditions (IF)" section:**
 
 - **Semantics:** `node_execution.result_code` from worker submit; engine reads via `wf_try_task_result_code(instance, nodeKey)` for IF/SWITCH (same table as WORKER_PROTOCOL: `<0` fail, `0` default/false, `1` true, `2+` multi-way).
 - **Two branching styles in DomainProgram:**
-  - **Boolean scope bindings** (existing): e.g. `sample.methyl_qc` → `qcPass`, `remediateAlignment` (see [`schemas/actions/catalog.json`](schemas/actions/catalog.json) `output_bindings`).
+  - **Boolean scope bindings** (existing): e.g. `sample.methyl_qc` → `qcPass`, `remediateAlignment` (see [`schemas/actions/catalog.json`](../../schemas/actions/catalog.json) `output_bindings`).
   - **Integer result_code** (new doc): use when programs need explicit SWITCH on worker branch codes (e.g. methyl_qc `0/1/2` without duplicating guardrail logic).
-- **Example program snippet** for remediation loop using `${remediateAlignment}` (matches [`workflow_engine/domain/fixtures/sample_prep.program.json`](workflow_engine/domain/fixtures/sample_prep.program.json)) plus optional SWITCH example on numeric code.
+- **Example program snippet** for remediation loop using `${remediateAlignment}` (matches [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)) plus optional SWITCH example on numeric code.
 - **Cross-links** to WORKER_PROTOCOL and user manual § observability; mention `.action_results/` manifests briefly (author doesn't write them, but may inspect `/work`).
 
 **Effort:** Small, docs-only.
@@ -81,14 +81,14 @@ flowchart TB
 
 ## 2. CI golden-fixture test per catalog action
 
-**Gap:** [`methyl-export-task-schemas --check`](workers/methyl_worker/task_schema_export.py) proves Pydantic → JSON Schema drift only. There is **no** committed example payload per action validated end-to-end. Worker tests exist per-handler but not catalog-wide. [`.github/workflows/db-parity.yml`](.github/workflows/db-parity.yml) does **not** run `pytest workers/tests/` today.
+**Gap:** [`methyl-export-task-schemas --check`](../../workers/methyl_worker/task_schema_export.py) proves Pydantic → JSON Schema drift only. There is **no** committed example payload per action validated end-to-end. Worker tests exist per-handler but not catalog-wide. [`.github/workflows/db-parity.yml`](.github/workflows/db-parity.yml) does **not** run `pytest workers/tests/` today.
 
 **Recommended approach (output-only goldens, not full handler runs):**
 
 | Piece | Location | Purpose |
 |-------|----------|---------|
 | Golden outputs | `workers/tests/golden/{action_name}.output.json` (34 files, dots → underscores) | Minimal **valid** example `output_json` per catalog entry |
-| Parametrized test | `workers/tests/test_golden_task_outputs.py` | For each `TaskSchemaSpec` in [`task_schema_registry.py`](workers/methyl_worker/task_schema_registry.py): load golden → `OutputModel.model_validate()` |
+| Parametrized test | `workers/tests/test_golden_task_outputs.py` | For each `TaskSchemaSpec` in [`task_schema_registry.py`](../../workers/methyl_worker/task_schema_registry.py): load golden → `OutputModel.model_validate()` |
 | Optional input goldens | `workers/tests/golden/{action_name}.input.json` | Same for `InputModel` (catches forbid-extra regressions) |
 | CI step | Extend `db-parity.yml` (already watches `workers/**`) | `source .venv/bin/activate && pip install -e workers/ ... && pytest workers/tests/ -q && methyl-export-task-schemas --check` |
 
@@ -96,7 +96,7 @@ flowchart TB
 
 - Start from `OutputModel.model_json_schema()` / a one-liner factory script (`scripts/generate_golden_fixtures.py`) that emits skeleton JSON, then hand-tune required nested fields (e.g. `MethylQcTaskOutput.guardrails`, `ValidationStabilityOutput.summary`).
 - Keep fixtures **minimal** — only fields required by `extra="forbid"` models plus one representative optional field where useful.
-- For CLI-only pipeline actions, goldens mirror manifest/collector field sets (same as [`DetectorTaskOutput`](workers/methyl_worker/task_models/pipeline_models.py), etc.).
+- For CLI-only pipeline actions, goldens mirror manifest/collector field sets (same as [`DetectorTaskOutput`](../../workers/methyl_worker/task_models/pipeline_models.py), etc.).
 
 **Out of scope for this item:** running real CLIs or mocked handlers for all 34 actions (too heavy; keep existing targeted handler tests).
 
@@ -106,7 +106,7 @@ flowchart TB
 
 ## 3. `action_run_log.jsonl` for MC run dirs
 
-**Gap:** Sample prep has [`sample_prep_log.py`](workers/methyl_worker/sample_prep_log.py) → `{sampleDir}/{sampleId}.sample_prep_log.jsonl`. Validation/MC actions write artifacts under `{monteCarloRunsRoot}` / `{runDir}` but **no unified timeline**.
+**Gap:** Sample prep has [`sample_prep_log.py`](../../workers/methyl_worker/sample_prep_log.py) → `{sampleDir}/{sampleId}.sample_prep_log.jsonl`. Validation/MC actions write artifacts under `{monteCarloRunsRoot}` / `{runDir}` but **no unified timeline**.
 
 **Design (mirror sample prep):**
 
@@ -119,7 +119,7 @@ def append_action_run_log(mc_root, *, action, capability, result_code, inputs, o
     # same record shape as sample_prep_log: ts_utc, action, capability, result_code, inputs, outputs
 ```
 
-**Hook point (central, not per-handler):** in [`execute_task()`](workers/methyl_worker/handlers.py) after successful `ActionExecutionResult`, when `entry.category == "validation"` (from [`action_catalog.py`](workers/methyl_worker/action_catalog.py)):
+**Hook point (central, not per-handler):** in [`execute_task()`](../../workers/methyl_worker/handlers.py) after successful `ActionExecutionResult`, when `entry.category == "validation"` (from [`action_catalog.py`](../../workers/methyl_worker/action_catalog.py)):
 
 1. Resolve log root via existing `_resolve_monte_carlo_runs_root(input_json)` (fallback: `input_json.runDir` parent).
 2. Append one JSONL line with trimmed `result.output.model_dump(mode="json")` in `outputs`.
@@ -135,14 +135,14 @@ def append_action_run_log(mc_root, *, action, capability, result_code, inputs, o
 
 ## 4. Pass validated `InputModel` directly to handlers
 
-**Gap:** [`InProcessCallable`](workers/methyl_worker/actions/base.py) is already typed as `(str, str, BaseModel) -> BaseModel`, but [`InProcessAction.execute()`](workers/methyl_worker/actions/base.py) still calls `input_model.model_dump(mode="json")` and all handlers take `Dict[str, Any]` with ~100 `.get()` calls.
+**Gap:** [`InProcessCallable`](../../workers/methyl_worker/actions/base.py) is already typed as `(str, str, BaseModel) -> BaseModel`, but [`InProcessAction.execute()`](../../workers/methyl_worker/actions/base.py) still calls `input_model.model_dump(mode="json")` and all handlers take `Dict[str, Any]` with ~100 `.get()` calls.
 
 **Migration steps:**
 
 1. Change handler signature to `(capability: str, action_name: str, input: BaseModel) -> BaseModel`.
 2. **`InProcessAction`:** pass `input_model` directly; remove `model_dump` on input path.
 3. **Per handler:** either use typed fields (`task.sampleDir`) or a single line `payload = input.model_dump(mode="json")` at the top for helpers that still expect dicts (`_resolve_monte_carlo_runs_root`, `run_fastp_trim`, archive helpers). Prefer typed access for new/edited code.
-4. Update [`_handle_stub_external`](workers/methyl_worker/handlers.py) and stub path in `execute_task`.
+4. Update [`_handle_stub_external`](../../workers/methyl_worker/handlers.py) and stub path in `execute_task`.
 5. Narrow shared helpers to accept `Mapping[str, Any]` from `input.model_dump()` at call sites (minimal churn).
 
 **Do not change:** CLI `CliAction` (still uses dict for argv building); `validate_input()` stays the single validation gate.

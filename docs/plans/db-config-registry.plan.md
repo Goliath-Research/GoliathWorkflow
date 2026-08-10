@@ -49,4 +49,4 @@ todos:
 
 > **Status: Implemented (spine)** — `cfg` DDL (MSSQL+PG), `methyl-cfg` CLI + file store, materialize, storage credentials (SAS/GCS), provision recipes, action scaffold, portal API, docs.
 
-See [docs/architecture/config-registry.md](../architecture/config-registry.md) and [docs/usage/19-config-registry.qmd](../usage/19-config-registry.qmd) for the operator path. Original design notes live in the Cursor plan; this file is the repo-local epic record.
+See [docs/architecture/config-registry.md](../architecture/config-registry.md) and [docs/usage/19-config-registry.qmd](../usage/19-config-registry.md) for the operator path. Original design notes live in the Cursor plan; this file is the repo-local epic record.

@@ -2,7 +2,7 @@
 
 **Status:** research / design note (not operator runbook).  
 **Source analyzed:** [`Prostate Cancer Detection.md`](Prostate%20Cancer%20Detection.md)  
-**Related:** [`BuffyCoat_vs_cfDNA_for_Cancer_Detection.md`](BuffyCoat_vs_cfDNA_for_Cancer_Detection.md), SaMD SOP [`docs/usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd), evidence index [`docs/regulatory/validation-evidence-index.md`](../regulatory/validation-evidence-index.md)  
+**Related:** [`BuffyCoat_vs_cfDNA_for_Cancer_Detection.md`](BuffyCoat_vs_cfDNA_for_Cancer_Detection.md), SaMD SOP [`docs/usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.md), evidence index [`docs/regulatory/validation-evidence-index.md`](../regulatory/validation-evidence-index.md)  
 **Interactive canvas:** [`pca-detection-fitness.canvas.tsx`](../canvas/pca-detection-fitness.canvas.tsx) (sync with `bash scripts/sync_cursor_canvases.sh` to open beside chat)
 
 **Date:** 2026-07-10  
@@ -40,7 +40,7 @@ The clinical **gatekeeper** framing (high NPV for Gleason ≥3+4 / GG≥2, separ
 | Recommendation | Feasibility in MethylPipeline |
 |----------------|-------------------------------|
 | Report NPV/PPV/sens/spec with CIs for intended-use population | **Already possible** — `packages/methylvalidation/methyl_validation/clinical_performance.py`, Wilson CIs; holdout Workflow 3 |
-| Gleason-staged labels (3+3 … 4+5) as disease stages | **Config-only** — study manifest stages ([usage ch.16](../usage/16-tutorial-healthy-vs-cancer-stages.qmd)); SaMD staged program |
+| Gleason-staged labels (3+3 … 4+5) as disease stages | **Config-only** — study manifest stages ([usage ch.16](../usage/16-tutorial-healthy-vs-cancer-stages.md)); SaMD staged program |
 | SaMD evidence ladder before clinical claims | **Already possible** — `samd_research` → `samd_holdout_enrichment` → `samd_pivotal`; claims blocked pre-pivotal |
 | Buffy research with `dual_fc` | **Already done** — Buffy → `samd_research` + `dual_fc` |
 | Switch primary analyte to cfDNA + fragmentomics | **Config-only / ops** — `regulatory.primary_analyte: cfdna`, SamplePrep fragmentomics |
