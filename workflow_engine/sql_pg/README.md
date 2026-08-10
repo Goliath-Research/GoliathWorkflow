@@ -20,6 +20,7 @@ Deploy **in order**:
 | 11 | [`wf_repo_upsert_workflow_action.sql`](wf_repo_upsert_workflow_action.sql) | Bootstrap 3-arg upsert (name / capability / schema ref) |
 | 11a | [`wf_action_dispatch_metadata.sql`](wf_action_dispatch_metadata.sql) | Dispatch columns + 7-arg upsert + canonical `wf_repo_list_actions` |
 | 11b | [`wf_action_dispatch_concurrency.sql`](wf_action_dispatch_concurrency.sql) | `max_per_worker` / `exclusive_worker` + 9-arg upsert (catalog `dispatch`) |
+| 11c | [`wf_action_dispatch_affinity.sql`](wf_action_dispatch_affinity.sql) | Soft affinity columns + 12-arg upsert + `wf_stamp_affinity_key` |
 | 12 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
 | 13 | [`wf_sql_collection_bindings.sql`](wf_sql_collection_bindings.sql) | Collection binding resolution at instance start |
 | 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles + `epimethyl-genomes` endpoint |

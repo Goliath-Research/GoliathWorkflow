@@ -22,6 +22,21 @@ methyl-cfg verify-workflow --check-db
 
 **Legacy SQL seed** [`deprecated/wf_sample_prep_pipeline_seed.sql`](deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**; use DomainProgram deploy above.
 
+## Worker affinity (soft, catalog-driven)
+
+Sample stickiness is **not** hard-wired into the engine or DomainProgram IR. Sample-scoped
+catalog actions declare `dispatch.affinity_key_field: "sampleId"` plus
+`prefer_previous_worker` / `prefer_continue_group` (see
+[`docs/architecture/action-provider-registry.md`](../../docs/architecture/action-provider-registry.md)).
+The claim SP then:
+
+1. Prefers continuing an affinity key that already has `SUCCEEDED` work (QC/extract after align)
+   over starting a fresh sample’s first step.
+2. Soft-prefers the worker that last completed that key when it is idle and capable; otherwise
+   any capable worker may claim (shared `/work` remains the correctness path).
+
+`wf` only sees opaque keys and catalog flags — no SamplePrep node names in SQL.
+
 ## Architecture
 
 ```text

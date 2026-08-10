@@ -554,6 +554,9 @@ SELECT @deleted_instance_count AS deleted_instance_count,
         argv_map: Optional[dict[str, Any]] = None,
         max_per_worker: Optional[int] = None,
         exclusive_worker: bool = False,
+        affinity_key_field: Optional[str] = None,
+        prefer_previous_worker: bool = False,
+        prefer_continue_group: bool = False,
     ) -> None:
         self._exec_proc(
             f"{_declare_json('argv')}"
@@ -561,7 +564,8 @@ SELECT @deleted_instance_count AS deleted_instance_count,
             "@action_name=?, @capability=?, @payload_schema_ref=?, "
             "@execution_mode=?, @cli_tool=?, @in_process_handler=?, "
             f"@argv_map={_json_var('argv')}, "
-            "@max_per_worker=?, @exclusive_worker=?",
+            "@max_per_worker=?, @exclusive_worker=?, "
+            "@affinity_key_field=?, @prefer_previous_worker=?, @prefer_continue_group=?",
             (
                 _json_text(argv_map),
                 action_name,
@@ -572,6 +576,9 @@ SELECT @deleted_instance_count AS deleted_instance_count,
                 in_process_handler,
                 max_per_worker,
                 1 if exclusive_worker else 0,
+                affinity_key_field,
+                1 if prefer_previous_worker else 0,
+                1 if prefer_continue_group else 0,
             ),
         )
 

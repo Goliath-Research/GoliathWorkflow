@@ -225,13 +225,42 @@ BEGIN
             AND wn_cap.workflow_action_id = wa.id
         ) < wa.max_per_worker
       )
-    ORDER BY ne.available_at_utc ASC NULLS FIRST, ne.id ASC
+    -- Soft affinity (catalog flags): continue an affinity group before starting
+    -- a new one; prefer the worker that last completed that key. Actions without
+    -- affinity flags keep pure FIFO (both CASE arms = 1).
+    ORDER BY
+      CASE WHEN wa.prefer_continue_group
+            AND ne.affinity_key IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM wf.node_execution AS x
+              WHERE x.workflow_instance_id = ne.workflow_instance_id
+                AND x.affinity_key = ne.affinity_key
+                AND x.status = 'SUCCEEDED')
+           THEN 0 ELSE 1 END,
+      CASE WHEN wa.prefer_previous_worker
+            AND ne.affinity_key IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM wf.node_execution AS prev
+              WHERE prev.workflow_instance_id = ne.workflow_instance_id
+                AND prev.affinity_key = ne.affinity_key
+                AND prev.status = 'SUCCEEDED'
+                AND prev.completed_by_worker_id = p_worker_id
+                AND prev.ended_at_utc = (
+                  SELECT MAX(p2.ended_at_utc)
+                  FROM wf.node_execution AS p2
+                  WHERE p2.workflow_instance_id = ne.workflow_instance_id
+                    AND p2.affinity_key = ne.affinity_key
+                    AND p2.status = 'SUCCEEDED'))
+           THEN 0 ELSE 1 END,
+      ne.available_at_utc ASC NULLS FIRST,
+      ne.id ASC
     LIMIT 1
     FOR UPDATE OF ne SKIP LOCKED
   )
   UPDATE wf.node_execution ne
   SET status = 'RUNNING',
-      started_at_utc = v_now
+      started_at_utc = v_now,
+      completed_by_worker_id = p_worker_id
   FROM cte
   WHERE ne.id = cte.id
   RETURNING ne.id INTO v_picked;

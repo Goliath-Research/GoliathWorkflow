@@ -529,6 +529,8 @@ BEGIN
       RETURN;
     END IF;
     UPDATE wf.node_execution SET input_json = v_fj WHERE id = v_ne_id;
+    -- Soft affinity key from catalog-declared input_json field (noop if unset).
+    CALL wf.wf_stamp_affinity_key(v_ne_id, p_workflow_node_id, v_fj);
     RETURN;
   END IF;
 

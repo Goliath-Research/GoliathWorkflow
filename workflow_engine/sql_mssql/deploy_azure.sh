@@ -91,6 +91,7 @@ SCRIPTS=(
   wf_action_dispatch_metadata.sql
   wf_action_dispatch_concurrency.sql
   wf_worker_desired_state.sql
+  wf_action_dispatch_affinity.sql
   portal_worker_enrollment_api.sql
   wf_repo_create_workflow_graph.sql
   wf_apply_validation_plan.sql

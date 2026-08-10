@@ -100,6 +100,9 @@ BEGIN
 END
 GO
 
+-- NOTE: Soft affinity ORDER BY / completed_by_worker_id are applied by
+-- wf_action_dispatch_affinity.sql (deployed after this file), which replaces
+-- this procedure. Keep the FIFO body below for intermediate deploy steps.
 CREATE OR ALTER PROCEDURE wf.sp_worker_request_task
     @worker_id BIGINT,
     @worker_token NVARCHAR(4000),

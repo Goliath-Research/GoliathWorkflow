@@ -204,6 +204,9 @@ class GatewayDb(Protocol):
         argv_map: Optional[dict[str, Any]] = None,
         max_per_worker: Optional[int] = None,
         exclusive_worker: bool = False,
+        affinity_key_field: Optional[str] = None,
+        prefer_previous_worker: bool = False,
+        prefer_continue_group: bool = False,
     ) -> None: ...
 
     def upsert_action_schema(
@@ -363,6 +366,9 @@ class GatewayDbBase(ABC):
         argv_map: Optional[dict[str, Any]] = None,
         max_per_worker: Optional[int] = None,
         exclusive_worker: bool = False,
+        affinity_key_field: Optional[str] = None,
+        prefer_previous_worker: bool = False,
+        prefer_continue_group: bool = False,
     ) -> None: ...
 
     @abstractmethod

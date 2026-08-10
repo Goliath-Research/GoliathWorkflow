@@ -214,6 +214,9 @@ def upsert_workflow_action(
     argv_map: Optional[dict[str, Any]] = None,
     max_per_worker: Optional[int] = None,
     exclusive_worker: bool = False,
+    affinity_key_field: Optional[str] = None,
+    prefer_previous_worker: bool = False,
+    prefer_continue_group: bool = False,
 ) -> None:
     with _use_db(db_or_dsn) as db:
         db.upsert_workflow_action(
@@ -226,6 +229,9 @@ def upsert_workflow_action(
             argv_map=argv_map,
             max_per_worker=max_per_worker,
             exclusive_worker=exclusive_worker,
+            affinity_key_field=affinity_key_field,
+            prefer_previous_worker=prefer_previous_worker,
+            prefer_continue_group=prefer_continue_group,
         )
 
 

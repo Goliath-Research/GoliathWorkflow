@@ -466,10 +466,13 @@ class PostgresGatewayDb(GatewayDbBase):
         argv_map: Optional[dict[str, Any]] = None,
         max_per_worker: Optional[int] = None,
         exclusive_worker: bool = False,
+        affinity_key_field: Optional[str] = None,
+        prefer_previous_worker: bool = False,
+        prefer_continue_group: bool = False,
     ) -> None:
         self._exec_proc(
             f"CALL {self._qual('wf_repo_upsert_workflow_action')}"
-            "(%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)",
+            "(%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s)",
             (
                 action_name,
                 capability,
@@ -480,6 +483,9 @@ class PostgresGatewayDb(GatewayDbBase):
                 json.dumps(argv_map) if argv_map is not None else None,
                 max_per_worker,
                 exclusive_worker,
+                affinity_key_field,
+                prefer_previous_worker,
+                prefer_continue_group,
             ),
         )
 

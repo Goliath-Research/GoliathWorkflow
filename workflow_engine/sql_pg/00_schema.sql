@@ -247,3 +247,17 @@ CREATE TABLE IF NOT EXISTS wf.instance_extension (
 );
 
 CREATE INDEX IF NOT EXISTS ix_ie_instance ON wf.instance_extension(workflow_instance_id);
+
+-- No-op stub so 08_foreach_support can CALL stamp before
+-- wf_action_dispatch_affinity.sql replaces this with the real body.
+CREATE OR REPLACE PROCEDURE wf.wf_stamp_affinity_key(
+  IN p_node_execution_id bigint,
+  IN p_workflow_node_id bigint,
+  IN p_input_json jsonb
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NULL;
+END;
+$$;

@@ -81,8 +81,11 @@ def _upsert_action_psql(
     argv_map: dict | None = None,
     max_per_worker: int | None = None,
     exclusive_worker: bool = False,
+    affinity_key_field: str | None = None,
+    prefer_previous_worker: bool = False,
+    prefer_continue_group: bool = False,
 ) -> None:
-    """Upsert via 9-arg ``wf_repo_upsert_workflow_action`` (dispatch metadata + concurrency)."""
+    """Upsert via 12-arg ``wf_repo_upsert_workflow_action`` (dispatch + affinity)."""
     cap = _sql_literal(capability) if capability else "NULL"
     ref = _sql_literal(payload_schema_ref) if payload_schema_ref else "NULL"
     mode = _sql_literal(execution_mode) if execution_mode else "NULL"
@@ -91,11 +94,14 @@ def _upsert_action_psql(
     argv = _json_literal(argv_map) if isinstance(argv_map, dict) else "NULL"
     max_pw = str(int(max_per_worker)) if max_per_worker is not None else "NULL"
     excl = "true" if exclusive_worker else "false"
+    aff = _sql_literal(affinity_key_field) if affinity_key_field else "NULL"
+    pref_prev = "true" if prefer_previous_worker else "false"
+    pref_cont = "true" if prefer_continue_group else "false"
     _exec_psql(
         dsn,
         "CALL wf.wf_repo_upsert_workflow_action("
         f"{_sql_literal(action_name)}, {cap}, {ref}, {mode}, {tool}, {handler}, {argv}, "
-        f"{max_pw}, {excl});",
+        f"{max_pw}, {excl}, {aff}, {pref_prev}, {pref_cont});",
     )
 
 
@@ -130,6 +136,7 @@ def _seed_via_db() -> tuple[int, int]:
         for action in actions:
             dispatch = action.get("dispatch") if isinstance(action.get("dispatch"), dict) else {}
             max_per_worker = dispatch.get("max_per_worker")
+            affinity_key_field = dispatch.get("affinity_key_field")
             upsert_workflow_action(
                 db,
                 str(action["action_name"]),
@@ -141,6 +148,9 @@ def _seed_via_db() -> tuple[int, int]:
                 argv_map=action.get("argv_map") if isinstance(action.get("argv_map"), dict) else None,
                 max_per_worker=int(max_per_worker) if max_per_worker is not None else None,
                 exclusive_worker=bool(dispatch.get("exclusive_worker", False)),
+                affinity_key_field=str(affinity_key_field) if affinity_key_field else None,
+                prefer_previous_worker=bool(dispatch.get("prefer_previous_worker", False)),
+                prefer_continue_group=bool(dispatch.get("prefer_continue_group", False)),
             )
             action_count += 1
             print(f"Upserted action {action['action_name']}")
@@ -179,6 +189,7 @@ def _seed_via_psql(dsn: str) -> tuple[int, int]:
     for action in actions:
         dispatch = action.get("dispatch") if isinstance(action.get("dispatch"), dict) else {}
         max_per_worker = dispatch.get("max_per_worker")
+        affinity_key_field = dispatch.get("affinity_key_field")
         _upsert_action_psql(
             dsn,
             str(action["action_name"]),
@@ -190,6 +201,9 @@ def _seed_via_psql(dsn: str) -> tuple[int, int]:
             argv_map=action.get("argv_map") if isinstance(action.get("argv_map"), dict) else None,
             max_per_worker=int(max_per_worker) if max_per_worker is not None else None,
             exclusive_worker=bool(dispatch.get("exclusive_worker", False)),
+            affinity_key_field=str(affinity_key_field) if affinity_key_field else None,
+            prefer_previous_worker=bool(dispatch.get("prefer_previous_worker", False)),
+            prefer_continue_group=bool(dispatch.get("prefer_continue_group", False)),
         )
         action_count += 1
         print(f"Upserted action {action['action_name']}")
@@ -224,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "PostgreSQL DSN only (skip gateway env; uses psql). "
-            "Requires wf_action_dispatch_concurrency.sql so the 9-arg upsert exists."
+            "Requires wf_action_dispatch_affinity.sql so the 12-arg upsert exists."
         ),
     )
     parser.add_argument(

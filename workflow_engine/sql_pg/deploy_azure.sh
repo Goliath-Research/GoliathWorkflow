@@ -64,6 +64,8 @@ SCRIPTS=(
   wf_repo_upsert_workflow_action.sql
   wf_action_dispatch_metadata.sql
   wf_action_dispatch_concurrency.sql
+  wf_action_dispatch_affinity.sql
+  08_foreach_support.sql
   01_worker_api.sql
   wf_cluster_security_columns.sql
   wf_worker_enrollment.sql

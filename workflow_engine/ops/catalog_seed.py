@@ -9,6 +9,7 @@ def _dispatch_fields(action: dict[str, Any]) -> dict[str, Any]:
     argv_map = action.get("argv_map")
     dispatch = action.get("dispatch") if isinstance(action.get("dispatch"), dict) else {}
     max_per_worker = dispatch.get("max_per_worker")
+    affinity_key_field = dispatch.get("affinity_key_field")
     return {
         "execution_mode": action.get("execution_mode"),
         "cli_tool": action.get("cli_tool"),
@@ -16,6 +17,9 @@ def _dispatch_fields(action: dict[str, Any]) -> dict[str, Any]:
         "argv_map": dict(argv_map) if isinstance(argv_map, dict) else None,
         "max_per_worker": int(max_per_worker) if max_per_worker is not None else None,
         "exclusive_worker": bool(dispatch.get("exclusive_worker", False)),
+        "affinity_key_field": str(affinity_key_field) if affinity_key_field else None,
+        "prefer_previous_worker": bool(dispatch.get("prefer_previous_worker", False)),
+        "prefer_continue_group": bool(dispatch.get("prefer_continue_group", False)),
     }
 
 

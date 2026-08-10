@@ -60,17 +60,31 @@ Full-node / scarce-resource actions declare claim constraints on the catalog
 (not in DomainPrograms and not as hard-wired engine policy):
 
 ```json
-"dispatch": { "max_per_worker": 1, "exclusive_worker": true }
+"dispatch": {
+  "max_per_worker": 1,
+  "exclusive_worker": true,
+  "affinity_key_field": "sampleId",
+  "prefer_previous_worker": true,
+  "prefer_continue_group": true
+}
 ```
 
 | Field | Meaning |
 |-------|---------|
 | `max_per_worker` | Max concurrent live leases of **this** action on one worker (`null` = unlimited) |
 | `exclusive_worker` | While leased, the worker accepts **no** other claim |
+| `affinity_key_field` | Optional name of an `input_json` field whose value is an opaque affinity key (e.g. `"sampleId"`). The engine never interprets the value. |
+| `prefer_previous_worker` | Soft stickiness: prefer the worker that last completed a task with the same `(workflow_instance_id, affinity_key)` when that worker is idle and capable; otherwise any capable worker may claim. |
+| `prefer_continue_group` | Soft continuation: prefer READY rows whose `affinity_key` already has ≥1 `SUCCEEDED` row in the instance over keys with none (finish a chain before starting a new one). |
 
-Seeded onto `wf.workflow_action` (`wf_action_dispatch_concurrency.sql`).
+Seeded onto `wf.workflow_action` (`wf_action_dispatch_concurrency.sql`,
+`wf_action_dispatch_affinity.sql`). At ACTION activation the engine copies the
+named field into `node_execution.affinity_key`; on claim it records
+`completed_by_worker_id` (retained after lease delete).
 `sp_worker_request_task` enforces these columns generically. Example:
-`sample.methylgrapher_wgbs_align` uses `DISPATCH_EXCLUSIVE_ONE`.
+`sample.methylgrapher_wgbs_align` uses `DISPATCH_EXCLUSIVE_ONE` (exclusive +
+sample affinity); other SamplePrep sample-scoped actions use
+`DISPATCH_SAMPLE_AFFINITY`.
 
 ## Adding a new process action
 
