@@ -228,7 +228,7 @@ Configure under profile or site `actionConfig.alignment_qc` (not in the study ma
 - **Bisulfite conversion:** reads `bisulfite_conversion.json` sidecar when present; otherwise may use deamination qscore as a qualitative proxy.
 - **cfDNA fragmentomics:** when `primary_analyte` is `cfdna`, insert-size histogram guardrails can flag abnormal fragment profiles before extraction.
 
-See [`docs/ANALYTE_PROFILES.md`](../../docs/ANALYTE_PROFILES.md) for profile defaults.
+See [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md) for profile defaults.
 
 ## Cycle screening and automated recovery
 
@@ -346,4 +346,4 @@ methyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID --sample-id SAMPLE_ID
 - Worker contract: [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md)
 - Alignment QC package: [`packages/methylalignmentqc/docs/USAGE.md`](../../packages/methylalignmentqc/docs/USAGE.md)
 - Extraction QC package: [`packages/methylextractionqc/README.md`](../../packages/methylextractionqc/README.md)
-- Historical design notes (cycle screening): [`docs/plans/alignment-qc-screening.plan.md`](../../docs/plans/alignment-qc-screening.plan.md)
+- Historical design notes (cycle screening): `docs/plans/alignment-qc-screening.plan.md`

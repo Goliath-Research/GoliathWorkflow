@@ -43,6 +43,6 @@ flowchart TB
   ctx --> resolved
 ```
 
-Pre-rendered figure: [`../diagrams/out/layer-model.svg`](../diagrams/out/layer-model.svg)
+Optional pre-rendered figure (repo-only / Marp): `docs/diagrams/out/layer-model.svg`.
 
-See also [orchestration-paths.md](orchestration-paths.md) and [simplify-study-config plan](../plans/simplify-study-config.plan.md).
+See also [orchestration-paths.md](orchestration-paths.md). Plan note: `docs/plans/simplify-study-config.plan.md`.

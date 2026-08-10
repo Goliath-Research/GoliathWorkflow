@@ -44,6 +44,7 @@ theme:
 
 hooks:
   - docs_hooks/filter_static.py
+  - docs_hooks/soften_repo_links.py
 
 plugins:
   - search
@@ -248,17 +249,32 @@ nav:
       - Traceability matrix: regulatory/traceability-matrix.md
       - Regulatory-ready platform: "regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md"
 
-# Links into the git repo outside docs/ (workers/, workflow_engine/, packages/, …)
-# remain valid on GitHub; MkDocs cannot resolve them as site pages.
+# In-site broken links fail --strict. Repo-outside / excluded-tree citations are
+# softened to code spans by docs_hooks/soften_repo_links.py (see also
+# scripts/check_doc_links.sh for filesystem checks).
+not_in_nav: |
+  architecture/documentation-audit*.md
+  architecture/integrity-and-design-review*.md
+  architecture/worker-security-review.md
+  architecture/worker-transport-decision.md
+  deployment/buffy_gene_tier_a_cross_vm.md
+  deployment/hpca_ecdf_extval10_other_vm.md
+  deployment/multicloud-iac.md
+  deployment/work_layout_migration.md
+  reference/ci-sync-matrix.md
+  reference/test-data-registry.md
+  reference/mojo-fq2bam-meth-parity.md
+
 validation:
   nav:
-    omitted_files: info
+    omitted_files: warn
   links:
-    not_found: info
+    not_found: warn
     absolute_links: ignore
-    unrecognized_links: info
-    anchors: info
+    unrecognized_links: ignore
+    anchors: warn
 
 watch:
   - docs
   - mkdocs.yml
+

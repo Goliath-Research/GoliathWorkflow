@@ -49,7 +49,7 @@ flowchart TB
 | Middle-tier | `methyl-gateway` (uvicorn) | Stateless HTTP; worker claim/submit only |
 | Workers | `methyl-worker` + package CLIs | Poll tasks by capability; read/write shared paths |
 
-Pre-rendered figure: [`../diagrams/out/distributed-runtime.svg`](../diagrams/out/distributed-runtime.svg)
+Optional pre-rendered figure (repo-only / Marp): `docs/diagrams/out/distributed-runtime.svg`.
 
 **Deep dive:** [`workflow_engine/docs/pipeline_architecture.md`](../../workflow_engine/docs/pipeline_architecture.md) (Quarto HTML/PDF via `build_pipeline_architecture_qmd.py`).
 

@@ -345,8 +345,6 @@ analyte defaults → site → *(no Python fallback for tunable science knobs)*.
 
 Study manifests must **not** contain `step_config` or tool parameters.
 
-![Four-layer configuration](../diagrams/out/layer-model.png)
-
 ```mermaid
 flowchart TB
   study["Study manifest"]
@@ -446,8 +444,6 @@ Details: [traceability-provenance](../reference/traceability-provenance.md).
 Methylation is the shipping process pack. Algorithms live in Theory; this section
 is the **operational stage map**.
 
-![Pipeline stages](../diagrams/out/pipeline-stages.png)
-
 ```mermaid
 flowchart LR
   prep["Sample prep"]
@@ -481,8 +477,6 @@ flowchart LR
 
 Theory: [two workflows](../theory/chapters/12-two-workflows.md).
 
-![Stability stage internals](../diagrams/out/stability-stage.png)
-
 ### Research modeling modes
 
 Under `pipelineProfile: samd_research`, optional `researchMode` overlays select
@@ -500,8 +494,6 @@ not fold them into research modes.
 | `dual_fc` | DMP + gene FeatureCuts (common research default) |
 
 ### Sample preparation sketch
-
-![Sample prep flow](../diagrams/out/sample-prep-flow.png)
 
 Typical path: download FASTQ → align by **configured** mode (`pangenome_wgbs`
 native-Mojo on NVIDIA/AMD, or explicit Clara Parabricks `fq2bam_meth` /
@@ -532,8 +524,6 @@ results across hyperparameter sets without silently mixing claim stages.
 ## 6. Runtime, operations, and security
 
 ### Topology
-
-![Distributed runtime](../diagrams/out/distributed-runtime.png)
 
 ```mermaid
 flowchart TB

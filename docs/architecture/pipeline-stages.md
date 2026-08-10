@@ -25,7 +25,7 @@ flowchart LR
 | Post-model validation | [ch.08](../usage/08-stage-post-model-validation.md) | `methylvalidation` |
 | Blind prediction | [ch.09](../usage/09-stage-blind-prediction.md) | `methylpredictor` |
 
-Pre-rendered figure: [`../diagrams/out/pipeline-stages.svg`](../diagrams/out/pipeline-stages.svg)
+Optional pre-rendered figure (repo-only / Marp): `docs/diagrams/out/pipeline-stages.svg`.
 
 **Example study diagram pack:** [`WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md`](end-to-end-workflow.md)
 

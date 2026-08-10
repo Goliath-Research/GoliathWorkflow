@@ -54,7 +54,7 @@ If a fact is duplicated, **link upward** — do not copy prose.
 
 ## CI guards
 
-- `mkdocs build --strict`
+- `mkdocs build --strict` (in-site link/anchor warnings fail the build; repo-outside citations are softened to code spans by `docs_hooks/soften_repo_links.py`)
 - `scripts/check_doc_links.sh`
 - `scripts/check_doc_freshness.sh`
 - Diagram `--check` remains available for shared `docs/diagrams/src` assets used by Marp
