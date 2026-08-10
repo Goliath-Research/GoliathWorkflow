@@ -236,6 +236,42 @@ def test_resolve_bundle_ok_and_no_stock_fallback(tmp_path: Path) -> None:
     assert bundle.c2t_gbz.is_file()
 
 
+def test_mojo_qc_sam_provenance_gates_giraffe_reuse(tmp_path: Path) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import (
+        giraffe_bam_reusable_for_mojo_qc,
+        write_mojo_qc_sam_provenance,
+    )
+
+    qc_bam = tmp_path / "sample.giraffe.bam"
+    qc_bam.write_bytes(b"BAM\x01")
+    assert giraffe_bam_reusable_for_mojo_qc(qc_bam) is False
+    write_mojo_qc_sam_provenance(qc_bam, offsets_dir=tmp_path / "offsets")
+    assert giraffe_bam_reusable_for_mojo_qc(qc_bam) is True
+
+
+def test_build_qc_bam_mojo_sam_command_uses_out_sam(tmp_path: Path) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import build_qc_bam_mojo_sam_command
+
+    cfg = _touch_bundle(tmp_path)
+    cfg["engine"] = "mojo"
+    cfg["qc_bam_engine"] = "mojo"
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    out_sam = tmp_path / "qc.sam"
+    offsets = tmp_path / "offsets"
+    offsets.mkdir()
+    cmd = build_qc_bam_mojo_sam_command(
+        bundle=bundle,
+        fq1_c2t=tmp_path / "a.C2T.R1.fastq",
+        fq2_g2a=tmp_path / "a.G2A.R2.fastq",
+        out_sam=out_sam,
+        segment_offsets=offsets,
+    )
+    assert "-out_sam" in cmd
+    assert cmd[cmd.index("-out_sam") + 1] == str(out_sam)
+    assert "-segment_offsets" in cmd
+    assert "-out_gaf" not in cmd
+
+
 def test_build_align_and_qc_bam_commands(tmp_path: Path) -> None:
     cfg = _touch_bundle(tmp_path)
     bundle = resolve_wgbs_bundle_from_resolved(cfg)

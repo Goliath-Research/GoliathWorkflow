@@ -18,6 +18,7 @@ import shlex
 import shutil
 import subprocess
 import tarfile
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -1023,6 +1024,36 @@ def samtools_sam_to_bam(sam_path: Path, bam_path: Path, log_path: Path) -> None:
         raise RuntimeError(f"samtools view wrote empty BAM: {bam_path}")
 
 
+def mojo_qc_sam_provenance_path(qc_bam: Path) -> Path:
+    """Sidecar proving ``giraffe.bam`` came from native Mojo SAM emit (not packer)."""
+    return Path(str(qc_bam) + ".mojo_sam")
+
+
+def write_mojo_qc_sam_provenance(qc_bam: Path, *, offsets_dir: Path) -> Path:
+    marker = mojo_qc_sam_provenance_path(qc_bam)
+    marker.write_text(
+        json.dumps(
+            {
+                "engine": "mojo_sam",
+                "qc_bam": str(qc_bam),
+                "bytes": qc_bam.stat().st_size,
+                "offsets_dir": str(offsets_dir),
+                "written_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return marker
+
+
+def giraffe_bam_reusable_for_mojo_qc(qc_bam: Path) -> bool:
+    """Reuse only Mojo-SAM BAMs; packer-era leftovers must be regenerated."""
+    return mojo_qc_sam_provenance_path(qc_bam).is_file()
+
+
 def _write_bs_converted_fastq(
     src: Path,
     dst: Path,
@@ -1718,13 +1749,28 @@ def run_methylgrapher_wgbs_align(
             if restored.is_file() and not _bam_reusable(restored):
                 _append_log(log_path, f"DISCARD: truncated restored BAM {restored}")
                 restored.unlink(missing_ok=True)
-            if qc_bam.is_file() and _bam_reusable(qc_bam):
+            qc_engine = effective_qc_bam_engine(bundle)
+            qc_fallback = effective_qc_bam_fallback(bundle)
+            provenance["qc_bam_engine"] = qc_engine
+            provenance["qc_bam_fallback"] = qc_fallback
+            can_reuse_giraffe = _bam_reusable(qc_bam) and (
+                qc_engine != "mojo" or giraffe_bam_reusable_for_mojo_qc(qc_bam)
+            )
+            if qc_bam.is_file() and can_reuse_giraffe:
                 logger.info("Reusing giraffe QC BAM for %s", sample_id)
                 _append_log(log_path, f"REUSE: existing giraffe BAM {qc_bam}")
             else:
-                if qc_bam.is_file() and not _bam_reusable(qc_bam):
-                    _append_log(log_path, f"DISCARD: truncated giraffe BAM {qc_bam}")
+                if qc_bam.is_file() and not can_reuse_giraffe:
+                    why = (
+                        "truncated/corrupt"
+                        if not _bam_reusable(qc_bam)
+                        else "missing Mojo-SAM provenance (packer-era or incomplete)"
+                    )
+                    _append_log(log_path, f"DISCARD: giraffe BAM ({why}) {qc_bam}")
                     qc_bam.unlink(missing_ok=True)
+                    mojo_qc_sam_provenance_path(qc_bam).unlink(missing_ok=True)
+                    # Stale GAF packer intermediate — never resume that path.
+                    (work_dir / f"{sample_id}.qc_mojo.gaf").unlink(missing_ok=True)
                 c2t_r1 = work_dir / f"{sample_id}.C2T.R1.fastq"
                 g2a_r2 = work_dir / f"{sample_id}.G2A.R2.fastq"
                 _write_bs_converted_fastq(
@@ -1733,10 +1779,6 @@ def run_methylgrapher_wgbs_align(
                 _write_bs_converted_fastq(
                     fq2, g2a_r2, base_from="G", base_to="A", log_path=log_path
                 )
-                qc_engine = effective_qc_bam_engine(bundle)
-                qc_fallback = effective_qc_bam_fallback(bundle)
-                provenance["qc_bam_engine"] = qc_engine
-                provenance["qc_bam_fallback"] = qc_fallback
                 used_vg_fallback = False
                 if qc_engine == "mojo":
                     qc_sam = work_dir / f"{sample_id}.qc_mojo.sam"
@@ -1785,6 +1827,7 @@ def run_methylgrapher_wgbs_align(
                         )
                         _run(docker_mojo_qc, log_path, step="mojo.qc_sam")
                         samtools_sam_to_bam(qc_sam, qc_bam, log_path)
+                        write_mojo_qc_sam_provenance(qc_bam, offsets_dir=offsets_dir)
                         _append_log(
                             log_path,
                             f"Mojo QC SAM→BAM {qc_sam} → {qc_bam} "
