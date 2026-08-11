@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Build epimethyl/methylgrapher:1.70-mojo from methylGrapher-mojo (engine + Mojo CLI).
+# Build epimethyl/methylgrapher:1.70-mojo from mojo-align (or legacy methylGrapher-mojo).
 #
-# Stages from METHYLGRAPHER_MOJO_ROOT (default: sibling ../methylGrapher-mojo
-# or /home/ubuntu/methylGrapher-mojo):
+# Stages from METHYLGRAPHER_MOJO_ROOT (default: sibling ../mojo-align,
+# ../methylGrapher-mojo, or /home/ubuntu/{mojo-align,methylGrapher-mojo}):
 #   - engine/          patched Python package
 #   - src/             native Mojo CLI + MethylCall hot path
 #   - mojo-env/        trimmed Mojo 1.0 runtime from the repo pixi env
+#
+# When ROOT is the mojo-align package layout (gpu-common/, fq2bam-meth/, …),
+# this script runs scripts/stage_flat_image_tree.sh first so Docker still
+# COPY engine/ + src/ into /opt/methylgrapher-mojo.
 #
 # Reuses vg.arm64 / vg_libs from a prior scripts/build_methylgrapher_image.sh run.
 set -euo pipefail
@@ -36,17 +40,30 @@ else
 fi
 MOJO_ROOT="${METHYLGRAPHER_MOJO_ROOT:-}"
 if [[ -z "${MOJO_ROOT}" ]]; then
-  if [[ -d "${REPO_ROOT}/../methylGrapher-mojo/engine" ]]; then
+  if [[ -d "${REPO_ROOT}/../mojo-align/methylgrapher/engine" ]]; then
+    MOJO_ROOT="$(cd "${REPO_ROOT}/../mojo-align" && pwd)"
+  elif [[ -d /home/ubuntu/mojo-align/methylgrapher/engine ]]; then
+    MOJO_ROOT=/home/ubuntu/mojo-align
+  elif [[ -d "${REPO_ROOT}/../methylGrapher-mojo/engine" ]]; then
     MOJO_ROOT="$(cd "${REPO_ROOT}/../methylGrapher-mojo" && pwd)"
   elif [[ -d /home/ubuntu/methylGrapher-mojo/engine ]]; then
     MOJO_ROOT=/home/ubuntu/methylGrapher-mojo
   else
-    echo "ERROR: set METHYLGRAPHER_MOJO_ROOT to the methylGrapher-mojo checkout" >&2
+    echo "ERROR: set METHYLGRAPHER_MOJO_ROOT to the mojo-align (or legacy methylGrapher-mojo) checkout" >&2
     exit 1
   fi
 fi
 
 log() { printf '[methylgrapher-mojo-image] %s\n' "$*"; }
+
+MOJO_CHECKOUT="${MOJO_ROOT}"
+# Package layout → flat tree for Dockerfile.mojo COPY paths.
+if [[ -d "${MOJO_ROOT}/gpu-common/src" && -d "${MOJO_ROOT}/methylgrapher/engine" ]]; then
+  FLAT="${MOJO_ROOT}/_flat_image"
+  log "mojo-align package layout detected; staging flat tree at ${FLAT}"
+  bash "${MOJO_ROOT}/scripts/stage_flat_image_tree.sh" "${FLAT}"
+  MOJO_ROOT="${FLAT}"
+fi
 
 [[ -d "${MOJO_ROOT}/engine" ]] || { echo "missing ${MOJO_ROOT}/engine" >&2; exit 1; }
 [[ -d "${MOJO_ROOT}/src" ]] || { echo "missing ${MOJO_ROOT}/src" >&2; exit 1; }
@@ -60,9 +77,9 @@ if [[ ! -f "${DOCKER_DIR}/vg.arm64" && -f "${DOCKER_DIR}/vg" ]]; then
   VG_PREBUILT=vg
 fi
 
-PIXI_ENV="${MOJO_ROOT}/.pixi/envs/default"
+PIXI_ENV="${MOJO_CHECKOUT}/.pixi/envs/default"
 [[ -x "${PIXI_ENV}/bin/mojo" ]] || {
-  echo "ERROR: Mojo runtime missing at ${PIXI_ENV}/bin/mojo (run: cd ${MOJO_ROOT} && pixi install)" >&2
+  echo "ERROR: Mojo runtime missing at ${PIXI_ENV}/bin/mojo (run: cd ${MOJO_CHECKOUT} && pixi install)" >&2
   exit 1
 }
 

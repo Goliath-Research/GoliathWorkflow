@@ -1,7 +1,7 @@
 # Smoke probe: DeviceContext(api=cuda) + pack/hash seed kernels.
 from std.collections import List
 
-from giraffe_gpu_kernels import probe_device_context, seed_kmers_on_device
+from gpu_kernels import probe_device_context, seed_kmers_on_device
 
 
 def main() raises:
