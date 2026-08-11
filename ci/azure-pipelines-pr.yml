@@ -112,6 +112,11 @@ steps:
   # Coverage is reported (no --cov-fail-under yet); see
   # docs/regulatory/continuous-integration-and-regression-testing.md.
   - script: |
+      sudo apt-get update
+      sudo apt-get install -y samtools bedtools
+    displayName: Host bioinformatics CLIs (samtools, bedtools)
+
+  - script: |
       python -m venv .venv
       . .venv/bin/activate
       python -m pip install -U pip

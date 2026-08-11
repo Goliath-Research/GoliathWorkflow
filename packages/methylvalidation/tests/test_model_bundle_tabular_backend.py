@@ -976,6 +976,7 @@ def test_tabular_backend_train_and_predict(tmp_path: Path, monkeypatch):
         output_dir=model_dir,
         model_type="random_forest",
         max_dmps=100,
+        save_test_dataset=False,
     )
     assert (model_dir / "tabular-model.joblib").is_file()
     assert (model_dir / "tabular-model-metadata.json").is_file()
@@ -1105,6 +1106,7 @@ def test_tabular_covariate_preprocessor_categorical(tmp_path: Path, monkeypatch)
         model_type="logistic_regression",
         covariates_path=str(cov_csv),
         covariates_strict_join=True,
+        save_test_dataset=False,
     )
     assert (model_dir / "covariate-preprocessor.json").is_file()
     with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
@@ -1160,6 +1162,7 @@ def test_tabular_covariate_preprocessor_ordinal(tmp_path: Path, monkeypatch):
         covariate_ordinal_columns=["risk_band"],
         covariate_ordinal_maps={"risk_band": {"low": 1, "medium": 2, "high": 3}},
         covariate_categorical_columns=["ethnicity"],
+        save_test_dataset=False,
     )
 
     with open(model_dir / "covariate-preprocessor.json", encoding="utf-8") as f:
@@ -1259,6 +1262,7 @@ def test_tabular_observed_hybrid_train_predict_schema_parity(tmp_path: Path, mon
         model_type="logistic_regression",
         feature_mode="observed_hybrid",
         observed_feature_min_obs_fraction=0.75,
+        save_test_dataset=False,
     )
     predictor_cfg = SimpleNamespace(
         test_control_paths=["/tmp/S1", "/tmp/S2"],
@@ -1347,6 +1351,7 @@ def test_tabular_multi_method_sequence_outputs_ranking(tmp_path: Path, monkeypat
             {"method": "random_forest", "params": {"n_estimators": 50, "random_state": 13}},
             {"method": "logistic_regression", "params": {"max_iter": 400, "random_state": 13}},
         ],
+        save_test_dataset=False,
     )
     assert (model_dir / "tabular-model.joblib").is_file()
     assert (model_dir / "tabular_method_metrics.csv").is_file()

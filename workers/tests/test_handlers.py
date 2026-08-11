@@ -127,7 +127,7 @@ def test_pipeline_cli_dispatch() -> None:
     with patch("methyl_worker.execution_handle.run_cancellable") as mock_run:
         mock_run.return_value = type("R", (), {"returncode": 0, "stdout": "done", "stderr": ""})()
         with patch(
-            "methyl_worker.handlers.dispatch.assert_execute_host_tool_prereqs",
+            "methyl_worker.capabilities.assert_execute_host_tool_prereqs",
             return_value=None,
         ):
             result = execute_task(

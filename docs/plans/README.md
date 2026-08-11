@@ -76,6 +76,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`di_action-agnostic_assessment_0d376284.plan.md`](di_action-agnostic_assessment_0d376284.plan.md) | **AB#664** | DI action-agnostic assessment | (see plan frontmatter) |
 | [`methylit-standalone-doc.plan.md`](methylit-standalone-doc.plan.md) | **AB#668** | MethylIT Standalone Doc | (see plan frontmatter) |
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |
+| [`fix-ci-test-failures.plan.md`](fix-ci-test-failures.plan.md) | _(pending ADO)_ | Fix CI test failures (native JSON + stale doubles) | `mssql-ddl`, `mssql-code`, `worker-doubles`, `env-fragile`, `validation-tests`, `ci-host-tools`, `verify` |
 | [`action-catalog-worker-control.plan.md`](action-catalog-worker-control.plan.md) | _(pending ADO)_ | Action catalog worker control (drain/stop) | `catalog-control`, `db-desired-state`, `runner-agnostic`, `execution-handle`, `tests-docs-plan` |
 | [`worker-affinity-dispatch.plan.md`](worker-affinity-dispatch.plan.md) | _(pending ADO)_ | Worker affinity dispatch (catalog → wf) | `schema-affinity`, `claim-activate`, `catalog-sampleprep`, `tests-docs` |
 | [`ado-boards-traceability.plan.md`](ado-boards-traceability.plan.md) | _(meta)_ | ADO Boards Traceability (seed tooling) | `manifest`, `seed-script`, `ado-create`, `backfill-docs`, `promote-plan` |

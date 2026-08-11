@@ -849,6 +849,10 @@ def test_run_model_mc_backend_reuses_primary_centroid_detector_artifacts(tmp_pat
             json.dumps({"balanced_accuracy": 0.9}),
             encoding="utf-8",
         )
+        (pred_dir / "test_metrics.json").write_text(
+            json.dumps({"balanced_accuracy": 0.9, "metrics_source": "model_test"}),
+            encoding="utf-8",
+        )
         return True, [], []
 
     class _Cfg(SimpleNamespace):
@@ -860,7 +864,11 @@ def test_run_model_mc_backend_reuses_primary_centroid_detector_artifacts(tmp_pat
     monkeypatch.setattr(cli, "run_pipeline_for_iteration", _forbidden_run_pipeline)
     monkeypatch.setattr(cli, "run_pipeline_for_model", _fake_run_pipeline_for_model)
     monkeypatch.setattr(cli, "_write_model_mc_outputs", lambda **kwargs: None)
-    monkeypatch.setattr(cli, "iteration_scalar_metrics_from_run_dir", lambda _run_dir: {"balanced_accuracy": 0.9})
+    monkeypatch.setattr(
+        cli,
+        "iteration_scalar_metrics_from_run_dir",
+        lambda _run_dir: {"balanced_accuracy": 0.9, "metrics_source": "model_test"},
+    )
     monkeypatch.setattr(
         cli,
         "load_project",
