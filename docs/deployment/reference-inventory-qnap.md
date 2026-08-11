@@ -44,20 +44,12 @@ scripts/sync_genomes_to_s3.sh
 #   --only pangenome/GRCh38/d9/1.70
 #   --only pangenome/GRCh38/d9-bs/1.70
 #   --only pangenome/canary
-# Full linear pin (FASTA + bwameth + Mojo siblings once dense-v1 pack is complete):
+# Full linear pin (FASTA + bwameth + Mojo C2T/dense-v1 siblings once pack is complete).
+# Recipe s3_sync of linear/GRCh38/ensembl-114/ already covers these on provision.
 scripts/sync_genomes_to_s3.sh --only linear/GRCh38/ensembl-114
-# Or Mojo C2T + dense-v1 pack only (rclone):
-scripts/rclone_sync_mojo_linear_pack.sh --upload
 scripts/sync_genomes_to_s3.sh --only pangenome/GRCh38/d9-bs/1.70
 # After provisioning the SamplePrep canary FASTQs under genomes/pangenome/canary/:
 scripts/sync_genomes_to_s3.sh --only pangenome/canary
-```
-
-Phase 0 download of Mojo siblings (new cluster):
-
-```bash
-scripts/rclone_sync_mojo_linear_pack.sh --download
-# also covered by provision_selected_genomes.sh when AWS_* are set and pack is missing
 ```
 
 ### Verify on QNAP

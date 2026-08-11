@@ -10,8 +10,8 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
 # Filenames for the current selected pins (operators change pins, not code defaults
 # for science knobs — these are inventory layout conventions for materialize).
 LINEAR_FASTA_NAME = "Homo_sapiens.GRCh38.dna.primary_assembly.fa"
-# MojoFq2bamMeth dense-v1 pack siblings (default k=15); provision via
-# scripts/rclone_sync_mojo_linear_pack.sh or full linear/ s3_sync.
+# MojoFq2bamMeth dense-v1 pack siblings (default k=15). Shipped under the same
+# linear/GRCh38/ensembl-114/ prefix as the FASTA; Phase 0 s3_sync pulls them.
 LINEAR_MOJO_K = 15
 GENCODE_GTF_NAME = "gencode.v49.annotation.gtf"
 PANGENOME_FILES = {

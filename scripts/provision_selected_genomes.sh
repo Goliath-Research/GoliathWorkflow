@@ -118,23 +118,11 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
-# Ensure MojoFq2bamMeth dense-v1 pack siblings via rclone when still missing
-# (directory s3_sync usually covers them; this is an explicit Phase 0 fallback).
-MOJO_FASTA="${WORK_ROOT}/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
-MOJO_PACK="${MOJO_FASTA}.mojo_linear_k${METHYLGRAPHER_LINEAR_K:-15}"
-if [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
-  if [[ ! -f "${MOJO_PACK}/kmers.bin" || ! -f "${MOJO_FASTA}.C2T.fa" ]]; then
-    echo "Mojo linear pack incomplete — rclone download from QNAP..."
-    bash "$ROOT/scripts/rclone_sync_mojo_linear_pack.sh" --download || true
-  fi
-fi
-
 echo "Re-checking selected paths..."
 if check_paths; then
   echo "Done — selected genomes ready."
   exit 0
 fi
 echo "ERROR: selected genome paths still missing after provision" >&2
-echo "Hint: Mojo pack → scripts/rclone_sync_mojo_linear_pack.sh --download" >&2
-echo "      or full tree → scripts/sync_genomes_to_s3.sh --download --only linear/GRCh38/ensembl-114" >&2
+echo "Hint: scripts/sync_genomes_to_s3.sh --download --only linear/GRCh38/ensembl-114" >&2
 exit 1
