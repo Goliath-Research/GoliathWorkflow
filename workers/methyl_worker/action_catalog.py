@@ -186,6 +186,11 @@ class ActionDispatch:
 
     max_per_worker: Optional[int] = None
     exclusive_worker: bool = False
+    # Opaque input_json field name (e.g. "sampleId"); engine never interprets
+    # the value — only matches keys within a workflow instance.
+    affinity_key_field: Optional[str] = None
+    prefer_previous_worker: bool = False
+    prefer_continue_group: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         out: Dict[str, Any] = {}
@@ -193,13 +198,33 @@ class ActionDispatch:
             out["max_per_worker"] = int(self.max_per_worker)
         if self.exclusive_worker:
             out["exclusive_worker"] = True
+        if self.affinity_key_field:
+            out["affinity_key_field"] = str(self.affinity_key_field)
+        if self.prefer_previous_worker:
+            out["prefer_previous_worker"] = True
+        if self.prefer_continue_group:
+            out["prefer_continue_group"] = True
         return out
 
 
 DEFAULT_ACTION_DISPATCH = ActionDispatch()
+# Soft sample stickiness for SamplePrep-style FOREACH chains: continue the same
+# affinity key before starting a new one; prefer the worker that last completed
+# that key (fallback to any capable worker when preferred is busy).
+DISPATCH_SAMPLE_AFFINITY = ActionDispatch(
+    affinity_key_field="sampleId",
+    prefer_previous_worker=True,
+    prefer_continue_group=True,
+)
 # Full-worker actions (e.g. single-GPU Align): at most one on a worker, and no
-# concurrent sibling claims while leased.
-DISPATCH_EXCLUSIVE_ONE = ActionDispatch(max_per_worker=1, exclusive_worker=True)
+# concurrent sibling claims while leased; also sample-affinity for SamplePrep.
+DISPATCH_EXCLUSIVE_ONE = ActionDispatch(
+    max_per_worker=1,
+    exclusive_worker=True,
+    affinity_key_field="sampleId",
+    prefer_previous_worker=True,
+    prefer_continue_group=True,
+)
 
 
 class ActionCatalogExport(TypedDict, total=False):
@@ -927,6 +952,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="SampleDownloadFastq",
         context_vars=("sampleId", "sampleDir", "fastqSource"),
         domain_effects=_DE_DOWNLOAD,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.demultiplex",
@@ -942,6 +968,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="SampleDemultiplex",
         context_vars=("sampleId", "sampleDir", "projectPath"),
         action_config_key="demultiplex",
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.docker_align",
@@ -959,6 +986,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         domain_effects=_DE_PARABRICKS,
         action_config_key="docker_align",
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.parabricks_fq2bam",
@@ -976,6 +1004,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         domain_effects=_DE_PARABRICKS,
         action_config_key="parabricks",
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.parabricks_giraffe",
@@ -993,6 +1022,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         domain_effects=_DE_PARABRICKS,
         action_config_key="parabricks",
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.methylgrapher_wgbs_align",
@@ -1027,6 +1057,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("sampleId", "sampleDir", "projectPath"),
         action_config_key="rna_align",
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.kallisto",
@@ -1041,6 +1072,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         in_process_handler="_handle_kallisto",
         tool="ParabricksKallisto",
         context_vars=("sampleId", "sampleDir", "projectPath"),
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
         action_config_key="rna_align",
         control=CONTROL_STOPPABLE,
     ),
@@ -1056,6 +1088,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "RnaQcTaskOutput",
         in_process_handler="_handle_rna_qc",
         tool="RnaAlignmentQc",
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
         cli_tool="rna-alignment-qc",
         action_config_key="rna_qc",
         context_vars=("projectPath", "sampleId", "sampleDir"),
@@ -1245,6 +1278,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="SampleDeleteFastqs",
         context_vars=("sampleId", "sampleDir"),
         control=CONTROL_DRAIN_ONLY,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.trim_fastq",
@@ -1267,6 +1301,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
             "trimTail2",
             "remediationReason",
         ),
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.methyl_qc",
@@ -1285,6 +1320,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("projectPath", "sampleId", "sampleDir", "primaryAnalyte"),
         domain_effects=_DE_METHYL_QC,
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.fragmentomics",
@@ -1303,6 +1339,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("projectPath", "sampleId", "sampleDir"),
         domain_effects=_DE_FRAGMENTOMICS,
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.methyl_extract",
@@ -1320,6 +1357,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_METHYL_EXTRACT,
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.methylgrapher_wgbs_extract",
@@ -1337,6 +1375,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_METHYL_EXTRACT,
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.extraction_qc",
@@ -1355,6 +1394,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("projectPath", "sampleId", "sampleDir"),
         domain_effects=_DE_EXTRACTION_QC,
         control=CONTROL_STOPPABLE,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.archive_sample",
@@ -1380,6 +1420,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         ),
         domain_effects=_DE_ARCHIVE_SAMPLE,
         control=CONTROL_DRAIN_ONLY,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.delete_bam",
@@ -1395,6 +1436,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="SampleDeleteBam",
         context_vars=("sampleId", "sampleDir"),
         control=CONTROL_DRAIN_ONLY,
+        dispatch=DISPATCH_SAMPLE_AFFINITY,
     ),
     _in_process(
         "sample.qc_failed",

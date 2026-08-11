@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from methyl_worker.extract_runner import (
     MethylExtractConfig,
     _resolve_read_level,
@@ -114,6 +116,20 @@ def test_skip_when_patterns_missing_without_bam(tmp_path, monkeypatch):
     sample_dir = tmp_path / sample_id
     sample_dir.mkdir()
     (sample_dir / "1-CG.h5").write_text("x", encoding="utf-8")
+    # MethylExtractor writes a per-chromosome stats sidecar next to each HDF5;
+    # the canonical extraction manifest is built from those.
+    (sample_dir / "1-CG.json").write_text(
+        json.dumps(
+            {
+                "num_positions": 100,
+                "total_methylated": 80,
+                "total_unmethylated": 20,
+                "avg_methylation_level": 0.8,
+                "avg_coverage": 12.0,
+            }
+        ),
+        encoding="utf-8",
+    )
     project = tmp_path / "project.json"
     project.write_text("{}", encoding="utf-8")
 

@@ -25,6 +25,7 @@ SPINE_TESTS=(
   packages/methylutils/tests/test_load_resolved_config.py
   packages/methylutils/tests/test_analyte_profiles.py
   packages/methylutils/tests/test_pangenome_config.py
+  packages/methylutils/tests/test_methylgrapher_wgbs_config.py
   packages/methyldomain/tests/test_action_result.py
 )
 
