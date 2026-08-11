@@ -18,10 +18,27 @@ Capability remains `sample.parabricks_fq2bam` / `parabricks.fq2bam`. Switch with
 | `{sampleId}.deduplicate_metrics.txt` | Picard-style | Yes | Optional / empty MVP |
 | GPU sort/write | Clara `--gpusort` | Yes | N/A (samtools sort) |
 
-## Explicitly out of MVP scope
+## GATK 4 / Picard consumer bar (in scope for cutover)
 
-- Full CollectMultipleMetrics / every Picard table Clara emits
-- BQSR / BaseRecalibrator
+Clara advertises GATK 4 support. Mojo BAMs must be acceptable to the same
+downstream tools — not bit-identical, but metric-close:
+
+| Check | Tool | Pass |
+|-------|------|------|
+| `ValidateSamFile` SUMMARY | GATK4 / Picard | Mojo exit 0 (or no worse than Clara) |
+| `PCT_PF_READS_ALIGNED` | CollectAlignmentSummaryMetrics | \|Δ\| ≤ 0.02 vs Clara |
+| Insert size median / SD | CollectInsertSizeMetrics | within cohort guardrails |
+| Mapped / proper-pair rates | `samtools flagstat` | \|Δ\| ≤ 0.02 / 0.05 |
+| Coordinate sort + `@RG` | BAM header | required |
+| Duplicate marking | `samtools markdup` (or Picard) | required for QC path |
+
+Harness: `mojo-align/fq2bam-meth/scripts/compare_gatk_picard_metrics.py`
+(`GATK_JAR` / `PICARD_JAR` or `gatk` on PATH).
+
+## Still deferred (post map-rate parity)
+
+- Full `CollectMultipleMetrics --gen-all-metrics` tar parity with every Clara table
+- BQSR / BaseRecalibrator table bit-match
 - Bit-identical BAM vs Clara
 
 ## Concordance gates
