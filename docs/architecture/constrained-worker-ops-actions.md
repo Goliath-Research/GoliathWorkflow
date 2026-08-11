@@ -48,3 +48,7 @@ explicit linear/stock path). See
 [mojo-multi-gpu-dual-align.md](mojo-multi-gpu-dual-align.md).
 **Never** put pause/stop policy only in host env — declare it on the catalog
 `control` block and drive fleet state via `desired_state`.
+
+**Portal UX:** how EpiPortal should surface Drain / Stop / Resume (and keep it
+distinct from instance pause/cancel) is in
+[portal-ia.md](portal-ia.md#control-model-fleet-vs-in-flight-vs-run).
