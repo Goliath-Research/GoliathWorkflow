@@ -19,10 +19,12 @@ from methyl_worker.methylgrapher_wgbs_runner import (
     build_grch38_segment_offsets_from_gfa,
     build_methylcall_command,
     build_qc_bam_command,
+    ensure_qc_bam_read_group,
     project_graph_cpg_to_linear_tsv,
     resolve_wgbs_bundle_from_resolved,
     run_methylgrapher_wgbs_align,
     run_methylgrapher_wgbs_extract,
+    share_work_path,
 )
 from methyl_worker.task_models.sample_prep_models import (
     MethylGrapherWgbsAlignTaskInput,
@@ -833,6 +835,50 @@ def test_catalog_registers_methylgrapher_actions() -> None:
     assert entries["sample.methylgrapher_wgbs_extract"].in_process_handler == (
         "_handle_methylgrapher_wgbs_extract"
     )
+
+
+def test_ensure_qc_bam_read_group_stamps_lb_like_linear_giraffe(tmp_path: Path) -> None:
+    """Clara collectmultiplemetrics needs @RG LB=library (same as pbrun giraffe)."""
+    import subprocess
+
+    sample_id = "DBCST-RGTEST"
+    bam = tmp_path / f"{sample_id}.bam"
+    unsorted = tmp_path / "unsorted.bam"
+    log = tmp_path / "rg.log"
+    sam = tmp_path / "tiny.sam"
+    sam.write_text(
+        "@HD\tVN:1.6\tSO:unsorted\n"
+        "@SQ\tSN:1\tLN:1000\n"
+        f"{sample_id}\t0\t1\t1\t60\t4M\t*\t0\t0\tACGT\tIIII\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["samtools", "view", "-b", "-o", str(unsorted), str(sam)],
+        check=True,
+        capture_output=True,
+    )
+    # Coordinate-sorted BGZF BAM (matches post-markdup QC BAMs).
+    subprocess.run(
+        ["samtools", "sort", "-o", str(bam), str(unsorted)],
+        check=True,
+        capture_output=True,
+    )
+    assert ensure_qc_bam_read_group(bam, sample_id, log) is True
+    header = subprocess.check_output(["samtools", "view", "-H", str(bam)], text=True)
+    assert "@RG" in header
+    assert "LB:library" in header
+    assert f"SM:{sample_id}" in header
+    # Idempotent when LB already present.
+    assert ensure_qc_bam_read_group(bam, sample_id, log) is False
+
+
+def test_share_work_path_opens_mode_600_for_fleet_uids(tmp_path: Path) -> None:
+    f = tmp_path / "alignment.gaf"
+    f.write_text("x\n", encoding="utf-8")
+    f.chmod(0o600)
+    share_work_path(f)
+    assert f.stat().st_mode & 0o004  # other-read
+    assert f.stat().st_mode & 0o002  # other-write (fleet co-writers)
 
 
 def test_flatten_and_package_nested_picard_metrics(tmp_path: Path) -> None:

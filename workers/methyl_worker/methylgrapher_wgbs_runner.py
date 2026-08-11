@@ -382,16 +382,24 @@ def _append_log(log_path: Path, text: str) -> None:
 
 
 def _align_docker_user() -> str:
-    """Docker ``--user`` for Align writes on shared NFS.
+    """Docker ``--user`` for Align/Extract writes on shared NFS ``/work``.
 
-    Always prefer ``1000:1000`` (ubuntu) so a sister that runs the worker as
-    root does not leave root-owned logs that the next worker cannot reopen.
+    Always prefer ``1000:1000`` so a sister that runs the worker as root does
+    not leave root-owned GAFs/BAMs that other hosts cannot chmod. Fleet hosts
+    all appear as ``ubuntu`` but have different numeric uids on NFS — pair this
+    with umask ``002`` inside the container and :func:`share_work_path` so mode
+    ``0600`` never blocks another sister.
     Override with ``METHYL_ALIGN_DOCKER_USER=uid:gid`` when needed.
     """
     explicit = (os.environ.get("METHYL_ALIGN_DOCKER_USER") or "").strip()
     if explicit:
         return explicit
     return "1000:1000"
+
+
+def _with_umask_002(cmd: Sequence[str]) -> List[str]:
+    """Run ``cmd`` under ``umask 002`` so new files are group/other-readable."""
+    return ["sh", "-c", 'umask 002; exec "$@"', "sh", *cmd]
 
 
 def _ensure_align_workdir_writable(work_dir: Path) -> None:
@@ -1287,6 +1295,108 @@ def ensure_gaf_named_coordinates(
             (proc.stderr or proc.stdout or "").strip()
             or f"mojo.gaf_named_coords failed (rc={proc.returncode})"
         )
+    share_work_path(gaf_path)
+    stamp = Path(str(gaf_path) + ".named_coords.json")
+    if stamp.is_file():
+        share_work_path(stamp)
+
+
+def _share_work_path_via_docker(path: Path) -> bool:
+    """chmod via Docker as root when the host uid cannot change ownership bits.
+
+    Root-owned (or foreign-uid) artifacts on NFS return EPERM to ``ubuntu``;
+    a one-shot ``docker run --user 0`` chmod still works and is how we open
+    files for sisters that share the name ``ubuntu`` but not the same uid.
+    """
+    if not path.exists():
+        return False
+    mode_flag = "a+rwx" if path.is_dir() else "a+rw"
+    parent = str(path.parent.resolve())
+    target = str(path.resolve())
+    image = (
+        (os.environ.get("METHYL_SHARE_CHMOD_IMAGE") or "").strip() or "alpine:3.20"
+    )
+    cmd = [
+        _docker_bin(),
+        "run",
+        "--rm",
+        "--user",
+        "0:0",
+        "-v",
+        f"{parent}:{parent}",
+        image,
+        "chmod",
+        mode_flag,
+        target,
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=300,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("share_work_path docker chmod failed for %s: %s", path, exc)
+        return False
+    if proc.returncode != 0:
+        logger.warning(
+            "share_work_path docker chmod rc=%s for %s: %s",
+            proc.returncode,
+            path,
+            (proc.stderr or proc.stdout or "").strip()[:300],
+        )
+        return False
+    return True
+
+
+def share_work_path(path: Path | str) -> None:
+    """Make a ``/work`` artifact usable across fleet hosts with different UIDs.
+
+    Sisters mount the same NFS tree as local users all named ``ubuntu`` but with
+    distinct numeric uids. Mode ``0600`` / ``0700`` from one host is unreadable
+    on another (e.g. ``alignment.gaf`` PermissionError during extract). Open
+    group/other read-write (files) and rwx (dirs). Falls back to Docker-as-root
+    chmod when the local uid cannot change mode (root-owned copies).
+    """
+    p = Path(path)
+    try:
+        mode = p.stat().st_mode
+    except OSError:
+        return
+    want = 0o777 if p.is_dir() else 0o666
+    try:
+        p.chmod(mode | want)
+        return
+    except OSError as exc:
+        if _share_work_path_via_docker(p):
+            return
+        logger.warning("share_work_path chmod failed for %s: %s", p, exc)
+
+
+def share_work_tree(root: Path | str, *, max_entries: int = 50_000) -> int:
+    """``share_work_path`` over a directory tree. Returns number of paths touched."""
+    root_p = Path(root)
+    if not root_p.exists():
+        return 0
+    n = 0
+    share_work_path(root_p)
+    n += 1
+    if not root_p.is_dir():
+        return n
+    for dirpath, dirnames, filenames in os.walk(root_p):
+        for name in dirnames:
+            share_work_path(Path(dirpath) / name)
+            n += 1
+            if n >= max_entries:
+                return n
+        for name in filenames:
+            share_work_path(Path(dirpath) / name)
+            n += 1
+            if n >= max_entries:
+                return n
+    return n
 
 
 def samtools_sam_to_bam(sam_path: Path, bam_path: Path, log_path: Path) -> None:
@@ -1300,6 +1410,97 @@ def samtools_sam_to_bam(sam_path: Path, bam_path: Path, log_path: Path) -> None:
     )
     if not bam_path.is_file() or bam_path.stat().st_size == 0:
         raise RuntimeError(f"samtools view wrote empty BAM: {bam_path}")
+    share_work_path(bam_path)
+
+
+def ensure_qc_bam_read_group(
+    bam_path: Path,
+    sample_id: str,
+    log_path: Path,
+) -> bool:
+    """Ensure QC BAM has ``@RG`` with ``LB`` (Clara ``collectmultiplemetrics``).
+
+    Linear ``pbrun giraffe`` / ``fq2bam_meth`` emit ``--read-group-library=library``.
+    Mojo QC SAM→BAM has no RG; Clara then fails with
+    ``Record contains library that is missing from header``. Same stamp as giraffe
+    (ID/SM/LB/PL/PU). Returns True when a rewrite ran.
+    """
+    if not bam_path.is_file() or bam_path.stat().st_size == 0:
+        return False
+    # Serialize rewrites — concurrent addreplacerg on the same BAM (fleet +
+    # backfill) can leave a truncated .rg.tmp / corrupt replace.
+    lock_path = Path(str(bam_path) + ".rg.lock")
+    lock_fh = lock_path.open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+        header = subprocess.run(
+            ["samtools", "view", "-H", str(bam_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if header.returncode != 0:
+            raise RuntimeError(
+                f"samtools view -H failed for {bam_path}: {(header.stderr or '').strip()}"
+            )
+        rg_lines = [ln for ln in header.stdout.splitlines() if ln.startswith("@RG")]
+        for ln in rg_lines:
+            for field in ln.split("\t")[1:]:
+                if field.startswith("LB:") and len(field) > 3:
+                    return False  # non-empty LB already present (linear pbrun style)
+        rg_id = f"{sample_id}_rg"
+        tmp = bam_path.with_suffix(bam_path.suffix + ".rg.tmp")
+        if tmp.is_file():
+            # Stale concurrent attempt — drop before rewrite.
+            tmp.unlink(missing_ok=True)
+        cmd = [
+            "samtools",
+            "addreplacerg",
+            "-r",
+            f"ID:{rg_id}",
+            "-r",
+            f"SM:{sample_id}",
+            "-r",
+            "LB:library",
+            "-r",
+            "PL:ILLUMINA",
+            "-r",
+            f"PU:{sample_id}",
+            "-o",
+            str(tmp),
+            str(bam_path),
+        ]
+        _run(cmd, log_path, step="samtools.addreplacerg")
+        if not tmp.is_file() or tmp.stat().st_size == 0:
+            tmp.unlink(missing_ok=True)
+            raise RuntimeError(f"samtools addreplacerg wrote empty BAM: {tmp}")
+        os.replace(str(tmp), str(bam_path))
+        share_work_path(bam_path)
+        # Re-index only coordinate-sorted BGZF BAMs (post markdup/sort QC BAMs).
+        # Uncompressed ``samtools view -b`` test BAMs are SO:coordinate but not BGZF.
+        if "SO:coordinate" in header.stdout:
+            bai = Path(str(bam_path) + ".bai")
+            bai.unlink(missing_ok=True)
+            try:
+                _run(
+                    ["samtools", "index", str(bam_path)],
+                    log_path,
+                    step="samtools.index_after_rg",
+                )
+                share_work_path(bai)
+            except RuntimeError as exc:
+                logger.warning(
+                    "QC BAM index after @RG skipped for %s: %s", bam_path, exc
+                )
+                _append_log(log_path, f"WARN: index after @RG skipped: {exc}")
+        return True
+    finally:
+        try:
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            pass
+        lock_fh.close()
+        lock_path.unlink(missing_ok=True)
 
 
 def mojo_qc_sam_provenance_path(qc_bam: Path) -> Path:
@@ -1502,7 +1703,21 @@ def _maybe_collect_picard_metrics(
         )
         return False
 
+    # Mojo QC BAMs lack @RG/LB; Clara requires the same library stamp as linear
+    # pbrun giraffe (--read-group-library=library).
+    try:
+        if ensure_qc_bam_read_group(bam_path, sample_id, log_path):
+            logger.info("Stamped @RG LB=library on QC BAM %s for Clara metrics", bam_path)
+    except Exception as exc:
+        logger.warning(
+            "Skipping collectmultiplemetrics for %s: RG stamp failed (%s)",
+            sample_id,
+            exc,
+        )
+        return False
+
     metrics_dir.mkdir(parents=True, exist_ok=True)
+    share_work_path(metrics_dir)
     paths = ParabricksPaths(
         sample_dir=sample_path,
         sample_id=sample_id,
@@ -1540,6 +1755,7 @@ def _maybe_collect_picard_metrics(
             "collectmultiplemetrics produced no quality_yield.txt for %s", sample_id
         )
         return False
+    share_work_tree(metrics_dir)
     return True
 
 
@@ -1975,10 +2191,11 @@ def run_methylgrapher_wgbs_align(
             for root in sorted(mount_roots, key=str):
                 docker_cmd.extend(["-v", f"{root}:{root}"])
             add_mojo_src_overlay_mounts(docker_cmd)
-            docker_cmd.extend([image, *align_cmd])
+            docker_cmd.extend([image, *_with_umask_002(align_cmd)])
             # One GH200 ≈ full HBM: flock + admit fraction + always release after.
             with _gpu_align_lock(align_device):
                 _run(docker_cmd, log_path, step="methylGrapher.Align")
+            share_work_tree(work_dir)
 
             # methylGrapher merges to work_dir/alignment.gaf; ignore empty shard files
             # left behind by a failed prior attempt (alignment.0.gaf …).
@@ -2000,6 +2217,7 @@ def run_methylgrapher_wgbs_align(
                         f"methylGrapher Align did not produce a GAF under {work_dir}"
                     )
                 shutil.copy2(candidates[0], gaf_path)
+            share_work_path(gaf_path)
 
         # Mojo emits GBZ chopped-node ids; MethylCall needs GFA named-coordinates.
         work_gaf = work_dir / "alignment.gaf"
@@ -2094,7 +2312,7 @@ def run_methylgrapher_wgbs_align(
                         "run",
                         "--rm",
                         "--user",
-                        f"{os.getuid()}:{os.getgid()}",
+                        _align_docker_user(),
                         *align_docker_gpu_flags(resolve_giraffe_device(bundle)),
                     ]
                     for env_pair in materialize_align_docker_env(bundle):
@@ -2117,7 +2335,7 @@ def run_methylgrapher_wgbs_align(
                     for root in sorted(qc_mounts, key=str):
                         docker_mojo_qc.extend(["-v", f"{root}:{root}"])
                     add_mojo_src_overlay_mounts(docker_mojo_qc)
-                    docker_mojo_qc.extend([image, *mojo_qc_cmd])
+                    docker_mojo_qc.extend([image, *_with_umask_002(mojo_qc_cmd)])
                     try:
                         _append_log(
                             log_path,
@@ -2162,13 +2380,13 @@ def run_methylgrapher_wgbs_align(
                         "run",
                         "--rm",
                         "--user",
-                        f"{os.getuid()}:{os.getgid()}",
+                        _align_docker_user(),
                     ]
                     for root in sorted(
                         mount_roots | {bundle.ref_paths.parent.resolve()}, key=str
                     ):
                         docker_qc_bam.extend(["-v", f"{root}:{root}"])
-                    docker_qc_bam.extend([image, *qc_bam_cmd])
+                    docker_qc_bam.extend([image, *_with_umask_002(qc_bam_cmd)])
                     _run(
                         docker_qc_bam,
                         log_path,
@@ -2207,10 +2425,14 @@ def run_methylgrapher_wgbs_align(
             step="samtools.markdup",
         )
         shutil.copy2(marked, bam_path)
+        share_work_path(bam_path)
+        ensure_qc_bam_read_group(bam_path, sample_id, log_path)
         _run(["samtools", "index", str(bam_path)], log_path, step="samtools.index")
+        share_work_path(Path(str(bam_path) + ".bai"))
         _write_dedup_metrics(
             dedup_path, sample_id, **_dedup_metrics_from_markdup_stderr(markdup_stderr)
         )
+        share_work_path(dedup_path)
         # Capture conversion / mapping reports if present.
         for report in work_dir.glob("*report*"):
             if report.is_file():
@@ -2743,11 +2965,11 @@ def _maybe_run_conversion_rate(
         "run",
         "--rm",
         "--user",
-        f"{os.getuid()}:{os.getgid()}",
+        _align_docker_user(),
     ]
     for root in sorted(mount_roots | {report.parent.resolve()}, key=str):
         docker_conv.extend(["-v", f"{root}:{root}"])
-    docker_conv.extend([image, *conv_cmd])
+    docker_conv.extend([image, *_with_umask_002(conv_cmd)])
     try:
         proc = subprocess.run(
             docker_conv, capture_output=True, text=True, check=False
@@ -3123,14 +3345,21 @@ def run_methylgrapher_wgbs_extract(
         # Follow symlink targets so Docker can open {index_prefix}.wl.gfa on local disk.
         if wl_gfa.is_symlink():
             mount_roots.add(wl_gfa.resolve().parent)
-        docker_cmd = [_docker_bin(), "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}"]
+        docker_cmd = [
+            _docker_bin(),
+            "run",
+            "--rm",
+            "--user",
+            _align_docker_user(),
+        ]
         for root in sorted(mount_roots, key=str):
             docker_cmd.extend(["-v", f"{root}:{root}"])
         # Optional host overlay so Mojo GAF / MethylCall / QC SAM hotfixes ship
         # without image rebuild.
         add_mojo_src_overlay_mounts(docker_cmd)
-        docker_cmd.extend([image, *methyl_cmd])
+        docker_cmd.extend([image, *_with_umask_002(methyl_cmd)])
         _run(docker_cmd, log_path, step="methylGrapher.MethylCall")
+        share_work_tree(work_dir)
 
         merge_cmd = [
             os.environ.get(METHYLGRAPHER_BIN_ENV, "").strip() or "methylGrapher",
@@ -3145,12 +3374,13 @@ def run_methylgrapher_wgbs_extract(
             "run",
             "--rm",
             "--user",
-            f"{os.getuid()}:{os.getgid()}",
+            _align_docker_user(),
         ]
         for root in sorted(mount_roots, key=str):
             docker_merge.extend(["-v", f"{root}:{root}"])
-        docker_merge.extend([image, *merge_cmd])
+        docker_merge.extend([image, *_with_umask_002(merge_cmd)])
         _run(docker_merge, log_path, step="methylGrapher.MergeCpG")
+        share_work_tree(work_dir)
 
         if bundle.conversion_rate_enabled:
             _maybe_run_conversion_rate(

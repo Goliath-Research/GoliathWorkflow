@@ -33,6 +33,14 @@ def _default_api_base() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Fleet hosts share /work over NFS as different numeric uids (all named
+    # ``ubuntu``). Default umask 022 + docker --user leaves mode-0600 GAFs that
+    # other sisters cannot read. Soften so new files are group/other-readable.
+    try:
+        os.umask(0o002)
+    except OSError:
+        pass
+
     argv_list = list(sys.argv[1:] if argv is None else argv)
     # Legacy: flags without a subcommand mean poll (e.g. `methyl-worker --once`).
     # Detect before parse_args so poll-only flags are not rejected as unknown.
