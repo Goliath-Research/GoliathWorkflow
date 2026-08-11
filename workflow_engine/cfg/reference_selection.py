@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
@@ -9,6 +10,9 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
 # Filenames for the current selected pins (operators change pins, not code defaults
 # for science knobs — these are inventory layout conventions for materialize).
 LINEAR_FASTA_NAME = "Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+# MojoFq2bamMeth dense-v1 pack siblings (default k=15); provision via
+# scripts/rclone_sync_mojo_linear_pack.sh or full linear/ s3_sync.
+LINEAR_MOJO_K = 15
 GENCODE_GTF_NAME = "gencode.v49.annotation.gtf"
 PANGENOME_FILES = {
     "gbz": "hprc-v1.1-mc-grch38.d9.gbz",
@@ -294,6 +298,29 @@ def verify_selected_paths(
             present.append(str(p))
         else:
             missing.append(str(p))
+
+    # Mojo linear dense-v1 pack (required when linear pin is set).
+    # Skip when METHYL_REQUIRE_MOJO_LINEAR=0 (legacy / partial trees).
+    require_mojo = os.environ.get("METHYL_REQUIRE_MOJO_LINEAR", "1").strip().lower()
+    if require_mojo not in ("0", "false", "no", "off"):
+        fasta_s = (resolved.get("reference_genome") or {}).get("fasta")
+        if fasta_s:
+            fasta_p = Path(fasta_s)
+            c2t = Path(str(fasta_p) + ".C2T.fa")
+            pack = Path(str(fasta_p) + f".mojo_linear_k{LINEAR_MOJO_K}")
+            for path_s in (
+                str(c2t),
+                str(pack / "meta.json"),
+                str(pack / "kmers.bin"),
+                str(pack / "offsets.bin"),
+                str(pack / "postings.bin"),
+            ):
+                p = Path(path_s)
+                if p.is_file():
+                    present.append(str(p))
+                else:
+                    missing.append(str(p))
+
     return {
         "ok": not missing,
         "present": present,

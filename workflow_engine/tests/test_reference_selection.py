@@ -51,7 +51,13 @@ def test_verify_selected_paths_ok(tmp_path: Path) -> None:
     pan = work / "genomes" / "pangenome" / "GRCh38" / "d9" / "1.70"
     for d in (linear, ann, pan):
         d.mkdir(parents=True)
-    (linear / "Homo_sapiens.GRCh38.dna.primary_assembly.fa").write_text(">1\nACGT\n")
+    fasta = linear / "Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+    fasta.write_text(">1\nACGT\n")
+    (Path(str(fasta) + ".C2T.fa")).write_text(">1\nATGT\n")
+    pack = Path(str(fasta) + ".mojo_linear_k15")
+    pack.mkdir()
+    for name in ("meta.json", "kmers.bin", "offsets.bin", "postings.bin"):
+        (pack / name).write_bytes(b"x")
     (ann / "gencode.v49.annotation.gtf").write_text("##gtf\n")
     for name in (
         "hprc-v1.1-mc-grch38.d9.gbz",

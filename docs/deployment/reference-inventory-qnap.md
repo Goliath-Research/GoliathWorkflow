@@ -24,7 +24,7 @@ Upload so object keys match `cfg.reference_asset` recipe `key` / `inventoryPrefi
 
 | Asset (`name@version`) | Local `/work` dest | QNAP object prefix | Required files |
 |------------------------|--------------------|--------------------|----------------|
-| `linear-grch38-ensembl-114@1` | `/work/genomes/linear/GRCh38/ensembl-114/` | `s3://epimethyl/genomes/linear/GRCh38/ensembl-114/` | `Homo_sapiens.GRCh38.dna.primary_assembly.fa` (+ `.fai` if used) |
+| `linear-grch38-ensembl-114@1` | `/work/genomes/linear/GRCh38/ensembl-114/` | `s3://epimethyl/genomes/linear/GRCh38/ensembl-114/` | `Homo_sapiens.GRCh38.dna.primary_assembly.fa` (+ `.fai`); Clara: `${FASTA}.bwameth.c2t` (+ `.amb/.ann/.bwt/.pac/.sa`); MojoFq2bamMeth: `${FASTA}.C2T.fa` + `${FASTA}.mojo_linear_k15/{meta.json,kmers.bin,offsets.bin,postings.bin,ref.fa}` dense-v1 (prebuild with `mojo-align/fq2bam-meth/scripts/ensure_mojo_linear_index.sh`; do **not** upload an incomplete pack) |
 | `gencode-v49@1` | `/work/genomes/annotation/gencode/v49/` | `s3://epimethyl/genomes/annotation/gencode/v49/` | `gencode.v49.annotation.gtf` |
 | `pangenome-grch38-d9-1.70@1` | `/work/genomes/pangenome/GRCh38/d9/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9/1.70/` | `hprc-v1.1-mc-grch38.d9.gbz`, `.autoindex.1.70.dist`, `.shortread.withzip.min`, `.shortread.zipcodes`, `.paths.sub` |
 | `pangenome-grch38-d9-bs-1.70@1` | `/work/genomes/pangenome/GRCh38/d9-bs/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/` | native-Mojo methylGrapher C2T+G2A bundle (`hprc-d9-bs.wl.gfa`, `hprc-d9-bs.wl.C2T.*`, `hprc-d9-bs.wl.G2A.*`, `.cpg.tsv`, `node.replacement.json`, report). **`wl.gfa` is required for MethylCall** (~43 GB). Pair with image `:1.70-mojo-cuda` or `:1.70-mojo-rocm`. |
@@ -40,12 +40,24 @@ scripts/sync_genomes_to_s3.sh --dry-run
 scripts/sync_genomes_to_s3.sh
 # optional subtree (aws s3 sync is recursive; narrow with --only):
 #   --only linear | annotation | pangenome
+#   --only linear/GRCh38/ensembl-114
 #   --only pangenome/GRCh38/d9/1.70
 #   --only pangenome/GRCh38/d9-bs/1.70
 #   --only pangenome/canary
+# Full linear pin (FASTA + bwameth + Mojo siblings once dense-v1 pack is complete):
+scripts/sync_genomes_to_s3.sh --only linear/GRCh38/ensembl-114
+# Or Mojo C2T + dense-v1 pack only (rclone):
+scripts/rclone_sync_mojo_linear_pack.sh --upload
 scripts/sync_genomes_to_s3.sh --only pangenome/GRCh38/d9-bs/1.70
 # After provisioning the SamplePrep canary FASTQs under genomes/pangenome/canary/:
 scripts/sync_genomes_to_s3.sh --only pangenome/canary
+```
+
+Phase 0 download of Mojo siblings (new cluster):
+
+```bash
+scripts/rclone_sync_mojo_linear_pack.sh --download
+# also covered by provision_selected_genomes.sh when AWS_* are set and pack is missing
 ```
 
 ### Verify on QNAP
