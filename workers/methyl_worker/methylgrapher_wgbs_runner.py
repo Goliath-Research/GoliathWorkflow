@@ -1133,6 +1133,7 @@ def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
             "giraffe_sam_emit.mojo",
             "giraffe_mapper.mojo",
             "giraffe_stream_map.mojo",
+            "giraffe_gpu_map_kernels.mojo",
             "main.mojo",
             "mcall.mojo",
         ):
@@ -1151,6 +1152,7 @@ def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
             "gpu_mem.py",
             "alignments.py",
             "named_coords.py",
+            "quartet_map.py",
         ):
             p = eng_dir / name
             if p.is_file():
