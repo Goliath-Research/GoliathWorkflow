@@ -243,7 +243,18 @@ def test_idempotent_skip_when_all_h5_present(tmp_path: Path) -> None:
             input_json=_task_input("S3", sample_dir, ref, action_config),
         )
 
-    mock_run.assert_not_called()
+    # Skip path must not invoke MethylExtractor. Do not use assert_not_called():
+    # resolve/load may call subprocess.run for unrelated probes (e.g. uname -p).
+    def _is_extractor_call(call: object) -> bool:
+        args = getattr(call, "args", ())
+        if not args:
+            return False
+        cmd = args[0]
+        if isinstance(cmd, (list, tuple)):
+            return any("MethylExtractor" in str(part) for part in cmd)
+        return "MethylExtractor" in str(cmd)
+
+    assert not any(_is_extractor_call(c) for c in mock_run.call_args_list)
     assert out["h5Files"] == ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
     manifest = json.loads((sample_dir / "S3.extraction_manifest.json").read_text(encoding="utf-8"))
     assert set(manifest["per_chromosome"]) == {"1"}
