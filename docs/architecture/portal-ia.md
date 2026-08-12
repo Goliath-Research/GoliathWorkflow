@@ -146,8 +146,8 @@ Studies
 |--------|---------|-------------------------------|
 | Study list | Filter by status / modality | `cfg.study` via portal list (extend if missing); clinical samples via legacy `portal.spGet*` where still used |
 | Study overview | Bound procedure/profile/mode, `projectPath`, recent runs | `sp_get_study_process_defaults` + latest instances |
-| Study process defaults | Persist default profile / procedure / researchMode on the study | `sp_set/get_study_process_defaults`; pickers from catalog procs |
-| Samples & groups | Enrollment, arms, membership | `sp_list_samples_for_study_enrollment`, `sp_list/set_study_group(s)`, `sp_set_study_group_members`, `sp_materialize_study_lists` |
+| Study process defaults | Persist default profile / procedure / analyte / researchMode on the study | `sp_set/get_study_process_defaults`; pickers from catalog procs (`sp_list_analyte_catalog`) |
+| Samples & groups | Enrollment, arms, membership (hard-filter by study analyte) | `sp_list_samples_for_study_enrollment` (`@study_row_id`), `sp_set_sample_analyte`, `sp_list/set_study_group(s)`, `sp_set_study_group_members`, `sp_materialize_study_lists` |
 | Project manifests | View/edit cohort paths under `/work/projects/<study>/` | File/cfg study document; **no** `actionConfig` knobs |
 | Runs list | Instances for this study | Filter `wf.workflow_instance` by study/context |
 | **Instance detail** | Timeline, tasks, config snapshot, controls | `sp_get_instance_tasks`; reclaim via `sp_reclaim_expired_leases` |
@@ -156,9 +156,10 @@ Studies
 ### Start-run wizard (must-have UX)
 
 1. Select **published** workflow definition + version (e.g. SamplePrepPipeline).
-2. Select **assay procedure** + **pipeline profile** (and research mode if any):
-   - Prefill from `sp_get_study_process_defaults`.
-   - Procedure picker: `sp_list_assay_procedure_catalog` (filter by study `regulatory.primary_analyte` when known).
+2. Select **analyte** + **assay procedure** + **pipeline profile** (and research mode if any):
+   - Prefill from `sp_get_study_process_defaults` (includes `default_analyte_id` / dual-written `regulatory.primary_analyte`).
+   - Analyte picker: `sp_list_analyte_catalog` — operator/active (optional advanced).
+   - Procedure picker: `sp_list_assay_procedure_catalog` (filter by study analyte when known).
    - Profile picker: `sp_list_pipeline_profile_catalog` — **operator** visibility + **active** lifecycle only (SaMD ladder first, then staged).
    - If profile is `samd_research`, show `researchMode` from the row’s `research_modes`.
    - Do **not** list deprecated `mc_*` aliases, `mode_*` overlays, or `visibility=hidden` packs.
@@ -171,11 +172,11 @@ Do **not** open DomainProgram IR editing on this path.
 
 | Surface | Data | Who sees retired/deprecated |
 |---------|------|-----------------------------|
-| Start wizard / Study defaults | `sp_list_*_catalog` | Never (active + operator; optional advanced) |
-| Platform → Process packs | `sp_list_pipeline_profiles` / `sp_list_assay_procedures` | Yes (admin browse incl. retired) |
+| Start wizard / Study defaults | `sp_list_*_catalog` (profiles, procedures, analytes) | Never (active + operator; optional advanced) |
+| Platform → Process packs | `sp_list_pipeline_profiles` / `sp_list_assay_procedures` / `sp_list_analytes` | Yes (admin browse incl. retired) |
 | Runtime aliases | Python `pipeline_profiles` folds | Old `context_json` still resolves; not offered in pickers |
 
-Profile/procedure JSON documents carry a required `catalog` block (`title`, `summary`, `visibility`, `lifecycle`, `family`, optional `replacedBy` / `researchModes`). Sync maps `deprecated`/`hidden` → cfg `status=retired`.
+Profile/procedure/analyte JSON documents carry a required `catalog` block (`title`, `summary`, `visibility`, `lifecycle`, `family`, optional `replacedBy` / `researchModes`). Sync maps `deprecated`/`hidden` → cfg `status=retired`.
 
 ### Instance detail layout
 
@@ -359,14 +360,17 @@ Complete contract surface shipped in this repo (MSSQL + PG twins under
 | `portal.sp_list/set_study_group(s)`, `sp_set_study_group_members` | Cohorts |
 | `portal.sp_list_study_group_members` | Membership |
 | `portal.sp_materialize_study_lists` | Materialize study lists to `/work` |
-| `portal.sp_list_samples_for_study_enrollment` | Enrollment picker |
+| `portal.sp_list_samples_for_study_enrollment` | Enrollment picker (hard-filter by `@study_row_id` / `@analyte_id`) |
+| `portal.sp_set_sample_analyte` | Bind sample → `cfg.analyte` |
 | `portal.sp_list/get/upsert/publish_storage_endpoint` | Storage admin |
 | `portal.sp_list/get/upsert/publish_credential` | Credential admin |
 | `portal.sp_list/get_pipeline_profile` | Platform process-pack browse (full docs) |
 | `portal.sp_list_pipeline_profile_catalog` | Study / Start wizard profile picker |
 | `portal.sp_list/get_assay_procedure` | Platform procedure browse |
 | `portal.sp_list_assay_procedure_catalog` | Study / Start wizard procedure picker (`@analyte`) |
-| `portal.sp_get/set_study_process_defaults` | Persist/read study `pipelineProfile` / `pipelineProcedure` / `researchMode` |
+| `portal.sp_list/get_analyte` | Platform analyte browse |
+| `portal.sp_list_analyte_catalog` | Study / Start wizard analyte picker |
+| `portal.sp_get/set_study_process_defaults` | Persist/read study `pipelineProfile` / `pipelineProcedure` / `analyte` / `researchMode` |
 
 ### Workers / fleet
 

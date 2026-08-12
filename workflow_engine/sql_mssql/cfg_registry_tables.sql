@@ -54,6 +54,24 @@ BEGIN
 END
 GO
 
+/* Specimen / matrix analytes (cfdna, buffy_coat, …) — versioned catalog documents. */
+IF OBJECT_ID(N'cfg.analyte', N'U') IS NULL
+BEGIN
+    CREATE TABLE cfg.analyte (
+        id bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        name nvarchar(256) NOT NULL,
+        version nvarchar(64) NOT NULL CONSTRAINT DF_cfg_analyte_version DEFAULT (N'1'),
+        status varchar(32) NOT NULL CONSTRAINT DF_cfg_analyte_status DEFAULT ('draft'),
+        content_hash nvarchar(128) NOT NULL,
+        document_json json NOT NULL,
+        created_at_utc datetime2(3) NOT NULL CONSTRAINT DF_cfg_analyte_created DEFAULT (SYSUTCDATETIME()),
+        updated_at_utc datetime2(3) NULL,
+        CONSTRAINT uq_cfg_analyte_name_version UNIQUE (name, version),
+        CONSTRAINT ck_cfg_analyte_status CHECK (status IN ('draft', 'published', 'retired'))
+    );
+END
+GO
+
 IF OBJECT_ID(N'cfg.domain_program', N'U') IS NULL
 BEGIN
     CREATE TABLE cfg.domain_program (

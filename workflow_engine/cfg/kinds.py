@@ -8,6 +8,7 @@ Kind = Literal[
     "site",
     "pipeline_profile",
     "assay_procedure",
+    "analyte",
     "domain_program",
     "study",
     "credential",
@@ -17,11 +18,11 @@ Kind = Literal[
     "action_definition",
     "enrichment_library_preset",
 ]
-
 CFG_KINDS: tuple[Kind, ...] = (
     "site",
     "pipeline_profile",
     "assay_procedure",
+    "analyte",
     "domain_program",
     "study",
     "credential",
@@ -37,6 +38,7 @@ MATERIALIZABLE_KINDS: tuple[Kind, ...] = (
     "site",
     "pipeline_profile",
     "assay_procedure",
+    "analyte",
     "domain_program",
     "study",
     "storage_endpoint",

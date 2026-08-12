@@ -63,6 +63,17 @@ BEGIN
         SELECT id FROM cfg.assay_procedure WHERE name = @name AND version = @ver;
         RETURN;
     END
+    IF @kind = N'analyte'
+    BEGIN
+        MERGE cfg.analyte AS t
+        USING (SELECT @name AS name, @ver AS version) AS s
+        ON t.name = s.name AND t.version = s.version
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc, updated_at_utc = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json)
+            VALUES (@name, @ver, @st, @hash, @doc);
+        SELECT id FROM cfg.analyte WHERE name = @name AND version = @ver;
+        RETURN;
+    END
     IF @kind = N'domain_program'
     BEGIN
         MERGE cfg.domain_program AS t
@@ -178,6 +189,7 @@ BEGIN
     IF @kind = N'site' BEGIN UPDATE cfg.site SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.site WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'pipeline_profile' BEGIN UPDATE cfg.pipeline_profile SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.pipeline_profile WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'assay_procedure' BEGIN UPDATE cfg.assay_procedure SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.assay_procedure WHERE name = @name AND version = @version; RETURN; END
+    IF @kind = N'analyte' BEGIN UPDATE cfg.analyte SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.analyte WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'domain_program' BEGIN UPDATE cfg.domain_program SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.domain_program WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'study' BEGIN UPDATE cfg.study SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.study WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'credential' BEGIN UPDATE cfg.credential SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.credential WHERE name = @name AND version = @version; RETURN; END
@@ -435,6 +447,32 @@ BEGIN
     BEGIN
         RAISERROR(N'cannot resolve processing_sample_key for one or more members', 16, 1);
         RETURN;
+    END
+
+    /* Hard-filter: when study has default_analyte_id, every sample must match. */
+    IF COL_LENGTH(N'cfg.study', N'default_analyte_id') IS NOT NULL
+       AND COL_LENGTH(N'portal.Samples', N'analyte_id') IS NOT NULL
+    BEGIN
+        DECLARE @study_analyte_id bigint = (
+            SELECT s.default_analyte_id
+            FROM cfg.study_group g
+            INNER JOIN cfg.study s ON s.id = g.study_row_id
+            WHERE g.id = @study_group_id
+        );
+        IF @study_analyte_id IS NOT NULL
+           AND EXISTS (
+                SELECT 1
+                FROM @resolved r
+                INNER JOIN portal.Samples samp ON samp.ID = r.portal_sample_id
+                WHERE samp.analyte_id IS NULL OR samp.analyte_id <> @study_analyte_id
+           )
+        BEGIN
+            RAISERROR(
+                N'sample analyte mismatch: enrolled samples must match study default_analyte_id',
+                16, 1
+            );
+            RETURN;
+        END
     END
 
     DELETE FROM cfg.study_group_member WHERE study_group_id = @study_group_id;

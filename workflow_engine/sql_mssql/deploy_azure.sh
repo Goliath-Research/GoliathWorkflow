@@ -109,6 +109,7 @@ SCRIPTS=(
   cfg_portal_api.sql
   cfg_process_pack_catalog.sql
   cfg_assay_procedure_links.sql
+  cfg_analyte_catalog.sql
   cfg_hyperparameter_search.sql
 )
 

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Push repo pipeline profiles, assay procedures + action catalog into DB(s).
+"""Push repo pipeline profiles, assay procedures, analytes + action catalog into DB(s).
 
 Use after breaking config/schema changes so ``cfg.pipeline_profile``,
-``cfg.assay_procedure``, and ``wf.workflow_action`` / schemas match git.
+``cfg.assay_procedure``, ``cfg.analyte``, and ``wf.workflow_action`` / schemas
+match git.
 
-Profiles carry a ``catalog`` block; sync maps that to cfg ``status``
-(``published`` vs ``retired``). Research mode overlays under
+Profiles/procedures/analytes carry a ``catalog`` block; sync maps that to cfg
+``status`` (``published`` vs ``retired``). Research mode overlays under
 ``profiles/modes/`` are **not** upserted as pipeline_profile rows.
 
 Examples::
@@ -114,6 +115,19 @@ def _procedure_items() -> List[Tuple[str, str, Path, Dict[str, Any]]]:
     return items
 
 
+def _analyte_items() -> List[Tuple[str, str, Path, Dict[str, Any]]]:
+    analytes_dir = REPO / "workflow_engine" / "domain" / "analytes"
+    items: List[Tuple[str, str, Path, Dict[str, Any]]] = []
+    if not analytes_dir.is_dir():
+        return items
+    for path in sorted(analytes_dir.glob("*.analyte.json")):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        name = str(doc.get("name") or path.name.replace(".analyte.json", ""))
+        version = str(doc.get("version") or "1")
+        items.append((name, version, path, doc))
+    return items
+
+
 def _upsert_kind(
     db,
     *,
@@ -194,6 +208,27 @@ def _analyte_token(doc: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def upsert_analytes(
+    db,
+    *,
+    names: Optional[Sequence[str]] = None,
+) -> List[str]:
+    updated: List[str] = []
+    for name, version, _path, doc in _analyte_items():
+        if names is not None and name not in names:
+            continue
+        status = cfg_status_for_catalog(doc.get("catalog"))
+        if status is None:
+            print(f"skip analyte:{name} (catalog says omit)")
+            continue
+        _upsert_kind(
+            db, kind="analyte", name=name, version=version, status=status, doc=doc
+        )
+        updated.append(f"{name}@{version}:{status}")
+        print(f"upserted analyte:{name}@{version} status={status}")
+    return updated
+
+
 def upsert_procedures(
     db,
     *,
@@ -214,6 +249,26 @@ def upsert_procedures(
         print(f"upserted assay_procedure:{name}@{version} status={status}")
         bind_assay_procedure(db, name=name, version=version, doc=doc)
     return updated
+
+
+def backfill_study_analyte_defaults(db) -> None:
+    """Bind study.default_analyte_id from regulatory.primary_analyte when unset."""
+    backend = os.environ.get("BACKEND_DB", "mssql").lower()
+    try:
+        if backend == "postgres":
+            rows = db._fetch_all(  # noqa: SLF001
+                "SELECT * FROM cfg.cfg_repo_backfill_study_analyte_defaults()",
+                (),
+            )
+        else:
+            rows = db._fetch_all(  # noqa: SLF001
+                "EXEC cfg.cfg_repo_backfill_study_analyte_defaults",
+                (),
+            )
+        n = (rows[0] or {}).get("studies_updated") if rows else 0
+        print(f"backfilled study default_analyte_id rows={n}")
+    except Exception as exc:  # noqa: BLE001 — links may be undeployed
+        print(f"warn: study analyte backfill failed: {exc}")
 
 
 def bind_assay_procedure(
@@ -447,8 +502,10 @@ def run_backend(
     if not skip_profiles:
         db = _open_db()
         try:
+            upsert_analytes(db)
             upsert_profiles(db, names=profiles)
             upsert_procedures(db)
+            backfill_study_analyte_defaults(db)
             retire_legacy_mode_profiles(db)
             if not skip_verify:
                 verify_names = (

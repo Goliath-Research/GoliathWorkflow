@@ -57,6 +57,15 @@ BEGIN
       document_json = EXCLUDED.document_json,
       updated_at_utc = (now() AT TIME ZONE 'utc')
     RETURNING cfg.assay_procedure.id INTO v_id;
+  ELSIF p_kind = 'analyte' THEN
+    INSERT INTO cfg.analyte(name, version, status, content_hash, document_json)
+    VALUES (p_name, v_version, v_status, v_hash, p_document)
+    ON CONFLICT (name, version) DO UPDATE SET
+      status = EXCLUDED.status,
+      content_hash = EXCLUDED.content_hash,
+      document_json = EXCLUDED.document_json,
+      updated_at_utc = (now() AT TIME ZONE 'utc')
+    RETURNING cfg.analyte.id INTO v_id;
   ELSIF p_kind = 'domain_program' THEN
     INSERT INTO cfg.domain_program(name, version, status, content_hash, document_json)
     VALUES (p_name, v_version, v_status, v_hash, p_document)
@@ -197,6 +206,10 @@ BEGIN
     RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash, s.document_json, NULL::jsonb, NULL::jsonb
     FROM cfg.assay_procedure s WHERE s.name = p_name AND (p_version IS NULL OR s.version = p_version)
       AND (NOT p_published_only OR s.status = 'published') ORDER BY s.id DESC LIMIT 1;
+  ELSIF p_kind = 'analyte' THEN
+    RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash, s.document_json, NULL::jsonb, NULL::jsonb
+    FROM cfg.analyte s WHERE s.name = p_name AND (p_version IS NULL OR s.version = p_version)
+      AND (NOT p_published_only OR s.status = 'published') ORDER BY s.id DESC LIMIT 1;
   ELSIF p_kind = 'domain_program' THEN
     RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash, s.document_json, NULL::jsonb,
       jsonb_build_object('compiledWorkflowVersionId', s.compiled_workflow_version_id)
@@ -253,6 +266,9 @@ BEGIN
   ELSIF p_kind = 'assay_procedure' THEN
     RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash FROM cfg.assay_procedure s
       WHERE NOT p_published_only OR s.status = 'published' ORDER BY s.name, s.version;
+  ELSIF p_kind = 'analyte' THEN
+    RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash FROM cfg.analyte s
+      WHERE NOT p_published_only OR s.status = 'published' ORDER BY s.name, s.version;
   ELSIF p_kind = 'domain_program' THEN
     RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash FROM cfg.domain_program s
       WHERE NOT p_published_only OR s.status = 'published' ORDER BY s.name, s.version;
@@ -302,6 +318,9 @@ BEGIN
   ELSIF p_kind = 'assay_procedure' THEN
     UPDATE cfg.assay_procedure SET status = 'published', updated_at_utc = (now() AT TIME ZONE 'utc')
     WHERE name = p_name AND version = p_version RETURNING cfg.assay_procedure.id INTO v_id;
+  ELSIF p_kind = 'analyte' THEN
+    UPDATE cfg.analyte SET status = 'published', updated_at_utc = (now() AT TIME ZONE 'utc')
+    WHERE name = p_name AND version = p_version RETURNING cfg.analyte.id INTO v_id;
   ELSIF p_kind = 'domain_program' THEN
     UPDATE cfg.domain_program SET status = 'published', updated_at_utc = (now() AT TIME ZONE 'utc')
     WHERE name = p_name AND version = p_version RETURNING cfg.domain_program.id INTO v_id;

@@ -49,9 +49,9 @@ Deploy catalog DDL/procs first (once per environment):
 ./scripts/deploy_process_pack_catalog.sh --backend postgres --sync
 ```
 
-Scripts: [`workflow_engine/sql_mssql/cfg_process_pack_catalog.sql`](../../workflow_engine/sql_mssql/cfg_process_pack_catalog.sql), [`workflow_engine/sql_pg/cfg_process_pack_catalog.sql`](../../workflow_engine/sql_pg/cfg_process_pack_catalog.sql) (also listed in each dialect’s `deploy_azure.sh`).
+Scripts: [`cfg_process_pack_catalog.sql`](../../workflow_engine/sql_mssql/cfg_process_pack_catalog.sql), [`cfg_assay_procedure_links.sql`](../../workflow_engine/sql_mssql/cfg_assay_procedure_links.sql), [`cfg_analyte_catalog.sql`](../../workflow_engine/sql_mssql/cfg_analyte_catalog.sql) (+ PG twins; listed in each dialect’s `deploy_azure.sh`).
 
-The sync upserts `cfg.pipeline_profile` and `cfg.assay_procedure` from `workflow_engine/domain/profiles/` (and `procedures/`), mapping each document’s `catalog` block to cfg `status` (`published` vs `retired`). Research mode overlays under `profiles/modes/` are **not** synced as profile rows. It also re-seeds `wf.workflow_action` / schemas from `schemas/actions/catalog.json` + `schemas/tasks/` (omit with `--skip-seed`). Portal Study / Start-run pickers use `portal.sp_list_*_catalog` — see [portal-ia](../architecture/portal-ia.md) / [portal-UI](../architecture/portal-UI.md).
+The sync upserts `cfg.analyte` from `workflow_engine/domain/analytes/`, then `cfg.pipeline_profile` and `cfg.assay_procedure` from `workflow_engine/domain/profiles/` (and `procedures/`), mapping each document’s `catalog` block to cfg `status` (`published` vs `retired`). Research mode overlays under `profiles/modes/` are **not** synced as profile rows. Assay bind sets `analyte_id` when the analyte row exists; studies with `regulatory.primary_analyte` get `default_analyte_id` backfilled. It also re-seeds `wf.workflow_action` / schemas from `schemas/actions/catalog.json` + `schemas/tasks/` (omit with `--skip-seed`). Portal Study / Start-run pickers use `portal.sp_list_*_catalog` — see [portal-ia](../architecture/portal-ia.md) / [portal-UI](../architecture/portal-UI.md).
 
 ## Study scaffold
 

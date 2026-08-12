@@ -6,7 +6,7 @@
 
 | Layer | Role |
 |-------|------|
-| **`cfg` schema** | Source of truth for sites, profiles, DomainProgram IR, studies, storage endpoints/credentials, reference assets, action definitions |
+| **`cfg` schema** | Source of truth for sites, profiles, assay procedures, analytes, DomainProgram IR, studies, storage endpoints/credentials, reference assets, action definitions |
 | **`wf` schema** | Compiled workflow graphs, instances, task queue |
 | **`/work`** | Materialization target for workers (paths only; **no secrets**) |
 | **Git** | Code, JSON Schema contracts, CI fixtures |
@@ -26,11 +26,14 @@ Deployed by `cfg_wf_relationships.sql` (after `cfg_registry_tables.sql`):
 | `cfg.site_reference_asset` | `cfg.site` + `cfg.reference_asset` | Site roles: `reference_genome`, `annotation_gtf`, `pangenome_bundle`, `houseman_seed_basis`, `hitimed_hierarchy_basis`, … |
 | `cfg.study_instance_link` | `cfg.study` + `wf.workflow_instance` (+ optional program/profile/site) | Which study/config started a run |
 | `cfg.storage_endpoint.credential_id` | `cfg.credential.id` | Internal (not wf) |
+| `cfg.study.default_analyte_id` | `cfg.analyte.id` | Study specimen/matrix (dual-writes `regulatory.primary_analyte`) |
+| `cfg.assay_procedure.analyte_id` | `cfg.analyte.id` | Typed analyte expectation (string `primary_analyte` kept) |
+| `portal.Samples.analyte_id` | `cfg.analyte.id` | Clinical sample matrix (enrollment hard-filter) |
 | `cfg.study_group.study_row_id` | `cfg.study.id` | Analysis arm (`control` / `disease`) |
 | `cfg.study_group_member.portal_sample_id` | `portal.Samples.ID` | Enrolled clinical sample (MSSQL FK) |
 | `cfg.study_group_member.lab_sample_id` | `portal.LabSamples.ID` | Optional lab run / processing key source |
 
-Views: `cfg.v_domain_program_wf`, `cfg.v_action_definition_wf`, `cfg.v_reference_asset`, `cfg.v_site_reference_asset`, `cfg.v_study_instance`.
+Views: `cfg.v_domain_program_wf`, `cfg.v_action_definition_wf`, `cfg.v_reference_asset`, `cfg.v_site_reference_asset`, `cfg.v_study_instance`, `cfg.v_analyte`, `cfg.v_assay_procedure`.
 
 Procs: `cfg.cfg_repo_set_compiled_version`, `cfg.cfg_repo_link_action`, `cfg.cfg_repo_link_study_instance`, `cfg.cfg_repo_link_reference_asset`, `cfg.cfg_repo_link_site_asset`, `cfg.cfg_repo_set_study_group`, `cfg.cfg_repo_set_study_group_members`, `cfg.cfg_repo_materialize_study_lists`.
 
@@ -125,16 +128,18 @@ File-backed store keeps the same structure under `study.extra.studyGroups`. CLI:
 - `portal.sp_list_domain_programs` / `sp_get_domain_program` / `sp_upsert_domain_program` — tree editor against `cfg.domain_program`
 - `portal.sp_list_cfg_actions` / `sp_get_cfg_action` — action catalog from `cfg.action_definition` (not the worker gateway)
 - `portal.sp_set_study_group` / `sp_set_study_group_members` / `sp_list_study_groups` / `sp_materialize_study_lists` — study arm enrollment
-- `portal.sp_list_samples_for_study_enrollment` (MSSQL) — picker over `portal.Samples` + `LabSamples`
+- `portal.sp_list_samples_for_study_enrollment` (MSSQL) — picker over `portal.Samples` + `LabSamples` (hard-filters by study `default_analyte_id` when set)
+- `portal.sp_set_sample_analyte` — bind `portal.Samples.analyte_id` → `cfg.analyte`
 - `portal.sp_list/get/upsert/publish_storage_endpoint` + `…_credential` — storage SoT for EpiPortal admins
-- `portal.sp_list_pipeline_profile_catalog` / `sp_list_assay_procedure_catalog` — operator process-pack pickers (Study + Start wizard)
-- `portal.sp_list/get_pipeline_profile` / `sp_list/get_assay_procedure` — Platform admin browse (incl. retired)
-- `portal.sp_get/set_study_process_defaults` — study-bound `pipelineProfile` / `pipelineProcedure` / `researchMode`
+- `portal.sp_list_pipeline_profile_catalog` / `sp_list_assay_procedure_catalog` / `sp_list_analyte_catalog` — operator pickers (Study + Start wizard)
+- `portal.sp_list/get_pipeline_profile` / `sp_list/get_assay_procedure` / `sp_list/get_analyte` — Platform admin browse (incl. retired)
+- `portal.sp_get/set_study_process_defaults` — study-bound `pipelineProfile` / `pipelineProcedure` / `analyte` / `researchMode` (dual-writes `regulatory.primary_analyte`)
 
-Process-pack documents in git carry a `catalog` block; `scripts/sync_cfg_profiles_and_action_catalog.py` upserts `cfg.pipeline_profile` + `cfg.assay_procedure` with `published` vs `retired` from that metadata and binds assay FKs (`default_pipeline_profile_id`, SamplePrep/lifecycle `domain_program` ids, `primary_analyte`). SQL contracts (native `json` / `jsonb` — no `nvarchar(max)` payloads):
+Process-pack and analyte documents in git carry a `catalog` block; `scripts/sync_cfg_profiles_and_action_catalog.py` upserts `cfg.pipeline_profile`, `cfg.assay_procedure`, and `cfg.analyte` with `published` vs `retired` from that metadata and binds assay FKs (`default_pipeline_profile_id`, SamplePrep/lifecycle `domain_program` ids, `primary_analyte` / `analyte_id`). SQL contracts (native `json` / `jsonb` — no `nvarchar(max)` payloads):
 
 - [`cfg_process_pack_catalog.sql`](../../workflow_engine/sql_mssql/cfg_process_pack_catalog.sql) + [PG](../../workflow_engine/sql_pg/cfg_process_pack_catalog.sql)
 - [`cfg_assay_procedure_links.sql`](../../workflow_engine/sql_mssql/cfg_assay_procedure_links.sql) + [PG](../../workflow_engine/sql_pg/cfg_assay_procedure_links.sql) — study defaults FKs, `study_instance_link.assay_procedure_id`, `cfg.v_assay_procedure`
+- [`cfg_analyte_catalog.sql`](../../workflow_engine/sql_mssql/cfg_analyte_catalog.sql) + [PG](../../workflow_engine/sql_pg/cfg_analyte_catalog.sql) — `cfg.analyte`, study/sample/assay analyte FKs, catalog + enrollment filter
 
 Day-2: [`scripts/deploy_process_pack_catalog.sh`](../../scripts/deploy_process_pack_catalog.sh). UI: [portal-ia.md](portal-ia.md) / [portal-UI.md](portal-UI.md).
 

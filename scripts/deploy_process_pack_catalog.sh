@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Deploy process-pack catalog SQL (cfg.assay_procedure + portal.sp_* pickers)
-# to Azure SQL and/or PostgreSQL, then optionally sync profile/procedure rows.
+# Deploy process-pack + analyte catalog SQL (cfg.assay_procedure, cfg.analyte,
+# portal.sp_* pickers) to Azure SQL and/or PostgreSQL, then optionally sync rows.
 #
 # Usage:
 #   ./scripts/deploy_process_pack_catalog.sh --backend mssql
@@ -69,6 +69,8 @@ deploy_mssql() {
   sqlcmd "${args[@]}" -i "$dir/cfg_process_pack_catalog.sql"
   echo "==> mssql: cfg_assay_procedure_links.sql"
   sqlcmd "${args[@]}" -i "$dir/cfg_assay_procedure_links.sql"
+  echo "==> mssql: cfg_analyte_catalog.sql"
+  sqlcmd "${args[@]}" -i "$dir/cfg_analyte_catalog.sql"
 }
 
 deploy_postgres() {
@@ -93,6 +95,8 @@ deploy_postgres() {
   psql -q -v ON_ERROR_STOP=1 -f "$dir/cfg_process_pack_catalog.sql"
   echo "==> postgres: cfg_assay_procedure_links.sql"
   psql -q -v ON_ERROR_STOP=1 -f "$dir/cfg_assay_procedure_links.sql"
+  echo "==> postgres: cfg_analyte_catalog.sql"
+  psql -q -v ON_ERROR_STOP=1 -f "$dir/cfg_analyte_catalog.sql"
 }
 
 backends=()
@@ -110,7 +114,7 @@ for b in "${backends[@]}"; do
     deploy_postgres
   fi
   if [[ "$DO_SYNC" == "1" ]]; then
-    echo "==> sync profiles/procedures ($b)"
+    echo "==> sync analytes/profiles/procedures ($b)"
     (
       cd "$REPO_ROOT"
       # shellcheck disable=SC1091

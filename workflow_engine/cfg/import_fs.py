@@ -108,6 +108,20 @@ def import_filesystem(
                     store.upsert("assay_procedure", name, doc, status=row_status)
                     imported.append(f"assay_procedure:{name}")
 
+        analytes_dir = repo_root / "workflow_engine" / "domain" / "analytes"
+        if analytes_dir.is_dir():
+            for path in sorted(analytes_dir.glob("*.analyte.json")):
+                doc = _load_json(path)
+                name = str(doc.get("name") or path.name.replace(".analyte.json", ""))
+                version = str(doc.get("version") or "1")
+                row_status = cfg_status_for_catalog(doc.get("catalog"))
+                if row_status is None:
+                    continue
+                store.upsert(
+                    "analyte", name, doc, status=row_status, version=version
+                )
+                imported.append(f"analyte:{name}@{version}")
+
     if include_programs:
         fixtures = repo_root / "workflow_engine" / "domain" / "fixtures"
         if fixtures.is_dir():

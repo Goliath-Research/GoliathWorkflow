@@ -4,8 +4,9 @@ A sample is an **ID + directory on shared storage**. Sample **identity** is impo
 
 | Layer | Owns |
 |-------|------|
-| **`portal.Samples`** (+ `LabSamples`) | Import registry from institutions/labs; clinical metadata; lab run id (`LabSamples.Sample` → processing key) |
-| **`cfg.study` / `cfg.study_group` / `cfg.study_group_member`** | Which portal samples belong to which analysis arm (`control` / `disease`) |
+| **`portal.Samples`** (+ `LabSamples`) | Import registry from institutions/labs; clinical metadata; optional `analyte_id` → `cfg.analyte`; lab run id (`LabSamples.Sample` → processing key) |
+| **`cfg.analyte`** | Versioned specimen/matrix catalog (`cfdna`, `buffy_coat`, …); study binds via `default_analyte_id` |
+| **`cfg.study` / `cfg.study_group` / `cfg.study_group_member`** | Which portal samples belong to which analysis arm (`control` / `disease`); enrollment hard-filters by study analyte when set |
 | **CSV lists** (`data/*.csv`) | Worker-facing lists rewritten from cfg on **study start** (also via admin `methyl-cfg materialize`) |
 | **`portal.Groups` / `GroupSamples`** | Customer UI cohorts — **not** study science arms |
 
@@ -75,7 +76,7 @@ methyl-cfg set-study-group-members Buffy_healthy_vs_PCa \
 
 Enrollment updates **cfg only**. `/work` CSVs are refreshed when you **start** the study (below). Optional admin preview: `methyl-cfg materialize --work-root /work` or `methyl-cfg materialize-study-lists`.
 
-Portal procs: `portal.sp_set_study_group`, `sp_set_study_group_members`, `sp_list_samples_for_study_enrollment` (MSSQL picker over `portal.Samples` / `LabSamples`).
+Portal procs: `portal.sp_set_study_group`, `sp_set_study_group_members`, `sp_list_samples_for_study_enrollment` (MSSQL picker; pass `@study_row_id` to hard-filter by the study’s `default_analyte_id`), `sp_set_sample_analyte` (bind a sample to `cfg.analyte`). Set the study analyte via `sp_set_study_process_defaults` (`@analyte`) — that also dual-writes `regulatory.primary_analyte` for the runtime.
 
 ### Sync on study start (mandatory)
 
