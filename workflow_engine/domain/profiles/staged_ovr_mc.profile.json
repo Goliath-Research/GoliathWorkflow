@@ -1,5 +1,12 @@
 {
   "pipelineProfile": "staged_ovr_mc",
+  "catalog": {
+    "title": "Staged OvR Monte Carlo",
+    "summary": "Multi-stage healthy vs stages with MC stability and progression.",
+    "visibility": "operator",
+    "lifecycle": "active",
+    "family": "staged"
+  },
   "actionConfig": {
     "alignment_qc": {},
     "methyl_extract": {

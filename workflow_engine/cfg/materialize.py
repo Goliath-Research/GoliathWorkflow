@@ -29,6 +29,7 @@ def materialize_paths(
         "storage_endpoints": work_root / "site" / "storage_endpoints",
         "storage_profiles": work_root / "site" / "storage_profiles",
         "profiles": bundle / "profiles",
+        "procedures": bundle / "profiles" / "procedures",
         "programs": bundle / "fixtures",
         "projects": work_root / "projects",
         "action_definitions": work_root / "site" / "action_definitions",
@@ -76,6 +77,12 @@ def materialize_store(
             out = paths["profiles"] / f"{rec.name}.profile.json"
             _write_json(out, rec.document)
             written.append(f"pipeline_profile:{rec.name}@{rec.version}->{out}")
+
+    if "assay_procedure" in selected:
+        for rec in store.list("assay_procedure", published_only=True):
+            out = paths["procedures"] / f"{rec.name}.procedure.json"
+            _write_json(out, rec.document)
+            written.append(f"assay_procedure:{rec.name}@{rec.version}->{out}")
 
     if "domain_program" in selected:
         for rec in store.list("domain_program", published_only=True):

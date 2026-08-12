@@ -81,20 +81,32 @@ def import_filesystem(
                 imported.append(f"reference_asset:{name}@{version}")
 
     if include_profiles:
+        from cfg.process_pack_catalog import cfg_status_for_catalog
+
         profiles_dir = repo_root / "workflow_engine" / "domain" / "profiles"
         if profiles_dir.is_dir():
             for path in sorted(profiles_dir.glob("*.profile.json")):
                 doc = _load_json(path)
                 name = str(doc.get("pipelineProfile") or path.name.replace(".profile.json", ""))
-                store.upsert("pipeline_profile", name, doc, status=status)
+                row_status = cfg_status_for_catalog(doc.get("catalog"))
+                if row_status is None:
+                    continue
+                store.upsert("pipeline_profile", name, doc, status=row_status)
                 imported.append(f"pipeline_profile:{name}")
-            modes_dir = profiles_dir / "modes"
-            if modes_dir.is_dir():
-                for path in sorted(modes_dir.glob("*.mode.json")):
+            # modes/*.mode.json are overlays only — never cfg.pipeline_profile rows
+            procedures_dir = profiles_dir / "procedures"
+            if procedures_dir.is_dir():
+                for path in sorted(procedures_dir.glob("*.procedure.json")):
                     doc = _load_json(path)
-                    name = f"mode_{path.name.replace('.mode.json', '')}"
-                    store.upsert("pipeline_profile", name, doc, status=status, version="mode")
-                    imported.append(f"pipeline_profile:{name}")
+                    name = str(
+                        doc.get("pipelineProcedure")
+                        or path.name.replace(".procedure.json", "")
+                    )
+                    row_status = cfg_status_for_catalog(doc.get("catalog"))
+                    if row_status is None:
+                        continue
+                    store.upsert("assay_procedure", name, doc, status=row_status)
+                    imported.append(f"assay_procedure:{name}")
 
     if include_programs:
         fixtures = repo_root / "workflow_engine" / "domain" / "fixtures"

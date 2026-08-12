@@ -1,5 +1,12 @@
 {
   "pipelineProfile": "structural_features",
+  "catalog": {
+    "title": "Structural features",
+    "summary": "Gene\u00d7region ranked structural feature catalog.",
+    "visibility": "advanced",
+    "lifecycle": "active",
+    "family": "specialty"
+  },
   "runDmpSelection": false,
   "runGeneFeaturecuts": false,
   "runBiomarkerFilter": false,

@@ -1,5 +1,12 @@
 {
   "pipelineProfile": "phase_a_dmp_stability",
+  "catalog": {
+    "title": "Phase A \u2014 DMP panel lock",
+    "summary": "Two-phase workflow: lock DMP panel before gene modeling.",
+    "visibility": "operator",
+    "lifecycle": "active",
+    "family": "staged"
+  },
   "dmp_modeling_mode": "featurecuts",
   "gene_modeling_mode": "none",
   "runDmpSelection": true,

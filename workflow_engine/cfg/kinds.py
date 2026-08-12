@@ -7,6 +7,7 @@ from typing import Literal
 Kind = Literal[
     "site",
     "pipeline_profile",
+    "assay_procedure",
     "domain_program",
     "study",
     "credential",
@@ -20,6 +21,7 @@ Kind = Literal[
 CFG_KINDS: tuple[Kind, ...] = (
     "site",
     "pipeline_profile",
+    "assay_procedure",
     "domain_program",
     "study",
     "credential",
@@ -34,6 +36,7 @@ CFG_KINDS: tuple[Kind, ...] = (
 MATERIALIZABLE_KINDS: tuple[Kind, ...] = (
     "site",
     "pipeline_profile",
+    "assay_procedure",
     "domain_program",
     "study",
     "storage_endpoint",

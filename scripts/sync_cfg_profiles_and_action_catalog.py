@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Push repo pipeline profiles + action catalog into Azure SQL and/or PostgreSQL.
+"""Push repo pipeline profiles, assay procedures + action catalog into DB(s).
 
-Use after breaking config/schema changes so ``cfg.pipeline_profile`` and
-``wf.workflow_action`` / ``wf.workflow_action_schema`` match git.
+Use after breaking config/schema changes so ``cfg.pipeline_profile``,
+``cfg.assay_procedure``, and ``wf.workflow_action`` / schemas match git.
+
+Profiles carry a ``catalog`` block; sync maps that to cfg ``status``
+(``published`` vs ``retired``). Research mode overlays under
+``profiles/modes/`` are **not** upserted as pipeline_profile rows.
 
 Examples::
 
@@ -14,16 +18,13 @@ Examples::
 
   # PostgreSQL (POSTGRES_* ; AAD users must URL-encode @ as %40)
   export BACKEND_DB=postgres
-  export POSTGRES_HOST=... POSTGRES_DB=... POSTGRES_USER=... POSTGRES_PASSWORD=...
   python scripts/sync_cfg_profiles_and_action_catalog.py --backend postgres
-
-  # Both sequentially (each backend uses its own env; set credentials before each run)
-  python scripts/sync_cfg_profiles_and_action_catalog.py --backend both
 
 Verification (default on):
   - staged profiles lack removed key ``stability_min_selected_dmps``
   - staged profiles contain ``stability_min_core_dmps``
   - ``validation.biomarker_filter`` output schema contains ``empty_reason``
+  - deprecated profiles are ``retired``; ``mode_*`` rows are absent
 """
 
 from __future__ import annotations
@@ -34,15 +35,20 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(REPO / "workers"), str(REPO / "workflow_engine")]
+
+from cfg.process_pack_catalog import cfg_status_for_catalog  # noqa: E402
 
 # Profiles known to have carried the removed MC key before the effective-config cut.
 _DEFAULT_VERIFY_PROFILES = ("staged_ovr_mc", "staged_full_lifecycle")
 _REMOVED_KEY = "stability_min_selected_dmps"
 _CANONICAL_KEY = "stability_min_core_dmps"
+
+# Legacy mode_* names previously synced as pipeline_profile rows — retire on sync.
+_LEGACY_MODE_PROFILE_PREFIX = "mode_"
 
 
 def _load_dotenv(path: Path) -> None:
@@ -57,7 +63,6 @@ def _load_dotenv(path: Path) -> None:
 
 
 def _prepare_mssql_env() -> None:
-    # Optional local helper files (never committed secrets).
     _load_dotenv(Path.home() / "mssql-mcp-server" / ".env")
     _load_dotenv(Path.home() / ".secrets" / "azure_sql.env")
     os.environ["BACKEND_DB"] = "mssql"
@@ -82,19 +87,54 @@ def _open_db():
     return open_gateway_db(resolve_connection_config())
 
 
-def _profile_items() -> List[tuple[str, str, Path]]:
+def _profile_items() -> List[Tuple[str, str, Path, Dict[str, Any]]]:
+    """Return (name, version, path, doc) for *.profile.json only (no modes)."""
     profiles_dir = REPO / "workflow_engine" / "domain" / "profiles"
-    items: List[tuple[str, str, Path]] = []
+    items: List[Tuple[str, str, Path, Dict[str, Any]]] = []
     for path in sorted(profiles_dir.glob("*.profile.json")):
         doc = json.loads(path.read_text(encoding="utf-8"))
         name = str(doc.get("pipelineProfile") or path.name.replace(".profile.json", ""))
-        items.append((name, "1", path))
-    modes = profiles_dir / "modes"
-    if modes.is_dir():
-        for path in sorted(modes.glob("*.mode.json")):
-            name = f"mode_{path.name.replace('.mode.json', '')}"
-            items.append((name, "mode", path))
+        items.append((name, "1", path, doc))
     return items
+
+
+def _procedure_items() -> List[Tuple[str, str, Path, Dict[str, Any]]]:
+    procedures_dir = (
+        REPO / "workflow_engine" / "domain" / "profiles" / "procedures"
+    )
+    items: List[Tuple[str, str, Path, Dict[str, Any]]] = []
+    if not procedures_dir.is_dir():
+        return items
+    for path in sorted(procedures_dir.glob("*.procedure.json")):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        name = str(
+            doc.get("pipelineProcedure") or path.name.replace(".procedure.json", "")
+        )
+        items.append((name, "1", path, doc))
+    return items
+
+
+def _upsert_kind(
+    db,
+    *,
+    kind: str,
+    name: str,
+    version: str,
+    status: str,
+    doc: Dict[str, Any],
+) -> None:
+    backend = os.environ.get("BACKEND_DB", "mssql").lower()
+    payload = json.dumps(doc, separators=(",", ":"))
+    if backend == "postgres":
+        db._exec_proc(  # noqa: SLF001
+            "SELECT * FROM cfg.cfg_repo_upsert(%s, %s, %s, %s, %s::jsonb)",
+            (kind, name, version, status, payload),
+        )
+    else:
+        db._exec_proc(  # noqa: SLF001
+            "EXEC cfg.cfg_repo_upsert @kind=?, @name=?, @version=?, @status=?, @document_json=?",
+            (kind, name, version, status, payload),
+        )
 
 
 def upsert_profiles(
@@ -102,26 +142,69 @@ def upsert_profiles(
     *,
     names: Optional[Sequence[str]] = None,
 ) -> List[str]:
-    backend = os.environ.get("BACKEND_DB", "mssql").lower()
     updated: List[str] = []
-    for name, version, path in _profile_items():
+    for name, version, _path, doc in _profile_items():
         if names is not None and name not in names:
             continue
-        doc = json.loads(path.read_text(encoding="utf-8"))
-        payload = json.dumps(doc, separators=(",", ":"))
-        if backend == "postgres":
-            db._exec_proc(  # noqa: SLF001 — admin sync via cfg_repo_upsert
-                "SELECT * FROM cfg.cfg_repo_upsert(%s, %s, %s, %s, %s::jsonb)",
-                ("pipeline_profile", name, version, "published", payload),
-            )
-        else:
-            db._exec_proc(  # noqa: SLF001
-                "EXEC cfg.cfg_repo_upsert @kind=?, @name=?, @version=?, @status=?, @document_json=?",
-                ("pipeline_profile", name, version, "published", payload),
-            )
-        updated.append(f"{name}@{version}")
-        print(f"upserted pipeline_profile:{name}@{version}")
+        status = cfg_status_for_catalog(doc.get("catalog"))
+        if status is None:
+            print(f"skip pipeline_profile:{name} (catalog says omit)")
+            continue
+        _upsert_kind(
+            db, kind="pipeline_profile", name=name, version=version, status=status, doc=doc
+        )
+        updated.append(f"{name}@{version}:{status}")
+        print(f"upserted pipeline_profile:{name}@{version} status={status}")
     return updated
+
+
+def upsert_procedures(
+    db,
+    *,
+    names: Optional[Sequence[str]] = None,
+) -> List[str]:
+    updated: List[str] = []
+    for name, version, _path, doc in _procedure_items():
+        if names is not None and name not in names:
+            continue
+        status = cfg_status_for_catalog(doc.get("catalog"))
+        if status is None:
+            print(f"skip assay_procedure:{name} (catalog says omit)")
+            continue
+        _upsert_kind(
+            db, kind="assay_procedure", name=name, version=version, status=status, doc=doc
+        )
+        updated.append(f"{name}@{version}:{status}")
+        print(f"upserted assay_procedure:{name}@{version} status={status}")
+    return updated
+
+
+def retire_legacy_mode_profiles(db) -> int:
+    """Mark leftover mode_* pipeline_profile rows retired (no longer synced)."""
+    backend = os.environ.get("BACKEND_DB", "mssql").lower()
+    if backend == "postgres":
+        rows = db._fetch_all(  # noqa: SLF001
+            """
+            UPDATE cfg.pipeline_profile
+            SET status = 'retired', updated_at_utc = (now() AT TIME ZONE 'utc')
+            WHERE name LIKE %s AND status <> 'retired'
+            RETURNING name
+            """,
+            (f"{_LEGACY_MODE_PROFILE_PREFIX}%",),
+        )
+    else:
+        rows = db._fetch_all(  # noqa: SLF001
+            """
+            UPDATE cfg.pipeline_profile
+            SET status = 'retired', updated_at_utc = SYSUTCDATETIME()
+            OUTPUT inserted.name
+            WHERE name LIKE ? AND status <> 'retired'
+            """,
+            (f"{_LEGACY_MODE_PROFILE_PREFIX}%",),
+        )
+    for row in rows or []:
+        print("retired legacy mode profile", row.get("name"))
+    return len(rows or [])
 
 
 def seed_action_catalog() -> None:
@@ -140,7 +223,7 @@ def verify_profiles(db, names: Iterable[str]) -> None:
     if backend == "postgres":
         rows = db._fetch_all(  # noqa: SLF001
             """
-            SELECT name,
+            SELECT name, status,
                    (document_json::text LIKE %s) AS has_removed,
                    (document_json::text LIKE %s) AS has_canonical
             FROM cfg.pipeline_profile
@@ -153,7 +236,7 @@ def verify_profiles(db, names: Iterable[str]) -> None:
         placeholders = ",".join("?" for _ in names_list)
         rows = db._fetch_all(  # noqa: SLF001
             f"""
-            SELECT name,
+            SELECT name, status,
                    CASE WHEN CAST(document_json AS nvarchar(max)) LIKE ? THEN 1 ELSE 0 END AS has_removed,
                    CASE WHEN CAST(document_json AS nvarchar(max)) LIKE ? THEN 1 ELSE 0 END AS has_canonical
             FROM cfg.pipeline_profile
@@ -181,6 +264,58 @@ def verify_profiles(db, names: Iterable[str]) -> None:
     if missing_canonical:
         raise SystemExit(
             f"canonical key {_CANONICAL_KEY!r} missing: {missing_canonical}"
+        )
+
+
+def verify_catalog_status(db) -> None:
+    """Ensure deprecated profiles are retired and mode_* rows are not published."""
+    backend = os.environ.get("BACKEND_DB", "mssql").lower()
+    if backend == "postgres":
+        rows = db._fetch_all(  # noqa: SLF001
+            """
+            SELECT name, status,
+                   document_json->'catalog'->>'lifecycle' AS lifecycle,
+                   document_json->'catalog'->>'visibility' AS visibility
+            FROM cfg.pipeline_profile
+            WHERE name LIKE 'mc_%'
+               OR name IN ('legacy_dual', 'discovery_gene_featurecuts',
+                           'dmp_panel_stability', 'gene_enricher_stability')
+               OR name LIKE 'mode_%'
+            ORDER BY name
+            """,
+            (),
+        )
+    else:
+        rows = db._fetch_all(  # noqa: SLF001
+            """
+            SELECT name, status,
+                   JSON_VALUE(CAST(document_json AS nvarchar(max)), '$.catalog.lifecycle') AS lifecycle,
+                   JSON_VALUE(CAST(document_json AS nvarchar(max)), '$.catalog.visibility') AS visibility
+            FROM cfg.pipeline_profile
+            WHERE name LIKE 'mc_%'
+               OR name IN (N'legacy_dual', N'discovery_gene_featurecuts',
+                           N'dmp_panel_stability', N'gene_enricher_stability')
+               OR name LIKE 'mode_%'
+            ORDER BY name
+            """,
+            (),
+        )
+    published_bad = [
+        r
+        for r in (rows or [])
+        if str(r.get("status") or "").lower() == "published"
+        and (
+            str(r.get("name") or "").startswith(_LEGACY_MODE_PROFILE_PREFIX)
+            or str(r.get("lifecycle") or "").lower() == "deprecated"
+            or str(r.get("visibility") or "").lower() == "hidden"
+        )
+    ]
+    for row in rows or []:
+        print("verify catalog status", row)
+    if published_bad:
+        raise SystemExit(
+            "deprecated/mode profiles still published (expected retired): "
+            f"{published_bad}"
         )
 
 
@@ -240,6 +375,8 @@ def run_backend(
         db = _open_db()
         try:
             upsert_profiles(db, names=profiles)
+            upsert_procedures(db)
+            retire_legacy_mode_profiles(db)
             if not skip_verify:
                 verify_names = (
                     list(profiles)
@@ -247,6 +384,7 @@ def run_backend(
                     else list(_DEFAULT_VERIFY_PROFILES)
                 )
                 verify_profiles(db, verify_names)
+                verify_catalog_status(db)
         finally:
             db.close()
 
@@ -264,7 +402,10 @@ def run_backend(
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Sync repo pipeline profiles + action catalog into gateway DB(s)."
+        description=(
+            "Sync repo pipeline profiles, assay procedures + action catalog "
+            "into gateway DB(s)."
+        )
     )
     parser.add_argument(
         "--backend",

@@ -145,21 +145,37 @@ Studies
 | Screen | Purpose | Primary `portal.sp_*` / notes |
 |--------|---------|-------------------------------|
 | Study list | Filter by status / modality | `cfg.study` via portal list (extend if missing); clinical samples via legacy `portal.spGet*` where still used |
-| Study overview | Bound procedure/profile, `projectPath`, recent runs | Read `cfg.study` + latest instances |
+| Study overview | Bound procedure/profile/mode, `projectPath`, recent runs | `sp_get_study_process_defaults` + latest instances |
+| Study process defaults | Persist default profile / procedure / researchMode on the study | `sp_set/get_study_process_defaults`; pickers from catalog procs |
 | Samples & groups | Enrollment, arms, membership | `sp_list_samples_for_study_enrollment`, `sp_list/set_study_group(s)`, `sp_set_study_group_members`, `sp_materialize_study_lists` |
 | Project manifests | View/edit cohort paths under `/work/projects/<study>/` | File/cfg study document; **no** `actionConfig` knobs |
 | Runs list | Instances for this study | Filter `wf.workflow_instance` by study/context |
 | **Instance detail** | Timeline, tasks, config snapshot, controls | `sp_get_instance_tasks`; reclaim via `sp_reclaim_expired_leases` |
-| **Start run wizard** | Definition@version → procedure/profile → manifest → start | `sp_list_workflow_definitions`, `sp_create_and_start_instance` |
+| **Start run wizard** | Definition@version → procedure/profile → manifest → start | Catalog procs + `sp_list_workflow_definitions`, `sp_create_and_start_instance` |
 
 ### Start-run wizard (must-have UX)
 
 1. Select **published** workflow definition + version (e.g. SamplePrepPipeline).
-2. Select **assay procedure** + **pipeline profile** (and research mode if any).
+2. Select **assay procedure** + **pipeline profile** (and research mode if any):
+   - Prefill from `sp_get_study_process_defaults`.
+   - Procedure picker: `sp_list_assay_procedure_catalog` (filter by study `regulatory.primary_analyte` when known).
+   - Profile picker: `sp_list_pipeline_profile_catalog` — **operator** visibility + **active** lifecycle only (SaMD ladder first, then staged).
+   - If profile is `samd_research`, show `researchMode` from the row’s `research_modes`.
+   - Do **not** list deprecated `mc_*` aliases, `mode_*` overlays, or `visibility=hidden` packs.
 3. Confirm **project manifest** / sample subset / `executionScopeId` if needed.
-4. Create instance — UI copy: *Instance of `SamplePrepPipeline` @ v12*.
+4. Create instance with `context_json` carrying `pipelineProfile`, `pipelineProcedure`, `researchMode` — UI copy: *Instance of `SamplePrepPipeline` @ v12*. Prefer linking `cfg.study_instance_link.pipeline_profile_id`.
 
 Do **not** open DomainProgram IR editing on this path.
+
+### Process-pack catalog rules
+
+| Surface | Data | Who sees retired/deprecated |
+|---------|------|-----------------------------|
+| Start wizard / Study defaults | `sp_list_*_catalog` | Never (active + operator; optional advanced) |
+| Platform → Process packs | `sp_list_pipeline_profiles` / `sp_list_assay_procedures` | Yes (admin browse incl. retired) |
+| Runtime aliases | Python `pipeline_profiles` folds | Old `context_json` still resolves; not offered in pickers |
+
+Profile/procedure JSON documents carry a required `catalog` block (`title`, `summary`, `visibility`, `lifecycle`, `family`, optional `replacedBy` / `researchModes`). Sync maps `deprecated`/`hidden` → cfg `status=retired`.
 
 ### Instance detail layout
 
@@ -240,6 +256,8 @@ Platform
 |--------|---------|---------------|
 | Storage endpoints | Upsert/publish by scope | `sp_list/get/upsert/publish_storage_endpoint` |
 | Credentials | Upsert/publish (never to `/work`) | `sp_list/get/upsert/publish_credential` |
+| **Pipeline profiles** | Full pack list (incl. retired) + document body | `sp_list/get_pipeline_profile` — not the operator catalog |
+| **Assay procedures** | Full procedure list (incl. retired) | `sp_list/get_assay_procedure` |
 | **Fleet console** | List workers; Drain / Stop / Resume; show exclusive lease + in-flight action | `sp_set_worker_desired_state`; `sp_upsert/list_cluster`; enrollment procs; catalog `control` for button enablement |
 | Enrollment | Prereg / list / revoke | `sp_upsert/list/revoke_worker_enrollment` |
 | Domain programs | Draft → publish → linked version | `sp_list/get/upsert_domain_program` |
@@ -344,6 +362,11 @@ Complete contract surface shipped in this repo (MSSQL + PG twins under
 | `portal.sp_list_samples_for_study_enrollment` | Enrollment picker |
 | `portal.sp_list/get/upsert/publish_storage_endpoint` | Storage admin |
 | `portal.sp_list/get/upsert/publish_credential` | Credential admin |
+| `portal.sp_list/get_pipeline_profile` | Platform process-pack browse (full docs) |
+| `portal.sp_list_pipeline_profile_catalog` | Study / Start wizard profile picker |
+| `portal.sp_list/get_assay_procedure` | Platform procedure browse |
+| `portal.sp_list_assay_procedure_catalog` | Study / Start wizard procedure picker (`@analyte`) |
+| `portal.sp_get/set_study_process_defaults` | Persist/read study `pipelineProfile` / `pipelineProcedure` / `researchMode` |
 
 ### Workers / fleet
 
@@ -377,11 +400,12 @@ Documented for EpiPortal backlog — keep workers/gateway unchanged:
 - Pause / resume / cancel **instance** (run lifecycle; **not** fleet Drain)  
 - List workers with `desired_state`, heartbeat, current lease (fleet console without raw `wf.worker` reads)  
 - Extend `sp_get_instance_tasks` (or detail proc) with `affinity_key`, lease `worker_id`, `completed_by_worker_id`  
-- List/get published **pipeline profiles** and **procedures** for Start wizard  
 - List/get **site** document for Platform → Site  
 - Instance `context_json` / baked `resolvedConfig` read API for Config tab  
 
-Until those exist, portal middle-tier may read `wf`/`cfg` tables with the same
+**Shipped for Study UX:** pipeline profile + assay procedure catalog/list/get and study process defaults (see inventory above). Wire EpiPortal pickers to `*_catalog` procs — do not dump raw `cfg.pipeline_profile` into the Start wizard.
+
+Until remaining gaps exist, portal middle-tier may read `wf`/`cfg` tables with the same
 RBAC rules; prefer adding `portal.sp_*` twins for parity.
 
 ---

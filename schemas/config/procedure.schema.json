@@ -3,13 +3,16 @@
   "title": "AssayProcedurePack",
   "description": "Named assay procedure overlay: library protocol + SamplePrep/lifecycle pointers + science defaults for a methylation matrix recipe. Merges under instance context and over profile/mode (instance → procedure → profile → analyte → site).",
   "type": "object",
-  "required": ["pipelineProcedure"],
+  "required": ["pipelineProcedure", "catalog"],
   "properties": {
     "pipelineProcedure": {
       "type": "string",
       "description": "Stable procedure id (filename stem), e.g. buffy_wgbs_pangenome_gene_fc."
     },
     "description": { "type": "string" },
+    "catalog": {
+      "$ref": "#/$defs/processPackCatalog"
+    },
     "pipelineProfile": {
       "type": "string",
       "description": "Default SaMD/research profile when instance omits pipelineProfile (usually samd_research)."
@@ -53,5 +56,48 @@
       }
     }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "processPackCatalog": {
+      "type": "object",
+      "description": "Portal/operator catalog metadata (not science knobs).",
+      "required": ["title", "summary", "visibility", "lifecycle", "family"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "visibility": {
+          "type": "string",
+          "enum": ["operator", "advanced", "hidden"]
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": ["active", "deprecated", "internal"]
+        },
+        "family": {
+          "type": "string",
+          "enum": ["samd", "staged", "specialty", "legacy"]
+        },
+        "replacedBy": {
+          "type": "string",
+          "description": "Canonical profile or procedure id when lifecycle is deprecated."
+        },
+        "researchModes": {
+          "type": "array",
+          "description": "Allowed researchMode values when this profile is samd_research.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "dmp_raw",
+              "dmp_fc",
+              "gene_enricher",
+              "gene_fc",
+              "dual_fc"
+            ]
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
 }

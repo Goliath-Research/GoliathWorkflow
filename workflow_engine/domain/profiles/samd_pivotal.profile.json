@@ -1,5 +1,12 @@
 {
   "pipelineProfile": "samd_pivotal",
+  "catalog": {
+    "title": "SaMD pivotal",
+    "summary": "Requires pivotal_validation; hard gates for claim-ready stage.",
+    "visibility": "operator",
+    "lifecycle": "active",
+    "family": "samd"
+  },
   "dmp_modeling_mode": "featurecuts",
   "gene_modeling_mode": "featurecuts",
   "runDmpSelection": true,

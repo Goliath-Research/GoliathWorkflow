@@ -66,3 +66,63 @@ def test_verify_profiles_ok_when_all_present_and_canonical(sync_mod, monkeypatch
         ]
     )
     sync_mod.verify_profiles(db, ["staged_ovr_mc", "staged_full_lifecycle"])
+
+
+def test_profile_items_exclude_mode_overlays(sync_mod):
+    names = [n for n, *_ in sync_mod._profile_items()]
+    assert "samd_research" in names
+    assert not any(n.startswith("mode_") for n in names)
+
+
+def test_cfg_status_from_stamped_docs(sync_mod):
+    from cfg.process_pack_catalog import cfg_status_for_catalog
+
+    for name, _version, _path, doc in sync_mod._profile_items():
+        status = cfg_status_for_catalog(doc.get("catalog"))
+        if doc.get("catalog", {}).get("lifecycle") == "deprecated":
+            assert status == "retired", name
+        elif doc.get("catalog", {}).get("visibility") == "operator":
+            assert status == "published", name
+
+
+def test_verify_catalog_status_fails_when_deprecated_still_published(sync_mod, monkeypatch):
+    monkeypatch.setenv("BACKEND_DB", "mssql")
+    db = SimpleNamespace(
+        _fetch_all=lambda *a, **k: [
+            {
+                "name": "mc_dmp",
+                "status": "published",
+                "lifecycle": "deprecated",
+                "visibility": "hidden",
+            }
+        ]
+    )
+    with pytest.raises(SystemExit, match="still published"):
+        sync_mod.verify_catalog_status(db)
+
+
+def test_verify_catalog_status_ok_when_retired(sync_mod, monkeypatch):
+    monkeypatch.setenv("BACKEND_DB", "mssql")
+    db = SimpleNamespace(
+        _fetch_all=lambda *a, **k: [
+            {
+                "name": "mc_dmp",
+                "status": "retired",
+                "lifecycle": "deprecated",
+                "visibility": "hidden",
+            },
+            {
+                "name": "mode_dual_fc",
+                "status": "retired",
+                "lifecycle": None,
+                "visibility": None,
+            },
+        ]
+    )
+    sync_mod.verify_catalog_status(db)
+
+
+def test_procedure_items_present(sync_mod):
+    names = [n for n, *_ in sync_mod._procedure_items()]
+    assert "buffy_wgbs_pangenome_gene_fc" in names
+    assert "cfdna_wgbs_plasma" in names

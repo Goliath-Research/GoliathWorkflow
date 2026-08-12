@@ -52,6 +52,17 @@ BEGIN
         SELECT id FROM cfg.pipeline_profile WHERE name = @name AND version = @ver;
         RETURN;
     END
+    IF @kind = N'assay_procedure'
+    BEGIN
+        MERGE cfg.assay_procedure AS t
+        USING (SELECT @name AS name, @ver AS version) AS s
+        ON t.name = s.name AND t.version = s.version
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc, updated_at_utc = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json)
+            VALUES (@name, @ver, @st, @hash, @doc);
+        SELECT id FROM cfg.assay_procedure WHERE name = @name AND version = @ver;
+        RETURN;
+    END
     IF @kind = N'domain_program'
     BEGIN
         MERGE cfg.domain_program AS t
@@ -166,6 +177,7 @@ BEGIN
     SET NOCOUNT ON;
     IF @kind = N'site' BEGIN UPDATE cfg.site SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.site WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'pipeline_profile' BEGIN UPDATE cfg.pipeline_profile SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.pipeline_profile WHERE name = @name AND version = @version; RETURN; END
+    IF @kind = N'assay_procedure' BEGIN UPDATE cfg.assay_procedure SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.assay_procedure WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'domain_program' BEGIN UPDATE cfg.domain_program SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.domain_program WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'study' BEGIN UPDATE cfg.study SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.study WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'credential' BEGIN UPDATE cfg.credential SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.credential WHERE name = @name AND version = @version; RETURN; END

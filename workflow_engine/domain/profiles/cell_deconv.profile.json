@@ -1,8 +1,17 @@
 {
   "pipelineProfile": "cell_deconv",
+  "catalog": {
+    "title": "Cell deconvolution",
+    "summary": "Houseman-style cell-type deconvolution specialty pack.",
+    "visibility": "advanced",
+    "lifecycle": "active",
+    "family": "specialty"
+  },
   "actionConfig": {
     "cell_deconvolution": {
-      "contexts": ["CG"],
+      "contexts": [
+        "CG"
+      ],
       "marker_min_coverage": 4,
       "min_marker_fraction": 0.25,
       "use_gpu": true
@@ -18,17 +27,27 @@
               "{output_base}/cell_fractions/cell_fractions.csv",
               "{output_base}/clinical_covariates.csv"
             ],
-            "covariate_numeric_columns": ["age", "bmi"],
+            "covariate_numeric_columns": [
+              "age",
+              "bmi"
+            ],
             "covariate_composition_groups": [
               {
                 "name": "cell_fractions",
-                "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+                "columns": [
+                  "CD8T",
+                  "CD4T",
+                  "NK",
+                  "Bcell",
+                  "Mono",
+                  "Neu"
+                ],
                 "reference": "Neu",
-                "pseudocount": 1e-6
+                "pseudocount": 1e-06
               }
             ],
             "covariate_id_column": "sample_id",
-            "ecdf_second_stage_probability_epsilon": 1e-6
+            "ecdf_second_stage_probability_epsilon": 1e-06
           }
         },
         "tabular_sklearn": {
@@ -40,13 +59,23 @@
               "{output_base}/cell_fractions/cell_fractions.csv",
               "{output_base}/clinical_covariates.csv"
             ],
-            "covariate_numeric_columns": ["age", "bmi"],
+            "covariate_numeric_columns": [
+              "age",
+              "bmi"
+            ],
             "covariate_composition_groups": [
               {
                 "name": "cell_fractions",
-                "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+                "columns": [
+                  "CD8T",
+                  "CD4T",
+                  "NK",
+                  "Bcell",
+                  "Mono",
+                  "Neu"
+                ],
                 "reference": "Neu",
-                "pseudocount": 1e-6
+                "pseudocount": 1e-06
               }
             ],
             "covariate_id_column": "sample_id"

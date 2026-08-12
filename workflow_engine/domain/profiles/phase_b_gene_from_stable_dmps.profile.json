@@ -1,5 +1,12 @@
 {
   "pipelineProfile": "phase_b_gene_from_stable_dmps",
+  "catalog": {
+    "title": "Phase B \u2014 gene from stable DMPs",
+    "summary": "Gene FeatureCuts after stable_dmps_production.csv from Phase A.",
+    "visibility": "operator",
+    "lifecycle": "active",
+    "family": "staged"
+  },
   "dmp_modeling_mode": "stable_panel",
   "gene_modeling_mode": "from_stable_dmp_panel",
   "runDmpSelection": false,

@@ -1,5 +1,12 @@
 {
   "pipelineProcedure": "buffy_wgbs_linear_gene_fc",
+  "catalog": {
+    "title": "Buffy WGBS linear + gene FC",
+    "summary": "Faster / cheaper linear baseline for buffy coat.",
+    "visibility": "operator",
+    "lifecycle": "active",
+    "family": "specialty"
+  },
   "description": "Buffy-coat WGBS with linear genome alignment (baseline / lower cost), read-level informME, Houseman deconvolution, gene FeatureCuts.",
   "pipelineProfile": "samd_research",
   "researchMode": "gene_fc",
@@ -29,13 +36,17 @@
     },
     "cell_deconvolution": {
       "method": "houseman",
-      "contexts": ["CG"],
+      "contexts": [
+        "CG"
+      ],
       "marker_min_coverage": 4,
       "min_marker_fraction": 0.25,
       "use_gpu": true
     },
     "info_measures": {
-      "contexts": ["CG"],
+      "contexts": [
+        "CG"
+      ],
       "tile_size": 4,
       "ising_enabled": true
     },

@@ -84,6 +84,7 @@ SCRIPTS=(
   portal_resource_profile.sql
   cfg_reference_assets_seed.sql
   cfg_portal_api.sql
+  cfg_process_pack_catalog.sql
   cfg_hyperparameter_search.sql
 )
 

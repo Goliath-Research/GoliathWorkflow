@@ -1,5 +1,13 @@
 {
   "pipelineProfile": "gene_enricher_stability",
+  "catalog": {
+    "title": "gene_enricher_stability (deprecated)",
+    "summary": "Deprecated alias \u2192 samd_research + researchMode dmp_raw.",
+    "visibility": "hidden",
+    "lifecycle": "deprecated",
+    "family": "legacy",
+    "replacedBy": "samd_research"
+  },
   "runDmpSelection": false,
   "runGeneFeaturecuts": false,
   "runBiomarkerFilter": false,

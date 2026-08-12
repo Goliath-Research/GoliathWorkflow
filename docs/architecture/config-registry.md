@@ -127,10 +127,16 @@ File-backed store keeps the same structure under `study.extra.studyGroups`. CLI:
 - `portal.sp_set_study_group` / `sp_set_study_group_members` / `sp_list_study_groups` / `sp_materialize_study_lists` — study arm enrollment
 - `portal.sp_list_samples_for_study_enrollment` (MSSQL) — picker over `portal.Samples` + `LabSamples`
 - `portal.sp_list/get/upsert/publish_storage_endpoint` + `…_credential` — storage SoT for EpiPortal admins
+- `portal.sp_list_pipeline_profile_catalog` / `sp_list_assay_procedure_catalog` — operator process-pack pickers (Study + Start wizard)
+- `portal.sp_list/get_pipeline_profile` / `sp_list/get_assay_procedure` — Platform admin browse (incl. retired)
+- `portal.sp_get/set_study_process_defaults` — study-bound `pipelineProfile` / `pipelineProcedure` / `researchMode`
+
+Process-pack documents in git carry a `catalog` block; `scripts/sync_cfg_profiles_and_action_catalog.py` upserts `cfg.pipeline_profile` + `cfg.assay_procedure` with `published` vs `retired` from that metadata. SQL contracts: [`cfg_process_pack_catalog.sql`](../../workflow_engine/sql_mssql/cfg_process_pack_catalog.sql) (MSSQL) / [PG twin](../../workflow_engine/sql_pg/cfg_process_pack_catalog.sql); day-2 deploy helper [`scripts/deploy_process_pack_catalog.sh`](../../scripts/deploy_process_pack_catalog.sh). UI contract: [portal-ia.md](portal-ia.md) / [portal-UI.md](portal-UI.md).
 
 ## Related
 
 - [layer-model.md](layer-model.md)
 - [distributed-runtime.md](distributed-runtime.md)
 - [portal_resource_profile.md](../deployment/portal_resource_profile.md)
+- [portal-ia.md](portal-ia.md) · [portal-UI.md](portal-UI.md)
 - Usage: [docs/usage/19-config-registry.md](../usage/19-config-registry.md)

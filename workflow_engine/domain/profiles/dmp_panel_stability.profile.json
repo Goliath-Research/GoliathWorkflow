@@ -1,5 +1,13 @@
 {
   "pipelineProfile": "dmp_panel_stability",
+  "catalog": {
+    "title": "dmp_panel_stability (deprecated)",
+    "summary": "Deprecated alias \u2192 samd_research + researchMode dmp_fc.",
+    "visibility": "hidden",
+    "lifecycle": "deprecated",
+    "family": "legacy",
+    "replacedBy": "samd_research"
+  },
   "runDmpSelection": true,
   "runGeneFeaturecuts": false,
   "runBiomarkerFilter": false,

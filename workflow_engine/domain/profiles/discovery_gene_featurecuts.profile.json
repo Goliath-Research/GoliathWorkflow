@@ -1,5 +1,13 @@
 {
   "pipelineProfile": "discovery_gene_featurecuts",
+  "catalog": {
+    "title": "discovery_gene_featurecuts (deprecated)",
+    "summary": "Deprecated alias \u2192 samd_research + researchMode dual_fc.",
+    "visibility": "hidden",
+    "lifecycle": "deprecated",
+    "family": "legacy",
+    "replacedBy": "samd_research"
+  },
   "runDmpSelection": true,
   "runGeneFeaturecuts": true,
   "runBiomarkerFilter": false,

@@ -29,6 +29,39 @@ _SAMD_RESEARCH_MODES: Dict[str, str] = {
 
 _RESEARCH_MODE_IDS = frozenset(_SAMD_RESEARCH_MODES.values())
 
+# Profiles that fold into samd_research (cfg rows should be retired on sync).
+_DEPRECATED_PROFILE_NAMES = frozenset(
+    {
+        *_PROFILE_ALIASES.keys(),
+        *_SAMD_RESEARCH_MODES.keys(),
+        "legacy_dual",
+    }
+)
+
+
+def cfg_status_for_catalog(catalog: Mapping[str, Any] | None) -> Optional[str]:
+    """Map catalog metadata to cfg status; see ``cfg.process_pack_catalog``."""
+    from cfg.process_pack_catalog import cfg_status_for_catalog as _impl
+
+    return _impl(catalog)
+
+
+def catalog_meta_for(name_or_doc: str | Mapping[str, Any]) -> Dict[str, Any]:
+    """Return catalog metadata for a profile name or document (empty if absent)."""
+    if isinstance(name_or_doc, Mapping):
+        cat = name_or_doc.get("catalog")
+        return dict(cat) if isinstance(cat, Mapping) else {}
+    key = str(name_or_doc).strip()
+    if not key:
+        return {}
+    try:
+        data = load_profile(key)
+    except FileNotFoundError:
+        return {}
+    cat = data.get("catalog")
+    return dict(cat) if isinstance(cat, Mapping) else {}
+
+
 _STRING_SCOPE_KEYS = frozenset(
     {
         "researchMode",

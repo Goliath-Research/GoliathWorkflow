@@ -1,5 +1,12 @@
 {
   "pipelineProfile": "staged_progression_interpretation",
+  "catalog": {
+    "title": "Staged progression interpretation",
+    "summary": "Mapper/enricher + progression without Monte Carlo.",
+    "visibility": "operator",
+    "lifecycle": "active",
+    "family": "staged"
+  },
   "runDmpSelection": false,
   "runGeneFeaturecuts": false,
   "runBiomarkerFilter": false,

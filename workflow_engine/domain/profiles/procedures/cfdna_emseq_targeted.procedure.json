@@ -1,5 +1,12 @@
 {
   "pipelineProcedure": "cfdna_emseq_targeted",
+  "catalog": {
+    "title": "cfDNA EM-Seq targeted",
+    "summary": "EM-Seq hybrid-capture panel (BED) for cfDNA.",
+    "visibility": "operator",
+    "lifecycle": "active",
+    "family": "specialty"
+  },
   "description": "cfDNA EM-Seq / hybrid-capture targeted procedure (inch-wide, mile-deep). Requires operator-supplied target_panel_bed; elevated min_cov; no genome-wide DMP hunt; no cell deconvolution.",
   "pipelineProfile": "samd_research",
   "researchMode": "gene_fc",

@@ -37,6 +37,23 @@ BEGIN
 END
 GO
 
+IF OBJECT_ID(N'cfg.assay_procedure', N'U') IS NULL
+BEGIN
+    CREATE TABLE cfg.assay_procedure (
+        id bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        name nvarchar(256) NOT NULL,
+        version nvarchar(64) NOT NULL CONSTRAINT DF_cfg_ap_version DEFAULT (N'1'),
+        status varchar(32) NOT NULL CONSTRAINT DF_cfg_ap_status DEFAULT ('draft'),
+        content_hash nvarchar(128) NOT NULL,
+        document_json json NOT NULL,
+        created_at_utc datetime2(3) NOT NULL CONSTRAINT DF_cfg_ap_created DEFAULT (SYSUTCDATETIME()),
+        updated_at_utc datetime2(3) NULL,
+        CONSTRAINT uq_cfg_assay_procedure_name_version UNIQUE (name, version),
+        CONSTRAINT ck_cfg_assay_procedure_status CHECK (status IN ('draft', 'published', 'retired'))
+    );
+END
+GO
+
 IF OBJECT_ID(N'cfg.domain_program', N'U') IS NULL
 BEGIN
     CREATE TABLE cfg.domain_program (

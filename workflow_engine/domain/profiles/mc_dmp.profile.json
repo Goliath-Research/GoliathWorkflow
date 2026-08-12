@@ -1,5 +1,13 @@
 {
   "pipelineProfile": "mc_dmp",
+  "catalog": {
+    "title": "mc_dmp (deprecated)",
+    "summary": "Deprecated alias \u2192 samd_research + researchMode dmp_raw.",
+    "visibility": "hidden",
+    "lifecycle": "deprecated",
+    "family": "legacy",
+    "replacedBy": "samd_research"
+  },
   "dmp_modeling_mode": "raw_pool",
   "gene_modeling_mode": "none",
   "runDmpSelection": false,

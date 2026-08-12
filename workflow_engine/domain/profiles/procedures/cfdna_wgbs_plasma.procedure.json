@@ -1,5 +1,12 @@
 {
   "pipelineProcedure": "cfdna_wgbs_plasma",
+  "catalog": {
+    "title": "cfDNA WGBS plasma",
+    "summary": "Plasma cfDNA WGBS with fragmentomics; no cell deconvolution.",
+    "visibility": "operator",
+    "lifecycle": "active",
+    "family": "specialty"
+  },
   "description": "cfDNA WGBS plasma procedure: linear alignment, fragmentomics (analyte merge), gene FeatureCuts, no cell deconvolution. HiTIMED plasma tree is an optional instance overlay, not the default.",
   "pipelineProfile": "samd_research",
   "researchMode": "gene_fc",
@@ -28,7 +35,9 @@
     },
     "cell_deconvolution": null,
     "info_measures": {
-      "contexts": ["CG"],
+      "contexts": [
+        "CG"
+      ],
       "tile_size": 4,
       "ising_enabled": true
     },

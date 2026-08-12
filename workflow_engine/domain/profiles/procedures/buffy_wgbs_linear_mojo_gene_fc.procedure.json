@@ -1,5 +1,12 @@
 {
   "pipelineProcedure": "buffy_wgbs_linear_mojo_gene_fc",
+  "catalog": {
+    "title": "Buffy WGBS linear Mojo + gene FC",
+    "summary": "Buffy linear alignment via Mojo multi-GPU path.",
+    "visibility": "advanced",
+    "lifecycle": "active",
+    "family": "specialty"
+  },
   "description": "Buffy-coat WGBS with linear Align via MojoFq2bamMeth (portable NVIDIA/AMD/CPU), read-level informME, Houseman deconvolution, gene FeatureCuts. Clara rollback: buffy_wgbs_linear_gene_fc (engine=parabricks).",
   "pipelineProfile": "samd_research",
   "researchMode": "gene_fc",
@@ -31,13 +38,17 @@
     },
     "cell_deconvolution": {
       "method": "houseman",
-      "contexts": ["CG"],
+      "contexts": [
+        "CG"
+      ],
       "marker_min_coverage": 4,
       "min_marker_fraction": 0.25,
       "use_gpu": true
     },
     "info_measures": {
-      "contexts": ["CG"],
+      "contexts": [
+        "CG"
+      ],
       "tile_size": 4,
       "ising_enabled": true
     },

@@ -1,5 +1,19 @@
 {
   "pipelineProfile": "samd_research",
+  "catalog": {
+    "title": "SaMD research",
+    "summary": "Feasibility / expanded development with early-stop; pick a researchMode axis.",
+    "visibility": "operator",
+    "lifecycle": "active",
+    "family": "samd",
+    "researchModes": [
+      "dmp_raw",
+      "dmp_fc",
+      "gene_enricher",
+      "gene_fc",
+      "dual_fc"
+    ]
+  },
   "dmp_modeling_mode": "featurecuts",
   "gene_modeling_mode": "featurecuts",
   "runDmpSelection": true,

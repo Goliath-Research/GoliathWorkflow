@@ -1,5 +1,12 @@
 {
   "pipelineProfile": "full_biomarker_gene_fc",
+  "catalog": {
+    "title": "Biomarker-filtered gene FC",
+    "summary": "DMP + gene FeatureCuts with biomarker filter.",
+    "visibility": "advanced",
+    "lifecycle": "active",
+    "family": "specialty"
+  },
   "runDmpSelection": true,
   "runGeneFeaturecuts": true,
   "runBiomarkerFilter": true,
