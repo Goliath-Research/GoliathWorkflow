@@ -67,6 +67,8 @@ deploy_mssql() {
   sqlcmd "${args[@]}" -i "$dir/cfg_repo_api.sql"
   echo "==> mssql: cfg_process_pack_catalog.sql"
   sqlcmd "${args[@]}" -i "$dir/cfg_process_pack_catalog.sql"
+  echo "==> mssql: cfg_assay_procedure_links.sql"
+  sqlcmd "${args[@]}" -i "$dir/cfg_assay_procedure_links.sql"
 }
 
 deploy_postgres() {
@@ -89,6 +91,8 @@ deploy_postgres() {
   psql -q -v ON_ERROR_STOP=1 -f "$dir/cfg_repo_api.sql"
   echo "==> postgres: cfg_process_pack_catalog.sql"
   psql -q -v ON_ERROR_STOP=1 -f "$dir/cfg_process_pack_catalog.sql"
+  echo "==> postgres: cfg_assay_procedure_links.sql"
+  psql -q -v ON_ERROR_STOP=1 -f "$dir/cfg_assay_procedure_links.sql"
 }
 
 backends=()

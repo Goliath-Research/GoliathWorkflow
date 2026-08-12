@@ -61,18 +61,14 @@ CREATE OR ALTER PROCEDURE portal.sp_list_pipeline_profiles
 AS
 BEGIN
     SET NOCOUNT ON;
-    /*
-      Platform -> Process packs -> Pipeline profiles.
-      document_json CAST to nvarchar(max) for uniGUI (native json not grid-safe;
-      avoids per-click sp_get_* under non-MARS sessions).
-    */
+    /* Platform -> Process packs -> Pipeline profiles (native json). */
     SELECT
         p.id,
         p.name,
         p.version,
         p.status,
         p.content_hash,
-        CAST(p.document_json AS nvarchar(max)) AS document_json,
+        p.document_json AS document_json,
         p.created_at_utc,
         p.updated_at_utc
     FROM cfg.pipeline_profile p
@@ -93,7 +89,7 @@ BEGIN
         p.version,
         p.status,
         p.content_hash,
-        CAST(p.document_json AS nvarchar(max)) AS document_json,
+        p.document_json AS document_json,
         p.created_at_utc,
         p.updated_at_utc
     FROM cfg.pipeline_profile p
@@ -114,23 +110,23 @@ BEGIN
         p.name,
         p.version,
         p.status,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.title') AS title,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.summary') AS summary,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') AS visibility,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.lifecycle') AS lifecycle,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.family') AS family,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.replacedBy') AS replaced_by,
-        JSON_QUERY(CAST(p.document_json AS nvarchar(max)), '$.catalog.researchModes') AS research_modes
+        JSON_VALUE(p.document_json, '$.catalog.title') AS title,
+        JSON_VALUE(p.document_json, '$.catalog.summary') AS summary,
+        JSON_VALUE(p.document_json, '$.catalog.visibility') AS visibility,
+        JSON_VALUE(p.document_json, '$.catalog.lifecycle') AS lifecycle,
+        JSON_VALUE(p.document_json, '$.catalog.family') AS family,
+        JSON_VALUE(p.document_json, '$.catalog.replacedBy') AS replaced_by,
+        CAST(JSON_QUERY(p.document_json, '$.catalog.researchModes') AS json) AS research_modes
     FROM cfg.pipeline_profile p
     WHERE p.status = 'published'
-      AND JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.lifecycle') = N'active'
+      AND JSON_VALUE(p.document_json, '$.catalog.lifecycle') = N'active'
       AND (
-            JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') = N'operator'
+            JSON_VALUE(p.document_json, '$.catalog.visibility') = N'operator'
          OR (@include_advanced = 1
-             AND JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') = N'advanced')
+             AND JSON_VALUE(p.document_json, '$.catalog.visibility') = N'advanced')
           )
     ORDER BY
-        CASE JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.family')
+        CASE JSON_VALUE(p.document_json, '$.catalog.family')
             WHEN N'samd' THEN 0
             WHEN N'staged' THEN 1
             ELSE 2
@@ -151,7 +147,7 @@ BEGIN
         p.version,
         p.status,
         p.content_hash,
-        CAST(p.document_json AS nvarchar(max)) AS document_json,
+        p.document_json AS document_json,
         p.created_at_utc,
         p.updated_at_utc
     FROM cfg.assay_procedure p
@@ -172,7 +168,7 @@ BEGIN
         p.version,
         p.status,
         p.content_hash,
-        CAST(p.document_json AS nvarchar(max)) AS document_json,
+        p.document_json AS document_json,
         p.created_at_utc,
         p.updated_at_utc
     FROM cfg.assay_procedure p
@@ -195,29 +191,29 @@ BEGIN
         p.name,
         p.version,
         p.status,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.title') AS title,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.summary') AS summary,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') AS visibility,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.lifecycle') AS lifecycle,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.family') AS family,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.replacedBy') AS replaced_by,
-        CAST(JSON_QUERY(CAST(p.document_json AS nvarchar(max)), '$.analyteExpectation') AS nvarchar(max)) AS analyte_expectation,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.pipelineProfile') AS default_pipeline_profile,
-        JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.researchMode') AS default_research_mode
+        JSON_VALUE(p.document_json, '$.catalog.title') AS title,
+        JSON_VALUE(p.document_json, '$.catalog.summary') AS summary,
+        JSON_VALUE(p.document_json, '$.catalog.visibility') AS visibility,
+        JSON_VALUE(p.document_json, '$.catalog.lifecycle') AS lifecycle,
+        JSON_VALUE(p.document_json, '$.catalog.family') AS family,
+        JSON_VALUE(p.document_json, '$.catalog.replacedBy') AS replaced_by,
+        CAST(JSON_QUERY(p.document_json, '$.analyteExpectation') AS json) AS analyte_expectation,
+        JSON_VALUE(p.document_json, '$.pipelineProfile') AS default_pipeline_profile,
+        JSON_VALUE(p.document_json, '$.researchMode') AS default_research_mode
     FROM cfg.assay_procedure p
     WHERE p.status = 'published'
-      AND JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.lifecycle') = N'active'
+      AND JSON_VALUE(p.document_json, '$.catalog.lifecycle') = N'active'
       AND (
-            JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') = N'operator'
+            JSON_VALUE(p.document_json, '$.catalog.visibility') = N'operator'
          OR (@include_advanced = 1
-             AND JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') = N'advanced')
+             AND JSON_VALUE(p.document_json, '$.catalog.visibility') = N'advanced')
           )
       AND (
             @analyte_l IS NULL OR @analyte_l = N''
-         OR LOWER(JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.analyteExpectation')) = @analyte_l
+         OR LOWER(JSON_VALUE(p.document_json, '$.analyteExpectation')) = @analyte_l
          OR EXISTS (
                 SELECT 1
-                FROM OPENJSON(JSON_QUERY(CAST(p.document_json AS nvarchar(max)), '$.analyteExpectation')) j
+                FROM OPENJSON(JSON_QUERY(p.document_json, '$.analyteExpectation')) j
                 WHERE LOWER(j.[value]) = @analyte_l
             )
           )
@@ -230,21 +226,22 @@ CREATE OR ALTER PROCEDURE portal.sp_get_study_process_defaults
 AS
 BEGIN
     SET NOCOUNT ON;
+    /* Bootstrap shape (document_json only). FK-aware version is in cfg_assay_procedure_links.sql. */
     SELECT
         s.id AS study_row_id,
         s.name AS study_name,
         s.version AS study_version,
-        JSON_VALUE(CAST(s.document_json AS nvarchar(max)), '$.pipelineProfile') AS pipeline_profile,
-        JSON_VALUE(CAST(s.document_json AS nvarchar(max)), '$.pipelineProcedure') AS pipeline_procedure,
-        JSON_VALUE(CAST(s.document_json AS nvarchar(max)), '$.researchMode') AS research_mode,
-        JSON_VALUE(CAST(pp.document_json AS nvarchar(max)), '$.catalog.title') AS pipeline_profile_title,
-        JSON_VALUE(CAST(ap.document_json AS nvarchar(max)), '$.catalog.title') AS pipeline_procedure_title
+        JSON_VALUE(s.document_json, '$.pipelineProfile') AS pipeline_profile,
+        JSON_VALUE(s.document_json, '$.pipelineProcedure') AS pipeline_procedure,
+        JSON_VALUE(s.document_json, '$.researchMode') AS research_mode,
+        JSON_VALUE(pp.document_json, '$.catalog.title') AS pipeline_profile_title,
+        JSON_VALUE(ap.document_json, '$.catalog.title') AS pipeline_procedure_title
     FROM cfg.study s
     LEFT JOIN cfg.pipeline_profile pp
-        ON pp.name = JSON_VALUE(CAST(s.document_json AS nvarchar(max)), '$.pipelineProfile')
+        ON pp.name = JSON_VALUE(s.document_json, '$.pipelineProfile')
        AND pp.status IN ('published', 'retired')
     LEFT JOIN cfg.assay_procedure ap
-        ON ap.name = JSON_VALUE(CAST(s.document_json AS nvarchar(max)), '$.pipelineProcedure')
+        ON ap.name = JSON_VALUE(s.document_json, '$.pipelineProcedure')
        AND ap.status IN ('published', 'retired')
     WHERE s.id = @study_row_id;
 END
@@ -259,6 +256,7 @@ CREATE OR ALTER PROCEDURE portal.sp_set_study_process_defaults
 AS
 BEGIN
     SET NOCOUNT ON;
+    /* Bootstrap shape. FK-aware version is in cfg_assay_procedure_links.sql. */
 
     IF NOT EXISTS (SELECT 1 FROM cfg.study WHERE id = @study_row_id)
     BEGIN
@@ -273,11 +271,11 @@ BEGIN
             FROM cfg.pipeline_profile p
             WHERE p.name = @pipeline_profile
               AND p.status = 'published'
-              AND JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.lifecycle') = N'active'
+              AND JSON_VALUE(p.document_json, '$.catalog.lifecycle') = N'active'
               AND (
-                    JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') = N'operator'
+                    JSON_VALUE(p.document_json, '$.catalog.visibility') = N'operator'
                  OR (@allow_advanced = 1
-                     AND JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') = N'advanced')
+                     AND JSON_VALUE(p.document_json, '$.catalog.visibility') = N'advanced')
                   )
         )
         BEGIN
@@ -293,11 +291,11 @@ BEGIN
             FROM cfg.assay_procedure p
             WHERE p.name = @pipeline_procedure
               AND p.status = 'published'
-              AND JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.lifecycle') = N'active'
+              AND JSON_VALUE(p.document_json, '$.catalog.lifecycle') = N'active'
               AND (
-                    JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') = N'operator'
+                    JSON_VALUE(p.document_json, '$.catalog.visibility') = N'operator'
                  OR (@allow_advanced = 1
-                     AND JSON_VALUE(CAST(p.document_json AS nvarchar(max)), '$.catalog.visibility') = N'advanced')
+                     AND JSON_VALUE(p.document_json, '$.catalog.visibility') = N'advanced')
                   )
         )
         BEGIN
@@ -306,25 +304,25 @@ BEGIN
         END;
     END;
 
-    DECLARE @doc nvarchar(max) = (
-        SELECT CAST(document_json AS nvarchar(max)) FROM cfg.study WHERE id = @study_row_id
+    DECLARE @doc json = (
+        SELECT document_json FROM cfg.study WHERE id = @study_row_id
     );
-    IF @doc IS NULL OR LTRIM(RTRIM(@doc)) = N''
-        SET @doc = N'{}';
+    IF @doc IS NULL
+        SET @doc = CAST(N'{}' AS json);
 
     IF @pipeline_profile IS NOT NULL
-        SET @doc = JSON_MODIFY(@doc, '$.pipelineProfile',
-            CASE WHEN LTRIM(RTRIM(@pipeline_profile)) = N'' THEN NULL ELSE @pipeline_profile END);
+        SET @doc = CAST(JSON_MODIFY(@doc, '$.pipelineProfile',
+            CASE WHEN LTRIM(RTRIM(@pipeline_profile)) = N'' THEN NULL ELSE @pipeline_profile END) AS json);
     IF @pipeline_procedure IS NOT NULL
-        SET @doc = JSON_MODIFY(@doc, '$.pipelineProcedure',
-            CASE WHEN LTRIM(RTRIM(@pipeline_procedure)) = N'' THEN NULL ELSE @pipeline_procedure END);
+        SET @doc = CAST(JSON_MODIFY(@doc, '$.pipelineProcedure',
+            CASE WHEN LTRIM(RTRIM(@pipeline_procedure)) = N'' THEN NULL ELSE @pipeline_procedure END) AS json);
     IF @research_mode IS NOT NULL
-        SET @doc = JSON_MODIFY(@doc, '$.researchMode',
-            CASE WHEN LTRIM(RTRIM(@research_mode)) = N'' THEN NULL ELSE @research_mode END);
+        SET @doc = CAST(JSON_MODIFY(@doc, '$.researchMode',
+            CASE WHEN LTRIM(RTRIM(@research_mode)) = N'' THEN NULL ELSE @research_mode END) AS json);
 
     UPDATE cfg.study
-    SET document_json = CAST(@doc AS json),
-        content_hash = CONVERT(nvarchar(128), HASHBYTES('SHA2_256', @doc), 2),
+    SET document_json = @doc,
+        content_hash = CONVERT(nvarchar(128), HASHBYTES('SHA2_256', CONVERT(nvarchar(max), @doc)), 2),
         updated_at_utc = SYSUTCDATETIME()
     WHERE id = @study_row_id;
 

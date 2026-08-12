@@ -131,7 +131,12 @@ File-backed store keeps the same structure under `study.extra.studyGroups`. CLI:
 - `portal.sp_list/get_pipeline_profile` / `sp_list/get_assay_procedure` — Platform admin browse (incl. retired)
 - `portal.sp_get/set_study_process_defaults` — study-bound `pipelineProfile` / `pipelineProcedure` / `researchMode`
 
-Process-pack documents in git carry a `catalog` block; `scripts/sync_cfg_profiles_and_action_catalog.py` upserts `cfg.pipeline_profile` + `cfg.assay_procedure` with `published` vs `retired` from that metadata. SQL contracts: [`cfg_process_pack_catalog.sql`](../../workflow_engine/sql_mssql/cfg_process_pack_catalog.sql) (MSSQL) / [PG twin](../../workflow_engine/sql_pg/cfg_process_pack_catalog.sql); day-2 deploy helper [`scripts/deploy_process_pack_catalog.sh`](../../scripts/deploy_process_pack_catalog.sh). UI contract: [portal-ia.md](portal-ia.md) / [portal-UI.md](portal-UI.md).
+Process-pack documents in git carry a `catalog` block; `scripts/sync_cfg_profiles_and_action_catalog.py` upserts `cfg.pipeline_profile` + `cfg.assay_procedure` with `published` vs `retired` from that metadata and binds assay FKs (`default_pipeline_profile_id`, SamplePrep/lifecycle `domain_program` ids, `primary_analyte`). SQL contracts (native `json` / `jsonb` — no `nvarchar(max)` payloads):
+
+- [`cfg_process_pack_catalog.sql`](../../workflow_engine/sql_mssql/cfg_process_pack_catalog.sql) + [PG](../../workflow_engine/sql_pg/cfg_process_pack_catalog.sql)
+- [`cfg_assay_procedure_links.sql`](../../workflow_engine/sql_mssql/cfg_assay_procedure_links.sql) + [PG](../../workflow_engine/sql_pg/cfg_assay_procedure_links.sql) — study defaults FKs, `study_instance_link.assay_procedure_id`, `cfg.v_assay_procedure`
+
+Day-2: [`scripts/deploy_process_pack_catalog.sh`](../../scripts/deploy_process_pack_catalog.sh). UI: [portal-ia.md](portal-ia.md) / [portal-UI.md](portal-UI.md).
 
 ## Related
 

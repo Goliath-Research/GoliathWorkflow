@@ -158,6 +158,42 @@ def upsert_profiles(
     return updated
 
 
+def _program_name_from_path(path_or_name: object) -> Optional[str]:
+    """Resolve DomainProgram cfg name from a fixture path or bare name."""
+    if path_or_name is None:
+        return None
+    raw = str(path_or_name).strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    if not path.is_absolute():
+        candidate = REPO / path
+    else:
+        candidate = path
+    if candidate.is_file():
+        try:
+            doc = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            doc = {}
+        name = doc.get("name")
+        if name:
+            return str(name)
+    # Fall back to fixture stem (sample_prep.program.json → sample_prep)
+    stem = path.name
+    if stem.endswith(".program.json"):
+        stem = stem[: -len(".program.json")]
+    return stem or None
+
+
+def _analyte_token(doc: Dict[str, Any]) -> Optional[str]:
+    exp = doc.get("analyteExpectation")
+    if isinstance(exp, str) and exp.strip():
+        return exp.strip().lower()
+    if isinstance(exp, list) and exp:
+        return str(exp[0]).strip().lower() or None
+    return None
+
+
 def upsert_procedures(
     db,
     *,
@@ -176,7 +212,44 @@ def upsert_procedures(
         )
         updated.append(f"{name}@{version}:{status}")
         print(f"upserted assay_procedure:{name}@{version} status={status}")
+        bind_assay_procedure(db, name=name, version=version, doc=doc)
     return updated
+
+
+def bind_assay_procedure(
+    db,
+    *,
+    name: str,
+    version: str,
+    doc: Dict[str, Any],
+) -> None:
+    """Set typed FKs on cfg.assay_procedure via cfg.cfg_repo_bind_assay_procedure."""
+    backend = os.environ.get("BACKEND_DB", "mssql").lower()
+    analyte = _analyte_token(doc)
+    profile = doc.get("pipelineProfile")
+    profile_name = str(profile).strip() if profile else None
+    sp_name = _program_name_from_path(doc.get("samplePrepProgram"))
+    lc_name = _program_name_from_path(doc.get("lifecycleProgram"))
+    try:
+        if backend == "postgres":
+            db._exec_proc(  # noqa: SLF001
+                "SELECT * FROM cfg.cfg_repo_bind_assay_procedure(%s, %s, %s, %s, %s, %s)",
+                (name, version, analyte, profile_name, sp_name, lc_name),
+            )
+        else:
+            db._exec_proc(  # noqa: SLF001
+                "EXEC cfg.cfg_repo_bind_assay_procedure "
+                "@procedure_name=?, @procedure_version=?, @primary_analyte=?, "
+                "@default_pipeline_profile_name=?, @sample_prep_program_name=?, "
+                "@lifecycle_program_name=?",
+                (name, version, analyte, profile_name, sp_name, lc_name),
+            )
+        print(
+            f"bound assay_procedure:{name} analyte={analyte} "
+            f"profile={profile_name} samplePrep={sp_name} lifecycle={lc_name}"
+        )
+    except Exception as exc:  # noqa: BLE001 — sync continues; links may be undeployed
+        print(f"warn: bind assay_procedure:{name} failed: {exc}")
 
 
 def retire_legacy_mode_profiles(db) -> int:

@@ -50,7 +50,7 @@ RETURNS TABLE(
   version text,
   status text,
   content_hash text,
-  document_json text,
+  document_json jsonb,
   created_at_utc timestamptz,
   updated_at_utc timestamptz
 )
@@ -63,7 +63,7 @@ AS $$
     p.version,
     p.status::text,
     p.content_hash,
-    p.document_json::text,
+    p.document_json,
     p.created_at_utc,
     p.updated_at_utc
   FROM cfg.pipeline_profile p
@@ -81,7 +81,7 @@ RETURNS TABLE(
   version text,
   status text,
   content_hash text,
-  document_json text,
+  document_json jsonb,
   created_at_utc timestamptz,
   updated_at_utc timestamptz
 )
@@ -94,7 +94,7 @@ AS $$
     p.version,
     p.status::text,
     p.content_hash,
-    p.document_json::text,
+    p.document_json,
     p.created_at_utc,
     p.updated_at_utc
   FROM cfg.pipeline_profile p
@@ -161,7 +161,7 @@ RETURNS TABLE(
   version text,
   status text,
   content_hash text,
-  document_json text,
+  document_json jsonb,
   created_at_utc timestamptz,
   updated_at_utc timestamptz
 )
@@ -174,7 +174,7 @@ AS $$
     p.version,
     p.status::text,
     p.content_hash,
-    p.document_json::text,
+    p.document_json,
     p.created_at_utc,
     p.updated_at_utc
   FROM cfg.assay_procedure p
@@ -192,7 +192,7 @@ RETURNS TABLE(
   version text,
   status text,
   content_hash text,
-  document_json text,
+  document_json jsonb,
   created_at_utc timestamptz,
   updated_at_utc timestamptz
 )
@@ -205,7 +205,7 @@ AS $$
     p.version,
     p.status::text,
     p.content_hash,
-    p.document_json::text,
+    p.document_json,
     p.created_at_utc,
     p.updated_at_utc
   FROM cfg.assay_procedure p
@@ -230,7 +230,7 @@ RETURNS TABLE(
   lifecycle text,
   family text,
   replaced_by text,
-  analyte_expectation text,
+  analyte_expectation jsonb,
   default_pipeline_profile text,
   default_research_mode text
 )
@@ -248,7 +248,7 @@ AS $$
     p.document_json->'catalog'->>'lifecycle',
     p.document_json->'catalog'->>'family',
     p.document_json->'catalog'->>'replacedBy',
-    (p.document_json->'analyteExpectation')::text,
+    p.document_json->'analyteExpectation',
     p.document_json->>'pipelineProfile',
     p.document_json->>'researchMode'
   FROM cfg.assay_procedure p

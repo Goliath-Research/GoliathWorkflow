@@ -272,7 +272,8 @@ CREATE OR ALTER PROCEDURE cfg.cfg_repo_link_study_instance
     @domain_program_id bigint = NULL,
     @pipeline_profile_id bigint = NULL,
     @site_id bigint = NULL,
-    @storage_profile_id bigint = NULL
+    @storage_profile_id bigint = NULL,
+    @assay_procedure_id bigint = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -284,11 +285,14 @@ BEGIN
         domain_program_id = COALESCE(@domain_program_id, t.domain_program_id),
         pipeline_profile_id = COALESCE(@pipeline_profile_id, t.pipeline_profile_id),
         site_id = COALESCE(@site_id, t.site_id),
-        storage_profile_id = COALESCE(@storage_profile_id, t.storage_profile_id)
+        storage_profile_id = COALESCE(@storage_profile_id, t.storage_profile_id),
+        assay_procedure_id = COALESCE(@assay_procedure_id, t.assay_procedure_id)
     WHEN NOT MATCHED THEN INSERT (
-        study_row_id, workflow_instance_id, domain_program_id, pipeline_profile_id, site_id, storage_profile_id
+        study_row_id, workflow_instance_id, domain_program_id, pipeline_profile_id,
+        site_id, storage_profile_id, assay_procedure_id
     ) VALUES (
-        @study_row_id, @workflow_instance_id, @domain_program_id, @pipeline_profile_id, @site_id, @storage_profile_id
+        @study_row_id, @workflow_instance_id, @domain_program_id, @pipeline_profile_id,
+        @site_id, @storage_profile_id, @assay_procedure_id
     );
     SELECT id FROM cfg.study_instance_link WHERE workflow_instance_id = @workflow_instance_id;
 END

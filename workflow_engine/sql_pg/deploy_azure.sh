@@ -85,6 +85,7 @@ SCRIPTS=(
   cfg_reference_assets_seed.sql
   cfg_portal_api.sql
   cfg_process_pack_catalog.sql
+  cfg_assay_procedure_links.sql
   cfg_hyperparameter_search.sql
 )
 

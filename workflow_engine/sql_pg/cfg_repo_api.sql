@@ -412,7 +412,8 @@ CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_study_instance(
   p_domain_program_id bigint DEFAULT NULL,
   p_pipeline_profile_id bigint DEFAULT NULL,
   p_site_id bigint DEFAULT NULL,
-  p_storage_profile_id bigint DEFAULT NULL
+  p_storage_profile_id bigint DEFAULT NULL,
+  p_assay_procedure_id bigint DEFAULT NULL
 )
 RETURNS TABLE(id bigint)
 LANGUAGE plpgsql
@@ -420,16 +421,19 @@ AS $$
 DECLARE v_id bigint;
 BEGIN
   INSERT INTO cfg.study_instance_link (
-    study_row_id, workflow_instance_id, domain_program_id, pipeline_profile_id, site_id, storage_profile_id
+    study_row_id, workflow_instance_id, domain_program_id, pipeline_profile_id,
+    site_id, storage_profile_id, assay_procedure_id
   ) VALUES (
-    p_study_row_id, p_workflow_instance_id, p_domain_program_id, p_pipeline_profile_id, p_site_id, p_storage_profile_id
+    p_study_row_id, p_workflow_instance_id, p_domain_program_id, p_pipeline_profile_id,
+    p_site_id, p_storage_profile_id, p_assay_procedure_id
   )
   ON CONFLICT (workflow_instance_id) DO UPDATE SET
     study_row_id = EXCLUDED.study_row_id,
     domain_program_id = COALESCE(EXCLUDED.domain_program_id, cfg.study_instance_link.domain_program_id),
     pipeline_profile_id = COALESCE(EXCLUDED.pipeline_profile_id, cfg.study_instance_link.pipeline_profile_id),
     site_id = COALESCE(EXCLUDED.site_id, cfg.study_instance_link.site_id),
-    storage_profile_id = COALESCE(EXCLUDED.storage_profile_id, cfg.study_instance_link.storage_profile_id)
+    storage_profile_id = COALESCE(EXCLUDED.storage_profile_id, cfg.study_instance_link.storage_profile_id),
+    assay_procedure_id = COALESCE(EXCLUDED.assay_procedure_id, cfg.study_instance_link.assay_procedure_id)
   RETURNING cfg.study_instance_link.id INTO v_id;
   id := v_id;
   RETURN NEXT;
