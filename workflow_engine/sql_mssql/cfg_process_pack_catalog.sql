@@ -226,7 +226,8 @@ CREATE OR ALTER PROCEDURE portal.sp_get_study_process_defaults
 AS
 BEGIN
     SET NOCOUNT ON;
-    /* Bootstrap shape (document_json only). FK-aware version is in cfg_assay_procedure_links.sql. */
+    /* Bootstrap shape (document_json only). FK-aware version is in cfg_assay_procedure_links.sql.
+       OUTER APPLY TOP (1) mirrors PG LATERAL … LIMIT 1 — (name, version) is unique, not name alone. */
     SELECT
         s.id AS study_row_id,
         s.name AS study_name,
@@ -237,12 +238,20 @@ BEGIN
         JSON_VALUE(pp.document_json, '$.catalog.title') AS pipeline_profile_title,
         JSON_VALUE(ap.document_json, '$.catalog.title') AS pipeline_procedure_title
     FROM cfg.study s
-    LEFT JOIN cfg.pipeline_profile pp
-        ON pp.name = JSON_VALUE(s.document_json, '$.pipelineProfile')
-       AND pp.status IN ('published', 'retired')
-    LEFT JOIN cfg.assay_procedure ap
-        ON ap.name = JSON_VALUE(s.document_json, '$.pipelineProcedure')
-       AND ap.status IN ('published', 'retired')
+    OUTER APPLY (
+        SELECT TOP (1) p.document_json
+        FROM cfg.pipeline_profile p
+        WHERE p.name = JSON_VALUE(s.document_json, '$.pipelineProfile')
+          AND p.status IN ('published', 'retired')
+        ORDER BY p.id DESC
+    ) pp
+    OUTER APPLY (
+        SELECT TOP (1) a.document_json
+        FROM cfg.assay_procedure a
+        WHERE a.name = JSON_VALUE(s.document_json, '$.pipelineProcedure')
+          AND a.status IN ('published', 'retired')
+        ORDER BY a.id DESC
+    ) ap
     WHERE s.id = @study_row_id;
 END
 GO
