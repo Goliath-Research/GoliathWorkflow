@@ -27,7 +27,7 @@ Branch parity (scope variables for IF/SWITCH/WHILE): [sql_mssql/wf_sql_branch_pa
 | Concept | Schema object |
 |---------|---------------|
 | Action catalog | `wf.workflow_action` (`action_name`, `capability`, `payload_schema_ref`) |
-| Action I/O schemas | `wf.workflow_action_schema` (`direction` = `input` \| `output`, `schema_json`, `schema_id`) |
+| Action I/O types | `wf.workflow_action.input_type_id` / `output_type_id` → `wf.data_type` (+ fields); legacy `wf.workflow_action_schema` read-compat only |
 | Input template | `wf.workflow_input_template.template_json` with `${...}` placeholders |
 | Input bindings | `wf.workflow_input_binding` (`target_json_path`, `source_expr`) |
 | Worker poll/claim | `wf.sp_worker_request_task` → `node_execution` WHERE `status = READY` |

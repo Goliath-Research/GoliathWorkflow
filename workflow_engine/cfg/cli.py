@@ -132,22 +132,15 @@ def _cmd_publish_program(args: argparse.Namespace) -> int:
 
 
 def _cmd_sync_actions(args: argparse.Namespace) -> int:
-    from cfg.sync_actions import (
-        seed_wf_from_catalog,
-        sync_actions_from_catalog,
-        sync_actions_from_committed_json,
-    )
+    from cfg.sync_actions import seed_wf_from_catalog
 
-    store = _open_store(args.store_dir)
+    # cfg.action_definition retired — always seed wf.workflow_action + wf.data_type.
+    # Compat flags --from-json / --seed-wf / --draft are ignored.
+    _ = (args.from_json, args.draft, args.seed_wf)
     repo = args.repo_root or _repo_root()
-    if args.from_json:
-        result = sync_actions_from_committed_json(store, repo_root=repo, publish=not args.draft)
-    else:
-        result = sync_actions_from_catalog(store, repo_root=repo, publish=not args.draft)
-    if args.seed_wf:
-        result["wf_seed"] = seed_wf_from_catalog(repo_root=repo, use_db=True)
+    result = seed_wf_from_catalog(repo_root=repo, use_db=True)
     print(json.dumps(result, indent=2))
-    return 0
+    return 0 if int(result.get("returncode") or 0) == 0 else 1
 
 
 def _cmd_sync_library_presets(args: argparse.Namespace) -> int:
@@ -161,24 +154,23 @@ def _cmd_sync_library_presets(args: argparse.Namespace) -> int:
 
 
 def _cmd_scaffold_action(args: argparse.Namespace) -> int:
-    from cfg.scaffold import scaffold_action, upsert_server_action
+    from cfg.scaffold import define_scaffold_action, scaffold_action
 
-    store = _open_store(args.store_dir)
+    document = None
     if args.define:
-        upsert_server_action(
-            store,
+        document = define_scaffold_action(
             action_name=args.name,
             capability=args.capability or args.name.split(".")[0],
-            publish=not args.draft,
         )
     result = scaffold_action(
-        store,
+        None,
         args.name,
         repo_root=args.repo_root or _repo_root(),
         version=args.version,
         force=args.force,
         emit_pydantic=not args.no_pydantic,
         emit_program_snippet=not args.no_program_snippet,
+        document=document,
     )
     print(json.dumps(result, indent=2))
     return 0
@@ -410,11 +402,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--deploy-db", action="store_true")
     s.set_defaults(func=_cmd_publish_program)
 
-    s = sub.add_parser("sync-actions", help="Sync action catalog into cfg (+ optional wf seed)")
+    s = sub.add_parser(
+        "sync-actions",
+        help="Seed wf.workflow_action + wf.data_type from the action catalog (cfg.action_definition retired)",
+    )
     s.add_argument("--repo-root", default=None)
-    s.add_argument("--from-json", action="store_true")
-    s.add_argument("--seed-wf", action="store_true")
-    s.add_argument("--draft", action="store_true")
+    s.add_argument("--from-json", action="store_true", help="Ignored (compat); always seeds wf")
+    s.add_argument("--seed-wf", action="store_true", help="Ignored (compat); always seeds wf")
+    s.add_argument("--draft", action="store_true", help="Ignored (compat)")
     s.set_defaults(func=_cmd_sync_actions)
 
     s = sub.add_parser(
@@ -425,14 +420,21 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--draft", action="store_true")
     s.set_defaults(func=_cmd_sync_library_presets)
 
-    s = sub.add_parser("scaffold-action", help="Scaffold client stubs from cfg action")
+    s = sub.add_parser(
+        "scaffold-action",
+        help="Scaffold client stubs from git catalog (or --define); seed wf via sync-actions",
+    )
     s.add_argument("name")
     s.add_argument("--version", default="1")
     s.add_argument("--repo-root", default=None)
-    s.add_argument("--define", action="store_true", help="Create scaffolded action_definition first")
+    s.add_argument(
+        "--define",
+        action="store_true",
+        help="Scaffold without requiring a catalog entry (in-memory stub only)",
+    )
     s.add_argument("--capability", default=None)
     s.add_argument("--force", action="store_true")
-    s.add_argument("--draft", action="store_true")
+    s.add_argument("--draft", action="store_true", help="Ignored (compat)")
     s.add_argument(
         "--no-pydantic",
         action="store_true",

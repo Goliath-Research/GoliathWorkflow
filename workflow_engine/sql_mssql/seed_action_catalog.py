@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-Seed wf.workflow_action rows and schemas from the unified action catalog.
+Seed wf.workflow_action rows from the unified action catalog, then seed
+wf.data_type (+ action input/output type FKs) via seed_data_types.py.
+
+Legacy per-action JSON Schema blobs (wf.workflow_action_schema) are no longer
+seeded; types are explicit rows in wf.data_type / wf.data_type_field.
 
 Uses the gateway DB layer (Azure SQL or PostgreSQL) via BACKEND_DB / connection env.
 Legacy PostgreSQL-only path: pass --dsn postgresql://...
@@ -121,7 +125,7 @@ def _upsert_schema_psql(
 def _seed_via_db() -> tuple[int, int]:
     from rest.connection import resolve_connection_config
     from rest.db import open_gateway_db
-    from rest.db_client import upsert_action_schema, upsert_workflow_action
+    from rest.db_client import upsert_workflow_action
 
     config = resolve_connection_config()
     db = open_gateway_db(config)
@@ -155,25 +159,7 @@ def _seed_via_db() -> tuple[int, int]:
             action_count += 1
             print(f"Upserted action {action['action_name']}")
 
-        if not TASKS_DIR.is_dir():
-            raise SystemExit(f"Missing {TASKS_DIR}; run methyl-export-task-schemas first.")
-
-        schema_count = 0
-        for spec in list_task_schema_specs():
-            for direction, filename in (
-                ("input", spec.input_filename),
-                ("output", spec.output_filename),
-            ):
-                path = TASKS_DIR / filename
-                if not path.is_file():
-                    print(f"Skip missing {path}", file=sys.stderr)
-                    continue
-                schema = json.loads(path.read_text(encoding="utf-8"))
-                upsert_action_schema(db, spec.action_name, direction, schema, spec.schema_id)
-                schema_count += 1
-                print(f"Upserted schema {spec.action_name} ({direction})")
-
-        return action_count, schema_count
+        return action_count, 0
     finally:
         db.close()
 
@@ -208,30 +194,12 @@ def _seed_via_psql(dsn: str) -> tuple[int, int]:
         action_count += 1
         print(f"Upserted action {action['action_name']}")
 
-    if not TASKS_DIR.is_dir():
-        raise SystemExit(f"Missing {TASKS_DIR}; run methyl-export-task-schemas first.")
-
-    schema_count = 0
-    for spec in list_task_schema_specs():
-        for direction, filename in (
-            ("input", spec.input_filename),
-            ("output", spec.output_filename),
-        ):
-            path = TASKS_DIR / filename
-            if not path.is_file():
-                print(f"Skip missing {path}", file=sys.stderr)
-                continue
-            schema = json.loads(path.read_text(encoding="utf-8"))
-            _upsert_schema_psql(dsn, spec.action_name, direction, schema, spec.schema_id)
-            schema_count += 1
-            print(f"Upserted schema {spec.action_name} ({direction})")
-
-    return action_count, schema_count
+    return action_count, 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Seed wf.workflow_action + schemas from schemas/actions/catalog.json"
+        description="Seed wf.workflow_action + wf.data_type from schemas/actions/catalog.json"
     )
     parser.add_argument(
         "--dsn",
@@ -257,11 +225,23 @@ def main(argv: list[str] | None = None) -> int:
         export_action_catalog(write=True)
 
     if args.dsn:
-        action_count, schema_count = _seed_via_psql(args.dsn)
+        action_count, _schema_count = _seed_via_psql(args.dsn)
     else:
-        action_count, schema_count = _seed_via_db()
+        action_count, _schema_count = _seed_via_db()
 
-    print(f"Seeded {action_count} action(s) and {schema_count} schema(s).")
+    print(f"Seeded {action_count} action(s).")
+
+    # Explicit data types + action input/output FKs (no schema blobs).
+    seed_dt = REPO_ROOT / "workflow_engine" / "sql_mssql" / "seed_data_types.py"
+    if seed_dt.is_file() and not args.dsn:
+        proc = subprocess.run(
+            [sys.executable, str(seed_dt)],
+            cwd=str(REPO_ROOT),
+            check=False,
+        )
+        if proc.returncode != 0:
+            print("warn: seed_data_types.py failed", file=sys.stderr)
+            return proc.returncode
     return 0
 
 

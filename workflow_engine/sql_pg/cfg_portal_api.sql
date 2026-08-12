@@ -43,11 +43,28 @@ AS $$
   );
 $$;
 
+/* Deprecated aliases — actions live in wf; use portal.sp_list/get_workflow_actions. */
 CREATE OR REPLACE FUNCTION portal.sp_list_cfg_actions()
-RETURNS TABLE(id bigint, name text, version text, status text, content_hash text)
+RETURNS TABLE(
+  id bigint,
+  action_name text,
+  capability text,
+  execution_mode text,
+  cli_tool text,
+  in_process_handler text,
+  implementation_status text,
+  can_pause boolean,
+  can_continue boolean,
+  can_stop boolean,
+  input_type_id bigint,
+  input_type_name text,
+  output_type_id bigint,
+  output_type_name text
+)
 LANGUAGE sql
+STABLE
 AS $$
-  SELECT * FROM cfg.cfg_repo_list('action_definition', false);
+  SELECT * FROM portal.sp_list_workflow_actions();
 $$;
 
 CREATE OR REPLACE FUNCTION portal.sp_get_cfg_action(
@@ -56,17 +73,24 @@ CREATE OR REPLACE FUNCTION portal.sp_get_cfg_action(
 )
 RETURNS TABLE(
   id bigint,
-  name text,
-  version text,
-  status text,
-  content_hash text,
-  document_json jsonb,
-  secret_redacted jsonb,
-  extra jsonb
+  action_name text,
+  capability text,
+  execution_mode text,
+  cli_tool text,
+  in_process_handler text,
+  implementation_status text,
+  can_pause boolean,
+  can_continue boolean,
+  can_stop boolean,
+  input_type_id bigint,
+  input_type_name text,
+  output_type_id bigint,
+  output_type_name text
 )
 LANGUAGE sql
+STABLE
 AS $$
-  SELECT * FROM cfg.cfg_repo_get('action_definition', p_name, p_version, false);
+  SELECT * FROM portal.sp_get_workflow_action(p_name);
 $$;
 
 CREATE OR REPLACE FUNCTION portal.sp_set_study_group(

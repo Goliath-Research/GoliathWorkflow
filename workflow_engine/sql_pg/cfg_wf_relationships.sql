@@ -146,24 +146,23 @@ FROM cfg.domain_program p
 LEFT JOIN wf.workflow_def d ON d.id = p.workflow_def_id
 LEFT JOIN wf.workflow_version v ON v.id = p.compiled_workflow_version_id;
 
+/* Retired cfg.action_definition view — browse wf actions + explicit data types. */
 CREATE OR REPLACE VIEW cfg.v_action_definition_wf AS
 SELECT
-  a.id AS action_definition_id,
-  a.name AS action_name,
-  a.version AS action_version,
-  a.status,
-  a.implementation_status,
-  a.workflow_action_id,
-  wa.action_name AS wf_action_name,
+  wa.id AS workflow_action_id,
+  wa.action_name,
   wa.capability,
-  si.schema_id AS input_schema_id,
-  so.schema_id AS output_schema_id
-FROM cfg.action_definition a
-LEFT JOIN wf.workflow_action wa ON wa.id = a.workflow_action_id
-LEFT JOIN wf.workflow_action_schema si
-  ON si.workflow_action_id = a.workflow_action_id AND si.direction = 'input'
-LEFT JOIN wf.workflow_action_schema so
-  ON so.workflow_action_id = a.workflow_action_id AND so.direction = 'output';
+  wa.implementation_status,
+  wa.input_type_id,
+  tin.name AS input_type_name,
+  wa.output_type_id,
+  tout.name AS output_type_name,
+  wa.can_pause,
+  wa.can_continue,
+  wa.can_stop
+FROM wf.workflow_action wa
+LEFT JOIN wf.data_type tin ON tin.id = wa.input_type_id
+LEFT JOIN wf.data_type tout ON tout.id = wa.output_type_id;
 
 CREATE OR REPLACE VIEW cfg.v_reference_asset AS
 SELECT

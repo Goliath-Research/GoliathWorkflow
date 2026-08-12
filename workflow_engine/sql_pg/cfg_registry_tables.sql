@@ -141,6 +141,8 @@ CREATE TABLE IF NOT EXISTS cfg.reference_asset (
   CONSTRAINT ck_cfg_reference_asset_status CHECK (status IN ('draft', 'published', 'retired'))
 );
 
+-- RETIRED — do not write. Actions + I/O types: wf.workflow_action + wf.data_type.
+-- Table kept only so existing deployments do not fail on leftover rows.
 CREATE TABLE IF NOT EXISTS cfg.action_definition (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   name text NOT NULL,

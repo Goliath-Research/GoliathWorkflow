@@ -431,22 +431,27 @@ def test_ensure_study_work_synced_noop_without_store(tmp_path: Path, monkeypatch
 
 
 def test_sync_and_scaffold_action(store: FileConfigStore, tmp_path: Path) -> None:
-    # Use committed catalog if present; else define server-side
-    catalog = REPO / "schemas" / "actions" / "catalog.json"
-    if catalog.is_file():
-        sync_actions_from_committed_json(store, repo_root=REPO, publish=True)
-        assert store.list("action_definition", published_only=True)
-    upsert_server_action(
-        store,
+    # Actions no longer land in cfg; scaffold from --define / catalog stubs.
+    _ = store
+    defined = upsert_server_action(
         action_name="demo.echo",
         capability="demo",
         input_schema={"type": "object", "properties": {"msg": {"type": "string"}}},
         publish=True,
     )
+    assert defined["name"] == "demo.echo"
     out_root = tmp_path / "scaffold_repo"
     (out_root / "schemas" / "tasks").mkdir(parents=True)
     (out_root / "workers" / "methyl_worker").mkdir(parents=True)
-    result = scaffold_action(store, "demo.echo", repo_root=out_root, force=True)
+    result = scaffold_action(
+        None,
+        "demo.echo",
+        repo_root=out_root,
+        force=True,
+        document=defined["document"],
+    )
     assert any("demo_echo.input.schema.json" in w or "schema" in w for w in result["written"])
     stub = out_root / "workers" / "methyl_worker" / "scaffolded" / "demo_echo.py"
     assert stub.is_file()
+    # sync-actions is a wf seed wrapper (DB required at runtime); API shape only here
+    assert callable(sync_actions_from_committed_json)

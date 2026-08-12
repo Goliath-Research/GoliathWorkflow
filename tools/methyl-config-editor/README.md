@@ -42,7 +42,7 @@ The worker gateway (`methyl-gateway`) is **claim/submit only** and does **not** 
 Prefer one of:
 
 1. **Filesystem schemas** under **Schemas root** (`schemas/tasks/*.schema.json`, `schemas/domain/*`).
-2. **Config registry / portal SQL** — list actions via `portal.sp_list_cfg_actions` / `portal.sp_get_cfg_action` (backed by `cfg.action_definition`), or materialize action JSON under `/work/site/action_definitions/` with `methyl-cfg materialize`.
+2. **Portal / wf SQL** — list actions via `portal.sp_list_workflow_actions` / `portal.sp_get_workflow_action` (aliases `sp_list/get_cfg_action`); describe types via `portal.sp_get_data_type` / fields (explicit `wf.data_type`, not schema blobs).
 3. Legacy ini `[Gateway] BaseUrl=.../v1` remote catalog is **deprecated**; do not point the editor at the worker gateway for action schemas.
 
 `TSchemaValidator.AllowTemplatePlaceholders` (default **true**) accepts string values matching `${...}` for any declared type so unresolved template tokens validate at edit time.

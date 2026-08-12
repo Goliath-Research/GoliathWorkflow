@@ -184,6 +184,8 @@ BEGIN
 END
 GO
 
+/* RETIRED — do not write. Actions + I/O types: wf.workflow_action + wf.data_type.
+   Table kept only so existing deployments do not fail on leftover rows. */
 IF OBJECT_ID(N'cfg.action_definition', N'U') IS NULL
 BEGIN
     CREATE TABLE cfg.action_definition (

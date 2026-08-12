@@ -10,10 +10,12 @@ provider registry**. We do **not** adopt request-scoped dependency injection
 | Layer | Knows about | Extension style |
 |-------|-------------|-----------------|
 | Engine (SQL / local scheduler / compiler) | Node types, scope, `${var.*}` templates | Opaque `ACTION` nodes |
-| Action catalog | `action_name`, capability, I/O schemas, `domain_effects` | Static `ACTION_CATALOG` + export/seed |
+| Explicit types | `wf.data_type` + fields (seeded from git models) | No JSON Schema blobs on actions |
+| Action catalog | `action_name`, capability, I/O **type FKs**, `domain_effects`, `control` / `dispatch` | Static `ACTION_CATALOG` + export/seed into `wf.workflow_action` |
 | CLI providers | Specialized `CliAction` / collectors | `register_cli_provider(action_name, …)` |
 | In-process handlers | Domain packages | Catalog `in_process_handler` name → `handlers` package |
 | Instance config | Merged `actionConfig` | Baked `resolvedConfig` / `resolvedConfig__*` |
+| Portal sample extras | Flexible covariate columns | **Only** DB JSON Schema column (`portal.sample_field_contract`) |
 
 ## Why not DI for the engine
 
@@ -94,16 +96,23 @@ sample affinity); other SamplePrep sample-scoped actions use
 3. For in-process: add `_handle_*` in the appropriate `handlers/` module and set
    `in_process_handler`; register nested subprocesses on
    `execution_handle.current_handle()` when `can_stop` should kill children.
-4. Export: `methyl-export-action-catalog` / task schema export; seed DB.
+4. Export: `methyl-export-action-catalog` / task schema export; seed DB
+   (`seed_action_catalog.py` → `wf.workflow_action`, then `seed_data_types.py` →
+   `wf.data_type` + `input_type_id` / `output_type_id`).
 5. Optional: template rules on `domain_effects` if the compiler must bind scope
    vars beyond `with` / `context_vars`.
 
-**Scaffold shortcut (stubs only):** declare via `methyl-cfg scaffold-action --define
-My.action --capability …` to emit JSON Schema files, handler stub under
+Workers still **send and receive JSON values** on claim/submit; those values must
+match the action’s explicit `wf.data_type`s. JSON is the wire encoding, not how
+the engine stores type definitions. Do **not** use `cfg.action_definition` or
+seed `wf.workflow_action_schema` blobs.
+
+**Scaffold shortcut (stubs only):** `methyl-cfg scaffold-action --define
+My.action --capability …` emits task schema files, handler stub under
 `workers/methyl_worker/scaffolded/`, Pydantic stub, catalog note, and a
 DomainProgram step snippet. Replace stubs with real science logic, then export +
-`methyl-cfg sync-actions --seed-wf`. Multi-language codegen is out of scope —
-schemas remain the interchange; Python worker pack is the first consumer.
+`methyl-cfg sync-actions` (seeds wf). Multi-language codegen is out of scope —
+git schemas remain the interchange generators; Python worker pack is the first consumer.
 
 Keep the catalog **explicit** (CI drift check). Do not rely on silent setuptools
 entry-point discovery as the sole registration path.

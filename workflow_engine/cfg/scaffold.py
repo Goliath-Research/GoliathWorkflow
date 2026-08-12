@@ -1,12 +1,10 @@
-"""Scaffold client-side action stubs from cfg.action_definition (DB → client)."""
+"""Scaffold client-side action stubs from the git action catalog (not cfg)."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any, Dict, Optional
-
-from .store import ConfigStore
 
 _HANDLER_STUB = '''\
 """Scaffolded in-process handler for {action_name} — replace with real implementation."""
@@ -25,7 +23,7 @@ def handle_{slug}(
 ) -> BaseModel:
     """Wire into ACTION_CATALOG in_process_handler after implementing science logic."""
     raise NotImplementedError(
-        "Action {action_name!r} was scaffolded from cfg; implement worker handler."
+        "Action {action_name!r} was scaffolded; implement worker handler."
     )
 
 
@@ -48,7 +46,7 @@ _CATALOG_STUB = '''\
 #   1. Fill Pydantic models under workers/methyl_worker/task_models/
 #   2. Implement handler; set in_process_handler / register_cli_provider
 #   3. methyl-export-action-catalog && methyl-export-task-schemas
-#   4. methyl-cfg sync-actions --seed-wf
+#   4. methyl-cfg sync-actions   # seeds wf.workflow_action + wf.data_type
 '''
 
 _PYDANTIC_STUB = '''\
@@ -105,27 +103,92 @@ def _class_prefix(action_name: str) -> str:
     return "".join(parts)
 
 
-def scaffold_action(
-    store: ConfigStore,
+def _load_catalog_entry(repo_root: Path, action_name: str) -> Optional[Dict[str, Any]]:
+    catalog_path = repo_root / "schemas" / "actions" / "catalog.json"
+    if not catalog_path.is_file():
+        return None
+    doc = json.loads(catalog_path.read_text(encoding="utf-8"))
+    actions = doc.get("actions") if isinstance(doc, dict) else None
+    if isinstance(actions, list):
+        for row in actions:
+            if isinstance(row, dict) and row.get("action_name") == action_name:
+                return row
+    if isinstance(actions, dict) and action_name in actions:
+        entry = actions[action_name]
+        if isinstance(entry, dict):
+            return {"action_name": action_name, **entry}
+    return None
+
+
+def define_scaffold_action(
+    *,
     action_name: str,
+    capability: str,
+    input_schema: Optional[Dict[str, Any]] = None,
+    output_schema: Optional[Dict[str, Any]] = None,
+    document: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Return an in-memory action document used by scaffold (no cfg write)."""
+    return {
+        "action_name": action_name,
+        "capability": capability,
+        "schema_id": action_name.replace(".", "_"),
+        "implementationStatus": "scaffolded",
+        "input_schema": input_schema or {"type": "object"},
+        "output_schema": output_schema or {"type": "object"},
+        **(document or {}),
+    }
+
+
+# Back-compat alias — previously upserted cfg.action_definition.
+def upsert_server_action(
+    store: Any = None,
+    *,
+    action_name: str,
+    capability: str,
+    input_schema: Optional[Dict[str, Any]] = None,
+    output_schema: Optional[Dict[str, Any]] = None,
+    document: Optional[Dict[str, Any]] = None,
+    version: str = "1",
+    publish: bool = True,
+) -> Dict[str, Any]:
+    del store, version, publish
+    doc = define_scaffold_action(
+        action_name=action_name,
+        capability=capability,
+        input_schema=input_schema,
+        output_schema=output_schema,
+        document=document,
+    )
+    return {"name": action_name, "version": "1", "status": "scaffolded", "document": doc}
+
+
+def scaffold_action(
+    store: Any = None,
+    action_name: str = "",
     *,
     repo_root: Path | str,
     version: str = "1",
     force: bool = False,
     emit_pydantic: bool = True,
     emit_program_snippet: bool = True,
+    document: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Emit task schema files, catalog note, handler stub, optional Pydantic models,
-    and DomainProgram step snippet from a cfg action_definition.
+    and DomainProgram step snippet from the git catalog (or an explicit document).
 
-    Marks implementation_status as ``scaffolded`` unless already ``present``.
+    Actions and I/O types are seeded into wf via ``methyl-cfg sync-actions``;
+    this helper does not write ``cfg.action_definition``.
     """
+    del store, version
     repo_root = Path(repo_root)
-    rec = store.get("action_definition", action_name, version=version)
-    if rec is None:
-        raise KeyError(f"action_definition not found: {action_name}@{version}")
-    doc = rec.document
+    doc = document or _load_catalog_entry(repo_root, action_name) or {}
+    if not doc:
+        raise KeyError(
+            f"action not found in schemas/actions/catalog.json: {action_name} "
+            "(pass --define or add a catalog entry)"
+        )
     slug = _slug(action_name)
     class_prefix = _class_prefix(action_name)
     schema_id = doc.get("schema_id") or slug
@@ -144,6 +207,7 @@ def scaffold_action(
         "additionalProperties": True,
     }
 
+    # Prefer committed task schemas when present
     tasks_dir = repo_root / "schemas" / "tasks"
     tasks_dir.mkdir(parents=True, exist_ok=True)
     in_path = tasks_dir / f"{schema_id}.input.schema.json"
@@ -205,51 +269,8 @@ def scaffold_action(
             )
             written.append(str(snip_path))
 
-    impl = rec.extra.get("implementationStatus") or doc.get("implementationStatus")
-    if impl != "present":
-        store.upsert(
-            "action_definition",
-            action_name,
-            {**doc, "implementationStatus": "scaffolded"},
-            version=version,
-            status=rec.status,
-            extra={"implementationStatus": "scaffolded"},
-        )
-
     return {
         "action": action_name,
         "written": written,
-        "implementationStatus": "scaffolded" if impl != "present" else "present",
+        "implementationStatus": doc.get("implementationStatus") or "scaffolded",
     }
-
-
-def upsert_server_action(
-    store: ConfigStore,
-    *,
-    action_name: str,
-    capability: str,
-    input_schema: Optional[Dict[str, Any]] = None,
-    output_schema: Optional[Dict[str, Any]] = None,
-    document: Optional[Dict[str, Any]] = None,
-    version: str = "1",
-    publish: bool = True,
-) -> Dict[str, Any]:
-    """Create/update an action_definition authored on the server side."""
-    doc = {
-        "action_name": action_name,
-        "capability": capability,
-        "schema_id": action_name.replace(".", "_"),
-        "implementationStatus": "scaffolded",
-        "input_schema": input_schema or {"type": "object"},
-        "output_schema": output_schema or {"type": "object"},
-        **(document or {}),
-    }
-    rec = store.upsert(
-        "action_definition",
-        action_name,
-        doc,
-        version=version,
-        status="published" if publish else "draft",
-        extra={"implementationStatus": "scaffolded"},
-    )
-    return {"name": rec.name, "version": rec.version, "status": rec.status}

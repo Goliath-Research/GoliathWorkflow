@@ -1,5 +1,9 @@
 /*
-  PostgreSQL: workflow action JSON Schema storage.
+  LEGACY — PostgreSQL workflow action JSON Schema blobs.
+
+  Seeding is retired. Prefer wf.data_type + workflow_action.input/output_type_id
+  (wf_data_type.sql). Table kept for read compatibility.
+
   Prerequisites: 00_schema.sql (workflow_action)
 
   Note: wf.wf_repo_list_actions is NOT defined here. A 4-column bootstrap would

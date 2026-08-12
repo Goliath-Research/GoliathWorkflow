@@ -15,7 +15,6 @@ Kind = Literal[
     "storage_endpoint",
     "storage_profile",
     "reference_asset",
-    "action_definition",
     "enrichment_library_preset",
 ]
 CFG_KINDS: tuple[Kind, ...] = (
@@ -29,7 +28,6 @@ CFG_KINDS: tuple[Kind, ...] = (
     "storage_endpoint",
     "storage_profile",
     "reference_asset",
-    "action_definition",
     "enrichment_library_preset",
 )
 
@@ -44,6 +42,5 @@ MATERIALIZABLE_KINDS: tuple[Kind, ...] = (
     "storage_endpoint",
     "storage_profile",
     "reference_asset",
-    "action_definition",
     "enrichment_library_preset",
 )

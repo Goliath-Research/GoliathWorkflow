@@ -221,7 +221,7 @@ Workflows
 |--------|---------|-------|
 | Definition list | Browse published graphs | `sp_list_workflow_definitions` |
 | Version / graph | Author & publish | `sp_list/get/upsert_domain_program`, `sp_create_workflow_graph` |
-| Action browser | JSON Schema for knobs + **control** / **dispatch** badges | `sp_list_workflow_actions`, `sp_get_action_schema`, `sp_list/get_cfg_action` |
+| Action browser | `input_type` / `output_type` names + **control** / **dispatch** badges | `sp_list/get_workflow_actions`; type detail via `sp_get_data_type` |
 | Global instances | Cross-study ops | `sp_get_instance_tasks` (+ instance list query) |
 
 ---
@@ -235,7 +235,9 @@ Platform
   │    ├─ Pipeline profiles
   │    └─ Assay procedures
   ├─ Domain programs
-  ├─ Action catalog
+  ├─ Action catalog              ← input_type / output_type names (not JSON Schema editor)
+  ├─ DataType Registry           ← wf.data_type browse (admin)
+  ├─ Sample field contracts      ← sole JSON Schema column (extras → covariates)
   ├─ Storage & credentials
   │    ├─ Lab ingress
   │    └─ Archive / shared / site
@@ -262,7 +264,26 @@ Platform
 | **Fleet console** | List workers; Drain / Stop / Resume; show exclusive lease + in-flight action | `sp_set_worker_desired_state`; `sp_upsert/list_cluster`; enrollment procs; catalog `control` for button enablement |
 | Enrollment | Prereg / list / revoke | `sp_upsert/list/revoke_worker_enrollment` |
 | Domain programs | Draft → publish → linked version | `sp_list/get/upsert_domain_program` |
-| Action catalog | Browse schemas **and** `control` / `dispatch` metadata | `sp_list/get_cfg_action`, `sp_get_action_schema`, `schemas/actions/catalog.json` |
+| Action catalog | Browse `input_type` / `output_type` names + `control` / `dispatch` | `sp_list/get_workflow_actions` (aliases `sp_list/get_cfg_action`); git `schemas/actions/catalog.json` |
+| **DataType Registry** | Browse `wf.data_type` / fields / enums (published + retired) | `sp_list/get_data_types`, `sp_list_data_type_fields` (PG) |
+| Sample field contracts | Flexible sample extras → future covariates | `sp_list/get_sample_field_contracts` — **only** JSON Schema column in DB |
+
+### DataType Registry (Platform)
+
+Explicit reusable types for the engine, gateway, and workers. Types are **rows +
+fields**, not stored JSON Schema documents.
+
+| Rule | Detail |
+|------|--------|
+| Storage | `wf.data_type`, `wf.data_type_field`, `wf.data_type_enum_value` — **no** `schema_json` |
+| Actions | `wf.workflow_action.input_type_id` / `output_type_id` |
+| Wire format | Workers still exchange JSON **values** that must match those types |
+| Seed | Git Pydantic / `schemas/domain` / `schemas/tasks` → `seed_data_types.py` |
+| **Not here** | Portal sample extras (flexible covariates) — that JSON Schema lives only under `portal.sample_field_contract` |
+| Start wizard / Study | Operators pick analyte / procedure / profile — **not** data types |
+
+Config Editor “describe type” reads `wf.data_type_field`, not a blob on the action.
+Legacy `sp_get_action_schema` may synthesize a minimal object schema for older UIs.
 
 ### Home / Ops board — fleet strip
 
@@ -348,15 +369,18 @@ Complete contract surface shipped in this repo (MSSQL + PG twins under
 | `portal.sp_create_and_start_instance` | Start run |
 | `portal.sp_get_instance_tasks` | Instance task table / Gantt |
 | `portal.sp_reclaim_expired_leases` | Ops reclaim control |
-| `portal.sp_list_workflow_actions` | Action catalog browse |
-| `portal.sp_get_action_schema` | Schema-driven forms |
+| `portal.sp_list/get_workflow_actions` | Action catalog browse (type names) |
+| `portal.sp_list/get_data_types` | DataType Registry |
+| `portal.sp_list_data_type_fields` | Type field table (PG; MSSQL via `sp_get_data_type` result sets) |
+| `portal.sp_list/get_sample_field_contracts` | Sole JSON Schema docs (sample extras) |
+| `portal.sp_get_action_schema` | Legacy compat only — prefer data_type fields |
 
 ### Cfg / study / storage
 
 | Procedure | UI use |
 |-----------|--------|
 | `portal.sp_list/get/upsert_domain_program` | Program authoring |
-| `portal.sp_list/get_cfg_action` | Catalog |
+| `portal.sp_list/get_cfg_action` | Deprecated alias → workflow_actions |
 | `portal.sp_list/set_study_group(s)`, `sp_set_study_group_members` | Cohorts |
 | `portal.sp_list_study_group_members` | Membership |
 | `portal.sp_materialize_study_lists` | Materialize study lists to `/work` |

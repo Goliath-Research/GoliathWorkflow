@@ -126,15 +126,7 @@ BEGIN
       updated_at_utc = (now() AT TIME ZONE 'utc')
     RETURNING cfg.reference_asset.id INTO v_id;
   ELSIF p_kind = 'action_definition' THEN
-    INSERT INTO cfg.action_definition(name, version, status, content_hash, document_json, implementation_status)
-    VALUES (p_name, v_version, v_status, v_hash, p_document, COALESCE(p_implementation_status, 'present'))
-    ON CONFLICT (name, version) DO UPDATE SET
-      status = EXCLUDED.status,
-      content_hash = EXCLUDED.content_hash,
-      document_json = EXCLUDED.document_json,
-      implementation_status = EXCLUDED.implementation_status,
-      updated_at_utc = (now() AT TIME ZONE 'utc')
-    RETURNING cfg.action_definition.id INTO v_id;
+    RAISE EXCEPTION 'cfg.action_definition retired; seed wf via seed_action_catalog / methyl-cfg sync-actions';
   ELSIF p_kind = 'enrichment_library_preset' THEN
     INSERT INTO cfg.enrichment_library_preset(name, version, status, content_hash, document_json)
     VALUES (p_name, v_version, v_status, v_hash, p_document)
@@ -229,10 +221,7 @@ BEGIN
     FROM cfg.reference_asset s WHERE s.name = p_name AND (p_version IS NULL OR s.version = p_version)
       AND (NOT p_published_only OR s.status = 'published') ORDER BY s.id DESC LIMIT 1;
   ELSIF p_kind = 'action_definition' THEN
-    RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash, s.document_json, NULL::jsonb,
-      jsonb_build_object('implementationStatus', s.implementation_status)
-    FROM cfg.action_definition s WHERE s.name = p_name AND (p_version IS NULL OR s.version = p_version)
-      AND (NOT p_published_only OR s.status = 'published') ORDER BY s.id DESC LIMIT 1;
+    RAISE EXCEPTION 'cfg.action_definition retired; use portal.sp_get_workflow_action / wf.data_type';
   ELSIF p_kind = 'enrichment_library_preset' THEN
     RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash, s.document_json, NULL::jsonb, NULL::jsonb
     FROM cfg.enrichment_library_preset s WHERE s.name = p_name AND (p_version IS NULL OR s.version = p_version)
@@ -288,8 +277,7 @@ BEGIN
     RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash FROM cfg.reference_asset s
       WHERE NOT p_published_only OR s.status = 'published' ORDER BY s.name, s.version;
   ELSIF p_kind = 'action_definition' THEN
-    RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash FROM cfg.action_definition s
-      WHERE NOT p_published_only OR s.status = 'published' ORDER BY s.name, s.version;
+    RAISE EXCEPTION 'cfg.action_definition retired; use portal.sp_list_workflow_actions';
   ELSIF p_kind = 'enrichment_library_preset' THEN
     RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash FROM cfg.enrichment_library_preset s
       WHERE NOT p_published_only OR s.status = 'published' ORDER BY s.name, s.version;
@@ -340,8 +328,7 @@ BEGIN
     UPDATE cfg.reference_asset SET status = 'published', updated_at_utc = (now() AT TIME ZONE 'utc')
     WHERE name = p_name AND version = p_version RETURNING cfg.reference_asset.id INTO v_id;
   ELSIF p_kind = 'action_definition' THEN
-    UPDATE cfg.action_definition SET status = 'published', updated_at_utc = (now() AT TIME ZONE 'utc')
-    WHERE name = p_name AND version = p_version RETURNING cfg.action_definition.id INTO v_id;
+    RAISE EXCEPTION 'cfg.action_definition retired; use wf.workflow_action';
   ELSIF p_kind = 'enrichment_library_preset' THEN
     UPDATE cfg.enrichment_library_preset SET status = 'published', updated_at_utc = (now() AT TIME ZONE 'utc')
     WHERE name = p_name AND version = p_version RETURNING cfg.enrichment_library_preset.id INTO v_id;
@@ -403,25 +390,9 @@ CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_action(
 RETURNS TABLE(id bigint, workflow_action_id bigint)
 LANGUAGE plpgsql
 AS $$
-DECLARE
-  v_wa bigint;
-  v_id bigint;
 BEGIN
-  SELECT wa.id INTO v_wa FROM wf.workflow_action wa WHERE wa.action_name = p_action_name;
-  IF v_wa IS NULL THEN
-    RAISE EXCEPTION 'wf.workflow_action not found: %', p_action_name;
-  END IF;
-  UPDATE cfg.action_definition a
-  SET workflow_action_id = v_wa,
-      updated_at_utc = (now() AT TIME ZONE 'utc')
-  WHERE a.name = p_action_name AND a.version = p_version
-  RETURNING a.id INTO v_id;
-  IF v_id IS NULL THEN
-    RAISE EXCEPTION 'cfg.action_definition not found: %@%', p_action_name, p_version;
-  END IF;
-  id := v_id;
-  workflow_action_id := v_wa;
-  RETURN NEXT;
+  RAISE EXCEPTION
+    'cfg.cfg_repo_link_action retired; use wf.workflow_action + wf.data_type (seed_action_catalog)';
 END;
 $$;
 

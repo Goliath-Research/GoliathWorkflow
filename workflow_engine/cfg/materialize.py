@@ -33,7 +33,6 @@ def materialize_paths(
         "analytes": bundle / "analytes",
         "programs": bundle / "fixtures",
         "projects": work_root / "projects",
-        "action_definitions": work_root / "site" / "action_definitions",
         "reference_assets": work_root / "site" / "reference_assets",
         "enrichment_library_presets": work_root / "site" / "enrichment",
     }
@@ -147,12 +146,6 @@ def materialize_store(
             alias = paths["reference_assets"] / f"{rec.name}.json"
             _write_json(alias, rec.document)
             written.append(f"reference_asset:{rec.name}@{rec.version}->{out}")
-
-    if "action_definition" in selected:
-        for rec in store.list("action_definition", published_only=True):
-            out = paths["action_definitions"] / f"{rec.name}.json"
-            _write_json(out, rec.document)
-            written.append(f"action_definition:{rec.name}@{rec.version}->{out}")
 
     if "enrichment_library_preset" in selected:
         presets = store.list("enrichment_library_preset", published_only=True)

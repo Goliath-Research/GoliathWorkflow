@@ -58,13 +58,12 @@ BEGIN
 END
 GO
 
+/* Deprecated aliases — actions live in wf; use portal.sp_list/get_workflow_actions. */
 CREATE OR ALTER PROCEDURE portal.sp_list_cfg_actions
 AS
 BEGIN
     SET NOCOUNT ON;
-    SELECT id, name, version, status, content_hash
-    FROM cfg.action_definition
-    ORDER BY name, version;
+    EXEC portal.sp_list_workflow_actions;
 END
 GO
 
@@ -74,24 +73,7 @@ CREATE OR ALTER PROCEDURE portal.sp_get_cfg_action
 AS
 BEGIN
     SET NOCOUNT ON;
-    SELECT TOP 1
-           id,
-           name,
-           version,
-           status,
-           content_hash,
-           document_json,
-           CAST(NULL AS json) AS secret_redacted,
-           CAST(
-               CONCAT(
-                   N'{"implementationStatus":"',
-                   implementation_status,
-                   N'"}'
-               ) AS json
-           ) AS extra
-    FROM cfg.action_definition
-    WHERE name = @name AND (@version IS NULL OR version = @version)
-    ORDER BY id DESC;
+    EXEC portal.sp_get_workflow_action @action_name = @name;
 END
 GO
 

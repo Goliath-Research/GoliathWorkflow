@@ -92,6 +92,7 @@ SCRIPTS=(
   wf_action_dispatch_concurrency.sql
   wf_worker_desired_state.sql
   wf_action_dispatch_affinity.sql
+  wf_data_type.sql
   portal_worker_enrollment_api.sql
   wf_repo_create_workflow_graph.sql
   wf_apply_validation_plan.sql
@@ -107,6 +108,7 @@ SCRIPTS=(
   portal_resource_profile.sql
   cfg_reference_assets_seed.sql
   cfg_portal_api.sql
+  portal_sample_extras_schema.sql
   cfg_process_pack_catalog.sql
   cfg_assay_procedure_links.sql
   cfg_analyte_catalog.sql

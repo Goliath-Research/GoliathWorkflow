@@ -1,8 +1,13 @@
 /*
-  MethylPipeline wf schema - workflow action JSON Schema storage.
+  LEGACY — workflow action JSON Schema blobs.
 
-  Stores input_json / output_json JSON Schema documents per workflow_action.
-  Populated from schemas/tasks/ JSON Schema files via seed_action_schemas.py.
+  Seeding of wf.workflow_action_schema is retired. Action I/O is expressed as
+  explicit wf.data_type (+ data_type_field) and bound via
+  workflow_action.input_type_id / output_type_id (see wf_data_type.sql).
+
+  This table/procs remain for read compatibility (wf_repo_get_action_schema
+  may synthesize a minimal object schema from type names when rows are absent).
+  Prefer portal.sp_get_data_type / sp_list_data_type_fields for Config Editor.
 
   Prerequisites:
   - Base wf schema (workflow_action)

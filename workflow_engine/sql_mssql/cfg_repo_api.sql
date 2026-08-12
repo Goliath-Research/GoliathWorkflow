@@ -151,15 +151,8 @@ BEGIN
     END
     IF @kind = N'action_definition'
     BEGIN
-        MERGE cfg.action_definition AS t
-        USING (SELECT @name AS name, @ver AS version) AS s
-        ON t.name = s.name AND t.version = s.version
-        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc,
-            implementation_status = COALESCE(@implementation_status, 'present'),
-            updated_at_utc = SYSUTCDATETIME()
-        WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json, implementation_status)
-            VALUES (@name, @ver, @st, @hash, @doc, COALESCE(@implementation_status, 'present'));
-        SELECT id FROM cfg.action_definition WHERE name = @name AND version = @ver;
+        /* Retired: actions + I/O types live in wf.workflow_action / wf.data_type. */
+        RAISERROR(N'cfg.action_definition retired; seed wf via seed_action_catalog / methyl-cfg sync-actions', 16, 1);
         RETURN;
     END;
     IF @kind = N'enrichment_library_preset'
@@ -196,7 +189,11 @@ BEGIN
     IF @kind = N'storage_endpoint' BEGIN UPDATE cfg.storage_endpoint SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.storage_endpoint WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'storage_profile' BEGIN UPDATE cfg.storage_profile SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.storage_profile WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'reference_asset' BEGIN UPDATE cfg.reference_asset SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.reference_asset WHERE name = @name AND version = @version; RETURN; END
-    IF @kind = N'action_definition' BEGIN UPDATE cfg.action_definition SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.action_definition WHERE name = @name AND version = @version; RETURN; END
+    IF @kind = N'action_definition'
+    BEGIN
+        RAISERROR(N'cfg.action_definition retired; use wf.workflow_action', 16, 1);
+        RETURN;
+    END
     IF @kind = N'enrichment_library_preset' BEGIN UPDATE cfg.enrichment_library_preset SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.enrichment_library_preset WHERE name = @name AND version = @version; RETURN; END
 
     RAISERROR(N'unknown cfg kind', 16, 1);
@@ -260,21 +257,13 @@ CREATE OR ALTER PROCEDURE cfg.cfg_repo_link_action
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @wa_id bigint = (SELECT id FROM wf.workflow_action WHERE action_name = @action_name);
-    IF @wa_id IS NULL
-    BEGIN
-        RAISERROR(N'wf.workflow_action not found for action_name', 16, 1);
-        RETURN;
-    END
-    UPDATE cfg.action_definition
-    SET workflow_action_id = @wa_id, updated_at_utc = SYSUTCDATETIME()
-    WHERE name = @action_name AND version = @version;
-    IF @@ROWCOUNT = 0
-    BEGIN
-        RAISERROR(N'cfg.action_definition not found: %s@%s', 16, 1, @action_name, @version);
-        RETURN;
-    END
-    SELECT id, workflow_action_id FROM cfg.action_definition WHERE name = @action_name AND version = @version;
+    /* Retired with cfg.action_definition. Actions are seeded directly into wf. */
+    RAISERROR(
+        N'cfg.cfg_repo_link_action retired; use wf.workflow_action + wf.data_type (seed_action_catalog)',
+        16,
+        1
+    );
+    RETURN;
 END
 GO
 

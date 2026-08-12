@@ -18,7 +18,7 @@ Operators set `wf.worker.desired_state` via `portal.sp_set_worker_desired_state`
 
 Per-action in-flight capabilities live on the **action catalog**
 (`control.can_pause` / `can_continue` / `can_stop` in
-`schemas/actions/catalog.json` / `cfg.action_definition.document_json`). The
+`schemas/actions/catalog.json` / `wf.workflow_action` + `wf.data_type`). The
 runner is process-agnostic: it only reads those flags for the claimed
 `action_name`. See [action-provider-registry.md](action-provider-registry.md).
 

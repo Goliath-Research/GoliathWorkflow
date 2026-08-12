@@ -6,10 +6,11 @@
 
 | Layer | Role |
 |-------|------|
-| **`cfg` schema** | Source of truth for sites, profiles, assay procedures, analytes, DomainProgram IR, studies, storage endpoints/credentials, reference assets, action definitions |
-| **`wf` schema** | Compiled workflow graphs, instances, task queue |
+| **`cfg` schema** | Source of truth for sites, profiles, assay procedures, analytes, DomainProgram IR, studies, storage endpoints/credentials, reference assets |
+| **`wf` schema** | Compiled workflow graphs, instances, task queue, **`wf.data_type`** (explicit types), **`wf.workflow_action`** (dispatch + I/O type FKs) |
+| **`portal`** | Clinical samples; **sole** DB JSON Schema column is sample-extras / `portal.sample_field_contract.schema_json` (flexible covariates) |
 | **`/work`** | Materialization target for workers (paths only; **no secrets**) |
-| **Git** | Code, JSON Schema contracts, CI fixtures |
+| **Git** | Code, JSON Schema / Pydantic / Mojo contracts that **seed** `wf.data_type` (not stored as schema documents) |
 
 ### Relationships (`cfg` ↔ `wf`)
 
@@ -20,8 +21,7 @@ Deployed by `cfg_wf_relationships.sql` (after `cfg_registry_tables.sql`):
 | `cfg.domain_program.workflow_def_id` | `wf.workflow_def.id` | Stable published graph identity |
 | `cfg.domain_program.compiled_workflow_version_id` | `wf.workflow_version.id` | Active compiled IR revision |
 | `cfg.program_publish` | `domain_program` + `workflow_def` + `workflow_version` | Audit of each publish |
-| `cfg.action_definition.workflow_action_id` | `wf.workflow_action.id` | Catalog row used by engine nodes (unique when set) |
-| *(via `workflow_action_id`)* | `wf.workflow_action_schema` (input/output) | Task I/O JSON Schemas — see `cfg.v_action_definition_wf` |
+| `wf.workflow_action.input_type_id` / `output_type_id` | `wf.data_type.id` | Explicit action I/O types (fields as rows; **no** `schema_json` on types) |
 | `cfg.reference_asset.storage_endpoint_id` | `cfg.storage_endpoint.id` | Primary download/provision source |
 | `cfg.site_reference_asset` | `cfg.site` + `cfg.reference_asset` | Site roles: `reference_genome`, `annotation_gtf`, `pangenome_bundle`, `houseman_seed_basis`, `hitimed_hierarchy_basis`, … |
 | `cfg.study_instance_link` | `cfg.study` + `wf.workflow_instance` (+ optional program/profile/site) | Which study/config started a run |
@@ -33,9 +33,21 @@ Deployed by `cfg_wf_relationships.sql` (after `cfg_registry_tables.sql`):
 | `cfg.study_group_member.portal_sample_id` | `portal.Samples.ID` | Enrolled clinical sample (MSSQL FK) |
 | `cfg.study_group_member.lab_sample_id` | `portal.LabSamples.ID` | Optional lab run / processing key source |
 
-Views: `cfg.v_domain_program_wf`, `cfg.v_action_definition_wf`, `cfg.v_reference_asset`, `cfg.v_site_reference_asset`, `cfg.v_study_instance`, `cfg.v_analyte`, `cfg.v_assay_procedure`.
+Views: `cfg.v_domain_program_wf`, `cfg.v_action_definition_wf` (now a **wf** action + type browse view; `cfg.action_definition` retired), `cfg.v_reference_asset`, `cfg.v_site_reference_asset`, `cfg.v_study_instance`, `cfg.v_analyte`, `cfg.v_assay_procedure`.
 
-Procs: `cfg.cfg_repo_set_compiled_version`, `cfg.cfg_repo_link_action`, `cfg.cfg_repo_link_study_instance`, `cfg.cfg_repo_link_reference_asset`, `cfg.cfg_repo_link_site_asset`, `cfg.cfg_repo_set_study_group`, `cfg.cfg_repo_set_study_group_members`, `cfg.cfg_repo_materialize_study_lists`.
+Procs: `cfg.cfg_repo_set_compiled_version`, `cfg.cfg_repo_link_study_instance`, `cfg.cfg_repo_link_reference_asset`, `cfg.cfg_repo_link_site_asset`, `cfg.cfg_repo_set_study_group`, `cfg.cfg_repo_set_study_group_members`, `cfg.cfg_repo_materialize_study_lists`. (`cfg.cfg_repo_link_action` raises — retired with `cfg.action_definition`.)
+
+### Actions and types (not cfg)
+
+| Concern | Lives in |
+|---------|----------|
+| Explicit reusable types | `wf.data_type` + `wf.data_type_field` (+ enum values) |
+| Action dispatch + I/O type FKs | `wf.workflow_action` |
+| Worker claim/submit bodies | JSON **values** conforming to those types (wire only) |
+| Flexible sample extras / future covariates | **`portal.sample_field_contract.schema_json` only** |
+| Git generators | Pydantic / Mojo / `schemas/domain`, `schemas/tasks` → `seed_data_types.py` |
+
+`cfg.action_definition` and seeding of `wf.workflow_action_schema` blobs are **retired**. Use `methyl-cfg sync-actions` (seeds wf) and portal `sp_list/get_workflow_actions` / `sp_list/get_data_type`.
 
 ```mermaid
 flowchart LR
@@ -54,7 +66,7 @@ export METHYL_CFG_STORE=/work/epimethyl/cfg-store
 export PYTHONPATH=workflow_engine:$PYTHONPATH
 
 methyl-cfg import-fs --repo-root . --work-root /work
-methyl-cfg sync-actions --from-json
+methyl-cfg sync-actions          # seeds wf.workflow_action + wf.data_type
 methyl-cfg materialize --work-root /work
 
 # Named cloud endpoints (secrets stay in store)
@@ -64,7 +76,7 @@ methyl-cfg upsert storage_endpoint --file lab_s3.json --name lab-aws \
 methyl-cfg expand-endpoint lab-aws --prefix plasma/S1/
 
 methyl-cfg publish-program SamplePrepPipeline --work-root /work
-methyl-cfg scaffold-action demo.echo --define --capability demo
+methyl-cfg scaffold-action demo.echo --define --capability demo   # git stubs; then sync-actions
 methyl-cfg sync-library-presets   # enrichment library presets → cfg (kind enrichment_library_preset)
 # Genomes inventory (epimethyl/genomes → /work/genomes); pins from site reference_selection
 methyl-cfg provision-assets --selected-only --site default --work-root /work --dry-run
@@ -126,7 +138,9 @@ File-backed store keeps the same structure under `study.extra.studyGroups`. CLI:
 ## Portal
 
 - `portal.sp_list_domain_programs` / `sp_get_domain_program` / `sp_upsert_domain_program` — tree editor against `cfg.domain_program`
-- `portal.sp_list_cfg_actions` / `sp_get_cfg_action` — action catalog from `cfg.action_definition` (not the worker gateway)
+- `portal.sp_list/get_workflow_actions` — action catalog from `wf` (input/output **type names**; deprecated aliases `sp_list/get_cfg_action`)
+- `portal.sp_list/get_data_types` (+ field result sets / `sp_list_data_type_fields`) — DataType Registry
+- `portal.sp_list/get_sample_field_contracts` — **only** JSON Schema documents in the DB (sample extras / covariates)
 - `portal.sp_set_study_group` / `sp_set_study_group_members` / `sp_list_study_groups` / `sp_materialize_study_lists` — study arm enrollment
 - `portal.sp_list_samples_for_study_enrollment` (MSSQL) — picker over `portal.Samples` + `LabSamples` (hard-filters by study `default_analyte_id` when set)
 - `portal.sp_set_sample_analyte` — bind `portal.Samples.analyte_id` → `cfg.analyte`

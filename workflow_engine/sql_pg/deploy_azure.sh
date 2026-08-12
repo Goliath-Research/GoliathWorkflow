@@ -65,6 +65,7 @@ SCRIPTS=(
   wf_action_dispatch_metadata.sql
   wf_action_dispatch_concurrency.sql
   wf_action_dispatch_affinity.sql
+  wf_data_type.sql
   08_foreach_support.sql
   01_worker_api.sql
   wf_cluster_security_columns.sql
@@ -84,6 +85,7 @@ SCRIPTS=(
   portal_resource_profile.sql
   cfg_reference_assets_seed.sql
   cfg_portal_api.sql
+  portal_sample_extras_schema.sql
   cfg_process_pack_catalog.sql
   cfg_assay_procedure_links.sql
   cfg_analyte_catalog.sql
