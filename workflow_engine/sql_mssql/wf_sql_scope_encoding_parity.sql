@@ -227,10 +227,10 @@ BEGIN
         @workflow_instance_id = @workflow_instance_id,
         @scope_node_execution_id = @scope_node_execution_id,
         @var_name = @item_var,
-        @value_json = @elem;
+        @value_json = wf.wf_json_box(@elem);
 
-    /* Store the index as a bare JSON integer. */
-    DECLARE @json_idx json = CAST(@zero_based_index AS NVARCHAR(32));
+    /* Store the index as a boxed JSON integer (Azure json rejects scalars). */
+    DECLARE @json_idx json = wf.wf_json_box(CAST(@zero_based_index AS NVARCHAR(32)));
     EXEC wf.wf_set_scope_variable
         @workflow_instance_id = @workflow_instance_id,
         @scope_node_execution_id = @scope_node_execution_id,
@@ -253,7 +253,7 @@ BEGIN
         BEGIN
             IF @fk IS NOT NULL AND @fk <> @item_var AND @fk <> @index_var
             BEGIN
-                DECLARE @json_val json = wf.wf_json_encode_openjson(@fv, @ft, @elem, @fk);
+                DECLARE @json_val json = wf.wf_json_box(wf.wf_json_encode_openjson(@fv, @ft, @elem, @fk));
                 EXEC wf.wf_set_scope_variable
                     @workflow_instance_id = @workflow_instance_id,
                     @scope_node_execution_id = @scope_node_execution_id,
@@ -350,7 +350,7 @@ BEGIN
             @workflow_instance_id = @inst,
             @scope_node_execution_id = @scope_exec,
             @var_name = @var_name,
-            @value_json = @frag;
+            @value_json = wf.wf_json_box(@frag);
 
         FETCH NEXT FROM bind_cur INTO @var_name, @source_kind, @source_path;
     END
@@ -389,7 +389,7 @@ BEGIN
         @workflow_instance_id,
         0,
         j.[key],
-        wf.wf_json_encode_openjson(j.[value], j.[type], @ctx, j.[key])
+        wf.wf_json_box(wf.wf_json_encode_openjson(j.[value], j.[type], @ctx, j.[key]))
     FROM OPENJSON(@ctx) AS j;
 END;
 GO

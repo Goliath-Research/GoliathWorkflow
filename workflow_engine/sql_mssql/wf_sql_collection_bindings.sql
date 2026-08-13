@@ -98,7 +98,7 @@ BEGIN
                 @workflow_instance_id = @workflow_instance_id,
                 @scope_node_execution_id = 0,
                 @var_name = @scope_var,
-                @value_json = CAST(@extracted AS json);
+                @value_json = wf.wf_json_box(@extracted);
         END
         ELSE IF @source_kind = N'jsonFile'
         BEGIN

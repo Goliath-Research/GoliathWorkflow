@@ -34,7 +34,7 @@ BEGIN
 
     WHILE 1 = 1
     BEGIN
-        SELECT @v = CAST(sv.value_json AS NVARCHAR(MAX))
+        SELECT @v = wf.wf_json_unbox(CAST(sv.value_json AS NVARCHAR(MAX)))
         FROM wf.scope_variable AS sv
         WHERE sv.workflow_instance_id = @workflow_instance_id
           AND sv.scope_node_execution_id = @cur

@@ -67,3 +67,58 @@ BEGIN
     CREATE INDEX IX_sv_instance_scope ON wf.scope_variable(workflow_instance_id, scope_node_execution_id);
 END
 GO
+
+/*
+  Azure json rejects RFC 8259 scalars. Box fragments so the column can be json;
+  wf.wf_json_unbox restores the fragment for readers. Redefined in
+  wf_json_column_alignment.sql (CREATE OR ALTER, safe to re-run).
+*/
+CREATE OR ALTER FUNCTION wf.wf_json_box(@frag nvarchar(max))
+RETURNS json
+AS
+BEGIN
+    IF @frag IS NULL
+        RETURN CAST(N'{"$mp.v":null}' AS json);
+
+    DECLARE @t nvarchar(max) = LTRIM(RTRIM(@frag));
+    IF ISJSON(@t, OBJECT) = 1 OR ISJSON(@t, ARRAY) = 1
+        RETURN CAST(@t AS json);
+
+    IF ISJSON(@t, VALUE) = 1
+        RETURN CAST(CONCAT(N'{"$mp.v":', @t, N'}') AS json);
+
+    RETURN CAST(CONCAT(N'{"$mp.v":', wf.wf_json_fragment_from_string(@t), N'}') AS json);
+END;
+GO
+
+CREATE OR ALTER FUNCTION wf.wf_json_unbox(@doc nvarchar(max))
+RETURNS nvarchar(max)
+AS
+BEGIN
+    IF @doc IS NULL
+        RETURN NULL;
+
+    IF ISJSON(@doc, OBJECT) <> 1
+        RETURN @doc;
+
+    DECLARE @val nvarchar(max);
+    DECLARE @typ int;
+    SELECT @val = [value], @typ = [type]
+    FROM OPENJSON(@doc)
+    WHERE [key] = N'$mp.v';
+
+    IF @typ IS NULL
+        RETURN @doc;
+    IF @typ = 0
+        RETURN N'null';
+    IF @typ = 1
+        RETURN wf.wf_json_fragment_from_string(@val);
+    IF @typ = 2
+        RETURN @val;
+    IF @typ = 3
+        RETURN LOWER(@val);
+    IF @typ IN (4, 5)
+        RETURN JSON_QUERY(@doc, N'$."$mp.v"');
+    RETURN @val;
+END;
+GO

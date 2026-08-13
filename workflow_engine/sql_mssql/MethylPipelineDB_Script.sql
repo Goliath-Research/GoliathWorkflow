@@ -1926,7 +1926,7 @@ BEGIN
     IF LEFT(@token, 4) = N''ctx.''
     BEGIN
         DECLARE @v NVARCHAR(MAX);
-        SELECT @v = CAST(context_value_json AS NVARCHAR(MAX))
+        SELECT @v = wf.wf_json_unbox(CAST(context_value_json AS NVARCHAR(MAX)))
         FROM wf.execution_context
         WHERE node_execution_id = @node_execution_id AND context_key = @token;
 

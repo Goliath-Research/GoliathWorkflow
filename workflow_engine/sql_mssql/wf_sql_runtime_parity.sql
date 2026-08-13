@@ -50,6 +50,7 @@ BEGIN
       @workflow_instance_id,
       0,
       j.[key],
+      wf.wf_json_box(
       CASE j.[type]
         WHEN 0 THEN N'null'
         WHEN 1 THEN wf.wf_json_fragment_from_string(j.[value])
@@ -58,7 +59,7 @@ BEGIN
         WHEN 4 THEN JSON_QUERY(@ctx, CONCAT(N'$.', QUOTENAME(j.[key], '"')))
         WHEN 5 THEN JSON_QUERY(@ctx, CONCAT(N'$.', QUOTENAME(j.[key], '"')))
         ELSE wf.wf_json_fragment_from_string(j.[value])
-      END
+      END)
     FROM OPENJSON(@ctx) AS j;
 END;
 GO
@@ -153,7 +154,7 @@ BEGIN
     IF LEFT(@token, 4) = N'ctx.'
     BEGIN
         DECLARE @v NVARCHAR(MAX);
-        SELECT @v = context_value_json
+        SELECT @v = wf.wf_json_unbox(CAST(context_value_json AS nvarchar(max)))
         FROM wf.execution_context
         WHERE node_execution_id = @node_execution_id AND context_key = @token;
 

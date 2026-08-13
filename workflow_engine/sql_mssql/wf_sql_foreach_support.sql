@@ -132,14 +132,14 @@ BEGIN
         @workflow_instance_id = @workflow_instance_id,
         @scope_node_execution_id = @scope_node_execution_id,
         @var_name = @item_var,
-        @value_json = @elem;
+        @value_json = wf.wf_json_box(@elem);
 
-    DECLARE @json json = CAST(@zero_based_index AS json);
+    DECLARE @json_idx json = wf.wf_json_box(CAST(@zero_based_index AS nvarchar(32)));
     EXEC wf.wf_set_scope_variable
         @workflow_instance_id = @workflow_instance_id,
         @scope_node_execution_id = @scope_node_execution_id,
         @var_name = @index_var,
-        @value_json = @json;
+        @value_json = @json_idx;
 
     IF @elem IS NOT NULL AND LEFT(LTRIM(@elem), 1) = N'{'
     BEGIN
@@ -172,7 +172,7 @@ BEGIN
                     @workflow_instance_id = @workflow_instance_id,
                     @scope_node_execution_id = @scope_node_execution_id,
                     @var_name = @fk,
-                    @value_json = @frag;
+                    @value_json = wf.wf_json_box(@frag);
             END
             FETCH NEXT FROM fk INTO @fk, @fv, @ft;
         END
@@ -654,7 +654,7 @@ BEGIN
     IF LEFT(@token, 4) = N'ctx.'
     BEGIN
         DECLARE @v NVARCHAR(MAX);
-        SELECT @v = context_value_json
+        SELECT @v = wf.wf_json_unbox(CAST(context_value_json AS nvarchar(max)))
         FROM wf.execution_context
         WHERE node_execution_id = @node_execution_id AND context_key = @token;
 

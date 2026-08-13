@@ -31,6 +31,56 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER FUNCTION wf.wf_json_box(@frag nvarchar(max))
+RETURNS json
+AS
+BEGIN
+    IF @frag IS NULL
+        RETURN CAST(N'{"$mp.v":null}' AS json);
+
+    DECLARE @t nvarchar(max) = LTRIM(RTRIM(@frag));
+    IF ISJSON(@t, OBJECT) = 1 OR ISJSON(@t, ARRAY) = 1
+        RETURN CAST(@t AS json);
+
+    IF ISJSON(@t, VALUE) = 1
+        RETURN CAST(CONCAT(N'{"$mp.v":', @t, N'}') AS json);
+
+    RETURN CAST(CONCAT(N'{"$mp.v":', wf.wf_json_fragment_from_string(@t), N'}') AS json);
+END;
+GO
+
+CREATE OR ALTER FUNCTION wf.wf_json_unbox(@doc nvarchar(max))
+RETURNS nvarchar(max)
+AS
+BEGIN
+    IF @doc IS NULL
+        RETURN NULL;
+
+    IF ISJSON(@doc, OBJECT) <> 1
+        RETURN @doc;
+
+    DECLARE @val nvarchar(max);
+    DECLARE @typ int;
+    SELECT @val = [value], @typ = [type]
+    FROM OPENJSON(@doc)
+    WHERE [key] = N'$mp.v';
+
+    IF @typ IS NULL
+        RETURN @doc;
+    IF @typ = 0
+        RETURN N'null';
+    IF @typ = 1
+        RETURN wf.wf_json_fragment_from_string(@val);
+    IF @typ = 2
+        RETURN @val;
+    IF @typ = 3
+        RETURN LOWER(@val);
+    IF @typ IN (4, 5)
+        RETURN JSON_QUERY(@doc, N'$."$mp.v"');
+    RETURN @val;
+END;
+GO
+
 --
 -- Create table [wf].[workflow_def]
 --
@@ -115,7 +165,7 @@ CREATE TABLE wf.scope_variable (
   workflow_instance_id bigint NOT NULL,
   scope_node_execution_id bigint NOT NULL,
   var_name nvarchar(128) NOT NULL,
-  value_json nvarchar(max) NOT NULL,
+  value_json json NOT NULL,
   updated_at_utc datetime2 NOT NULL CONSTRAINT DF_sv_updated DEFAULT (sysutcdatetime()),
   CONSTRAINT PK_scope_variable PRIMARY KEY CLUSTERED (workflow_instance_id, scope_node_execution_id, var_name)
 )
@@ -988,22 +1038,22 @@ BEGIN
     DELETE FROM wf.execution_context WHERE node_execution_id = @node_execution_id;
 
     INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-    VALUES (@node_execution_id, N'ctx.iterationNo', CAST(@iteration_no AS NVARCHAR(32)));
+    VALUES (@node_execution_id, N'ctx.iterationNo', wf.wf_json_box(CAST(@iteration_no AS NVARCHAR(32))));
 
     IF @sequence_index IS NOT NULL
         INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-        VALUES (@node_execution_id, N'ctx.sequenceIndex', CAST(@sequence_index AS NVARCHAR(32)));
+        VALUES (@node_execution_id, N'ctx.sequenceIndex', wf.wf_json_box(CAST(@sequence_index AS NVARCHAR(32))));
 
     IF @parallel_index IS NOT NULL
         INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-        VALUES (@node_execution_id, N'ctx.parallelIndex', CAST(@parallel_index AS NVARCHAR(32)));
+        VALUES (@node_execution_id, N'ctx.parallelIndex', wf.wf_json_box(CAST(@parallel_index AS NVARCHAR(32))));
 
     IF @parent_node_execution_id IS NOT NULL
     BEGIN
         DECLARE @prc INT;
         SELECT @prc = result_code FROM wf.node_execution WHERE id = @parent_node_execution_id;
         INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-        VALUES (@node_execution_id, N'ctx.parent.resultCode', CAST(@prc AS NVARCHAR(32)));
+        VALUES (@node_execution_id, N'ctx.parent.resultCode', wf.wf_json_box(CAST(@prc AS NVARCHAR(32))));
     END
 END;
 GO
@@ -1080,7 +1130,7 @@ BEGIN
     IF LEFT(@token, 4) = N'ctx.'
     BEGIN
         DECLARE @v NVARCHAR(MAX);
-        SELECT @v = CAST(context_value_json AS NVARCHAR(MAX))
+        SELECT @v = wf.wf_json_unbox(CAST(context_value_json AS NVARCHAR(MAX)))
         FROM wf.execution_context
         WHERE node_execution_id = @node_execution_id AND context_key = @token;
 

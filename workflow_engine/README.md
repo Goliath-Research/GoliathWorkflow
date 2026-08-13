@@ -17,7 +17,7 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 7. [`workflow_tree_run_example.sql`](workflow_tree_run_example.sql) — optional end-to-end claim/submit simulation loop for `DelphiTreeFlow`.
 8. [`wf_scope_readpath.sql`](wf_scope_readpath.sql) — scope variable read-path helpers (`wf_get_scope_variable_json/int`).
 8a. [`wf_instance_extension.sql`](wf_instance_extension.sql) — generic optional instance extension storage (json/jsonb).
-8b. [`wf_json_column_alignment.sql`](wf_json_column_alignment.sql) — migrate scope/context JSON columns to native types.
+8b. [`wf_json_column_alignment.sql`](wf_json_column_alignment.sql) — box RFC 8259 scalars, then migrate scope/context columns to native `json`.
 8c. [`wf_drop_monte_carlo_tables.sql`](wf_drop_monte_carlo_tables.sql) — remove deprecated `wf.monte_carlo_*` tables.
 9. [`wf_sql_branch_parity.sql`](wf_sql_branch_parity.sql) — SQL IF/SWITCH/WHILE variable-branch parity (`condition_var`/`switch_var`) with Delphi runtime behavior.
 10. [`sql_mssql/deprecated/workflow_methylvalidation_seed.sql`](sql_mssql/deprecated/workflow_methylvalidation_seed.sql) — **deprecated** MethylValidationFlow (use ValidationPipeline).

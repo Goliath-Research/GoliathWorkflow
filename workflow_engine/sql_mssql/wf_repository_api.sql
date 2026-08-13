@@ -245,22 +245,45 @@ CREATE OR ALTER PROCEDURE wf.wf_repo_set_scope_variable
 AS
 BEGIN
     SET NOCOUNT ON;
-    /* Live wf.scope_variable.value_json is nvarchar(max); Azure SQL forbids
-       implicit json → nvarchar. CONVERT is required (Msg 257). */
+
+    /*
+      Azure forbids implicit json ↔ nvarchar. Live value_json may still be
+      nvarchar(max) until wf_json_column_alignment.sql. Dynamic SQL picks
+      CAST(@value_text AS json) vs @value_text at runtime.
+    */
     DECLARE @value_text nvarchar(max) = CONVERT(nvarchar(max), @value_json);
+    DECLARE @rhs nvarchar(32) = CASE WHEN EXISTS (
+        SELECT 1
+        FROM sys.columns AS c
+        INNER JOIN sys.types AS t ON t.user_type_id = c.user_type_id
+        WHERE c.object_id = OBJECT_ID(N'wf.scope_variable')
+          AND c.name = N'value_json'
+          AND t.name = N'json'
+    ) THEN N'CAST(@value_text AS json)' ELSE N'@value_text' END;
+
+    DECLARE @sql nvarchar(max);
     IF EXISTS (
         SELECT 1 FROM wf.scope_variable
         WHERE workflow_instance_id = @instance_id
           AND scope_node_execution_id = @scope_exec_id
           AND var_name = @var_name
     )
-        UPDATE wf.scope_variable
-        SET value_json = @value_text, updated_at_utc = SYSUTCDATETIME()
-        WHERE workflow_instance_id = @instance_id
-          AND scope_node_execution_id = @scope_exec_id
-          AND var_name = @var_name;
+        SET @sql = N'UPDATE wf.scope_variable
+            SET value_json = ' + @rhs + N', updated_at_utc = SYSUTCDATETIME()
+            WHERE workflow_instance_id = @instance_id
+              AND scope_node_execution_id = @scope_exec_id
+              AND var_name = @var_name';
     ELSE
-        INSERT INTO wf.scope_variable (workflow_instance_id, scope_node_execution_id, var_name, value_json)
-        VALUES (@instance_id, @scope_exec_id, @var_name, @value_text);
+        SET @sql = N'INSERT INTO wf.scope_variable
+            (workflow_instance_id, scope_node_execution_id, var_name, value_json)
+            VALUES (@instance_id, @scope_exec_id, @var_name, ' + @rhs + N')';
+
+    EXEC sp_executesql
+        @sql,
+        N'@value_text nvarchar(max), @instance_id bigint, @scope_exec_id bigint, @var_name nvarchar(128)',
+        @value_text = @value_text,
+        @instance_id = @instance_id,
+        @scope_exec_id = @scope_exec_id,
+        @var_name = @var_name;
 END;
 GO

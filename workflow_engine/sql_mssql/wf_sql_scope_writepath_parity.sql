@@ -42,27 +42,44 @@ BEGIN
     IF @var_name IS NULL OR LTRIM(RTRIM(@var_name)) = N''
         RETURN;
 
-    /* Live value_json is nvarchar(max); CONVERT json → nvarchar (Msg 257). */
+    /* Same json ↔ nvarchar rule as wf.wf_repo_set_scope_variable. */
     DECLARE @value_text nvarchar(max) = CONVERT(nvarchar(max), @value_json);
+    DECLARE @rhs nvarchar(32) = CASE WHEN EXISTS (
+        SELECT 1
+        FROM sys.columns AS c
+        INNER JOIN sys.types AS t ON t.user_type_id = c.user_type_id
+        WHERE c.object_id = OBJECT_ID(N'wf.scope_variable')
+          AND c.name = N'value_json'
+          AND t.name = N'json'
+    ) THEN N'CAST(@value_text AS json)' ELSE N'@value_text' END;
 
-    MERGE wf.scope_variable AS t
-    USING (
-        SELECT
-            @workflow_instance_id AS workflow_instance_id,
-            ISNULL(@scope_node_execution_id, 0) AS scope_node_execution_id,
-            @var_name AS var_name,
-            @value_text AS value_json
-    ) AS s
-    ON t.workflow_instance_id = s.workflow_instance_id
-       AND t.scope_node_execution_id = s.scope_node_execution_id
-       AND t.var_name = s.var_name
-    WHEN MATCHED THEN
-        UPDATE SET
-            value_json = s.value_json,
-            updated_at_utc = SYSUTCDATETIME()
-    WHEN NOT MATCHED THEN
-        INSERT (workflow_instance_id, scope_node_execution_id, var_name, value_json)
-        VALUES (s.workflow_instance_id, s.scope_node_execution_id, s.var_name, s.value_json);
+    DECLARE @sql nvarchar(max) = N'
+        MERGE wf.scope_variable AS t
+        USING (
+            SELECT
+                @workflow_instance_id AS workflow_instance_id,
+                ISNULL(@scope_node_execution_id, 0) AS scope_node_execution_id,
+                @var_name AS var_name,
+                ' + @rhs + N' AS value_json
+        ) AS s
+        ON t.workflow_instance_id = s.workflow_instance_id
+           AND t.scope_node_execution_id = s.scope_node_execution_id
+           AND t.var_name = s.var_name
+        WHEN MATCHED THEN
+            UPDATE SET
+                value_json = s.value_json,
+                updated_at_utc = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN
+            INSERT (workflow_instance_id, scope_node_execution_id, var_name, value_json)
+            VALUES (s.workflow_instance_id, s.scope_node_execution_id, s.var_name, s.value_json);';
+
+    EXEC sp_executesql
+        @sql,
+        N'@value_text nvarchar(max), @workflow_instance_id bigint, @scope_node_execution_id bigint, @var_name nvarchar(128)',
+        @value_text = @value_text,
+        @workflow_instance_id = @workflow_instance_id,
+        @scope_node_execution_id = @scope_node_execution_id,
+        @var_name = @var_name;
 END;
 GO
 
@@ -128,7 +145,7 @@ BEGIN
                 @workflow_instance_id = @workflow_instance_id,
                 @scope_node_execution_id = @to_scope,
                 @var_name = @def_var,
-                @value_json = @resolved;
+                @value_json = wf.wf_json_box(@resolved);
 
         FETCH NEXT FROM def_cur INTO @def_var, @def_expr;
     END
@@ -242,7 +259,7 @@ BEGIN
             @workflow_instance_id = @inst,
             @scope_node_execution_id = @scope_exec,
             @var_name = @var_name,
-            @value_json = @frag;
+            @value_json = wf.wf_json_box(@frag);
 
         FETCH NEXT FROM bind_cur INTO @var_name, @source_kind, @source_path;
     END

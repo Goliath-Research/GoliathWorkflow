@@ -136,7 +136,7 @@ Operator guide: [sql_mssql/SamplePrepFlow.md](sql_mssql/SamplePrepFlow.md). Cont
 1. `MethylPipeline.sql` (or base `wf` schema)
 2. `wf_scope_variables.sql`
 3. `wf_scope_readpath.sql`
-4. `wf_json_column_alignment.sql` (migrate legacy JSON columns to native `json`)
+4. `wf_json_column_alignment.sql` (box JSON scalars, then migrate columns to native `json`)
 5. `wf_instance_extension.sql`
 6. `wf_drop_monte_carlo_tables.sql` (remove deprecated `wf.monte_carlo_*`)
 6a. `wf_apply_validation_plan.sql` — merge planner `context_json` onto workflow instances

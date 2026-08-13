@@ -228,7 +228,7 @@ def test_pg_create_instance_sql_overlays_and_normalizes_study_analyte() -> None:
     assert "lower(v_analyte) IN" not in create
 
 
-def test_mssql_set_scope_variable_converts_json_for_nvarchar_column() -> None:
+def test_mssql_set_scope_variable_casts_json_for_either_column_type() -> None:
     repo = (
         Path(__file__).resolve().parents[1]
         / "sql_mssql"
@@ -236,7 +236,9 @@ def test_mssql_set_scope_variable_converts_json_for_nvarchar_column() -> None:
     ).read_text(encoding="utf-8")
     proc = repo.split("CREATE OR ALTER PROCEDURE wf.wf_repo_set_scope_variable", 1)[1]
     proc = proc.split("CREATE OR ALTER PROCEDURE", 1)[0]
+    assert "@value_json json" in proc
     assert "CONVERT(nvarchar(max), @value_json)" in proc
+    assert "CAST(@value_text AS json)" in proc
     assert "SET value_json = @value_json" not in proc
     assert "VALUES (@instance_id, @scope_exec_id, @var_name, @value_json)" not in proc
 
@@ -247,8 +249,23 @@ def test_mssql_set_scope_variable_converts_json_for_nvarchar_column() -> None:
     ).read_text(encoding="utf-8")
     setter = writepath.split("CREATE OR ALTER PROCEDURE wf.wf_set_scope_variable", 1)[1]
     setter = setter.split("CREATE OR ALTER PROCEDURE", 1)[0]
+    assert "@value_json json" in setter
     assert "CONVERT(nvarchar(max), @value_json)" in setter
+    assert "CAST(@value_text AS json)" in setter
     assert "@value_json AS value_json" not in setter
+
+
+def test_mssql_json_alignment_boxes_scalars_then_alters_to_json() -> None:
+    alignment = (
+        Path(__file__).resolve().parents[1]
+        / "sql_mssql"
+        / "wf_json_column_alignment.sql"
+    ).read_text(encoding="utf-8")
+    assert "ALTER COLUMN value_json json NOT NULL" in alignment
+    assert "ALTER COLUMN context_value_json json NULL" in alignment
+    assert "wf.wf_json_box" in alignment
+    assert '"$mp.v"' in alignment
+    assert "ALTER COLUMN value_json nvarchar(max)" not in alignment
 
 
 def test_finalize_instance_context_bakes_execution_scope_id():
