@@ -212,6 +212,7 @@ BEGIN
     /* JSON_QUERY returns structured values (arrays/objects); JSON_VALUE returns scalars. */
     DECLARE @elem NVARCHAR(MAX) = JSON_QUERY(@coll, @jp);
     DECLARE @is_scalar BIT = 0;
+    DECLARE @boxed json;
 
     IF @elem IS NULL
     BEGIN
@@ -223,11 +224,12 @@ BEGIN
         SET @elem = N'null';
 
     /* Store the item variable. */
+    SET @boxed = wf.wf_json_box(@elem);
     EXEC wf.wf_set_scope_variable
         @workflow_instance_id = @workflow_instance_id,
         @scope_node_execution_id = @scope_node_execution_id,
         @var_name = @item_var,
-        @value_json = wf.wf_json_box(@elem);
+        @value_json = @boxed;
 
     /* Store the index as a boxed JSON integer (Azure json rejects scalars). */
     DECLARE @json_idx json = wf.wf_json_box(CAST(@zero_based_index AS NVARCHAR(32)));
@@ -253,12 +255,12 @@ BEGIN
         BEGIN
             IF @fk IS NOT NULL AND @fk <> @item_var AND @fk <> @index_var
             BEGIN
-                DECLARE @json_val json = wf.wf_json_box(wf.wf_json_encode_openjson(@fv, @ft, @elem, @fk));
+                SET @boxed = wf.wf_json_box(wf.wf_json_encode_openjson(@fv, @ft, @elem, @fk));
                 EXEC wf.wf_set_scope_variable
                     @workflow_instance_id = @workflow_instance_id,
                     @scope_node_execution_id = @scope_node_execution_id,
                     @var_name = @fk,
-                    @value_json = @json_val;
+                    @value_json = @boxed;
             END
             FETCH NEXT FROM fk INTO @fk, @fv, @ft;
         END
@@ -301,6 +303,7 @@ BEGIN
     DECLARE @source_kind VARCHAR(32);
     DECLARE @source_path NVARCHAR(1024);
     DECLARE @frag NVARCHAR(MAX);
+    DECLARE @boxed json;
     DECLARE @jp NVARCHAR(1024);
 
     DECLARE bind_cur CURSOR LOCAL FAST_FORWARD FOR
@@ -346,11 +349,12 @@ BEGIN
         ELSE
             SET @frag = N'null';
 
+        SET @boxed = wf.wf_json_box(@frag);
         EXEC wf.wf_set_scope_variable
             @workflow_instance_id = @inst,
             @scope_node_execution_id = @scope_exec,
             @var_name = @var_name,
-            @value_json = wf.wf_json_box(@frag);
+            @value_json = @boxed;
 
         FETCH NEXT FROM bind_cur INTO @var_name, @source_kind, @source_path;
     END

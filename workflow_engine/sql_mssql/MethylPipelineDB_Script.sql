@@ -1174,13 +1174,23 @@ GO
 GO
 PRINT (N'Create or alter functions for worker capability dispatch')
 GO
+/* CREATE OR ALTER cannot change NVARCHAR → json; drop dependents first. */
+IF OBJECT_ID(N'wf.sp_worker_request_task', N'P') IS NOT NULL
+    DROP PROCEDURE wf.sp_worker_request_task;
+IF OBJECT_ID(N'wf.wf_worker_capability_allowed', N'FN') IS NOT NULL
+    DROP FUNCTION wf.wf_worker_capability_allowed;
+IF OBJECT_ID(N'wf.wf_worker_is_omnibus', N'FN') IS NOT NULL
+    DROP FUNCTION wf.wf_worker_is_omnibus;
+GO
 EXEC sp_executesql N'
-CREATE OR ALTER FUNCTION wf.wf_worker_is_omnibus(@capabilities NVARCHAR(MAX))
+CREATE OR ALTER FUNCTION wf.wf_worker_is_omnibus(@capabilities json)
 RETURNS BIT
 AS
 BEGIN
-    IF @capabilities IS NULL OR LTRIM(RTRIM(@capabilities)) = N'''' OR @capabilities = N''[]''
-        RETURN 1;
+    IF @capabilities IS NULL
+        RETURN 0;
+    IF NOT EXISTS (SELECT 1 FROM OPENJSON(@capabilities))
+        RETURN 0;
     IF EXISTS (
         SELECT 1
         FROM OPENJSON(@capabilities) WITH (value NVARCHAR(128) ''$'') AS caps
@@ -1193,7 +1203,7 @@ END;
 GO
 EXEC sp_executesql N'
 CREATE OR ALTER FUNCTION wf.wf_worker_capability_allowed(
-    @worker_capabilities NVARCHAR(MAX),
+    @worker_capabilities json,
     @task_capability NVARCHAR(128)
 )
 RETURNS BIT
@@ -1230,7 +1240,7 @@ BEGIN
 
     DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
     DECLARE @lease_end DATETIME2(7) = DATEADD(SECOND, @max_lease_seconds, @now);
-    DECLARE @worker_capabilities NVARCHAR(MAX);
+    DECLARE @worker_capabilities json;
     DECLARE @is_omnibus BIT;
 
     SELECT @worker_capabilities = w.capabilities
@@ -1540,11 +1550,16 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[wf_engine_on_action_complete]')
 GO
+IF OBJECT_ID(N'wf.sp_worker_submit_result', N'P') IS NOT NULL
+    DROP PROCEDURE wf.sp_worker_submit_result;
+IF OBJECT_ID(N'wf.wf_engine_on_action_complete', N'P') IS NOT NULL
+    DROP PROCEDURE wf.wf_engine_on_action_complete;
+GO
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.wf_engine_on_action_complete
     @action_execution_id BIGINT,
     @result_code INT,
-    @output_json NVARCHAR(MAX) NULL
+    @output_json json NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1552,14 +1567,6 @@ BEGIN
     DECLARE @inst BIGINT;
     DECLARE @wn BIGINT;
     DECLARE @parent BIGINT;
-    /* Normalize payload as NVARCHAR only. Do not use a typed `json` variable here: assigning `json`
-       to an `nvarchar(max)` column (older schemas) raises error 257; `nvarchar` assigns to both
-       `nvarchar(max)` and native `json` columns via implicit conversion where supported. */
-    DECLARE @oj NVARCHAR(MAX) = CASE
-        WHEN @output_json IS NULL THEN NULL
-        WHEN LTRIM(RTRIM(@output_json)) = N'''' THEN NULL
-        ELSE @output_json
-    END;
 
     SELECT @inst = workflow_instance_id, @wn = workflow_node_id, @parent = parent_node_execution_id
     FROM wf.node_execution WHERE id = @action_execution_id;
@@ -1569,7 +1576,7 @@ BEGIN
         UPDATE wf.node_execution
         SET status = N''FAILED'',
             result_code = @result_code,
-            output_json = @oj,
+            output_json = @output_json,
             ended_at_utc = SYSUTCDATETIME(),
             engine_error_code = @result_code
         WHERE id = @action_execution_id;
@@ -1586,7 +1593,7 @@ BEGIN
     UPDATE wf.node_execution
     SET status = N''SUCCEEDED'',
         result_code = @result_code,
-        output_json = @oj,
+        output_json = @output_json,
         ended_at_utc = SYSUTCDATETIME()
     WHERE id = @action_execution_id;
 
@@ -1642,7 +1649,7 @@ CREATE OR ALTER PROCEDURE wf.sp_worker_submit_result
     @worker_id BIGINT,
     @worker_token NVARCHAR(4000),
     @result_code INT,
-    @output_json NVARCHAR(MAX) NULL,
+    @output_json json NULL,
     @accepted BIT OUTPUT,
     @instance_status VARCHAR(32) OUTPUT,
     @next_ready_count INT OUTPUT

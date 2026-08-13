@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS wf.workflow_edge (
 );
 
 DROP INDEX IF EXISTS wf.uq_we_parent_child_order;
+-- IF THEN/ELSE share child_order=0; uniqueness is parent+child, not parent+order.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_we_parent_child
+  ON wf.workflow_edge (parent_node_id, child_node_id);
 CREATE INDEX IF NOT EXISTS ix_we_parent ON wf.workflow_edge(parent_node_id);
 CREATE INDEX IF NOT EXISTS ix_we_child ON wf.workflow_edge(child_node_id);
 

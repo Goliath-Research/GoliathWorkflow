@@ -268,6 +268,44 @@ def test_mssql_json_alignment_boxes_scalars_then_alters_to_json() -> None:
     assert "ALTER COLUMN value_json nvarchar(max)" not in alignment
 
 
+def test_mssql_db_script_worker_capabilities_use_json() -> None:
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "sql_mssql"
+        / "MethylPipelineDB_Script.sql"
+    ).read_text(encoding="utf-8")
+    assert "CREATE OR ALTER FUNCTION wf.wf_worker_is_omnibus(@capabilities json)" in script
+    assert "DECLARE @worker_capabilities json;" in script
+    assert "@worker_capabilities NVARCHAR" not in script
+    assert "@output_json json NULL" in script
+    assert "output_json = @oj" not in script
+
+
+def test_pg_workflow_edge_unique_is_parent_child_not_order() -> None:
+    schema = (
+        Path(__file__).resolve().parents[1]
+        / "sql_pg"
+        / "00_schema.sql"
+    ).read_text(encoding="utf-8")
+    assert "DROP INDEX IF EXISTS wf.uq_we_parent_child_order" in schema
+    assert "CREATE UNIQUE INDEX IF NOT EXISTS uq_we_parent_child" in schema
+    assert "ON wf.workflow_edge (parent_node_id, child_node_id)" in schema
+    assert "UNIQUE INDEX IF NOT EXISTS uq_we_parent_child_order" not in schema
+
+
+def test_mssql_exec_does_not_pass_json_box_as_proc_arg() -> None:
+    """T-SQL EXEC cannot take a function call as a named parameter."""
+    root = Path(__file__).resolve().parents[1] / "sql_mssql"
+    hits: list[str] = []
+    for path in root.glob("*.sql"):
+        text = path.read_text(encoding="utf-8")
+        if "@value_json = wf.wf_json_box(" in text.replace("\n", " "):
+            hits.append(path.name)
+        if "@value_json = wf.wf_json_box(" in text:
+            hits.append(path.name)
+    assert hits == [], f"EXEC @value_json = wf.wf_json_box(...) is illegal T-SQL: {hits}"
+
+
 def test_finalize_instance_context_bakes_execution_scope_id():
     ctx = {
         "projectPath": "/work/projects/x/configs/project.json",

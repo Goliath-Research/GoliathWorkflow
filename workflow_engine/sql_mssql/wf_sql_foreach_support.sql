@@ -113,6 +113,7 @@ BEGIN
 
     DECLARE @jp NVARCHAR(32) = CONCAT(N'$[', CAST(@zero_based_index AS NVARCHAR(32)), N']');
     DECLARE @elem NVARCHAR(MAX) = JSON_QUERY(@coll, @jp);
+    DECLARE @boxed json;
 
     IF @elem IS NULL
         SET @elem = JSON_VALUE(@coll, @jp);
@@ -128,11 +129,12 @@ BEGIN
             SET @elem = wf.wf_json_fragment_from_string(@elem);
     END
 
+    SET @boxed = wf.wf_json_box(@elem);
     EXEC wf.wf_set_scope_variable
         @workflow_instance_id = @workflow_instance_id,
         @scope_node_execution_id = @scope_node_execution_id,
         @var_name = @item_var,
-        @value_json = wf.wf_json_box(@elem);
+        @value_json = @boxed;
 
     DECLARE @json_idx json = wf.wf_json_box(CAST(@zero_based_index AS nvarchar(32)));
     EXEC wf.wf_set_scope_variable
@@ -168,11 +170,12 @@ BEGIN
                 ELSE
                     SET @frag = ISNULL(@fv, N'null');
 
+                SET @boxed = wf.wf_json_box(@frag);
                 EXEC wf.wf_set_scope_variable
                     @workflow_instance_id = @workflow_instance_id,
                     @scope_node_execution_id = @scope_node_execution_id,
                     @var_name = @fk,
-                    @value_json = wf.wf_json_box(@frag);
+                    @value_json = @boxed;
             END
             FETCH NEXT FROM fk INTO @fk, @fv, @ft;
         END

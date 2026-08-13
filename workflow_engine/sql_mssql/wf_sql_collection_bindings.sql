@@ -46,6 +46,7 @@ BEGIN
     DECLARE @existing NVARCHAR(MAX);
     DECLARE @base_json NVARCHAR(MAX);
     DECLARE @extracted NVARCHAR(MAX);
+    DECLARE @boxed json;
     DECLARE @path_expr NVARCHAR(512);
 
     SELECT @version_id = workflow_version_id
@@ -94,11 +95,12 @@ BEGIN
             IF @extracted IS NULL OR @extracted = N'null'
                 THROW 50021, N'collection binding jsonPath produced null', 1;
 
+            SET @boxed = wf.wf_json_box(@extracted);
             EXEC wf.wf_set_scope_variable
                 @workflow_instance_id = @workflow_instance_id,
                 @scope_node_execution_id = 0,
                 @var_name = @scope_var,
-                @value_json = wf.wf_json_box(@extracted);
+                @value_json = @boxed;
         END
         ELSE IF @source_kind = N'jsonFile'
         BEGIN

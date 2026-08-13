@@ -118,6 +118,7 @@ BEGIN
     DECLARE @def_var NVARCHAR(128);
     DECLARE @def_expr NVARCHAR(1024);
     DECLARE @resolved NVARCHAR(MAX);
+    DECLARE @boxed json;
     DECLARE @failed BIT;
     DECLARE @fc INT;
     DECLARE @fm NVARCHAR(1024);
@@ -141,11 +142,14 @@ BEGIN
             @fail_msg = @fm OUTPUT;
 
         IF @failed = 0
+        BEGIN
+            SET @boxed = wf.wf_json_box(@resolved);
             EXEC wf.wf_set_scope_variable
                 @workflow_instance_id = @workflow_instance_id,
                 @scope_node_execution_id = @to_scope,
                 @var_name = @def_var,
-                @value_json = wf.wf_json_box(@resolved);
+                @value_json = @boxed;
+        END
 
         FETCH NEXT FROM def_cur INTO @def_var, @def_expr;
     END
@@ -207,6 +211,7 @@ BEGIN
     DECLARE @source_kind VARCHAR(32);
     DECLARE @source_path NVARCHAR(1024);
     DECLARE @frag NVARCHAR(MAX);
+    DECLARE @boxed json;
     DECLARE @jp NVARCHAR(1024);
     DECLARE @bi BIGINT;
 
@@ -255,11 +260,12 @@ BEGIN
         ELSE
             SET @frag = N'null';
 
+        SET @boxed = wf.wf_json_box(@frag);
         EXEC wf.wf_set_scope_variable
             @workflow_instance_id = @inst,
             @scope_node_execution_id = @scope_exec,
             @var_name = @var_name,
-            @value_json = wf.wf_json_box(@frag);
+            @value_json = @boxed;
 
         FETCH NEXT FROM bind_cur INTO @var_name, @source_kind, @source_path;
     END
