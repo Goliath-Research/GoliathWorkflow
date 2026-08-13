@@ -33,9 +33,56 @@ CREATE OR ALTER PROCEDURE wf.wf_repo_create_workflow_instance
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    /*
+      ACTION templates bind ${var.executionScopeId}. Portal SQL starts often skip
+      Python finalize_instance_context, so bake a scope key here when absent.
+      Prefer a caller-provided id (from finalize); otherwise hash context_json.
+    */
+    DECLARE @ctx json = COALESCE(@context_json, CAST(N'{}' AS json));
+    DECLARE @set_key nvarchar(64) = COALESCE(
+        NULLIF(LTRIM(RTRIM(JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.executionScopeId'))), N''),
+        NULLIF(LTRIM(RTRIM(JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.hyperparamSetId'))), N'')
+    );
+    IF @set_key IS NULL
+    BEGIN
+        /* HASHBYTES is limited to 8000 bytes; CAST json → nvarchar, then left-truncate. */
+        SET @set_key = LOWER(CONVERT(nvarchar(64), HASHBYTES(
+            'SHA2_256',
+            LEFT(CAST(@ctx AS nvarchar(max)), 4000)
+        ), 2));
+        SET @set_key = LEFT(@set_key, 32);
+        SET @ctx = CAST(JSON_MODIFY(CAST(@ctx AS nvarchar(max)), N'$.executionScopeId', @set_key) AS json);
+        SET @ctx = CAST(JSON_MODIFY(CAST(@ctx AS nvarchar(max)), N'$.hyperparamSetId', @set_key) AS json);
+    END
+    ELSE
+    BEGIN
+        /* Keep legacy alias in sync when only one side is present. */
+        IF JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.executionScopeId') IS NULL
+            SET @ctx = CAST(JSON_MODIFY(CAST(@ctx AS nvarchar(max)), N'$.executionScopeId', @set_key) AS json);
+        IF JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.hyperparamSetId') IS NULL
+            SET @ctx = CAST(JSON_MODIFY(CAST(@ctx AS nvarchar(max)), N'$.hyperparamSetId', @set_key) AS json);
+    END
+
+    DECLARE @created TABLE (id bigint);
     INSERT INTO wf.workflow_instance (workflow_version_id, status, context_json)
-    OUTPUT INSERTED.id
-    VALUES (@version_id, N'CREATED', @context_json);
+    OUTPUT INSERTED.id INTO @created
+    VALUES (@version_id, N'CREATED', @ctx);
+
+    DECLARE @instance_id bigint = (SELECT TOP 1 id FROM @created);
+
+    /* Best-effort: register opaque execution_scope when the helper exists. */
+    IF OBJECT_ID(N'wf.wf_apply_execution_scope', N'P') IS NOT NULL
+    BEGIN
+        EXEC wf.wf_apply_execution_scope
+            @workflow_instance_id = @instance_id,
+            @set_key = @set_key,
+            @display_name = NULL,
+            @config_json = NULL,
+            @persist_extension = 1;
+    END
+
+    SELECT id FROM @created;
 END;
 GO
 

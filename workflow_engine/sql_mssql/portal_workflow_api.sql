@@ -124,6 +124,10 @@ GO
   rest.db_client.create_workflow_instance) MUST run cfg → /work study sync
   (ensure_study_work_synced / materialize_study_lists) before invoking this proc
   so membership CSVs match cfg.study_group_member.
+
+  Prefer baking a full context via Python finalize_instance_context (resolvedConfig__*
+  + executionScopeId). When the portal passes raw context, wf_repo_create_workflow_instance
+  still injects executionScopeId so ${var.executionScopeId} template expand cannot fail.
 */
 IF OBJECT_ID(N'portal.sp_create_and_start_instance', N'P') IS NOT NULL
     DROP PROCEDURE portal.sp_create_and_start_instance;

@@ -32,11 +32,44 @@ CREATE OR REPLACE FUNCTION wf.wf_repo_create_workflow_instance(
 RETURNS TABLE (id bigint)
 LANGUAGE plpgsql
 AS $$
+DECLARE
+  v_ctx jsonb := COALESCE(p_context_json, '{}'::jsonb);
+  v_set_key text;
+  v_id bigint;
 BEGIN
-  RETURN QUERY
+  /*
+    ACTION templates bind ${var.executionScopeId}. Portal SQL starts often skip
+    Python finalize_instance_context, so bake a scope key here when absent.
+  */
+  v_set_key := NULLIF(BTRIM(COALESCE(v_ctx->>'executionScopeId', v_ctx->>'hyperparamSetId')), '');
+  IF v_set_key IS NULL THEN
+    v_set_key := LEFT(encode(wf.wf_sha256_text(v_ctx::text), 'hex'), 32);
+    v_ctx := v_ctx || jsonb_build_object(
+      'executionScopeId', v_set_key,
+      'hyperparamSetId', v_set_key
+    );
+  ELSE
+    IF v_ctx->>'executionScopeId' IS NULL THEN
+      v_ctx := v_ctx || jsonb_build_object('executionScopeId', v_set_key);
+    END IF;
+    IF v_ctx->>'hyperparamSetId' IS NULL THEN
+      v_ctx := v_ctx || jsonb_build_object('hyperparamSetId', v_set_key);
+    END IF;
+  END IF;
+
   INSERT INTO wf.workflow_instance (workflow_version_id, status, context_json)
-  VALUES (p_version_id, 'CREATED', p_context_json)
-  RETURNING wf.workflow_instance.id;
+  VALUES (p_version_id, 'CREATED', v_ctx)
+  RETURNING wf.workflow_instance.id INTO v_id;
+
+  BEGIN
+    CALL wf.wf_apply_execution_scope(v_id, v_set_key, NULL, NULL, true);
+  EXCEPTION
+    WHEN OTHERS THEN
+      NULL; -- optional on partially deployed schemas
+  END;
+
+  id := v_id;
+  RETURN NEXT;
 END;
 $$;
 

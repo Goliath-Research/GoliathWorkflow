@@ -140,6 +140,19 @@ def test_compute_execution_scope_id_accepts_legacy_label_alias():
     assert compute_execution_scope_id(labeled) != compute_execution_scope_id(base)
 
 
+def test_mssql_create_instance_sql_bakes_execution_scope_id() -> None:
+    sql = (
+        Path(__file__).resolve().parents[1]
+        / "sql_mssql"
+        / "wf_repository_api.sql"
+    ).read_text(encoding="utf-8")
+    create = sql.split("CREATE OR ALTER PROCEDURE wf.wf_repo_create_workflow_instance", 1)[1]
+    create = create.split("CREATE OR ALTER PROCEDURE", 1)[0]
+    assert "$.executionScopeId" in create
+    assert "JSON_MODIFY" in create
+    assert "wf_apply_execution_scope" in create
+
+
 def test_finalize_instance_context_bakes_execution_scope_id():
     ctx = {
         "projectPath": "/work/projects/x/configs/project.json",
