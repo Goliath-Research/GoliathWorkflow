@@ -228,6 +228,29 @@ def test_pg_create_instance_sql_overlays_and_normalizes_study_analyte() -> None:
     assert "lower(v_analyte) IN" not in create
 
 
+def test_mssql_set_scope_variable_converts_json_for_nvarchar_column() -> None:
+    repo = (
+        Path(__file__).resolve().parents[1]
+        / "sql_mssql"
+        / "wf_repository_api.sql"
+    ).read_text(encoding="utf-8")
+    proc = repo.split("CREATE OR ALTER PROCEDURE wf.wf_repo_set_scope_variable", 1)[1]
+    proc = proc.split("CREATE OR ALTER PROCEDURE", 1)[0]
+    assert "CONVERT(nvarchar(max), @value_json)" in proc
+    assert "CAST(@value_text AS json)" in proc
+    assert "SET value_json = @value_json" not in proc
+
+    writepath = (
+        Path(__file__).resolve().parents[1]
+        / "sql_mssql"
+        / "wf_sql_scope_writepath_parity.sql"
+    ).read_text(encoding="utf-8")
+    setter = writepath.split("CREATE OR ALTER PROCEDURE wf.wf_set_scope_variable", 1)[1]
+    setter = setter.split("CREATE OR ALTER PROCEDURE", 1)[0]
+    assert "CONVERT(nvarchar(max), @value_json)" in setter
+    assert "@value_json AS value_json" not in setter
+
+
 def test_finalize_instance_context_bakes_execution_scope_id():
     ctx = {
         "projectPath": "/work/projects/x/configs/project.json",

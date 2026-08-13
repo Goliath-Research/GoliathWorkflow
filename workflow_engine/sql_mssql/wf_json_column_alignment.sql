@@ -44,3 +44,17 @@ BEGIN
     PRINT N'Aligned wf.execution_context.context_value_json to json.';
 END
 GO
+
+/*
+  After this script, wf.scope_variable.value_json is native json.
+  wf.wf_repo_set_scope_variable and wf.wf_set_scope_variable detect the column
+  type at runtime (CONVERT json → nvarchar, then CAST back when the column is json).
+*/
+
+/*
+  After this script, wf.scope_variable.value_json is native json.
+  wf.wf_repo_set_scope_variable and wf.wf_set_scope_variable detect the column
+  type at runtime (CONVERT json → nvarchar, then CAST back when the column is json).
+  Re-deploy those procs from wf_repository_api.sql / wf_sql_scope_writepath_parity.sql
+  if they still assign @value_json directly to the column.
+*/
