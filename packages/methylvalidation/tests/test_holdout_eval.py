@@ -149,8 +149,8 @@ def test_write_holdout_eval_artifacts_caas_symlink_and_mc_root(tmp_path):
         assert [e["label"] for e in tg] == ["all", "PCa"]
         assert (dest / "test_control.csv").is_file()
         assert (dest / "test_disease.csv").is_file()
-        assert (dest / "val_control.csv").is_file()
-        assert (dest / "val_disease.csv").is_file()
+        assert not (dest / "val_control.csv").exists()
+        assert not (dest / "val_disease.csv").exists()
         ctrl = (dest / "test_control.csv").read_text(encoding="utf-8")
         assert "H3" in ctrl and "H4" in ctrl
         assert "C4" in (dest / "test_disease.csv").read_text(encoding="utf-8")

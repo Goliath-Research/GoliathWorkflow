@@ -41,7 +41,11 @@ def _count_run_samples_from_run_dir(run_dir: Path) -> tuple[int, int]:
     train_files = sorted(
         set(list(run_dir.glob("train_*.csv")) + list(run_dir.glob("training_*.csv")))
     )
-    val_files = sorted(set(list(run_dir.glob("val_*.csv")) + list(run_dir.glob("testing_*.csv"))))
+    canonical_test = sorted(run_dir.glob("test_*.csv"))
+    if canonical_test:
+        val_files = canonical_test
+    else:
+        val_files = sorted(set(list(run_dir.glob("val_*.csv")) + list(run_dir.glob("testing_*.csv"))))
     n_train = sum(_count_csv_data_rows(p) for p in train_files)
     n_val = sum(_count_csv_data_rows(p) for p in val_files)
     return int(n_train), int(n_val)

@@ -46,6 +46,7 @@ from .project_gen import (
     generate_run_project_hierarchical_multiclass,
     generate_run_project_multiclass,
     infer_monte_carlo_layout,
+    link_run_artifacts_from_source,
     prepare_model_mc_backend_run_from_shared,
 )
 from .reuse_splits import (
@@ -276,6 +277,13 @@ def _count_run_samples_from_existing_files(run_dir: Path) -> Tuple[int, int]:
     return int(n_train), int(n_test)
 
 
+def _resolve_holdout_groups_json(run_dir: Path) -> Path:
+    canonical = run_dir / "test_groups.json"
+    if canonical.is_file():
+        return canonical
+    return run_dir / "val_test_groups.json"
+
+
 def _deep_merge_dicts(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
     """Recursively merge mappings, preferring values from updates."""
     merged: Dict[str, Any] = copy.deepcopy(base)
@@ -502,17 +510,23 @@ def _build_model_mc_shared_runs(
             return 0
         return sum(1 for _ in detections_root.glob("**/classifier-*.pkl"))
 
-    def _has_reusable_source_run(run_path: Path, metadata_path: Path) -> bool:
-        reusable = (
+    def _can_reuse_centroids(run_path: Path, metadata_path: Path) -> bool:
+        return (
             run_path.is_dir()
             and (metadata_path / "project.json").is_file()
-            and (run_path / "detections").is_dir()
             and (run_path / "centroids").is_dir()
-            and _detection_config_compatible(metadata_path / "project.json")
         )
-        if reusable and require_classifier_models:
-            reusable = _classifier_count(run_path / "detections") >= expected_classifier_models
-        return reusable
+
+    def _can_reuse_detections(run_path: Path, metadata_path: Path) -> bool:
+        if not _can_reuse_centroids(run_path, metadata_path):
+            return False
+        if not (run_path / "detections").is_dir():
+            return False
+        if not _detection_config_compatible(metadata_path / "project.json"):
+            return False
+        if require_classifier_models:
+            return _classifier_count(run_path / "detections") >= expected_classifier_models
+        return True
 
     def _shared_run_ready(run_path: Path) -> bool:
         """Keep already-built shared runs that match the production detection contract."""
@@ -537,7 +551,7 @@ def _build_model_mc_shared_runs(
             primary_det = primary_monte_carlo_runs_root / run_path.name / "detections"
             try:
                 if target == primary_det.resolve():
-                    return _has_reusable_source_run(
+                    return _can_reuse_detections(
                         primary_monte_carlo_runs_root / run_path.name,
                         resolve_run_metadata_dir(primary_monte_carlo_runs_root / run_path.name),
                     )
@@ -653,10 +667,13 @@ def _build_model_mc_shared_runs(
 
         source_run_dir = primary_monte_carlo_runs_root / run_id
         metadata_run_dir = resolve_run_metadata_dir(source_run_dir)
-        can_reuse_artifacts = split_src == "reused" and _has_reusable_source_run(
+        can_reuse_centroids = split_src == "reused" and _can_reuse_centroids(
             source_run_dir, metadata_run_dir
         )
-        if require_artifact_reuse and not can_reuse_artifacts:
+        can_reuse_detections = split_src == "reused" and _can_reuse_detections(
+            source_run_dir, metadata_run_dir
+        )
+        if require_artifact_reuse and not can_reuse_detections:
             missing: List[str] = []
             if split_src != "reused":
                 missing.append("compatible primary split")
@@ -681,7 +698,7 @@ def _build_model_mc_shared_runs(
                 "followed by fixed-panel freeze, use requireArtifactReuse=false so model-MC "
                 "can rebuild shared under the frozen panel."
             )
-        if can_reuse_artifacts:
+        if can_reuse_detections:
             _clean_path(run_dir)
             run_dir.mkdir(parents=True, exist_ok=True)
             if layout == "binary":
@@ -726,18 +743,7 @@ def _build_model_mc_shared_runs(
                     cohort_labels,
                     config.samples_base_path,
                 )
-            for artifact_dir in ("centroids", "detections"):
-                src = source_run_dir / artifact_dir
-                dst = run_dir / artifact_dir
-                if src.is_dir():
-                    _clean_path(dst)
-                    dst.symlink_to(src, target_is_directory=True)
-            for optional_file in ("detector_step_override.json",):
-                srcf = source_run_dir / optional_file
-                dstf = run_dir / optional_file
-                if srcf.is_file():
-                    _clean_path(dstf)
-                    dstf.symlink_to(srcf)
+            link_run_artifacts_from_source(source_run_dir, run_dir)
             source_timings = primary_timings_by_run.get(run_id, [])
             if source_timings:
                 for t in source_timings:
@@ -787,13 +793,24 @@ def _build_model_mc_shared_runs(
                 previous_train_disease = list(train_disease)
             continue
 
+        skip_centroid = bool(can_reuse_centroids)
+        if skip_centroid:
+            link_run_artifacts_from_source(
+                source_run_dir, run_dir, artifacts=("centroids",)
+            )
+            _clean_path(run_dir / "detections")
+            print(
+                f"[model-mc:shared] Reused centroids for {run_id}; rebuilding detector "
+                "under the production detection contract",
+                file=sys.stderr,
+            )
         if layout == "binary":
             (
                 project_path,
                 _,
                 _,
-                _val_control_csv,
-                _val_disease_csv,
+                _test_control_csv,
+                _test_disease_csv,
                 centroid_group1_override,
                 centroid_group2_override,
             ) = generate_run_project(
@@ -821,12 +838,12 @@ def _build_model_mc_shared_runs(
                     "group2": centroid_group2_override,
                 },
                 detector_step_override=None,
-                skip_centroid=False,
+                skip_centroid=skip_centroid,
                 config=config,
             )
         else:
             if layout == "multiclass":
-                project_path, _val_groups_json = generate_run_project_multiclass(
+                project_path, _test_groups_json = generate_run_project_multiclass(
                     base_project_for_runs,
                     run_dir,
                     run_id,
@@ -837,7 +854,7 @@ def _build_model_mc_shared_runs(
                     config.samples_base_path,
                 )
             else:
-                project_path, _val_groups_json, _centroid_overrides = generate_run_project_hierarchical_multiclass(
+                project_path, _test_groups_json, _centroid_overrides = generate_run_project_hierarchical_multiclass(
                     base_project_for_runs,
                     run_dir,
                     run_id,
@@ -853,7 +870,7 @@ def _build_model_mc_shared_runs(
                 logs_dir=run_dir / "logs",
                 progress_callback=None,
                 detector_step_override=None,
-                skip_centroid=False,
+                skip_centroid=skip_centroid,
                 config=config,
             )
 
@@ -3341,7 +3358,7 @@ def main() -> None:
             elif layout == "multiclass":
                 if args.skip_centroid:
                     project_path = run_dir / "project.json"
-                    val_groups_json = run_dir / "val_test_groups.json"
+                    val_groups_json = _resolve_holdout_groups_json(run_dir)
                     if not project_path.is_file():
                         print(
                             f"Warning: iteration {i + 1} skipped: missing existing run project at {project_path} "
@@ -3404,7 +3421,7 @@ def main() -> None:
             else:
                 if args.skip_centroid:
                     project_path = run_dir / "project.json"
-                    val_groups_json = run_dir / "val_test_groups.json"
+                    val_groups_json = _resolve_holdout_groups_json(run_dir)
                     if not project_path.is_file():
                         print(
                             f"Warning: iteration {i + 1} skipped: missing existing run project at {project_path} "
