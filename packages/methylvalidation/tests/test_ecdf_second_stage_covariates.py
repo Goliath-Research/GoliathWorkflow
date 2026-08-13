@@ -345,6 +345,40 @@ def test_ecdf_second_stage_strict_join_missing_ids(tmp_path: Path):
         )
 
 
+def test_ecdf_second_stage_drop_missing_ids_continues(tmp_path: Path, capsys):
+    project = _minimal_project(tmp_path)
+    pred_dir = tmp_path / "predictors"
+    clf_dir = tmp_path / "classifiers"
+    _write_predictions(pred_dir / "predictions.csv", n=8)
+    cov_csv = tmp_path / "covariates.csv"
+    _write_covariates(cov_csv, [f"S{i}" for i in range(8)], drop_one=True)
+
+    params = EcdfSecondStageParams(
+        include_observed_hybrid=False,
+        covariates_path=str(cov_csv),
+        covariates_strict_join=True,
+        covariates_missing_samples="drop",
+        covariate_numeric_columns=["age", "bmi"],
+        probability_epsilon=1e-6,
+    )
+    out = train_and_apply_ecdf_second_stage(
+        project_json=project,
+        predictor_output_dir=pred_dir,
+        classifier_output_dir=clf_dir,
+        params=params,
+    )
+    assert Path(out["model_path"]).is_file()
+    captured = capsys.readouterr()
+    assert "Dropping 1 sample" in captured.err
+    train_metrics = json.loads((pred_dir / "train_metrics.json").read_text(encoding="utf-8"))
+    assert train_metrics["n_samples_excluded_missing_covariates"] == 1
+    assert train_metrics["dropped_sample_ids"] == ["S7"]
+    assert train_metrics["n_train_samples"] == 7
+    meta = json.loads((clf_dir / "ecdf-second-stage-metadata.json").read_text(encoding="utf-8"))
+    assert meta["covariate_report"]["n_dropped"] == 1
+    assert meta["covariate_report"]["dropped_sample_ids"] == ["S7"]
+
+
 def test_ecdf_second_stage_requires_stack_components():
     params = EcdfSecondStageParams(include_observed_hybrid=False, covariates_path=None)
     with pytest.raises(ValueError, match="include_observed_hybrid and/or covariates_path"):

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -255,6 +256,88 @@ class CovariatePreprocessor:
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
         return cls.from_dict(payload)
+
+
+MISSING_SAMPLE_POLICIES = ("fail", "drop")
+
+
+def resolve_missing_sample_policy(
+    missing_samples: Optional[str],
+    *,
+    strict_join: bool,
+) -> str:
+    """Resolve row policy: ``fail``, ``drop``, or ``impute`` (legacy non-strict)."""
+    raw = None if missing_samples is None else str(missing_samples).strip().lower()
+    if raw in {"", "none"}:
+        raw = None
+    if raw is not None and raw not in MISSING_SAMPLE_POLICIES:
+        raise ValueError(
+            "covariates_missing_samples must be 'fail' or 'drop' "
+            f"(got {missing_samples!r})"
+        )
+    if raw == "drop":
+        return "drop"
+    if raw == "fail" or (bool(strict_join) and raw is None):
+        return "fail"
+    return "impute"
+
+
+def _warn_dropped_covariate_samples(dropped: Sequence[str]) -> None:
+    preview = ", ".join(str(x) for x in list(dropped)[:10])
+    msg = (
+        f"Dropping {len(dropped)} sample(s) with missing covariate rows "
+        f"(first: {preview}). Covariate-using stage continues on the remaining samples."
+    )
+    logger.warning(msg)
+    print(msg, file=sys.stderr)
+
+
+def resolve_covariate_sample_ids(
+    sample_ids: Sequence[str],
+    covariates_path: Optional[Union[str, Sequence[str]]],
+    covariate_id_column: str,
+    *,
+    missing_samples: Optional[str] = None,
+    strict_join: bool = False,
+) -> Tuple[List[str], List[str]]:
+    """Return ``(kept_ids, dropped_ids)`` in the original sample order.
+
+    ``drop`` excludes IDs absent from the sidecar and warns. ``fail`` (or
+    ``strict_join`` when the policy is unset) raises. Otherwise all IDs are
+    kept so ``fit_covariates`` can reindex and impute cells.
+    """
+    ordered = [str(sid) for sid in sample_ids]
+    if not covariates_path:
+        return ordered, []
+    policy = resolve_missing_sample_policy(missing_samples, strict_join=strict_join)
+    raw = _load_covariate_table(covariates_path, covariate_id_column)
+    present = set(raw[covariate_id_column].astype(str).tolist())
+    dropped = [sid for sid in ordered if sid not in present]
+    if not dropped:
+        return ordered, []
+    if policy == "fail":
+        preview = ", ".join(dropped[:5])
+        raise ValueError(
+            f"Missing covariate rows for {len(dropped)} sample ids (first: {preview})"
+        )
+    if policy == "drop":
+        kept = [sid for sid in ordered if sid in present]
+        if not kept:
+            raise ValueError(
+                "covariates_missing_samples='drop' excluded every sample; "
+                "no covariate rows remain."
+            )
+        _warn_dropped_covariate_samples(dropped)
+        return kept, dropped
+    return ordered, []
+
+
+def exclusion_report(dropped_ids: Sequence[str]) -> Dict[str, Any]:
+    dropped = [str(x) for x in dropped_ids]
+    return {
+        "dropped_sample_ids": dropped,
+        "n_dropped": int(len(dropped)),
+    }
 
 
 def _ordered_covariate_rows(

@@ -364,6 +364,16 @@ class BackendSharedParams(BaseModel):
     covariate_missing_numeric_strategy: str = Field(default="mean")
     covariate_standardize_numeric: bool = Field(default=True)
     covariates_strict_join: bool = Field(default=False)
+    covariates_missing_samples: Optional[Literal["fail", "drop"]] = Field(
+        default=None,
+        description=(
+            "Row policy when sample IDs are missing from the covariates sidecar. "
+            "'drop' excludes those samples from the covariate-using stage and warns. "
+            "'fail' raises. When unset, covariates_strict_join=true fails and "
+            "false reindexes (cell impute; composition ALR still cannot fill a missing row). "
+            "Operator-set per profile/site."
+        ),
+    )
     ecdf_second_stage_probability_transform: Optional[
         Literal["logit_class1"]
     ] = Field(default=None)
@@ -1527,6 +1537,7 @@ class MonteCarloConfig(BaseModel):
             "covariate_missing_numeric_strategy",
             "covariate_standardize_numeric",
             "covariates_strict_join",
+            "covariates_missing_samples",
             "covariate_composition_transform",
             "covariate_composition_columns",
             "covariate_composition_reference",

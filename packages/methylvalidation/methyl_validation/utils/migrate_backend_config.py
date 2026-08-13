@@ -66,6 +66,7 @@ SHARED_PARAM_KEYS = {
     "covariate_missing_numeric_strategy",
     "covariate_standardize_numeric",
     "covariates_strict_join",
+    "covariates_missing_samples",
 }
 
 TABULAR_PARAM_KEYS = {

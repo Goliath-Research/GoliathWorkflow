@@ -75,6 +75,32 @@ def test_build_model_backend_steps_ecdf_includes_second_stage(tmp_path: Path, mo
     assert params.max_gene_features == 9
 
 
+def test_build_model_backend_steps_ecdf_second_stage_error_fails_step(tmp_path: Path, monkeypatch):
+    def _boom(**_kwargs):
+        raise RuntimeError("second-stage exploded")
+
+    monkeypatch.setattr(
+        "methyl_validation.ecdf_second_stage.train_and_apply_ecdf_second_stage",
+        _boom,
+    )
+    monkeypatch.setattr(
+        "methyl_validation.trainer_api._write_ecdf_training_metrics",
+        lambda *_args, **_kwargs: (True, "training_metrics.json"),
+    )
+    steps = build_model_backend_steps(
+        project_json=tmp_path / "project.json",
+        predictor_output_dir=tmp_path / "predictors",
+        config=_base_config(tmp_path, enabled=True),
+        per_cancer_group=False,
+        run_classifier_fn=lambda _p, _g: (0, "classifier ok", ""),
+        run_predictor_fn=lambda _p, _o: (0, "predictor ok", ""),
+    )
+    rc, _out, err = steps[-1][1]()
+    assert rc == 1
+    assert "ECDF second-stage failed" in err
+    assert "second-stage exploded" in err
+
+
 def test_build_model_backend_steps_ecdf_hybrid_flag_is_explicit(tmp_path: Path, monkeypatch):
     called = {"params": None}
 

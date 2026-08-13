@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 import joblib
 import numpy as np
@@ -24,8 +24,10 @@ from methyl_utils import load_project
 from .classification_metrics import compute_validation_metrics
 from .covariate_preprocessor import (
     CompositionGroupSpec,
+    exclusion_report,
     fit_covariates,
     normalize_composition_groups,
+    resolve_covariate_sample_ids,
     transform_covariates,
 )
 from .eval_split_resolver import resolve_eval_paths_and_labels
@@ -104,6 +106,7 @@ class EcdfSecondStageParams(BaseModel):
     covariate_missing_numeric_strategy: str = Field(default="mean")
     covariate_standardize_numeric: bool = Field(default=True)
     covariates_strict_join: bool = Field(default=False)
+    covariates_missing_samples: Optional[Literal["fail", "drop"]] = Field(default=None)
     probability_transform: Optional[str] = Field(default=None)
     probability_epsilon: Optional[float] = Field(
         default=None,
@@ -210,6 +213,7 @@ class EcdfSecondStageParams(BaseModel):
                 getattr(config, "covariate_standardize_numeric", True)
             ),
             covariates_strict_join=bool(getattr(config, "covariates_strict_join", False)),
+            covariates_missing_samples=getattr(config, "covariates_missing_samples", None),
             probability_transform=getattr(
                 config, "ecdf_second_stage_probability_transform", None
             ),
@@ -698,16 +702,31 @@ def train_and_apply_ecdf_second_stage(
     if "sample" not in df.columns:
         raise ValueError("Second-stage scorer requires sample column in train_predictions.csv.")
 
+    sample_paths = _sample_paths_from_predictions(df, project_json)
+    if not sample_paths:
+        raise ValueError("No sample paths were derived from predictions.csv for ECDF second-stage scorer.")
+    sample_ids = [Path(str(p)).name for p in sample_paths]
+    dropped_train_ids: List[str] = []
+    if params.has_covariates():
+        kept_ids, dropped_train_ids = resolve_covariate_sample_ids(
+            sample_ids,
+            params.covariates_path,
+            params.covariate_id_column,
+            missing_samples=params.covariates_missing_samples,
+            strict_join=params.covariates_strict_join,
+        )
+        if dropped_train_ids:
+            keep = set(kept_ids)
+            mask = [sid in keep for sid in sample_ids]
+            df = df.loc[mask].reset_index(drop=True)
+            sample_paths = [path for path, keep_row in zip(sample_paths, mask) if keep_row]
+            sample_ids = list(kept_ids)
+
     X_prob, prob_cols = _probability_design(
         df,
         transform=params.probability_transform,
         epsilon=params.probability_epsilon,
     )
-
-    sample_paths = _sample_paths_from_predictions(df, project_json)
-    if not sample_paths:
-        raise ValueError("No sample paths were derived from predictions.csv for ECDF second-stage scorer.")
-    sample_ids = [Path(str(p)).name for p in sample_paths]
 
     blocks: List[np.ndarray] = [X_prob]
     block_names: List[str] = list(prob_cols)
@@ -859,7 +878,7 @@ def train_and_apply_ecdf_second_stage(
             params.covariates_path,
             sample_ids,
             covariate_id_column=params.covariate_id_column,
-            strict_join=params.covariates_strict_join,
+            strict_join=True if dropped_train_ids else params.covariates_strict_join,
             numeric_columns=params.covariate_numeric_columns,
             ordinal_columns=params.covariate_ordinal_columns,
             ordinal_maps=params.covariate_ordinal_maps,
@@ -879,7 +898,9 @@ def train_and_apply_ecdf_second_stage(
         block_names.extend(cov_names)
         meta_extra["n_covariate_features"] = int(cov.shape[1])
         meta_extra["covariate_feature_names"] = cov_names
-        meta_extra["covariate_report"] = dict(cov_report)
+        cov_report = dict(cov_report)
+        cov_report.update(exclusion_report(dropped_train_ids))
+        meta_extra["covariate_report"] = cov_report
         meta_extra["covariates_path"] = (
             [str(p) for p in params.covariates_path]
             if isinstance(params.covariates_path, (list, tuple))
@@ -937,6 +958,8 @@ def train_and_apply_ecdf_second_stage(
             "evaluation_partition": "train",
             "metrics_source": "ecdf_second_stage_train",
             "n_train_samples": int(len(y_fit)),
+            "n_samples_excluded_missing_covariates": int(len(dropped_train_ids)),
+            "dropped_sample_ids": list(dropped_train_ids),
         }
     )
     train_metrics_path.write_text(json.dumps(train_payload, indent=2) + "\n", encoding="utf-8")
@@ -954,14 +977,31 @@ def train_and_apply_ecdf_second_stage(
             raise ValueError(
                 "Second-stage test application requires sample and expected_class columns."
             )
+        test_sample_paths = _sample_paths_from_predictions(test_df, project_json)
+        test_sample_ids = [Path(str(path)).name for path in test_sample_paths]
+        dropped_test_ids: List[str] = []
+        if params.has_covariates() and preprocessor is not None:
+            kept_test_ids, dropped_test_ids = resolve_covariate_sample_ids(
+                test_sample_ids,
+                params.covariates_path,
+                params.covariate_id_column,
+                missing_samples=params.covariates_missing_samples,
+                strict_join=params.covariates_strict_join,
+            )
+            if dropped_test_ids:
+                keep_test = set(kept_test_ids)
+                test_mask = [sid in keep_test for sid in test_sample_ids]
+                test_df = test_df.loc[test_mask].reset_index(drop=True)
+                test_sample_paths = [
+                    path for path, keep_row in zip(test_sample_paths, test_mask) if keep_row
+                ]
+                test_sample_ids = list(kept_test_ids)
         test_probability_matrix, test_prob_cols = _probability_design(
             test_df,
             transform=params.probability_transform,
             epsilon=params.probability_epsilon,
         )
         test_blocks: List[np.ndarray] = [test_probability_matrix]
-        test_sample_paths = _sample_paths_from_predictions(test_df, project_json)
-        test_sample_ids = [Path(str(path)).name for path in test_sample_paths]
         overlap = sorted(set(sample_ids) & set(test_sample_ids))
         if overlap:
             raise ValueError(
@@ -1033,7 +1073,7 @@ def train_and_apply_ecdf_second_stage(
                 params.covariates_path,
                 test_sample_ids,
                 preprocessor,
-                strict_join=params.covariates_strict_join,
+                strict_join=True if dropped_test_ids else params.covariates_strict_join,
             )
             if test_cov is None:
                 raise ValueError("Second-stage covariate transform returned no test matrix.")
@@ -1084,6 +1124,8 @@ def train_and_apply_ecdf_second_stage(
                 "n_train_samples": int(len(y_fit)),
                 "n_test_samples": int(np.sum(test_valid)),
                 "train_test_overlap_count": 0,
+                "n_samples_excluded_missing_covariates": int(len(dropped_test_ids)),
+                "dropped_sample_ids": list(dropped_test_ids),
             }
         )
         test_metrics_path.write_text(

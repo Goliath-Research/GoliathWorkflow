@@ -133,6 +133,7 @@ def _covariate_block(params: Any) -> Optional[Dict[str, Any]]:
         "missing_numeric_strategy": getattr(params, "covariate_missing_numeric_strategy", "mean"),
         "standardize_numeric": getattr(params, "covariate_standardize_numeric", True),
         "strict_join": getattr(params, "covariates_strict_join", False),
+        "missing_samples": getattr(params, "covariates_missing_samples", None),
     }
 
 

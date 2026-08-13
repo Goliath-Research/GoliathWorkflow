@@ -316,6 +316,23 @@
           "title": "Covariate Standardize Numeric",
           "type": "boolean"
         },
+        "covariates_missing_samples": {
+          "anyOf": [
+            {
+              "enum": [
+                "fail",
+                "drop"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Row policy when sample IDs are missing from the covariates sidecar. 'drop' excludes those samples from the covariate-using stage and warns. 'fail' raises. When unset, covariates_strict_join=true fails and false reindexes (cell impute; composition ALR still cannot fill a missing row). Operator-set per profile/site.",
+          "title": "Covariates Missing Samples"
+        },
         "covariates_path": {
           "anyOf": [
             {
@@ -938,6 +955,23 @@
           "default": true,
           "title": "Covariate Standardize Numeric",
           "type": "boolean"
+        },
+        "covariates_missing_samples": {
+          "anyOf": [
+            {
+              "enum": [
+                "fail",
+                "drop"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Row policy when sample IDs are missing from the covariates sidecar. 'drop' excludes those samples from the covariate-using stage and warns. 'fail' raises. When unset, covariates_strict_join=true fails and false reindexes (cell impute; composition ALR still cannot fill a missing row). Operator-set per profile/site.",
+          "title": "Covariates Missing Samples"
         },
         "covariates_path": {
           "anyOf": [
@@ -1851,6 +1885,23 @@
           "default": true,
           "title": "Covariate Standardize Numeric",
           "type": "boolean"
+        },
+        "covariates_missing_samples": {
+          "anyOf": [
+            {
+              "enum": [
+                "fail",
+                "drop"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Row policy when sample IDs are missing from the covariates sidecar. 'drop' excludes those samples from the covariate-using stage and warns. 'fail' raises. When unset, covariates_strict_join=true fails and false reindexes (cell impute; composition ALR still cannot fill a missing row). Operator-set per profile/site.",
+          "title": "Covariates Missing Samples"
         },
         "covariates_path": {
           "anyOf": [

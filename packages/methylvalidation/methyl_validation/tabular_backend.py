@@ -39,8 +39,10 @@ from .classification_metrics import (
 )
 from .covariate_preprocessor import (
     CovariatePreprocessor,
+    exclusion_report,
     fit_covariates,
     normalize_composition_groups,
+    resolve_covariate_sample_ids,
     transform_covariates,
 )
 from .eval_split_resolver import assert_model_mc_train_partition, resolve_eval_paths_and_labels
@@ -352,6 +354,7 @@ def train_tabular_model(
     covariates_path: Optional[str] = None,
     covariate_id_column: str = "sample_id",
     covariates_strict_join: bool = False,
+    covariates_missing_samples: Optional[str] = None,
     covariate_numeric_columns: Optional[List[str]] = None,
     covariate_ordinal_columns: Optional[List[str]] = None,
     covariate_ordinal_maps: Optional[Dict[str, Dict[str, float]]] = None,
@@ -475,6 +478,21 @@ def train_tabular_model(
             y.append(cls_idx)
             sample_ids.append(Path(str(p)).name)
     assert_model_mc_train_partition(project_json, train_sample_paths=all_paths)
+    dropped_train_ids: List[str] = []
+    if covariates_path:
+        kept_ids, dropped_train_ids = resolve_covariate_sample_ids(
+            sample_ids,
+            covariates_path,
+            covariate_id_column,
+            missing_samples=covariates_missing_samples,
+            strict_join=covariates_strict_join,
+        )
+        if dropped_train_ids:
+            keep = set(kept_ids)
+            mask = [sid in keep for sid in sample_ids]
+            all_paths = [path for path, keep_row in zip(all_paths, mask) if keep_row]
+            y = [label for label, keep_row in zip(y, mask) if keep_row]
+            sample_ids = list(kept_ids)
 
     feature_mode_norm = str(feature_mode or "raw_dmp").strip().lower()
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
@@ -506,7 +524,7 @@ def train_tabular_model(
     train_cache_miss_reason: Optional[str] = None
     feature_names: List[str] = []
     preprocessor: Optional[CovariatePreprocessor] = None
-    cov_report: Dict[str, Any] = {"used": False}
+    cov_report: Dict[str, Any] = {"used": False, **exclusion_report(dropped_train_ids)}
     observed_feature_names: List[str] = []
     training_feature_names_obs: List[str] = []
     quality_feature_names: List[str] = []
@@ -572,6 +590,7 @@ def train_tabular_model(
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": str(covariate_id_column),
         "covariates_strict_join": bool(covariates_strict_join),
+        "covariates_missing_samples": covariates_missing_samples,
         "covariate_numeric_columns": [str(x) for x in (covariate_numeric_columns or [])],
         "covariate_ordinal_columns": [str(x) for x in (covariate_ordinal_columns or [])],
         "covariate_ordinal_maps": covariate_ordinal_maps or {},
@@ -886,7 +905,7 @@ def train_tabular_model(
             covariates_path,
             sample_ids,
             covariate_id_column=covariate_id_column,
-            strict_join=covariates_strict_join,
+            strict_join=True if dropped_train_ids else covariates_strict_join,
             numeric_columns=covariate_numeric_columns,
             ordinal_columns=covariate_ordinal_columns,
             ordinal_maps=covariate_ordinal_maps,
@@ -896,6 +915,8 @@ def train_tabular_model(
             standardize_numeric=covariate_standardize_numeric,
             composition_groups=composition_specs,
         )
+        cov_report = dict(cov_report or {"used": False})
+        cov_report.update(exclusion_report(dropped_train_ids))
         if feature_mode_norm == "observed_hybrid":
             X_export = X_obs_full
         if cov is not None:
@@ -1015,6 +1036,20 @@ def train_tabular_model(
         if eval_y is None:
             raise ValueError("No labeled evaluation samples resolved for tabular test dataset export.")
         eval_ids = sample_ids_from_paths(eval_paths)
+        if covariates_path:
+            kept_eval_ids, dropped_eval_ids = resolve_covariate_sample_ids(
+                eval_ids,
+                covariates_path,
+                covariate_id_column,
+                missing_samples=covariates_missing_samples,
+                strict_join=covariates_strict_join,
+            )
+            if dropped_eval_ids:
+                keep_eval = set(kept_eval_ids)
+                eval_mask = [sid in keep_eval for sid in eval_ids]
+                eval_paths = [path for path, keep_row in zip(eval_paths, eval_mask) if keep_row]
+                eval_y = [label for label, keep_row in zip(list(eval_y), eval_mask) if keep_row]
+                eval_ids = list(kept_eval_ids)
         test_fingerprint = _fingerprint_payload(
             {
                 "common": fingerprint_common_payload,
@@ -1114,7 +1149,7 @@ def train_tabular_model(
                 covariates_path,
                 eval_ids,
                 preprocessor,
-                strict_join=bool(covariates_strict_join),
+                strict_join=True if covariates_missing_samples == "drop" else bool(covariates_strict_join),
             )
             if cov_eval is not None:
                 X_eval = np.concatenate([X_eval, cov_eval], axis=1)
@@ -1311,6 +1346,7 @@ def train_tabular_model(
             "covariates_path": str(covariates_path) if covariates_path else None,
             "covariate_id_column": covariate_id_column,
             "covariates_strict_join": bool(covariates_strict_join),
+            "covariates_missing_samples": covariates_missing_samples,
             "covariate_numeric_columns": [str(x) for x in (covariate_numeric_columns or [])],
             "covariate_ordinal_columns": [str(x) for x in (covariate_ordinal_columns or [])],
             "covariate_ordinal_maps": covariate_ordinal_maps or {},
@@ -1437,6 +1473,7 @@ def predict_tabular_model_from_project(
     covariates_path: Optional[str] = None,
     covariate_id_column: str = "sample_id",
     covariates_strict_join: bool = False,
+    covariates_missing_samples: Optional[str] = None,
     observed_feature_min_obs_fraction: Optional[float] = None,
     evaluation_partition: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -1465,6 +1502,23 @@ def predict_tabular_model_from_project(
         evaluation_partition=partition or None,
     )
     sample_ids = sample_ids_from_paths(samples)
+    dropped_eval_ids: List[str] = []
+    cov_path = covariates_path or meta.get("covariates_path")
+    if cov_path:
+        kept_ids, dropped_eval_ids = resolve_covariate_sample_ids(
+            sample_ids,
+            cov_path,
+            covariate_id_column or str(meta.get("covariate_id_column") or "sample_id"),
+            missing_samples=covariates_missing_samples
+            or meta.get("covariates_missing_samples"),
+            strict_join=bool(covariates_strict_join or meta.get("covariates_strict_join", False)),
+        )
+        if dropped_eval_ids:
+            keep = set(kept_ids)
+            mask = [sid in keep for sid in sample_ids]
+            samples = [path for path, keep_row in zip(samples, mask) if keep_row]
+            y_true = [label for label, keep_row in zip(list(y_true), mask) if keep_row]
+            sample_ids = list(kept_ids)
 
     obs_fraction_vec: Optional[np.ndarray] = None
     n_obs_dmps_vec: Optional[np.ndarray] = None
@@ -1592,8 +1646,12 @@ def predict_tabular_model_from_project(
         covariates_path or meta.get("covariates_path"),
         sample_ids,
         preprocessor,
-        strict_join=bool(covariates_strict_join or meta.get("covariates_strict_join", False)),
+        strict_join=True
+        if dropped_eval_ids
+        else bool(covariates_strict_join or meta.get("covariates_strict_join", False)),
     )
+    cov_report = dict(cov_report or {"used": False})
+    cov_report.update(exclusion_report(dropped_eval_ids))
     if cov is not None:
         X = np.concatenate([X, cov], axis=1)
     if selected_feature_names:

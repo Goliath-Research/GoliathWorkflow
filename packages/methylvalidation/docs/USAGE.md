@@ -440,7 +440,7 @@ Covariates are backend-specific:
 - **Numeric preprocessing:** impute via `covariate_missing_numeric_strategy` (`mean`, `median`, `zero`) then optional z-score (`covariate_standardize_numeric`). ALR coordinates are standardized with the other numerics unless their group sets `standardize: false`.
 - **Ordinal preprocessing:** mapped to a **single** ordered numeric code per column using `covariate_ordinal_maps` (already non-redundant); if omitted, known label sets like `low/medium/high` are auto-mapped; unknown/missing values use `covariate_ordinal_unknown_value`.
 - **Categorical (nominal) preprocessing:** one-hot with frozen vocab and `__UNKNOWN__` bucket, with **one dropped reference level** (first sorted non-unknown level) so L levels become L−1 columns. Samples in the dropped level have all zeros on that factor’s one-hots.
-- **Strictness:** `covariates_strict_join` (tabular / ECDF second stage) and `generative_covariates_strict` (generative) enforce one-to-one sample id coverage.
+- **Strictness:** `covariates_strict_join` (tabular / ECDF second stage) and `generative_covariates_strict` (generative) enforce one-to-one sample id coverage when `covariates_missing_samples` is unset. Set `covariates_missing_samples: "drop"` to exclude missing IDs, warn, and continue on the intersection. `"fail"` always raises.
 
 Example (profile `actionConfig.validation`) using all covariate types:
 

@@ -6,7 +6,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from methyl_validation.covariate_preprocessor import fit_covariates
+import pytest
+
+from methyl_validation.covariate_preprocessor import (
+    fit_covariates,
+    resolve_covariate_sample_ids,
+    resolve_missing_sample_policy,
+)
 
 
 def _cell_fractions_csv(path: Path) -> Path:
@@ -89,3 +95,34 @@ def test_covariate_list_skips_missing_sidecar(tmp_path: Path):
     )
     assert X is not None and X.shape == (2, 2)
     assert prep is not None
+
+
+def test_resolve_missing_sample_policy():
+    assert resolve_missing_sample_policy("drop", strict_join=True) == "drop"
+    assert resolve_missing_sample_policy("fail", strict_join=False) == "fail"
+    assert resolve_missing_sample_policy(None, strict_join=True) == "fail"
+    assert resolve_missing_sample_policy(None, strict_join=False) == "impute"
+    with pytest.raises(ValueError, match="fail' or 'drop"):
+        resolve_missing_sample_policy("impute", strict_join=False)
+
+
+def test_resolve_covariate_sample_ids_drop_and_fail(tmp_path: Path, capsys):
+    cov = tmp_path / "cov.csv"
+    pd.DataFrame({"sample_id": ["A", "B"], "age": [1.0, 2.0]}).to_csv(cov, index=False)
+    kept, dropped = resolve_covariate_sample_ids(
+        ["A", "B", "C"],
+        str(cov),
+        "sample_id",
+        missing_samples="drop",
+        strict_join=True,
+    )
+    assert kept == ["A", "B"]
+    assert dropped == ["C"]
+    assert "Dropping 1 sample" in capsys.readouterr().err
+    with pytest.raises(ValueError, match="Missing covariate rows"):
+        resolve_covariate_sample_ids(
+            ["A", "B", "C"],
+            str(cov),
+            "sample_id",
+            missing_samples="fail",
+        )

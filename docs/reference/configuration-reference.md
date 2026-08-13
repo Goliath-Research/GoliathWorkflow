@@ -308,7 +308,8 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `covariate_categorical_columns` | list[str] \| null | `null` | no overlap with numeric/ordinal columns | Explicit categorical columns; encoded with one-hot and frozen levels. |
 | `covariate_missing_numeric_strategy` | str | `"mean"` | `"mean"`, `"median"`, `"zero"` | Numeric imputation strategy used for numeric covariates. |
 | `covariate_standardize_numeric` | bool | `true` | — | If true, z-score standardize numeric and ordinal-coded features using training statistics. |
-| `covariates_strict_join` | bool | `false` | — | If true, tabular backend requires every sample id to exist in covariates sidecar. |
+| `covariates_strict_join` | bool | `false` | — | If true (and `covariates_missing_samples` is unset), ECDF second-stage / tabular / generative require every sample id to exist in the covariates sidecar. |
+| `covariates_missing_samples` | str \| null | `null` | `"fail"`, `"drop"` | Row policy when sample IDs are missing from the covariates sidecar. `drop` excludes those samples from the covariate-using stage and warns. `fail` raises. When unset, `covariates_strict_join=true` fails and `false` reindexes (cell impute; composition ALR still cannot fill a missing row). |
 | `generative_latent_dim` | int | `16` | ≥ 2 | Latent dimensionality for `model_backend="generative_hybrid"`. |
 | `generative_kl_weight` | float | `0.1` | ≥ 0 | KL-like regularization weight metadata/control for generative hybrid training. |
 | `generative_density_type` | str | `"diag_gaussian"` | currently only `"diag_gaussian"` | Latent class-density family for the generative hybrid backend. |

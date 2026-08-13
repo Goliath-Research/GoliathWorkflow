@@ -925,6 +925,9 @@ def run_post_model_validation_binary(
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                     covariates_strict_join=(config.covariates_strict_join if config is not None else False),
+                    covariates_missing_samples=(
+                        config.covariates_missing_samples if config is not None else None
+                    ),
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
@@ -946,6 +949,9 @@ def run_post_model_validation_binary(
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                     covariates_strict_join=(config.generative_covariates_strict if config is not None else True),
+                    covariates_missing_samples=(
+                        config.covariates_missing_samples if config is not None else None
+                    ),
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
@@ -1046,6 +1052,9 @@ def run_post_model_validation_multiclass(
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                     covariates_strict_join=(config.covariates_strict_join if config is not None else False),
+                    covariates_missing_samples=(
+                        config.covariates_missing_samples if config is not None else None
+                    ),
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
@@ -1067,6 +1076,9 @@ def run_post_model_validation_multiclass(
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                     covariates_strict_join=(config.generative_covariates_strict if config is not None else True),
+                    covariates_missing_samples=(
+                        config.covariates_missing_samples if config is not None else None
+                    ),
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
