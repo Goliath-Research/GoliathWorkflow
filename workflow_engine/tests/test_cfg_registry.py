@@ -41,6 +41,15 @@ def test_import_profiles_and_programs(store: FileConfigStore) -> None:
     assert profiles
     assert programs
     assert any(p.name == "samd_research" for p in profiles) or len(profiles) >= 1
+    endpoint_names = {r.name for r in store.list("storage_endpoint", published_only=True)}
+    assert "epimethyl-archive" in endpoint_names
+    assert "epimethyl-fastq" in endpoint_names
+    assert "epimethyl-genomes" in endpoint_names
+    profiles_storage = store.list("storage_profile", published_only=True)
+    assert any(p.name == "epimethyl-samples" for p in profiles_storage)
+    pairing = next(p for p in profiles_storage if p.name == "epimethyl-samples")
+    assert pairing.document["fastqStorageEndpoint"] == "epimethyl-fastq"
+    assert pairing.document["sampleStorageEndpoint"] == "epimethyl-archive"
 
 
 def test_roundtrip_materialize_site_and_profile(store: FileConfigStore, tmp_path: Path) -> None:

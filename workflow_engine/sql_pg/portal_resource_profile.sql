@@ -43,6 +43,19 @@ WHERE NOT EXISTS (
 
 INSERT INTO cfg.storage_endpoint (name, version, status, content_hash, provider, location_json, credential_name)
 SELECT
+  'epimethyl-fastq',
+  '1',
+  'published',
+  md5('{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"samples/","scope":"lab_ingress"}'),
+  's3',
+  '{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"samples/","scope":"lab_ingress"}'::jsonb,
+  'epimethyl-archive-keys'
+WHERE NOT EXISTS (
+  SELECT 1 FROM cfg.storage_endpoint WHERE name = 'epimethyl-fastq' AND version = '1'
+);
+
+INSERT INTO cfg.storage_endpoint (name, version, status, content_hash, provider, location_json, credential_name)
+SELECT
   'epimethyl-genomes',
   '1',
   'published',
@@ -70,3 +83,22 @@ SET profile_json = '{"sampleStorageEndpoint":"epimethyl-archive","prefixBase":"s
     updated_at_utc = (now() AT TIME ZONE 'utc')
 WHERE profile_key = 'epimethyl-samples'
   AND profile_json::text LIKE '%REPLACE_WITH_ACCESS_KEY%';
+
+INSERT INTO cfg.storage_profile (name, version, status, content_hash, document_json)
+SELECT
+  'epimethyl-samples',
+  '1',
+  'published',
+  md5('{"fastqStorageEndpoint":"epimethyl-fastq","sampleStorageEndpoint":"epimethyl-archive"}'),
+  '{"fastqStorageEndpoint":"epimethyl-fastq","sampleStorageEndpoint":"epimethyl-archive"}'::jsonb
+WHERE NOT EXISTS (
+  SELECT 1 FROM cfg.storage_profile WHERE name = 'epimethyl-samples' AND version = '1'
+);
+
+UPDATE cfg.storage_profile
+SET document_json = '{"fastqStorageEndpoint":"epimethyl-fastq","sampleStorageEndpoint":"epimethyl-archive"}'::jsonb,
+    content_hash = md5('{"fastqStorageEndpoint":"epimethyl-fastq","sampleStorageEndpoint":"epimethyl-archive"}'),
+    status = 'published',
+    updated_at_utc = (now() AT TIME ZONE 'utc')
+WHERE name = 'epimethyl-samples' AND version = '1'
+  AND document_json::text NOT LIKE '%fastqStorageEndpoint%';

@@ -56,6 +56,21 @@ BEGIN
 END
 GO
 
+IF NOT EXISTS (SELECT 1 FROM cfg.storage_endpoint WHERE name = N'epimethyl-fastq' AND version = N'1')
+BEGIN
+    INSERT INTO cfg.storage_endpoint (name, version, status, content_hash, provider, location_json, credential_name)
+    VALUES (
+        N'epimethyl-fastq',
+        N'1',
+        N'published',
+        CONVERT(nvarchar(128), HASHBYTES('SHA2_256', N'{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"samples/","scope":"lab_ingress"}'), 2),
+        N's3',
+        CAST(N'{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"samples/","scope":"lab_ingress"}' AS json),
+        N'epimethyl-archive-keys'
+    );
+END
+GO
+
 /* Sibling genomes inventory endpoint (same bucket/keys; prefix genomes/). */
 IF NOT EXISTS (SELECT 1 FROM cfg.storage_endpoint WHERE name = N'epimethyl-genomes' AND version = N'1')
 BEGIN
@@ -93,5 +108,28 @@ BEGIN
         updated_at_utc = SYSUTCDATETIME()
     WHERE profile_key = N'epimethyl-samples'
       AND profile_json LIKE N'%REPLACE_WITH_ACCESS_KEY%';
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM cfg.storage_profile WHERE name = N'epimethyl-samples' AND version = N'1')
+BEGIN
+    INSERT INTO cfg.storage_profile (name, version, status, content_hash, document_json)
+    VALUES (
+        N'epimethyl-samples',
+        N'1',
+        N'published',
+        CONVERT(nvarchar(128), HASHBYTES('SHA2_256', N'{"fastqStorageEndpoint":"epimethyl-fastq","sampleStorageEndpoint":"epimethyl-archive"}'), 2),
+        CAST(N'{"fastqStorageEndpoint":"epimethyl-fastq","sampleStorageEndpoint":"epimethyl-archive"}' AS json)
+    );
+END
+ELSE
+BEGIN
+    UPDATE cfg.storage_profile
+    SET document_json = CAST(N'{"fastqStorageEndpoint":"epimethyl-fastq","sampleStorageEndpoint":"epimethyl-archive"}' AS json),
+        content_hash = CONVERT(nvarchar(128), HASHBYTES('SHA2_256', N'{"fastqStorageEndpoint":"epimethyl-fastq","sampleStorageEndpoint":"epimethyl-archive"}'), 2),
+        status = 'published',
+        updated_at_utc = SYSUTCDATETIME()
+    WHERE name = N'epimethyl-samples' AND version = N'1'
+      AND CONVERT(nvarchar(max), document_json) NOT LIKE N'%fastqStorageEndpoint%';
 END
 GO

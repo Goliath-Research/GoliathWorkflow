@@ -57,6 +57,28 @@ def import_filesystem(
                 )
                 imported.append(f"storage_endpoint:{name}@{version}")
 
+        profiles_dir = (
+            repo_root / "workflow_engine" / "domain" / "fixtures" / "storage_profiles"
+        )
+        if profiles_dir.is_dir():
+            for path in sorted(profiles_dir.glob("*.json")):
+                doc = _load_json(path)
+                name = str(doc.get("name") or path.stem)
+                version = str(doc.get("version") or "1")
+                body = {
+                    k: v
+                    for k, v in doc.items()
+                    if k not in ("name", "version", "status")
+                }
+                store.upsert(
+                    "storage_profile",
+                    name,
+                    body,
+                    status=status,
+                    version=version,
+                )
+                imported.append(f"storage_profile:{name}@{version}")
+
         assets_dir = (
             repo_root / "workflow_engine" / "domain" / "fixtures" / "reference_assets"
         )

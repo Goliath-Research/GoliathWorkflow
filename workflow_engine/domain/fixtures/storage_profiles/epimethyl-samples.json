@@ -1,0 +1,6 @@
+{
+  "name": "epimethyl-samples",
+  "version": "1",
+  "fastqStorageEndpoint": "epimethyl-fastq",
+  "sampleStorageEndpoint": "epimethyl-archive"
+}

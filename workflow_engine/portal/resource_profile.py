@@ -142,6 +142,40 @@ class ResourceProfileReader:
             assembled["prefixBase"] = location.get("prefixBase")
         return assembled
 
+    def expand_endpoint(
+        self, endpoint_name: str, *, prefix_base: str | None = None
+    ) -> Optional[dict[str, Any]]:
+        """Public wrapper: expand a published ``cfg.storage_endpoint`` name."""
+        return self._expand_storage_endpoint(endpoint_name, prefix_base=prefix_base)
+
+    def get_storage_profile(self, profile_name: str) -> Optional[dict[str, Any]]:
+        """Load a published ``cfg.storage_profile`` document (endpoint name pairing)."""
+        if self._db.backend == "postgres":
+            row = self._db._fetch_one(
+                """
+                SELECT document_json
+                FROM cfg.storage_profile
+                WHERE name = %s AND status = 'published'
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (profile_name,),
+            )
+        else:
+            row = self._db._fetch_one(
+                """
+                SELECT TOP 1 document_json
+                FROM cfg.storage_profile
+                WHERE name = ? AND status = 'published'
+                ORDER BY id DESC
+                """,
+                (profile_name,),
+            )
+        if not row:
+            return None
+        doc = _parse_json_field(row.get("document_json"))
+        return doc if isinstance(doc, dict) else None
+
     def h5_storage_defaults(self, profile_key: str) -> Optional[dict[str, Any]]:
         row = self.get_active(profile_key)
         if not row:

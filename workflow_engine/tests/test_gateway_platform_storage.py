@@ -273,3 +273,77 @@ def test_download_and_archive_task_inputs_accept_expanded_locations() -> None:
     )
     assert ar.sampleDestination.contentHash == "hash2"
     assert ar.sampleDestination.scope == "archive"
+
+
+def test_named_qnap_locations_replace_file_and_aws_placeholders() -> None:
+    from archive_profile_resolver import apply_named_storage_locations
+
+    qnap_fastq = {
+        "type": "s3",
+        "bucket": "epimethyl",
+        "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+        "prefixBase": "samples/",
+        "scope": "lab_ingress",
+    }
+    qnap_archive = {
+        "type": "s3",
+        "bucket": "epimethyl",
+        "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+        "prefixBase": "samples/",
+        "scope": "archive",
+    }
+
+    def expand(name: str):
+        return {"epimethyl-fastq": qnap_fastq, "epimethyl-archive": qnap_archive}.get(name)
+
+    def load_profile(name: str):
+        assert name == "epimethyl-samples"
+        return {
+            "fastqStorageEndpoint": "epimethyl-fastq",
+            "sampleStorageEndpoint": "epimethyl-archive",
+        }
+
+    out = apply_named_storage_locations(
+        {
+            "projectPath": "/work/p.json",
+            "fastqStorage": {"type": "file", "basePath": "/work/samples"},
+        },
+        expand_endpoint=expand,
+        load_profile=load_profile,
+        study_defaults={"storageProfile": "epimethyl-samples"},
+    )
+    assert out["fastqStorage"]["endpointUrl"] == "https://s3.us-east-1.myqnapcloud.io"
+    assert out["fastqStorage"]["scope"] == "lab_ingress"
+    assert out["sampleStorage"]["scope"] == "archive"
+    assert out["fastqStorageEndpoint"] == "epimethyl-fastq"
+
+    copied_aws = apply_named_storage_locations(
+        {
+            "fastqStorage": {
+                "type": "s3",
+                "bucket": "methyl-cohort",
+                "region": "us-east-1",
+                "credentials": {"authMode": "instance_profile"},
+            },
+            "fastqStorageEndpoint": "epimethyl-fastq",
+        },
+        expand_endpoint=expand,
+    )
+    assert copied_aws["fastqStorage"]["bucket"] == "epimethyl"
+    assert "myqnapcloud.io" in copied_aws["fastqStorage"]["endpointUrl"]
+
+
+def test_named_locations_keep_explicit_qnap() -> None:
+    from archive_profile_resolver import apply_named_storage_locations
+
+    existing = {
+        "type": "s3",
+        "bucket": "epimethyl",
+        "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+        "prefixBase": "samples",
+    }
+    out = apply_named_storage_locations(
+        {"fastqStorage": existing, "fastqStorageEndpoint": "epimethyl-fastq"},
+        expand_endpoint=lambda _n: {"bucket": "other"},
+    )
+    assert out["fastqStorage"]["bucket"] == "epimethyl"

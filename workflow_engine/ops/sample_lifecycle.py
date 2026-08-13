@@ -27,7 +27,11 @@ def start_sample_prep(
         raise ValueError("projectPath is required")
 
     ensure_import_paths()
-    from archive_profile_resolver import apply_archive_profile_storage
+    from archive_profile_resolver import (
+        apply_archive_profile_storage,
+        apply_named_storage_locations,
+        study_storage_defaults,
+    )
     from methyl_validation.sample_prep_planner import plan_sample_prep_context
     from resource_profile import DEFAULT_ARCHIVE_PROFILE_KEY, ResourceProfileReader
     from workflow_context import finalize_instance_context
@@ -42,6 +46,12 @@ def start_sample_prep(
         or DEFAULT_ARCHIVE_PROFILE_KEY
     )
     profile_reader = ResourceProfileReader(db)
+    planner_payload = apply_named_storage_locations(
+        planner_payload,
+        expand_endpoint=profile_reader.expand_endpoint,
+        load_profile=profile_reader.get_storage_profile,
+        study_defaults=study_storage_defaults(str(project_path)),
+    )
     planner_payload = apply_archive_profile_storage(
         planner_payload,
         profile_reader.h5_storage_defaults,
