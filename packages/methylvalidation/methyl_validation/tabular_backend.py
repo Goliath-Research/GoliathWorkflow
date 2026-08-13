@@ -1036,6 +1036,7 @@ def train_tabular_model(
         if eval_y is None:
             raise ValueError("No labeled evaluation samples resolved for tabular test dataset export.")
         eval_ids = sample_ids_from_paths(eval_paths)
+        dropped_eval_ids: List[str] = []
         if covariates_path:
             kept_eval_ids, dropped_eval_ids = resolve_covariate_sample_ids(
                 eval_ids,
@@ -1149,7 +1150,7 @@ def train_tabular_model(
                 covariates_path,
                 eval_ids,
                 preprocessor,
-                strict_join=True if covariates_missing_samples == "drop" else bool(covariates_strict_join),
+                strict_join=True if dropped_eval_ids else bool(covariates_strict_join),
             )
             if cov_eval is not None:
                 X_eval = np.concatenate([X_eval, cov_eval], axis=1)
