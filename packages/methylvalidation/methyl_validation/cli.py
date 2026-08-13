@@ -564,6 +564,17 @@ def _build_model_mc_shared_runs(
             path.unlink()
         elif path.is_dir():
             shutil.rmtree(path)
+
+    def _prepare_shared_run_dir(path: Path) -> None:
+        """Wipe ``path`` and recreate it before writing a shared model-MC run.
+
+        Full reuse and selective centroid reuse both write into this directory.
+        Cleaning first avoids generating a project over leftover detections,
+        mapper outputs, or a prior ``project.json`` from a previous attempt.
+        """
+        _clean_path(path)
+        path.mkdir(parents=True, exist_ok=True)
+
     completed_iteration_seconds: List[float] = []
     previous_train_control: Optional[List[str]] = None
     previous_train_disease: Optional[List[str]] = None
@@ -699,8 +710,7 @@ def _build_model_mc_shared_runs(
                 "can rebuild shared under the frozen panel."
             )
         if can_reuse_detections:
-            _clean_path(run_dir)
-            run_dir.mkdir(parents=True, exist_ok=True)
+            _prepare_shared_run_dir(run_dir)
             if layout == "binary":
                 (
                     project_path,
@@ -794,16 +804,7 @@ def _build_model_mc_shared_runs(
             continue
 
         skip_centroid = bool(can_reuse_centroids)
-        if skip_centroid:
-            link_run_artifacts_from_source(
-                source_run_dir, run_dir, artifacts=("centroids",)
-            )
-            _clean_path(run_dir / "detections")
-            print(
-                f"[model-mc:shared] Reused centroids for {run_id}; rebuilding detector "
-                "under the production detection contract",
-                file=sys.stderr,
-            )
+        _prepare_shared_run_dir(run_dir)
         if layout == "binary":
             (
                 project_path,
@@ -828,6 +829,41 @@ def _build_model_mc_shared_runs(
             )
             previous_train_control = list(train_control)
             previous_train_disease = list(train_disease)
+        elif layout == "multiclass":
+            project_path, _test_groups_json = generate_run_project_multiclass(
+                base_project_for_runs,
+                run_dir,
+                run_id,
+                str(shared_root),
+                train_m,
+                val_m,
+                cohort_labels,
+                config.samples_base_path,
+            )
+        else:
+            project_path, _test_groups_json, _centroid_overrides = (
+                generate_run_project_hierarchical_multiclass(
+                    base_project_for_runs,
+                    run_dir,
+                    run_id,
+                    str(shared_root),
+                    train_m,
+                    val_m,
+                    cohort_labels,
+                    config.samples_base_path,
+                )
+            )
+        if skip_centroid:
+            link_run_artifacts_from_source(
+                source_run_dir, run_dir, artifacts=("centroids",)
+            )
+            _clean_path(run_dir / "detections")
+            print(
+                f"[model-mc:shared] Reused centroids for {run_id}; rebuilding detector "
+                "under the production detection contract",
+                file=sys.stderr,
+            )
+        if layout == "binary":
             ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration(
                 project_path,
                 per_cancer_group=per_cancer_group,
@@ -842,28 +878,6 @@ def _build_model_mc_shared_runs(
                 config=config,
             )
         else:
-            if layout == "multiclass":
-                project_path, _test_groups_json = generate_run_project_multiclass(
-                    base_project_for_runs,
-                    run_dir,
-                    run_id,
-                    str(shared_root),
-                    train_m,
-                    val_m,
-                    cohort_labels,
-                    config.samples_base_path,
-                )
-            else:
-                project_path, _test_groups_json, _centroid_overrides = generate_run_project_hierarchical_multiclass(
-                    base_project_for_runs,
-                    run_dir,
-                    run_id,
-                    str(shared_root),
-                    train_m,
-                    val_m,
-                    cohort_labels,
-                    config.samples_base_path,
-                )
             ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration_multiclass(
                 project_path,
                 per_cancer_group=per_cancer_group,

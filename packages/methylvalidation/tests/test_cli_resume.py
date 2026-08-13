@@ -625,7 +625,7 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
         encoding="utf-8",
     )
 
-    calls = {"generated_project": 0, "ran_pipeline": 0}
+    calls = {"generated_project": 0, "ran_pipeline": 0, "run_dir_existed_at_generate": None}
 
     def _fake_resolve_iteration_split(**kwargs):
         return (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]), "reused"
@@ -643,6 +643,7 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
     ):
         calls["generated_project"] += 1
         run_dir = Path(run_dir)
+        calls["run_dir_existed_at_generate"] = run_dir.is_dir()
         run_dir.mkdir(parents=True, exist_ok=True)
         project_path = run_dir / "project.json"
         project_path.write_text("{}", encoding="utf-8")
@@ -699,6 +700,7 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
     assert (linked_run / "detections").resolve() == (run1 / "detections").resolve()
     assert calls["generated_project"] == 1
     assert calls["ran_pipeline"] == 0
+    assert calls["run_dir_existed_at_generate"] is True
 
 
 def test_build_model_mc_shared_runs_reuses_centroids_when_detections_incompatible(
@@ -727,7 +729,14 @@ def test_build_model_mc_shared_runs_reuses_centroids_when_detections_incompatibl
         encoding="utf-8",
     )
 
-    calls: dict[str, object] = {"generated_project": 0, "ran_pipeline": 0, "skip_centroid": None}
+    calls: dict[str, object] = {
+        "generated_project": 0,
+        "ran_pipeline": 0,
+        "skip_centroid": None,
+        "generate_saw_stale_mapper": None,
+        "generate_saw_stale_detections": None,
+        "run_dir_existed_at_generate": None,
+    }
 
     def _fake_resolve_iteration_split(**kwargs):
         return (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]), "reused"
@@ -746,6 +755,9 @@ def test_build_model_mc_shared_runs_reuses_centroids_when_detections_incompatibl
     ):
         calls["generated_project"] = int(calls["generated_project"]) + 1
         run_dir = Path(run_dir)
+        calls["run_dir_existed_at_generate"] = run_dir.is_dir()
+        calls["generate_saw_stale_mapper"] = (run_dir / "mapper" / "stale.txt").exists()
+        calls["generate_saw_stale_detections"] = (run_dir / "detections" / "stale.txt").exists()
         run_dir.mkdir(parents=True, exist_ok=True)
         project_path = run_dir / "project.json"
         project_path.write_text(production_project.read_text(encoding="utf-8"), encoding="utf-8")
@@ -778,6 +790,15 @@ def test_build_model_mc_shared_runs_reuses_centroids_when_detections_incompatibl
         abort_on_step_failure=True,
     )
     shared_root = tmp_path / "model_mc" / "shared"
+    stale_run = shared_root / "run_0001"
+    (stale_run / "mapper").mkdir(parents=True, exist_ok=True)
+    (stale_run / "mapper" / "stale.txt").write_text("leftover mapper", encoding="utf-8")
+    (stale_run / "detections").mkdir(parents=True, exist_ok=True)
+    (stale_run / "detections" / "stale.txt").write_text("leftover detections", encoding="utf-8")
+    (stale_run / "project.json").write_text(
+        json.dumps({"actionConfig": {"detection": {"detection_mode": "discovery_only"}}}),
+        encoding="utf-8",
+    )
     rows = cli._build_model_mc_shared_runs(
         base_project_for_runs=production_project,
         config=config,
@@ -799,6 +820,11 @@ def test_build_model_mc_shared_runs_reuses_centroids_when_detections_incompatibl
     assert (linked_run / "centroids").resolve() == (run1 / "centroids").resolve()
     assert (linked_run / "detections").is_dir()
     assert not (linked_run / "detections").is_symlink()
+    assert not (linked_run / "detections" / "stale.txt").exists()
+    assert not (linked_run / "mapper").exists()
+    assert calls["run_dir_existed_at_generate"] is True
+    assert calls["generate_saw_stale_mapper"] is False
+    assert calls["generate_saw_stale_detections"] is False
     assert calls["ran_pipeline"] == 1
     assert calls["skip_centroid"] is True
 
