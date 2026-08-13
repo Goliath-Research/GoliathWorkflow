@@ -69,11 +69,12 @@ BEGIN
     WHERE parent_node_id = @ctl AND branch_kind = N'BODY'
     ORDER BY child_order ASC;
 
+    SET @iter = @iter + 1;
     EXEC wf.wf_engine_activate
         @workflow_instance_id = @inst,
         @workflow_node_id = @wbody,
         @parent_node_execution_id = @while_execution_id,
-        @iteration_no = @iter + 1,
+        @iteration_no = @iter,
         @sequence_index = NULL,
         @parallel_index = NULL;
 END;

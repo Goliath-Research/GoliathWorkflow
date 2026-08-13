@@ -812,9 +812,10 @@ BEGIN
     );
     SET @pex = SCOPE_IDENTITY();
 
+    DECLARE @from_scope BIGINT = ISNULL(@parent_node_execution_id, 0);
     EXEC wf.wf_open_scope
         @workflow_instance_id = @workflow_instance_id,
-        @from_scope_exec_id = ISNULL(@parent_node_execution_id, 0),
+        @from_scope_exec_id = @from_scope,
         @to_scope_exec_id = @pex,
         @workflow_node_id = @workflow_node_id;
 
@@ -1058,6 +1059,7 @@ BEGIN
         DECLARE @flen INT;
         DECLARE @fbody BIGINT;
         DECLARE @fi INT;
+        DECLARE @fiter INT;
 
         SELECT
             @fcoll = foreach_collection_var,
@@ -1109,11 +1111,12 @@ BEGIN
             SET @fi = 0;
             WHILE @fi < @flen
             BEGIN
+                SET @fiter = @fi + 1;
                 EXEC wf.wf_engine_activate
                     @workflow_instance_id = @workflow_instance_id,
                     @workflow_node_id = @fbody,
                     @parent_node_execution_id = @pex,
-                    @iteration_no = @fi + 1,
+                    @iteration_no = @fiter,
                     @sequence_index = NULL,
                     @parallel_index = @fi;
                 SET @fi += 1;

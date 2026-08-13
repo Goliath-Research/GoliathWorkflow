@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -304,6 +305,24 @@ def test_mssql_exec_does_not_pass_json_box_as_proc_arg() -> None:
         if "@value_json = wf.wf_json_box(" in text:
             hits.append(path.name)
     assert hits == [], f"EXEC @value_json = wf.wf_json_box(...) is illegal T-SQL: {hits}"
+
+    isnull_hits = [
+        path.name
+        for path in root.glob("*.sql")
+        if "@from_scope_exec_id = ISNULL(" in path.read_text(encoding="utf-8")
+    ]
+    assert isnull_hits == [], (
+        "EXEC named args cannot take ISNULL(...): " + ", ".join(isnull_hits)
+    )
+
+    expr_hits: list[str] = []
+    expr_re = re.compile(r"@iteration_no\s*=\s*@\w+\s*\+")
+    for path in root.glob("*.sql"):
+        if expr_re.search(path.read_text(encoding="utf-8")):
+            expr_hits.append(path.name)
+    assert expr_hits == [], (
+        "EXEC named args cannot take @var + N: " + ", ".join(expr_hits)
+    )
 
 
 def test_finalize_instance_context_bakes_execution_scope_id():
