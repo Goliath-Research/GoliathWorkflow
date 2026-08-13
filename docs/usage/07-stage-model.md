@@ -67,8 +67,7 @@ With `n_iterations: 10` and ECDF enabled, outputs are written under
 Each backend run writes `train_metrics.json` for diagnostics and
 `test_metrics.json` for the disjoint held-out partition. Only test metrics feed
 `all_metrics.csv`, summaries, and backend ranking. Canonical split files are
-`test_control.csv`, `test_disease.csv`, and `test_groups.json`; `val_*` names are
-compatibility aliases. Tabular and generative backends use the same
+`test_control.csv`, `test_disease.csv`, and `test_groups.json`. Tabular and generative backends use the same
 `evaluation_partition` contract as ECDF (not legacy predictor `test_*` cohort
 lists), so shared-run train/test membership stays comparable across backends.
 Tabular **train-time** `test_dataset.h5` export uses the same rule:

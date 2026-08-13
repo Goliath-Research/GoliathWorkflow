@@ -77,7 +77,7 @@ def test_post_model_validation_multiclass_uses_root_default(tmp_path: Path) -> N
     production_dir = mc_root / "production"
     production_dir.mkdir(parents=True)
     (production_dir / "project.json").write_text("{}", encoding="utf-8")
-    test_groups = mc_root / "val_test_groups.json"
+    test_groups = mc_root / "test_groups.json"
     test_groups.write_text("{}", encoding="utf-8")
     expected = mc_root / "post_model_validation"
 

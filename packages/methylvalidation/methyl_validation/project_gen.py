@@ -9,7 +9,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from methyl_domain.types import CentroidGroupScope, CentroidSeedGroup
 
@@ -106,9 +106,6 @@ def prepare_model_mc_backend_run_from_shared(
         "test_control.csv",
         "test_disease.csv",
         "test_groups.json",
-        "val_control.csv",
-        "val_disease.csv",
-        "val_test_groups.json",
         "centroid_group1_override.json",
         "centroid_group2_override.json",
     ):
@@ -273,12 +270,15 @@ def _control_disease_side_labels(base: Dict[str, Any]) -> tuple[str, str]:
 def link_run_artifacts_from_source(
     source_run_dir: Union[str, Path],
     target_run_dir: Union[str, Path],
+    *,
+    artifacts: Sequence[str] = ("centroids", "detections"),
 ) -> Dict[str, Any]:
-    """Symlink centroids/detections from a prior MC run into a model-mc iteration dir."""
+    """Symlink selected artifacts from a prior MC run into a model-mc iteration dir."""
     src_root = Path(source_run_dir)
     dst_root = Path(target_run_dir)
     dst_root.mkdir(parents=True, exist_ok=True)
     linked: List[str] = []
+    requested = tuple(artifacts) if artifacts else ("centroids", "detections")
 
     def _replace_path(dst: Path) -> None:
         if dst.is_symlink() or dst.is_file():
@@ -286,7 +286,7 @@ def link_run_artifacts_from_source(
         elif dst.is_dir():
             shutil.rmtree(dst)
 
-    for artifact_dir in ("centroids", "detections"):
+    for artifact_dir in requested:
         src = src_root / artifact_dir
         dst = dst_root / artifact_dir
         if not src.is_dir():
@@ -294,13 +294,14 @@ def link_run_artifacts_from_source(
         _replace_path(dst)
         dst.symlink_to(src.resolve(), target_is_directory=True)
         linked.append(artifact_dir)
-    for optional_file in ("detector_step_override.json",):
-        srcf = src_root / optional_file
-        dstf = dst_root / optional_file
-        if srcf.is_file():
-            _replace_path(dstf)
-            dstf.symlink_to(srcf.resolve())
-            linked.append(optional_file)
+    if "detections" in requested:
+        for optional_file in ("detector_step_override.json",):
+            srcf = src_root / optional_file
+            dstf = dst_root / optional_file
+            if srcf.is_file():
+                _replace_path(dstf)
+                dstf.symlink_to(srcf.resolve())
+                linked.append(optional_file)
     return {"linked": linked, "sourceRunDir": str(src_root.resolve()), "targetRunDir": str(dst_root.resolve())}
 
 
@@ -678,8 +679,8 @@ def generate_run_project(
             project_json_path,
             train_control_csv,
             train_disease_csv,
-            val_control_csv,
-            val_disease_csv,
+            test_control_csv,
+            test_disease_csv,
             centroid_group1_override_json,
             centroid_group2_override_json,
         )
@@ -694,15 +695,11 @@ def generate_run_project(
     train_disease_csv = run_dir / "train_disease.csv"
     test_control_csv = run_dir / "test_control.csv"
     test_disease_csv = run_dir / "test_disease.csv"
-    val_control_csv = run_dir / "val_control.csv"
-    val_disease_csv = run_dir / "val_disease.csv"
 
     write_train_csv(train_control_csv, train_control_paths, samples_base_path)
     write_train_csv(train_disease_csv, train_disease_paths, samples_base_path)
     write_val_csv(test_control_csv, val_control_paths)
     write_val_csv(test_disease_csv, val_disease_paths)
-    shutil.copy2(test_control_csv, val_control_csv)
-    shutil.copy2(test_disease_csv, val_disease_csv)
 
     control_group, disease_group = _first_control_and_disease_labels(base)
     control_side, disease_side = _control_disease_side_labels(base)
@@ -767,8 +764,8 @@ def generate_run_project(
         project_path,
         train_control_csv,
         train_disease_csv,
-        val_control_csv,
-        val_disease_csv,
+        test_control_csv,
+        test_disease_csv,
         group1_override,
         group2_override,
     )
@@ -860,8 +857,8 @@ def generate_run_project_multiclass(
     samples_base_path: str,
 ) -> Tuple[Path, Path]:
     """
-    Write per-cohort ``training_<label>.csv`` (sample names), ``testing_<label>.csv`` (absolute paths),
-    ``val_test_groups.json`` for ``methyl-predictor --test-groups``, and a run ``project.json`` with flat
+    Write per-cohort ``training_<label>.csv`` (sample names), ``test_<label>.csv`` (absolute paths),
+    ``test_groups.json`` for ``methyl-predictor --test-groups``, and a run ``project.json`` with flat
     ``groups`` sample_paths pointing at training CSVs only.
 
     ``cohort_labels`` order must match ``base`` template ``groups[i].label``.
@@ -896,8 +893,6 @@ def generate_run_project_multiclass(
         train_csv_by_label[lbl] = p
         test_csv = run_dir / f"test_{safe}.csv"
         write_val_csv(test_csv, val_by_label[lbl])
-        testing_csv = run_dir / f"testing_{safe}.csv"
-        shutil.copy2(test_csv, testing_csv)
         testing_csv_by_label[lbl] = test_csv
 
     val_payload: List[Dict[str, Any]] = []
@@ -912,8 +907,6 @@ def generate_run_project_multiclass(
     test_groups_json.parent.mkdir(parents=True, exist_ok=True)
     with open(test_groups_json, "w", encoding="utf-8") as f:
         json.dump(val_payload, f, indent=2)
-    val_groups_json = run_dir / "val_test_groups.json"
-    shutil.copy2(test_groups_json, val_groups_json)
 
     project = dict(base)
     project.pop("step_config", None)
@@ -933,7 +926,7 @@ def generate_run_project_multiclass(
     project_path = run_dir / "project.json"
     write_run_project_json(project, project_path)
 
-    return project_path, val_groups_json
+    return project_path, test_groups_json
 
 
 def _patch_side_groups_with_label_csvs(
@@ -1229,7 +1222,6 @@ def _write_binary_test_groups_json(
     path = run_dir / "test_groups.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
-    shutil.copy2(path, run_dir / "val_test_groups.json")
     return path
 
 
@@ -1276,8 +1268,8 @@ def generate_run_project_hierarchical_multiclass(
     previous_train_by_label: Optional[Dict[str, List[str]]] = None,
 ) -> Tuple[Path, Path, Dict[str, Path]]:
     """
-    Same artifacts as ``generate_run_project_multiclass`` (``training_<label>.csv``, ``testing_<label>.csv``,
-    ``val_test_groups.json``) but keeps ``controls`` / ``diseases`` (and optional nested ``stages``) in
+    Same artifacts as ``generate_run_project_multiclass`` (``training_<label>.csv``, ``test_<label>.csv``,
+    ``test_groups.json``) but keeps ``controls`` / ``diseases`` (and optional nested ``stages``) in
     ``project.json`` for full centroid/detector layout.
     """
     from methyl_utils import load_project
@@ -1307,8 +1299,6 @@ def generate_run_project_hierarchical_multiclass(
         train_csv_by_label[lbl] = p
         test_csv = run_dir / f"test_{safe}.csv"
         write_val_csv(test_csv, val_by_label[lbl])
-        testing_csv = run_dir / f"testing_{safe}.csv"
-        shutil.copy2(test_csv, testing_csv)
         testing_csv_by_label[lbl] = test_csv
 
     val_payload: List[Dict[str, Any]] = []
@@ -1323,8 +1313,6 @@ def generate_run_project_hierarchical_multiclass(
     test_groups_json.parent.mkdir(parents=True, exist_ok=True)
     with open(test_groups_json, "w", encoding="utf-8") as f:
         json.dump(val_payload, f, indent=2)
-    val_groups_json = run_dir / "val_test_groups.json"
-    shutil.copy2(test_groups_json, val_groups_json)
 
     project = dict(base)
     project.pop("step_config", None)
@@ -1359,4 +1347,4 @@ def generate_run_project_hierarchical_multiclass(
         )
         centroid_overrides[lbl] = override_path
 
-    return project_path, val_groups_json, centroid_overrides
+    return project_path, test_groups_json, centroid_overrides

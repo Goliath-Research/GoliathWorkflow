@@ -780,14 +780,20 @@ def _handle_validation_post_model_validation(
             config=config,
         )
     else:
-        test_groups_json = Path(
-            input_json.get("testGroupsJson") or output_dir / "val_test_groups.json"
-        )
+        raw_groups = input_json.get("testGroupsJson") or input_json.get("valGroupsJson")
+        test_groups_json = Path(raw_groups) if raw_groups else output_dir / "test_groups.json"
         if not test_groups_json.is_file():
-            # Fall back to MC root artifact when present.
-            candidate = mc_root / "val_test_groups.json"
-            if candidate.is_file():
-                test_groups_json = candidate
+            for candidate in (
+                output_dir / "test_groups.json",
+                mc_root / "test_groups.json",
+                production_dir / "test_groups.json",
+                output_dir / "val_test_groups.json",
+                mc_root / "val_test_groups.json",
+                production_dir / "val_test_groups.json",
+            ):
+                if candidate.is_file():
+                    test_groups_json = candidate
+                    break
         if not test_groups_json.is_file():
             raise RuntimeError(
                 f"post_model_validation multiclass requires testGroupsJson at {test_groups_json}"

@@ -123,9 +123,12 @@ def _load_validation_paths_and_labels(
         samples = test_control_paths + test_disease_paths
         y_true = [0] * len(test_control_paths) + [1] * len(test_disease_paths)
     else:
-        val_json = project_json.parent / "val_test_groups.json"
-        if val_json.is_file():
-            with open(val_json, encoding="utf-8") as f:
+        run_dir = project_json.parent
+        groups_json = run_dir / "test_groups.json"
+        if not groups_json.is_file():
+            groups_json = run_dir / "val_test_groups.json"
+        if groups_json.is_file():
+            with open(groups_json, encoding="utf-8") as f:
                 payload = json.load(f)
             if isinstance(payload, list):
                 name_to_idx = {str(n): int(i) for i, n in enumerate(class_names)}
@@ -142,14 +145,16 @@ def _load_validation_paths_and_labels(
         if not samples:
             from .split import load_and_resolve_sample_paths
 
-            run_dir = project_json.parent
-            vc = run_dir / "val_control.csv"
-            vd = run_dir / "val_disease.csv"
-            if vc.is_file() and vd.is_file():
-                val_control = load_and_resolve_sample_paths(vc, None)
-                val_disease = load_and_resolve_sample_paths(vd, None)
-                samples = [str(p) for p in val_control] + [str(p) for p in val_disease]
-                y_true = [0] * len(val_control) + [1] * len(val_disease)
+            tc = run_dir / "test_control.csv"
+            td = run_dir / "test_disease.csv"
+            if not (tc.is_file() and td.is_file()):
+                tc = run_dir / "val_control.csv"
+                td = run_dir / "val_disease.csv"
+            if tc.is_file() and td.is_file():
+                test_control = load_and_resolve_sample_paths(tc, None)
+                test_disease = load_and_resolve_sample_paths(td, None)
+                samples = [str(p) for p in test_control] + [str(p) for p in test_disease]
+                y_true = [0] * len(test_control) + [1] * len(test_disease)
 
     if not samples:
         raise ValueError(

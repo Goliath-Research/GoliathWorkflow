@@ -625,7 +625,7 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
         encoding="utf-8",
     )
 
-    calls = {"generated_project": 0, "ran_pipeline": 0}
+    calls = {"generated_project": 0, "ran_pipeline": 0, "run_dir_existed_at_generate": None}
 
     def _fake_resolve_iteration_split(**kwargs):
         return (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]), "reused"
@@ -643,6 +643,7 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
     ):
         calls["generated_project"] += 1
         run_dir = Path(run_dir)
+        calls["run_dir_existed_at_generate"] = run_dir.is_dir()
         run_dir.mkdir(parents=True, exist_ok=True)
         project_path = run_dir / "project.json"
         project_path.write_text("{}", encoding="utf-8")
@@ -699,6 +700,200 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
     assert (linked_run / "detections").resolve() == (run1 / "detections").resolve()
     assert calls["generated_project"] == 1
     assert calls["ran_pipeline"] == 0
+    assert calls["run_dir_existed_at_generate"] is True
+
+
+def test_build_model_mc_shared_runs_reuses_centroids_when_detections_incompatible(
+    tmp_path: Path, monkeypatch
+):
+    primary_root = tmp_path / "primary_mc"
+    run1 = primary_root / "run_0001"
+    (run1 / "detections" / "all" / "pca_pca1").mkdir(parents=True, exist_ok=True)
+    (run1 / "centroids").mkdir(parents=True, exist_ok=True)
+    (run1 / "project.json").write_text(
+        json.dumps({"actionConfig": {"detection": {"detection_mode": "discovery_only"}}}),
+        encoding="utf-8",
+    )
+    production_project = tmp_path / "production_project.json"
+    production_project.write_text(
+        json.dumps(
+            {
+                "actionConfig": {
+                    "detection": {
+                        "detection_mode": "fixed",
+                        "fixed_dmp_panel": "/tmp/stable_dmps.csv",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    calls: dict[str, object] = {
+        "generated_project": 0,
+        "ran_pipeline": 0,
+        "skip_centroid": None,
+        "generate_saw_stale_mapper": None,
+        "generate_saw_stale_detections": None,
+        "run_dir_existed_at_generate": None,
+    }
+
+    def _fake_resolve_iteration_split(**kwargs):
+        return (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]), "reused"
+
+    def _fake_generate_run_project(
+        base_project_path,
+        run_dir,
+        run_id,
+        output_base,
+        train_control,
+        train_disease,
+        val_control,
+        val_disease,
+        samples_base_path,
+        **kwargs,
+    ):
+        calls["generated_project"] = int(calls["generated_project"]) + 1
+        run_dir = Path(run_dir)
+        calls["run_dir_existed_at_generate"] = run_dir.is_dir()
+        calls["generate_saw_stale_mapper"] = (run_dir / "mapper" / "stale.txt").exists()
+        calls["generate_saw_stale_detections"] = (run_dir / "detections" / "stale.txt").exists()
+        run_dir.mkdir(parents=True, exist_ok=True)
+        project_path = run_dir / "project.json"
+        project_path.write_text(production_project.read_text(encoding="utf-8"), encoding="utf-8")
+        return (
+            project_path,
+            run_dir / "train_control.csv",
+            run_dir / "train_disease.csv",
+            run_dir / "test_control.csv",
+            run_dir / "test_disease.csv",
+            None,
+            None,
+        )
+
+    def _fake_run_pipeline(project_path, *args, **kwargs):
+        calls["ran_pipeline"] = int(calls["ran_pipeline"]) + 1
+        calls["skip_centroid"] = kwargs.get("skip_centroid")
+        detections = Path(project_path).parent / "detections"
+        detections.mkdir(parents=True, exist_ok=True)
+        return True, [], [{"step_name": "methyl-detector", "duration_seconds": 1.0, "return_code": 0}]
+
+    monkeypatch.setattr(cli, "resolve_iteration_split", _fake_resolve_iteration_split)
+    monkeypatch.setattr(cli, "generate_run_project", _fake_generate_run_project)
+    monkeypatch.setattr(cli, "run_pipeline_for_iteration", _fake_run_pipeline)
+
+    config = SimpleNamespace(
+        n_iterations=1,
+        train_fraction=0.8,
+        seed=42,
+        samples_base_path=str(tmp_path),
+        abort_on_step_failure=True,
+    )
+    shared_root = tmp_path / "model_mc" / "shared"
+    stale_run = shared_root / "run_0001"
+    (stale_run / "mapper").mkdir(parents=True, exist_ok=True)
+    (stale_run / "mapper" / "stale.txt").write_text("leftover mapper", encoding="utf-8")
+    (stale_run / "detections").mkdir(parents=True, exist_ok=True)
+    (stale_run / "detections" / "stale.txt").write_text("leftover detections", encoding="utf-8")
+    (stale_run / "project.json").write_text(
+        json.dumps({"actionConfig": {"detection": {"detection_mode": "discovery_only"}}}),
+        encoding="utf-8",
+    )
+    rows = cli._build_model_mc_shared_runs(
+        base_project_for_runs=production_project,
+        config=config,
+        layout="binary",
+        cohort_paths_list=[("healthy", ["h1", "h2", "h3"]), ("disease", ["d1", "d2", "d3"])],
+        cohort_labels=["healthy", "disease"],
+        control_paths=["h1", "h2", "h3"],
+        disease_paths=["d1", "d2", "d3"],
+        shared_root=shared_root,
+        resume_arg=None,
+        per_cancer_group=False,
+        primary_monte_carlo_runs_root=primary_root,
+        require_artifact_reuse=False,
+    )
+
+    assert len(rows) == 1
+    linked_run = shared_root / "run_0001"
+    assert (linked_run / "centroids").is_symlink()
+    assert (linked_run / "centroids").resolve() == (run1 / "centroids").resolve()
+    assert (linked_run / "detections").is_dir()
+    assert not (linked_run / "detections").is_symlink()
+    assert not (linked_run / "detections" / "stale.txt").exists()
+    assert not (linked_run / "mapper").exists()
+    assert calls["run_dir_existed_at_generate"] is True
+    assert calls["generate_saw_stale_mapper"] is False
+    assert calls["generate_saw_stale_detections"] is False
+    assert calls["ran_pipeline"] == 1
+    assert calls["skip_centroid"] is True
+
+
+def test_build_model_mc_shared_runs_strict_reuse_rejects_incompatible_detections(
+    tmp_path: Path, monkeypatch
+):
+    primary_root = tmp_path / "primary_mc"
+    run1 = primary_root / "run_0001"
+    (run1 / "centroids").mkdir(parents=True)
+    (run1 / "detections").mkdir()
+    (run1 / "project.json").write_text(
+        json.dumps({"actionConfig": {"detection": {"detection_mode": "discovery_only"}}}),
+        encoding="utf-8",
+    )
+    production_project = tmp_path / "production_project.json"
+    production_project.write_text(
+        json.dumps(
+            {
+                "actionConfig": {
+                    "detection": {
+                        "detection_mode": "fixed",
+                        "fixed_dmp_panel": "/tmp/stable_dmps.csv",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        cli,
+        "resolve_iteration_split",
+        lambda **_kwargs: (
+            (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]),
+            "reused",
+        ),
+    )
+
+    def _forbidden_run_pipeline(*_args, **_kwargs):
+        raise AssertionError("strict reuse must fail before centroid/detector execution")
+
+    monkeypatch.setattr(cli, "run_pipeline_for_iteration", _forbidden_run_pipeline)
+
+    config = SimpleNamespace(
+        n_iterations=1,
+        train_fraction=0.8,
+        seed=42,
+        samples_base_path=str(tmp_path),
+        abort_on_step_failure=True,
+    )
+
+    with pytest.raises(RuntimeError, match="detection contract"):
+        cli._build_model_mc_shared_runs(
+            base_project_for_runs=production_project,
+            config=config,
+            layout="binary",
+            cohort_paths_list=[
+                ("healthy", ["h1", "h2", "h3"]),
+                ("disease", ["d1", "d2", "d3"]),
+            ],
+            cohort_labels=["healthy", "disease"],
+            control_paths=["h1", "h2", "h3"],
+            disease_paths=["d1", "d2", "d3"],
+            shared_root=tmp_path / "model_mc" / "shared",
+            resume_arg=None,
+            per_cancer_group=False,
+            primary_monte_carlo_runs_root=primary_root,
+            require_artifact_reuse=True,
+        )
 
 
 def test_build_model_mc_shared_runs_strict_reuse_rejects_missing_artifacts(

@@ -270,10 +270,12 @@ def test_hierarchical_mc_run_project_predictor_points_at_testing_csvs(tmp_path: 
 
     run_proj = json.loads(project_path.read_text(encoding="utf-8"))
     assert "step_config" not in run_proj
-    val_groups = json.loads((run_dir / "val_test_groups.json").read_text(encoding="utf-8"))
+    val_groups = json.loads((run_dir / "test_groups.json").read_text(encoding="utf-8"))
     assert len(val_groups) == len(cohort_labels)
     assert [row["label"] for row in val_groups] == cohort_labels
-    assert len(list(run_dir.glob("testing_*.csv"))) == len(cohort_labels)
+    assert len(list(run_dir.glob("test_*.csv"))) == len(cohort_labels)
+    assert not list(run_dir.glob("testing_*.csv"))
+    assert not (run_dir / "val_test_groups.json").exists()
 
 
 def test_hierarchical_mc_run_project_without_predictor_nested_sides(tmp_path: Path):
@@ -351,8 +353,10 @@ def test_hierarchical_mc_run_project_without_predictor_nested_sides(tmp_path: Pa
 
     run_proj = json.loads(project_path.read_text(encoding="utf-8"))
     assert "step_config" not in run_proj
-    val_groups = json.loads((run_dir / "val_test_groups.json").read_text(encoding="utf-8"))
+    val_groups = json.loads((run_dir / "test_groups.json").read_text(encoding="utf-8"))
     assert len(val_groups) == len(cohort_labels)
     assert run_proj["controls"]["groups"][0]["label"] == "all"
     assert len(run_proj["diseases"]["groups"][0]["stages"]) == 4
-    assert len(list(run_dir.glob("testing_*.csv"))) == len(cohort_labels)
+    assert len(list(run_dir.glob("test_*.csv"))) == len(cohort_labels)
+    assert not list(run_dir.glob("testing_*.csv"))
+    assert not (run_dir / "val_test_groups.json").exists()

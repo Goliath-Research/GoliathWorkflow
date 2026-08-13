@@ -440,15 +440,10 @@ def write_holdout_eval_artifacts(
         dest.mkdir(parents=True, exist_ok=True)
         tg = dest / "test_groups.json"
         tg.write_text(json.dumps(test_groups, indent=2) + "\n", encoding="utf-8")
-        # Alias used by some multiclass / post_model lookups.
-        (dest / "val_test_groups.json").write_text(tg.read_text(encoding="utf-8"), encoding="utf-8")
         ctrl = dest / "test_control.csv"
         dis = dest / "test_disease.csv"
         _write_paths_csv(ctrl, control_paths)
         _write_paths_csv(dis, disease_paths)
-        # post_model_validation binary handler falls back to val_*.csv under mc_root.
-        (dest / "val_control.csv").write_text(ctrl.read_text(encoding="utf-8"), encoding="utf-8")
-        (dest / "val_disease.csv").write_text(dis.read_text(encoding="utf-8"), encoding="utf-8")
         written[str(dest)] = tg
     return written
 
