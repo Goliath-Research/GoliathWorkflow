@@ -237,8 +237,8 @@ def test_mssql_set_scope_variable_converts_json_for_nvarchar_column() -> None:
     proc = repo.split("CREATE OR ALTER PROCEDURE wf.wf_repo_set_scope_variable", 1)[1]
     proc = proc.split("CREATE OR ALTER PROCEDURE", 1)[0]
     assert "CONVERT(nvarchar(max), @value_json)" in proc
-    assert "CAST(@value_text AS json)" in proc
     assert "SET value_json = @value_json" not in proc
+    assert "VALUES (@instance_id, @scope_exec_id, @var_name, @value_json)" not in proc
 
     writepath = (
         Path(__file__).resolve().parents[1]
