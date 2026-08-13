@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS wf.workflow_edge (
   CHECK (branch_kind IS NULL OR branch_kind IN ('SEQUENCE','PARALLEL','THEN','ELSE','CASE','DEFAULT','BODY'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_we_parent_child_order ON wf.workflow_edge(parent_node_id, child_order);
+DROP INDEX IF EXISTS wf.uq_we_parent_child_order;
 CREATE INDEX IF NOT EXISTS ix_we_parent ON wf.workflow_edge(parent_node_id);
 CREATE INDEX IF NOT EXISTS ix_we_child ON wf.workflow_edge(child_node_id);
 

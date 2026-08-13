@@ -424,22 +424,16 @@ CREATE UNIQUE INDEX UQ_we_parent_child
 GO
 
 --
--- Create index [UQ_we_parent_child_order] on table [wf].[workflow_edge]
+-- UQ_we_parent_child_order is intentionally absent.
+-- IF THEN/ELSE (and similar) share child_order=0; uniqueness is parent+child
+-- (UQ_we_parent_child). See wf_workflow_edge_index_fixup.sql.
 --
-PRINT (N'Create index [UQ_we_parent_child_order] on table [wf].[workflow_edge]')
+PRINT (N'Skip unique index [UQ_we_parent_child_order] (IF THEN/ELSE share child_order)')
 GO
-IF NOT EXISTS (
+IF EXISTS (
   SELECT 1 FROM sys.indexes WITH (NOLOCK)
   WHERE name = N'UQ_we_parent_child_order' AND object_id = OBJECT_ID(N'wf.workflow_edge'))
-  AND EXISTS (
-  SELECT 1 FROM sys.columns WITH (NOLOCK)
-  WHERE name = N'parent_node_id' AND object_id = OBJECT_ID(N'wf.workflow_edge'))
-  AND EXISTS (
-  SELECT 1 FROM sys.columns WITH (NOLOCK)
-  WHERE name = N'child_order' AND object_id = OBJECT_ID(N'wf.workflow_edge'))
-CREATE UNIQUE INDEX UQ_we_parent_child_order
-  ON wf.workflow_edge (parent_node_id, child_order)
-  ON [PRIMARY]
+    DROP INDEX UQ_we_parent_child_order ON wf.workflow_edge;
 GO
 
 --

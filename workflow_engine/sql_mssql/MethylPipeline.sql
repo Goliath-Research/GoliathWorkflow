@@ -386,12 +386,9 @@ CREATE UNIQUE INDEX UQ_we_parent_child
 GO
 
 --
--- Create index [UQ_we_parent_child_order] on table [wf].[workflow_edge]
+-- Do not create UQ_we_parent_child_order (parent_node_id, child_order).
+-- IF THEN/ELSE edges both use child_order=0; uniqueness is UQ_we_parent_child.
 --
-PRINT (N'Create index [UQ_we_parent_child_order] on table [wf].[workflow_edge]')
-GO
-CREATE UNIQUE INDEX UQ_we_parent_child_order
-  ON wf.workflow_edge (parent_node_id, child_order)
 GO
 
 --
