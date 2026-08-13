@@ -23,7 +23,7 @@ Deployed by `cfg_wf_relationships.sql` (after `cfg_registry_tables.sql`):
 | `cfg.program_publish` | `domain_program` + `workflow_def` + `workflow_version` | Audit of each publish |
 | `wf.workflow_action.input_type_id` / `output_type_id` | `wf.data_type.id` | Explicit action I/O types (fields as rows; **no** `schema_json` on types) |
 | `cfg.reference_asset.storage_endpoint_id` | `cfg.storage_endpoint.id` | Primary download/provision source |
-| `cfg.site_reference_asset` | `cfg.site` + `cfg.reference_asset` | Site roles: `reference_genome`, `annotation_gtf`, `pangenome_bundle`, `houseman_seed_basis`, `hitimed_hierarchy_basis`, … |
+| `cfg.site_reference_asset` | `cfg.site` + `cfg.reference_asset` | Site roles: `reference_genome`, `annotation_gtf`, `pangenome_bundle`, `houseman_seed_basis`, `hitimed_hierarchy_basis`, … **One asset per (`site_id`, `asset_role`)** (`uq_cfg_sra_site_role`). `ck_cfg_sra_role` has no WGBS pangenome role; stock d9-1.70 and WGBS d9-bs-1.70 both compete for `pangenome_bundle`. Site-link seed attaches the stock bundle; swap `@links` for a WGBS site. Dual bind is a model change (widen CHECK + unique). |
 | `cfg.study_instance_link` | `cfg.study` + `wf.workflow_instance` (+ optional program/profile/site) | Which study/config started a run |
 | `cfg.storage_endpoint.credential_id` | `cfg.credential.id` | Internal (not wf) |
 | `cfg.study.default_analyte_id` | `cfg.analyte.id` | Study specimen/matrix (dual-writes `regulatory.primary_analyte`) |
@@ -66,6 +66,7 @@ export METHYL_CFG_STORE=/work/epimethyl/cfg-store
 export PYTHONPATH=workflow_engine:$PYTHONPATH
 
 methyl-cfg import-fs --repo-root . --work-root /work
+methyl-cfg link-site-assets --site default --deploy-db   # cfg.cfg_repo_link_site_asset
 methyl-cfg sync-actions          # seeds wf.workflow_action + wf.data_type
 methyl-cfg materialize --work-root /work
 
@@ -83,7 +84,7 @@ methyl-cfg provision-assets --selected-only --site default --work-root /work --d
 methyl-cfg provision-assets --name linear-grch38-ensembl-114 --version 1 --work-root /work --dry-run
 ```
 
-**Canonical genomes tree** (QNAP + `/work`): `linear/GRCh38/ensembl-114/`, `annotation/gencode/v49/`, `pangenome/GRCh38/d9/1.70/`. Site `reference_selection` pins active versions; `cfg.storage_endpoint` `epimethyl-genomes` (`prefixBase: genomes/`) + `cfg.reference_asset` recipes drive `s3_sync` provision. Phase 0 helper: `scripts/provision_selected_genomes.sh`. Operator upload/provision map: [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md).
+**Canonical genomes tree** (QNAP + `/work`): `linear/GRCh38/ensembl-114/`, `annotation/gencode/v49/`, `pangenome/GRCh38/d9/1.70/`. Site `reference_selection` pins active versions; `cfg.storage_endpoint` `epimethyl-genomes` (`prefixBase: genomes/`) + `cfg.reference_asset` recipes drive `s3_sync` provision. Phase 0 helper: `scripts/provision_selected_genomes.sh`. Operator upload/provision map: [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md). `cfg.cfg_repo_link_site_asset` is the **only** writer of `cfg.site_reference_asset`. Asset seed does not fill the grid. Construction callers: [`cfg_site_reference_assets_seed.sql`](../../workflow_engine/sql_mssql/cfg_site_reference_assets_seed.sql) (after `cfg.site default@1` exists) and `methyl-cfg link-site-assets --deploy-db` (bootstrap after `import-fs`).
 
 `METHYL_CFG_STORE` defaults to `/work/epimethyl/cfg-store` (file-backed stand-in that mirrors `cfg.*` tables). Production DDL: `workflow_engine/sql_{pg,mssql}/cfg_*.sql` (wired into `deploy_azure.sh`).
 

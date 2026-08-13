@@ -22,7 +22,10 @@ PANGENOME_FILES = {
     "ref_paths": "hprc-v1.1-mc-grch38.d9.paths.sub",
 }
 
-# Map reference_selection keys → cfg.site_reference_asset.asset_role
+# Map reference_selection keys → cfg.site_reference_asset.asset_role.
+# pangenome_wgbs_bundle is the inventory asset_type only: ck_cfg_sra_role has
+# no WGBS role, and uq_cfg_sra_site_role allows one pangenome_bundle per site.
+# Site SQL seed links d9-1.70; swap d9-bs-1.70 in @links for a WGBS site.
 SELECTION_TO_ASSET_ROLE = {
     "linear": "reference_genome",
     "gene_annotation": "annotation_gtf",

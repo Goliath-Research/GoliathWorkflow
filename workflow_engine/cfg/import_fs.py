@@ -148,6 +148,22 @@ def import_filesystem(
             if example.is_file():
                 store.upsert("site", "default", _load_json(example), status=status)
                 imported.append("site:default(example)")
+        site_rec = store.get("site", "default", published_only=False)
+        assets_present = bool(
+            store.list("reference_asset", published_only=True)
+            or store.list("reference_asset", published_only=False)
+        )
+        if site_rec is not None and assets_present:
+            from cfg.site_assets import link_site_assets_in_store
+
+            try:
+                plan = link_site_assets_in_store(store, site_name="default")
+                imported.append(
+                    "site_reference_asset:"
+                    + ",".join(row["asset_role"] for row in plan.get("linked") or [])
+                )
+            except ValueError as exc:
+                imported.append(f"site_reference_asset:skipped:{exc}")
 
     if include_studies and work_root_p is not None:
         projects = work_root_p / "projects"

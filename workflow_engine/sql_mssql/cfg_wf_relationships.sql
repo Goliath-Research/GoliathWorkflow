@@ -127,6 +127,7 @@ BEGIN
         CONSTRAINT uq_cfg_sra_site_asset UNIQUE (site_id, reference_asset_id),
         CONSTRAINT FK_cfg_sra_site FOREIGN KEY (site_id) REFERENCES cfg.site (id) ON DELETE CASCADE,
         CONSTRAINT FK_cfg_sra_asset FOREIGN KEY (reference_asset_id) REFERENCES cfg.reference_asset (id),
+        /* No pangenome_wgbs_bundle: one pangenome_bundle per site. Dual Giraffe+WGBS is a model change. */
         CONSTRAINT ck_cfg_sra_role CHECK (asset_role IN (
             N'reference_genome', N'annotation_gtf', N'pangenome_bundle',
             N'mapper_cache',

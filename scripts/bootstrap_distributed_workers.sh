@@ -154,6 +154,9 @@ if [[ "$SKIP_CFG" -eq 0 ]]; then
   "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" import-fs \
     --repo-root "$REPO_ROOT" \
     --work-root "$WORK_ROOT" || echo "WARN: methyl-cfg import-fs failed (non-fatal)"
+  "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" link-site-assets \
+    --site default --deploy-db \
+    || echo "WARN: methyl-cfg link-site-assets failed (non-fatal; cfg.site_reference_asset stays empty)"
   "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" sync-actions \
     --repo-root "$REPO_ROOT" --from-json || echo "WARN: methyl-cfg sync-actions failed (non-fatal)"
   "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" materialize \

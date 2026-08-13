@@ -84,6 +84,7 @@ SCRIPTS=(
   cfg_repo_api.sql
   portal_resource_profile.sql
   cfg_reference_assets_seed.sql
+  cfg_site_reference_assets_seed.sql
   cfg_portal_api.sql
   portal_sample_extras_schema.sql
   cfg_process_pack_catalog.sql

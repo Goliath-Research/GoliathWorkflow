@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS cfg.site_reference_asset (
   created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   CONSTRAINT uq_cfg_sra_site_role UNIQUE (site_id, asset_role),
   CONSTRAINT uq_cfg_sra_site_asset UNIQUE (site_id, reference_asset_id),
+  -- No pangenome_wgbs_bundle: one pangenome_bundle per site. Dual Giraffe+WGBS is a model change.
   CONSTRAINT ck_cfg_sra_role CHECK (asset_role IN (
     'reference_genome', 'annotation_gtf', 'pangenome_bundle',
     'mapper_cache',

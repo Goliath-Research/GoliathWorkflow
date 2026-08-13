@@ -49,6 +49,30 @@ def _cmd_import_fs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_link_site_assets(args: argparse.Namespace) -> int:
+    from cfg.site_assets import link_site_assets
+
+    store = _open_store(args.store_dir)
+    db = None
+    if args.deploy_db:
+        from rest.connection import resolve_connection_config
+        from rest.db import open_gateway_db
+
+        db = open_gateway_db(resolve_connection_config())
+    try:
+        result = link_site_assets(
+            store,
+            site_name=args.site,
+            site_version=args.version,
+            db=db,
+        )
+    finally:
+        if db is not None:
+            db.close()
+    print(json.dumps(result, indent=2, default=str))
+    return 0
+
+
 def _cmd_upsert(args: argparse.Namespace) -> int:
     store = _open_store(args.store_dir)
     doc = json.loads(Path(args.file).read_text(encoding="utf-8"))
@@ -478,6 +502,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="wf.workflow_def.name for --check-db (default: compiled name)",
     )
     s.set_defaults(func=_cmd_verify_workflow)
+
+    s = sub.add_parser(
+        "link-site-assets",
+        help="Bind site reference_selection pins via cfg.cfg_repo_link_site_asset",
+    )
+    s.add_argument("--site", default="default")
+    s.add_argument("--version", default=None, help="Site version (default: store record)")
+    s.add_argument(
+        "--deploy-db",
+        action="store_true",
+        help="Call cfg.cfg_repo_link_site_asset on BACKEND_DB (required to fill the SQL grid)",
+    )
+    s.set_defaults(func=_cmd_link_site_assets)
 
     s = sub.add_parser("provision-assets", help="Run reference_asset provision recipes")
     s.add_argument("--name", default=None, help="Asset name (omit to provision all published)")

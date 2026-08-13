@@ -2,6 +2,11 @@
   Seed versioned reference_asset rows for the canonical genomes tree.
   Deploy after cfg.reference_asset exists (cfg_registry_tables + relationships).
   Endpoint epimethyl-genomes is seeded in portal_resource_profile.sql.
+
+  Site role binding is cfg_site_reference_assets_seed.sql — not this file.
+  Both pangenome bundles are published here; uq_cfg_sra_site_role + ck_cfg_sra_role
+  allow only one pangenome_bundle per site (no WGBS role). The site-link seed
+  attaches d9-1.70 and leaves d9-bs-1.70 for an explicit @links swap.
 */
 
 DECLARE @ep_id bigint = (

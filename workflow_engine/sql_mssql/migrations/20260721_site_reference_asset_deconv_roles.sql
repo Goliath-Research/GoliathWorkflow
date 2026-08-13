@@ -2,6 +2,8 @@
 -- For existing Azure SQL databases created before houseman/hitimed roles were
 -- added to ck_cfg_sra_role. Fresh installs already get the wide CHECK from
 -- cfg_wf_relationships.sql — this migration is idempotent (drop + recreate).
+-- Does not add a WGBS pangenome role; that plus relaxing uq_cfg_sra_site_role
+-- is a separate model change (see cfg_site_reference_assets_seed.sql).
 --
 -- Apply manually when upgrading an older DB (not part of deploy_azure.sh):
 --   sqlcmd ... -i workflow_engine/sql_mssql/migrations/20260721_site_reference_asset_deconv_roles.sql

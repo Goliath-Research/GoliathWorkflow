@@ -65,6 +65,7 @@ PostgreSQL equivalent: [`../sql_pg/wf_split_detector_actions_seed.sql`](../sql_p
 
 1. [`portal_resource_profile.sql`](portal_resource_profile.sql) — `epimethyl-archive` + `epimethyl-genomes` endpoints
 2. [`cfg_reference_assets_seed.sql`](cfg_reference_assets_seed.sql) — linear / GENCODE / pangenome recipes → `/work/genomes/`
+3. [`cfg_site_reference_assets_seed.sql`](cfg_site_reference_assets_seed.sql) — calls `cfg.cfg_repo_link_site_asset` for `default@1` (`reference_genome`, `annotation_gtf`, stock `pangenome_bundle`). **One role per site** (`uq_cfg_sra_site_role`); `ck_cfg_sra_role` has no WGBS pangenome role, so d9-bs-1.70 stays unlinked. Swap that row in `@links` for a WGBS site; linking both is a model change. If the site is published after DDL, re-run this script or `methyl-cfg link-site-assets --deploy-db`.
 
 Operator upload/provision: [`docs/deployment/reference-inventory-qnap.md`](../../docs/deployment/reference-inventory-qnap.md).
 

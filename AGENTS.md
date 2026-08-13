@@ -10,7 +10,7 @@ MethylPipeline is **not** tied to one disease or study. Cohorts and paths live o
 
 | Backend | Typical use | Populate reference data |
 |---------|-------------|-------------------------|
-| Azure SQL | Production gateway, portal | Already populated; refresh catalog via `seed_action_catalog.py` or MCP; genomes via `cfg_reference_assets_seed.sql` |
+| Azure SQL | Production gateway, portal | Already populated; refresh catalog via `seed_action_catalog.py` or MCP; genomes via `cfg_reference_assets_seed.sql` + site roles via `cfg_site_reference_assets_seed.sql` (one `pangenome_bundle` per site; WGBS is an `@links` swap, not a second role) |
 | PostgreSQL | Parity, dev gateway, CI | Schema via [`sql_pg/deploy_azure.sh`](workflow_engine/sql_pg/deploy_azure.sh) (dir is **`sql_pg`**, not `sql_pgsql`); action catalog via [`scripts/populate_postgres_reference_data.py`](scripts/populate_postgres_reference_data.py); genomes via same `cfg_reference_assets_seed.sql` + [reference-inventory-qnap.md](docs/deployment/reference-inventory-qnap.md) |
 
 When assisting with DB tasks:
@@ -19,7 +19,7 @@ When assisting with DB tasks:
 2. **PostgreSQL** — use PostgreSQL MCP (`pgsql_query`) when `pgsql_list_connection_profiles` returns profiles; otherwise require `POSTGRES_*` env and `psql` / `populate_postgres_reference_data.py`.
 3. **Catalog source of truth** — git (`schemas/actions/catalog.json` + `seed_action_catalog.py`), not necessarily production MSSQL rows (may include retired actions like `sample.upload_h5`).
 4. **Shell bootstrap** — `scripts/bootstrap_distributed_workers.sh` for full DDL + seed + workflow deploy; use MCP for verification and incremental fixes.
-5. **Genome inventory** — `populate_postgres_reference_data.py` does **not** seed `cfg.reference_asset`; use SQL seeds + `methyl-cfg provision-assets` / `scripts/provision_selected_genomes.sh` (see [reference-inventory-qnap.md](docs/deployment/reference-inventory-qnap.md)).
+5. **Genome inventory** — `populate_postgres_reference_data.py` does **not** seed `cfg.reference_asset`; use SQL seeds + `methyl-cfg provision-assets` / `scripts/provision_selected_genomes.sh` (see [reference-inventory-qnap.md](docs/deployment/reference-inventory-qnap.md)). `cfg.site_reference_asset` is filled only by `cfg.cfg_repo_link_site_asset` (`cfg_site_reference_assets_seed.sql` or `methyl-cfg link-site-assets --deploy-db`).
 
 ## Four-layer configuration
 

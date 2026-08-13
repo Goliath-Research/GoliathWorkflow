@@ -25,6 +25,7 @@ Deploy **in order**:
 | 13 | [`wf_sql_collection_bindings.sql`](wf_sql_collection_bindings.sql) | Collection binding resolution at instance start |
 | 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles + `epimethyl-genomes` endpoint |
 | 15 | [`cfg_reference_assets_seed.sql`](cfg_reference_assets_seed.sql) | Linear / GENCODE / pangenome `cfg.reference_asset` recipes |
+| 15a | [`cfg_site_reference_assets_seed.sql`](cfg_site_reference_assets_seed.sql) | Calls `cfg.cfg_repo_link_site_asset` for `default@1` (stock `pangenome_bundle` only). Re-run or `methyl-cfg link-site-assets --deploy-db` after the site exists. |
 | 16 | [`portal_workflow_api.sql`](portal_workflow_api.sql) | Portal workflow builder + instance lifecycle (`portal.sp_*`) |
 | 17 | [`wf_drop_platform_sample_storage.sql`](wf_drop_platform_sample_storage.sql) | Drop legacy wf.platform_sample_storage if present |
 

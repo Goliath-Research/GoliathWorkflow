@@ -127,6 +127,7 @@ These write under `/work` via public download scripts or packages; they are **no
 |----------|------|
 | Endpoint + credential seed | `workflow_engine/sql_{mssql,pg}/portal_resource_profile.sql` |
 | Reference asset recipes | `workflow_engine/sql_{mssql,pg}/cfg_reference_assets_seed.sql` |
+| Site role links (`default@1`) | `workflow_engine/sql_{mssql,pg}/cfg_site_reference_assets_seed.sql` (calls `cfg.cfg_repo_link_site_asset`) and `methyl-cfg link-site-assets --deploy-db`. Stock `pangenome_bundle` (d9-1.70) only; WGBS d9-bs-1.70 is an `@links` swap (`uq_cfg_sra_site_role` + no WGBS role in `ck_cfg_sra_role`). Asset seed alone leaves the grid empty. |
 | JSON fixtures | `workflow_engine/domain/fixtures/reference_assets/*.json` |
 | Endpoint fixture | `workflow_engine/domain/fixtures/storage_endpoints/epimethyl-genomes.json` |
 | Credential example (not auto-imported) | `workflow_engine/domain/fixtures/credentials/epimethyl-archive-keys.example.json` |
