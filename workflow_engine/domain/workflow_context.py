@@ -91,17 +91,15 @@ def enrich_comparisons_from_project(project_path: Path) -> List[Dict[str, Any]]:
     return enriched
 
 
-_CFDNA_ANALYTES = frozenset(
-    {"cfdna", "cf_dna", "cell_free_dna", "plasma", "plasma_cfdna"}
-)
-
-
 def apply_study_analyte(context: Dict[str, Any], project: Any | None = None) -> Dict[str, Any]:
     """Set ``primaryAnalyte`` / ``isCfdna`` from study/project regulatory.
 
     Study ``regulatory.primary_analyte`` wins over DomainProgram fixture seeds
-    and stale portal ``cfdna`` defaults.
+    and stale portal ``cfdna`` defaults. Token shape matches SQL create-instance
+    overlays: lowercase, hyphen → underscore (aliases are not collapsed).
     """
+    from methyl_utils.analyte_profiles import analyte_token, is_cfdna_analyte
+
     out = context
     analyte = None
     reg = out.get("regulatory") if isinstance(out.get("regulatory"), dict) else {}
@@ -113,11 +111,11 @@ def apply_study_analyte(context: Dict[str, Any], project: Any | None = None) -> 
             analyte = getter()
         elif isinstance(getattr(project, "regulatory", None), dict):
             analyte = project.regulatory.get("primary_analyte")
-    if analyte is None or str(analyte).strip() == "":
+    token = analyte_token(analyte)
+    if not token:
         return out
-    token = str(analyte).strip().lower().replace("-", "_")
     out["primaryAnalyte"] = token
-    out["isCfdna"] = token in _CFDNA_ANALYTES
+    out["isCfdna"] = is_cfdna_analyte(token)
     return out
 
 

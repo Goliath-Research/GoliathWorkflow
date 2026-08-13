@@ -77,9 +77,11 @@ BEGIN
     ORDER BY s.id DESC
     LIMIT 1;
     IF v_analyte IS NOT NULL AND btrim(v_analyte) <> '' THEN
+      /* Match Python apply_study_analyte: lowercase, hyphen → underscore. */
+      v_analyte := replace(lower(btrim(v_analyte)), '-', '_');
       v_ctx := v_ctx || jsonb_build_object(
         'primaryAnalyte', v_analyte,
-        'isCfdna', lower(v_analyte) IN ('cfdna', 'cf_dna', 'plasma_cfdna', 'plasma', 'cell_free_dna')
+        'isCfdna', v_analyte IN ('cfdna', 'cf_dna', 'plasma_cfdna', 'plasma', 'cell_free_dna')
       );
     END IF;
   END IF;

@@ -23,6 +23,7 @@ from methyl_domain.fastq_storage import (
     S3FastqStorageDefaults,
 )
 from methyl_utils.action_config_resolver import resolve_for_project
+from methyl_utils.analyte_profiles import analyte_token, is_cfdna_analyte
 from methyl_domain.sample_storage import (
     SampleDestinationLocation,
     SampleStorageDefaults,
@@ -409,8 +410,11 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
             "No samples resolved; provide samples[], sampleCsv/sampleCsvs, or useProjectSamples=true"
         )
 
-    primary = project.get_primary_analyte() or request.primaryAnalyte or "buffy_coat"
-    is_cfdna = str(primary).lower() in {"cfdna", "plasma_cfdna", "cf_dna"}
+    primary = (
+        analyte_token(project.get_primary_analyte() or request.primaryAnalyte)
+        or "buffy_coat"
+    )
+    is_cfdna = is_cfdna_analyte(primary)
 
     context: Dict[str, Any] = {
         "projectPath": str(base_project.resolve()),

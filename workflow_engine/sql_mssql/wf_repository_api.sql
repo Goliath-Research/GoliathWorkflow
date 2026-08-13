@@ -94,13 +94,15 @@ BEGIN
     END
     IF @analyte IS NOT NULL AND LTRIM(RTRIM(@analyte)) <> N''
     BEGIN
+        /* Match Python apply_study_analyte: lowercase, hyphen → underscore. */
+        SET @analyte = REPLACE(LOWER(LTRIM(RTRIM(@analyte))), N'-', N'_');
         SET @ctx = CAST(JSON_MODIFY(CAST(@ctx AS nvarchar(max)), N'$.primaryAnalyte', @analyte) AS json);
         SET @ctx = CAST(
             JSON_MODIFY(
                 CAST(@ctx AS nvarchar(max)),
                 N'$.isCfdna',
                 CAST(
-                    CASE WHEN LOWER(@analyte) IN (N'cfdna', N'cf_dna', N'plasma_cfdna', N'plasma', N'cell_free_dna')
+                    CASE WHEN @analyte IN (N'cfdna', N'cf_dna', N'plasma_cfdna', N'plasma', N'cell_free_dna')
                          THEN 1 ELSE 0 END AS bit
                 )
             ) AS json

@@ -185,7 +185,21 @@ def test_apply_study_analyte_overrides_cfdna_seed() -> None:
     assert out["isCfdna"] is False
 
 
-def test_mssql_create_instance_sql_overlays_study_analyte() -> None:
+def test_apply_study_analyte_normalizes_case_and_hyphens() -> None:
+    mixed = apply_study_analyte({"regulatory": {"primary_analyte": "Buffy_Coat"}})
+    assert mixed["primaryAnalyte"] == "buffy_coat"
+    assert mixed["isCfdna"] is False
+
+    cfdna = apply_study_analyte({"regulatory": {"primary_analyte": "cfDNA"}})
+    assert cfdna["primaryAnalyte"] == "cfdna"
+    assert cfdna["isCfdna"] is True
+
+    hyphen = apply_study_analyte({"regulatory": {"primary_analyte": "CF-DNA"}})
+    assert hyphen["primaryAnalyte"] == "cf_dna"
+    assert hyphen["isCfdna"] is True
+
+
+def test_mssql_create_instance_sql_overlays_and_normalizes_study_analyte() -> None:
     sql = (
         Path(__file__).resolve().parents[1]
         / "sql_mssql"
@@ -196,6 +210,22 @@ def test_mssql_create_instance_sql_overlays_study_analyte() -> None:
     assert "default_analyte_id" in create
     assert "$.primaryAnalyte" in create
     assert "$.isCfdna" in create
+    assert "REPLACE(LOWER(LTRIM(RTRIM(@analyte))), N'-', N'_')" in create
+    assert "LOWER(@analyte) IN" not in create
+
+
+def test_pg_create_instance_sql_overlays_and_normalizes_study_analyte() -> None:
+    sql = (
+        Path(__file__).resolve().parents[1]
+        / "sql_pg"
+        / "02_repository_api.sql"
+    ).read_text(encoding="utf-8")
+    create = sql.split("CREATE OR REPLACE FUNCTION wf.wf_repo_create_workflow_instance(", 1)[1]
+    create = create.split("CREATE OR REPLACE FUNCTION", 1)[0]
+    assert "default_analyte_id" in create
+    assert "'primaryAnalyte'" in create
+    assert "replace(lower(btrim(v_analyte)), '-', '_')" in create
+    assert "lower(v_analyte) IN" not in create
 
 
 def test_finalize_instance_context_bakes_execution_scope_id():

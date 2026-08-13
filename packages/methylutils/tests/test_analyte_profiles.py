@@ -1,7 +1,9 @@
 """Tests for analyte-driven step_config profiles."""
 
 from methyl_utils.analyte_profiles import (
+    analyte_token,
     cisbp_mode_label,
+    is_cfdna_analyte,
     merge_step_config,
     normalize_primary_analyte,
     profile_for_analyte,
@@ -17,6 +19,16 @@ def test_normalize_primary_analyte():
     assert normalize_primary_analyte("plant") == "plant_tissue"
     assert normalize_primary_analyte("leaf") == "plant_tissue"
     assert normalize_primary_analyte("plant-tissue") == "plant_tissue"
+
+
+def test_analyte_token_and_is_cfdna_analyte():
+    assert analyte_token("Buffy_Coat") == "buffy_coat"
+    assert analyte_token("cfDNA") == "cfdna"
+    assert analyte_token("CF-DNA") == "cf_dna"
+    assert is_cfdna_analyte("plasma") is True
+    assert is_cfdna_analyte("cell_free_dna") is True
+    assert is_cfdna_analyte("CELL-FREE-DNA") is True
+    assert is_cfdna_analyte("buffy_coat") is False
 
 
 def test_plant_tissue_profile_opens_non_cpg_qc():

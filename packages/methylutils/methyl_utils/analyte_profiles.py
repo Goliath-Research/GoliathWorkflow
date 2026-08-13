@@ -12,6 +12,25 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, List, Optional
 
+# Tokens treated as cfDNA after analyte_token() (lowercase, hyphen → underscore).
+# Kept as aliases on context_json.primaryAnalyte; isCfdna is the boolean consumers use.
+CFDNA_ANALYTE_TOKENS = frozenset(
+    {"cfdna", "cf_dna", "cell_free_dna", "plasma", "plasma_cfdna"}
+)
+
+
+def analyte_token(value: Optional[str]) -> Optional[str]:
+    """Trim, lowercase, and map hyphens to underscores. Does not collapse aliases."""
+    if value is None:
+        return None
+    token = str(value).strip().lower().replace("-", "_")
+    return token or None
+
+
+def is_cfdna_analyte(value: Optional[str]) -> bool:
+    token = analyte_token(value)
+    return bool(token) and token in CFDNA_ANALYTE_TOKENS
+
 
 def normalize_primary_modality(value: Optional[str]) -> Optional[str]:
     """Normalize regulatory primary_modality tokens to a canonical omics modality.

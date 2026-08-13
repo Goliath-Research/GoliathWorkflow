@@ -292,6 +292,22 @@ def test_project_analyte_overrides_request_cfdna(tmp_path: Path) -> None:
     assert ctx["isCfdna"] is False
 
 
+@pytest.mark.parametrize("analyte", ["plasma", "cell_free_dna", "Plasma", "CELL-FREE-DNA"])
+def test_planner_is_cfdna_for_plasma_aliases(tmp_path: Path, analyte: str) -> None:
+    project_path = _write_project(tmp_path)
+    ctx = _plan(
+        tmp_path,
+        {
+            "projectPath": str(project_path),
+            "samples": [{"sampleId": "S1"}],
+            "fastqStorage": S3_STORAGE,
+            "primaryAnalyte": analyte,
+        },
+    )
+    assert ctx["isCfdna"] is True
+    assert ctx["primaryAnalyte"] == analyte.strip().lower().replace("-", "_")
+
+
 H5_STORAGE = {
     "type": "s3",
     "bucket": "methyl-archive",
