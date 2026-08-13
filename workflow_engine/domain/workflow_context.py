@@ -91,6 +91,36 @@ def enrich_comparisons_from_project(project_path: Path) -> List[Dict[str, Any]]:
     return enriched
 
 
+_CFDNA_ANALYTES = frozenset(
+    {"cfdna", "cf_dna", "cell_free_dna", "plasma", "plasma_cfdna"}
+)
+
+
+def apply_study_analyte(context: Dict[str, Any], project: Any | None = None) -> Dict[str, Any]:
+    """Set ``primaryAnalyte`` / ``isCfdna`` from study/project regulatory.
+
+    Study ``regulatory.primary_analyte`` wins over DomainProgram fixture seeds
+    and stale portal ``cfdna`` defaults.
+    """
+    out = context
+    analyte = None
+    reg = out.get("regulatory") if isinstance(out.get("regulatory"), dict) else {}
+    if reg.get("primary_analyte"):
+        analyte = reg.get("primary_analyte")
+    if analyte is None and project is not None:
+        getter = getattr(project, "get_primary_analyte", None)
+        if callable(getter):
+            analyte = getter()
+        elif isinstance(getattr(project, "regulatory", None), dict):
+            analyte = project.regulatory.get("primary_analyte")
+    if analyte is None or str(analyte).strip() == "":
+        return out
+    token = str(analyte).strip().lower().replace("-", "_")
+    out["primaryAnalyte"] = token
+    out["isCfdna"] = token in _CFDNA_ANALYTES
+    return out
+
+
 def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Expand minimal ``{ projectPath }`` into engine-ready context_json.
@@ -141,6 +171,10 @@ def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
 
     if not out.get("regulatory"):
         out["regulatory"] = project.get_regulatory_config()
+
+    # Study/project analyte is source of truth. DomainProgram fixture defaults
+    # (historically primaryAnalyte=cfdna) and portal leftovers must not win.
+    apply_study_analyte(out, project)
 
     # Assay procedure pack (optional). Precedence (highest wins first):
     # instance → procedure → profile/mode → analyte → site.

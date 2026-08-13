@@ -409,7 +409,7 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
             "No samples resolved; provide samples[], sampleCsv/sampleCsvs, or useProjectSamples=true"
         )
 
-    primary = request.primaryAnalyte or project.get_primary_analyte() or "buffy_coat"
+    primary = project.get_primary_analyte() or request.primaryAnalyte or "buffy_coat"
     is_cfdna = str(primary).lower() in {"cfdna", "plasma_cfdna", "cf_dna"}
 
     context: Dict[str, Any] = {

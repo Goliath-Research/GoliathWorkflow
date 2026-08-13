@@ -35,13 +35,17 @@ AS $$
 DECLARE
   v_ctx jsonb := COALESCE(p_context_json, '{}'::jsonb);
   v_set_key text;
+  v_analyte text;
   v_id bigint;
 BEGIN
   /*
     ACTION templates bind ${var.executionScopeId}. Portal SQL starts often skip
     Python finalize_instance_context, so bake a scope key here when absent.
   */
-  v_set_key := NULLIF(BTRIM(COALESCE(v_ctx->>'executionScopeId', v_ctx->>'hyperparamSetId')), '');
+  v_set_key := COALESCE(
+    NULLIF(BTRIM(v_ctx->>'executionScopeId'), ''),
+    NULLIF(BTRIM(v_ctx->>'hyperparamSetId'), '')
+  );
   IF v_set_key IS NULL THEN
     v_set_key := LEFT(encode(wf.wf_sha256_text(v_ctx::text), 'hex'), 32);
     v_ctx := v_ctx || jsonb_build_object(
@@ -49,11 +53,34 @@ BEGIN
       'hyperparamSetId', v_set_key
     );
   ELSE
-    IF v_ctx->>'executionScopeId' IS NULL THEN
+    IF NULLIF(BTRIM(v_ctx->>'executionScopeId'), '') IS NULL THEN
       v_ctx := v_ctx || jsonb_build_object('executionScopeId', v_set_key);
     END IF;
-    IF v_ctx->>'hyperparamSetId' IS NULL THEN
+    IF NULLIF(BTRIM(v_ctx->>'hyperparamSetId'), '') IS NULL THEN
       v_ctx := v_ctx || jsonb_build_object('hyperparamSetId', v_set_key);
+    END IF;
+  END IF;
+
+  IF to_regclass('cfg.study') IS NOT NULL THEN
+    SELECT COALESCE(an.name, s.document_json #>> '{regulatory,primary_analyte}')
+      INTO v_analyte
+    FROM cfg.study s
+    LEFT JOIN cfg.analyte an ON an.id = s.default_analyte_id
+    WHERE s.status = 'published'
+      AND (
+        (s.study_id IS NOT NULL AND position(s.study_id in coalesce(v_ctx->>'projectPath', '')) > 0)
+        OR (
+          (s.document_json->>'output_base') IS NOT NULL
+          AND position(s.document_json->>'output_base' in coalesce(v_ctx->>'projectPath', '')) = 1
+        )
+      )
+    ORDER BY s.id DESC
+    LIMIT 1;
+    IF v_analyte IS NOT NULL AND btrim(v_analyte) <> '' THEN
+      v_ctx := v_ctx || jsonb_build_object(
+        'primaryAnalyte', v_analyte,
+        'isCfdna', lower(v_analyte) IN ('cfdna', 'cf_dna', 'plasma_cfdna', 'plasma', 'cell_free_dna')
+      );
     END IF;
   END IF;
 

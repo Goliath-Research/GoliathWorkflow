@@ -173,7 +173,7 @@ def test_sample_prep_still_compiles():
     assert wf.variable_schemas.get("qcPass") == "schemas/vars/bool.schema.json"
     assert wf.variable_schemas.get("remediateAlignment") == "schemas/vars/bool.schema.json"
     assert wf.variable_schemas.get("extractionQcPass") == "schemas/vars/bool.schema.json"
-    assert "primaryAnalyte" in result.context_json
+    assert "primaryAnalyte" not in result.context_json
     binding_vars = {b.var_name for b in wf.output_bindings}
     assert "qcPass" in binding_vars
     assert "extractionQcPass" in binding_vars

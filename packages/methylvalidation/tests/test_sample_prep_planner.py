@@ -274,6 +274,24 @@ def test_cfdna_primary_analyte(tmp_path: Path) -> None:
     assert ctx["isCfdna"] is True
 
 
+def test_project_analyte_overrides_request_cfdna(tmp_path: Path) -> None:
+    project_path = _write_project(tmp_path)
+    data = json.loads(project_path.read_text(encoding="utf-8"))
+    data["regulatory"] = {"primary_analyte": "buffy_coat"}
+    project_path.write_text(json.dumps(data), encoding="utf-8")
+    ctx = _plan(
+        tmp_path,
+        {
+            "projectPath": str(project_path),
+            "samples": [{"sampleId": "S1"}],
+            "fastqStorage": S3_STORAGE,
+            "primaryAnalyte": "cfdna",
+        },
+    )
+    assert ctx["primaryAnalyte"] == "buffy_coat"
+    assert ctx["isCfdna"] is False
+
+
 H5_STORAGE = {
     "type": "s3",
     "bucket": "methyl-archive",

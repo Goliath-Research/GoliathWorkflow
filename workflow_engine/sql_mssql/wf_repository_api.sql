@@ -57,11 +57,54 @@ BEGIN
     END
     ELSE
     BEGIN
-        /* Keep legacy alias in sync when only one side is present. */
-        IF JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.executionScopeId') IS NULL
+        /* Keep legacy alias in sync when only one side is present (blank = missing). */
+        IF NULLIF(LTRIM(RTRIM(JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.executionScopeId'))), N'') IS NULL
             SET @ctx = CAST(JSON_MODIFY(CAST(@ctx AS nvarchar(max)), N'$.executionScopeId', @set_key) AS json);
-        IF JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.hyperparamSetId') IS NULL
+        IF NULLIF(LTRIM(RTRIM(JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.hyperparamSetId'))), N'') IS NULL
             SET @ctx = CAST(JSON_MODIFY(CAST(@ctx AS nvarchar(max)), N'$.hyperparamSetId', @set_key) AS json);
+    END
+
+    /*
+      Study analyte (cfg.study.default_analyte / document regulatory) wins over
+      DomainProgram fixture seeds (historically primaryAnalyte=cfdna).
+    */
+    DECLARE @project_path nvarchar(512) = JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.projectPath');
+    DECLARE @analyte nvarchar(128) = NULL;
+    IF @project_path IS NOT NULL AND OBJECT_ID(N'cfg.study', N'U') IS NOT NULL
+    BEGIN
+        SELECT TOP 1
+            @analyte = COALESCE(
+                an.name,
+                JSON_VALUE(CAST(s.document_json AS nvarchar(max)), N'$.regulatory.primary_analyte')
+            )
+        FROM cfg.study AS s
+        LEFT JOIN cfg.analyte AS an ON an.id = s.default_analyte_id
+        WHERE s.status = 'published'
+          AND (
+                (s.study_id IS NOT NULL AND CHARINDEX(s.study_id, @project_path) > 0)
+             OR (
+                    JSON_VALUE(CAST(s.document_json AS nvarchar(max)), N'$.output_base') IS NOT NULL
+                AND CHARINDEX(
+                        JSON_VALUE(CAST(s.document_json AS nvarchar(max)), N'$.output_base'),
+                        @project_path
+                    ) = 1
+                )
+          )
+        ORDER BY s.id DESC;
+    END
+    IF @analyte IS NOT NULL AND LTRIM(RTRIM(@analyte)) <> N''
+    BEGIN
+        SET @ctx = CAST(JSON_MODIFY(CAST(@ctx AS nvarchar(max)), N'$.primaryAnalyte', @analyte) AS json);
+        SET @ctx = CAST(
+            JSON_MODIFY(
+                CAST(@ctx AS nvarchar(max)),
+                N'$.isCfdna',
+                CAST(
+                    CASE WHEN LOWER(@analyte) IN (N'cfdna', N'cf_dna', N'plasma_cfdna', N'plasma', N'cell_free_dna')
+                         THEN 1 ELSE 0 END AS bit
+                )
+            ) AS json
+        );
     END
 
     DECLARE @created TABLE (id bigint);

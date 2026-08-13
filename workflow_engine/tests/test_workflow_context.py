@@ -12,6 +12,7 @@ if str(_DOMAIN) not in sys.path:
     sys.path.insert(0, str(_DOMAIN))
 
 from workflow_context import (  # noqa: E402
+    apply_study_analyte,
     build_resolved_config_scope_vars,
     compute_execution_scope_id,
     enrich_instance_context,
@@ -151,6 +152,50 @@ def test_mssql_create_instance_sql_bakes_execution_scope_id() -> None:
     assert "$.executionScopeId" in create
     assert "JSON_MODIFY" in create
     assert "wf_apply_execution_scope" in create
+    # Empty executionScopeId must not block hyperparamSetId (per-field NULLIF).
+    assert "NULLIF(LTRIM(RTRIM(JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.executionScopeId'))), N'')" in create
+    assert "NULLIF(LTRIM(RTRIM(JSON_VALUE(CAST(@ctx AS nvarchar(max)), N'$.hyperparamSetId'))), N'')" in create
+
+
+def test_pg_create_instance_sql_falls_back_from_blank_execution_scope_id() -> None:
+    sql = (
+        Path(__file__).resolve().parents[1]
+        / "sql_pg"
+        / "02_repository_api.sql"
+    ).read_text(encoding="utf-8")
+    create = sql.split("CREATE OR REPLACE FUNCTION wf.wf_repo_create_workflow_instance(", 1)[1]
+    create = create.split("CREATE OR REPLACE FUNCTION", 1)[0]
+    assert "NULLIF(BTRIM(v_ctx->>'executionScopeId'), '')" in create
+    assert "NULLIF(BTRIM(v_ctx->>'hyperparamSetId'), '')" in create
+    assert "NULLIF(BTRIM(COALESCE(v_ctx->>'executionScopeId'" not in create
+
+
+def test_apply_study_analyte_overrides_cfdna_seed() -> None:
+    class _Proj:
+        regulatory = {"primary_analyte": "buffy_coat"}
+
+        def get_primary_analyte(self):
+            return "buffy_coat"
+
+    out = apply_study_analyte(
+        {"primaryAnalyte": "cfdna", "isCfdna": True, "regulatory": {"primary_analyte": "buffy_coat"}},
+        _Proj(),
+    )
+    assert out["primaryAnalyte"] == "buffy_coat"
+    assert out["isCfdna"] is False
+
+
+def test_mssql_create_instance_sql_overlays_study_analyte() -> None:
+    sql = (
+        Path(__file__).resolve().parents[1]
+        / "sql_mssql"
+        / "wf_repository_api.sql"
+    ).read_text(encoding="utf-8")
+    create = sql.split("CREATE OR ALTER PROCEDURE wf.wf_repo_create_workflow_instance", 1)[1]
+    create = create.split("CREATE OR ALTER PROCEDURE", 1)[0]
+    assert "default_analyte_id" in create
+    assert "$.primaryAnalyte" in create
+    assert "$.isCfdna" in create
 
 
 def test_finalize_instance_context_bakes_execution_scope_id():

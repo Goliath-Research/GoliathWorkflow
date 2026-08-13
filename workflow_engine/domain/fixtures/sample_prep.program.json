@@ -4,7 +4,6 @@
   "description": "Per-sample upstream preprocessing with alignment QC screening, trim remediation, extraction QC, and sample archive. Gate booleans are typed DomainProgram variables (catalog scope_bindings write them; FOREACH+IF remains the control flow \u2014 hybrid typed assign, not science-in-assign).",
   "projectPath": "${var.projectPath}",
   "variables": {
-    "primaryAnalyte": "cfdna",
     "qcPass": {
       "schemaRef": "schemas/vars/bool.schema.json",
       "description": "Alignment QC overall_pass from sample.methyl_qc (catalog binding $.guardrails.overall_pass)"

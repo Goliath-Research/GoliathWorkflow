@@ -4,7 +4,6 @@
   "description": "epi-GBS / reduced-representation methylation SamplePrep: optional barcode demultiplex, generic Docker align (not Parabricks), then methyl QC \u2192 extract \u2192 archive. Use libraryProtocol=epi_gbs. WGBS stays on SamplePrepPipeline (Parabricks).",
   "projectPath": "${var.projectPath}",
   "variables": {
-    "primaryAnalyte": "cfdna",
     "qcPass": {
       "schemaRef": "schemas/vars/bool.schema.json",
       "description": "Alignment QC overall_pass from sample.methyl_qc (catalog binding $.guardrails.overall_pass)"

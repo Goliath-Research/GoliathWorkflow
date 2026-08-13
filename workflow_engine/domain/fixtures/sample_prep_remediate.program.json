@@ -4,7 +4,6 @@
   "description": "Batch remediation: re-download FASTQs, R2 front-trim, realign, and final QC before extract. Typed gate variables document the QC bus (catalog bindings populate them).",
   "projectPath": "${var.projectPath}",
   "variables": {
-    "primaryAnalyte": "cfdna",
     "qcPass": {
       "schemaRef": "schemas/vars/bool.schema.json",
       "description": "Alignment QC overall_pass from sample.methyl_qc"
