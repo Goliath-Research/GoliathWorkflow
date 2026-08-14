@@ -1,13 +1,13 @@
 # Alignment engines
 
-MethylPipeline SamplePrep supports three `alignmentMode` values. This page is the operator matrix for choosing an engine; science contracts for the Mojo cutover live in the sibling [methylGrapher-mojo](https://github.com/Goliath-Research/methylGrapher-mojo) repository.
+MethylPipeline SamplePrep supports three `alignmentMode` values. This page is the operator matrix for choosing an engine; science contracts for the Mojo cutover live in the sibling [mojo-align](https://dev.azure.com/EpiMethyl/Development/_git/mojo-align) repository (`fq2bam-meth/`, `giraffe/`, `methylgrapher/`). Legacy `methylGrapher-mojo` remains a rollback checkout only.
 
 ## Mode matrix
 
 | `alignmentMode` | Primary action(s) | Default engine | Explicit alternative | Notes |
 |-----------------|-------------------|----------------|----------------------|-------|
 | `linear` | `sample.parabricks_fq2bam` | Clara Parabricks `fq2bam_meth` (NVIDIA) | **MojoFq2bamMeth** when `actionConfig.parabricks.engine=mojo` | Portable NVIDIA / AMD / CPU; Clara remains an explicit config choice |
-| `pangenome` | `sample.parabricks_giraffe` | Clara Parabricks giraffe → BAM | — | Stock (non-bisulfite) HPRC-style path; **not** replaced by methylGrapher-mojo |
+| `pangenome` | `sample.parabricks_giraffe` | Clara Parabricks giraffe → BAM | — | Stock (non-bisulfite) HPRC-style path; **not** replaced by mojo-align Giraffe |
 | `pangenome_wgbs` | `sample.methylgrapher_wgbs_align` → extract | Native Mojo Giraffe (`align_engine=gpu_giraffe` / `mojo_giraffe`) on NVIDIA CUDA or AMD HIP | `cpu_vg` (`vg giraffe`) only when GPU vendor is unknown or for parity/rollback | Graph-aware GAF → MethylCall; Parabricks giraffe is **not** a GAF substitute |
 
 ## Configuration surface
@@ -34,18 +34,18 @@ Alignment QC shares guardrails across modes and adds tool-family checks:
 
 See [Sample prep and QC](03-sample-prep-and-qc.md), [Sample preparation flow](../implementation/sample-preparation-flow.md), and [methylalignmentqc USAGE](../../packages/methylalignmentqc/docs/USAGE.md).
 
-## Sibling science contracts (methylGrapher-mojo)
+## Sibling science contracts (mojo-align)
 
 | Document | Role |
 |----------|------|
-| `docs/GIRAFFE_SPEC.md` | Native Mojo Giraffe GBZ → GAF contract for `pangenome_wgbs` |
-| `docs/LINEAR_FQ2BAM_SPEC.md` | MojoFq2bamMeth BAM + QC JSON contract for `linear` + `engine=mojo` |
-| `docs/PHASE0_GH200_ALIGN.md` | Why Parabricks `pbrun giraffe` cannot emit science GAF |
-| `docs/BENCHMARK_GIRAFFE.md` | Operator wall-time / parity gates vs `vg` |
-| `docs/BENCHMARK_FQ2BAM_METH.md` | Clara vs Mojo linear bakeoff gates |
-| `docs/ROCM_GIRAFFE_GATES.md` | AMD ROCm image and host gates |
+| `giraffe/docs/GIRAFFE_SPEC.md` | Native Mojo Giraffe GBZ → GAF contract for `pangenome_wgbs` |
+| `fq2bam-meth/docs/LINEAR_FQ2BAM_SPEC.md` | MojoFq2bamMeth BAM + QC JSON contract for `linear` + `engine=mojo` |
+| `giraffe/docs/PHASE0_GH200_ALIGN.md` | Why Parabricks `pbrun giraffe` cannot emit science GAF |
+| `giraffe/docs/BENCHMARK_GIRAFFE.md` | Operator wall-time / parity gates vs `vg` |
+| `fq2bam-meth/docs/BENCHMARK_FQ2BAM_METH.md` | Clara vs Mojo linear bakeoff gates |
+| `giraffe/docs/ROCM_GIRAFFE_GATES.md` | AMD ROCm image and host gates |
 
-Clone path on developer hosts is typically alongside this repo (`../methylGrapher-mojo`). Docker images are built from that tree via `scripts/build_methylgrapher_mojo_image.sh` and documented under [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md).
+Clone path on developer hosts is typically alongside this repo (`../mojo-align`). Set `METHYLGRAPHER_MOJO_ROOT` to that checkout (or leave unset to auto-detect). Docker images are built via `scripts/build_methylgrapher_mojo_image.sh` and documented under [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md). The in-container install prefix remains `/opt/methylgrapher-mojo` (not a source-repo name).
 
 ## Related
 

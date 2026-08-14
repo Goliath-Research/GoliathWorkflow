@@ -15,7 +15,8 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]  # mojo-align
+sys.path.insert(0, str(ROOT / "methylgrapher"))
 sys.path.insert(0, str(ROOT))
 
 from engine.giraffe_gbz_helper import ensure_segment_cache, probe_gbz  # noqa: E402

@@ -34,7 +34,7 @@ todos:
 
 ## Defaults (locked)
 
-- **Primary code**: `/home/ubuntu/methylGrapher-mojo` (separate repo). MethylPipeline only gets contracts, dual-ship hooks, and this plan.
+- **Primary code**: `/home/ubuntu/mojo-align` (package monorepo: `gpu-common/`, `fq2bam-meth/`, `giraffe/`, `methylgrapher/`). Legacy `/home/ubuntu/methylGrapher-mojo` is rollback-only. MethylPipeline gets contracts, dual-ship hooks, and this plan; the in-container prefix remains `/opt/methylgrapher-mojo`.
 - **Slice order**: **MethylCall-first** against existing Python GAFs under `/work/samples/*/pangenome_wgbs/`, then **MergeCpG**, then **Align**, then image dual-ship. PrepareGenome assets already on QNAP are reused.
 - **Toolchain**: Pixi + Modular `modular` package (Mojo 1.0) on this aarch64 host. Python interop for subprocess / GFA bridge acceptable until native Mojo I/O stabilizes.
 - **Architecture**: Mojo 1.0 CLI + patched Python `engine/` (GAF header skip, single GFA worker) + native Mojo `mcall_core` helpers; dual-ship via `engine: python|mojo` and image tag `:1.70-mojo`.

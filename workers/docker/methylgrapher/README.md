@@ -11,7 +11,7 @@ Canonical SamplePrep contract: [`docs/implementation/sample-preparation-flow.md`
 | `mojo` (**canonical**) | `epimethyl/methylgrapher:1.70-mojo-cuda` or `:1.70-mojo-rocm` | native-Mojo Align / MethylCall / MergeCpG; same userspace binary; host runtime + tag select NVIDIA vs AMD |
 | `python` (dev/parity rollback) | `epimethyl/methylgrapher:1.70` | Stock methylGrapher 0.2.0 + GAF-header patch |
 
-Build Mojo image: `scripts/build_methylgrapher_mojo_image.sh` (requires `METHYLGRAPHER_MOJO_ROOT` and a prior vg bake from `build_methylgrapher_image.sh`). Set `METHYLGRAPHER_MOJO_GPU_VARIANT=cuda|rocm` for the twin tags. Plan: [`docs/plans/methylgrapher-mojo-cutover.plan.md`](../../../docs/plans/methylgrapher-mojo-cutover.plan.md).
+Build Mojo image: `scripts/build_methylgrapher_mojo_image.sh` (requires `METHYLGRAPHER_MOJO_ROOT` pointing at **mojo-align**, or auto-detect of sibling `../mojo-align`, and a prior vg bake from `build_methylgrapher_image.sh`). Set `METHYLGRAPHER_MOJO_GPU_VARIANT=cuda|rocm` for the twin tags. Plan: [`docs/plans/methylgrapher-mojo-cutover.plan.md`](../../../docs/plans/methylgrapher-mojo-cutover.plan.md).
 
 ## Compute model (native-Mojo GPU)
 
@@ -32,7 +32,7 @@ Pin `actionConfig.methylgrapher_wgbs.align_engine=gpu_giraffe|mojo_giraffe` and 
 
 On 64 KB-page ARM64 (Grace / GH200) any vg-assisted QC BAM path needs `jemalloc=off` vg baked into the image.
 
-**Code default flag:** the sibling `methylGrapher-mojo` launcher may still default `engine=python` / `align_engine=cpu_vg` for dual-ship rollback. Production site/profile config should pin Mojo GPU as above.
+**Code default flag:** the sibling `mojo-align` launcher may still default `align_engine=cpu_vg` for dual-ship rollback until Buffy ≤2 h + DS20M gates pass. Production site/profile config should pin Mojo GPU as above. Legacy `methylGrapher-mojo` is rollback-only.
 
 ## Production model (do not compile on deploy)
 
@@ -41,7 +41,7 @@ On 64 KB-page ARM64 (Grace / GH200) any vg-assisted QC BAM path needs `jemalloc=
 | **CI / image refresh** | `scripts/build_methylgrapher_image.sh` (vg bake) then `scripts/build_methylgrapher_mojo_image.sh` (Mojo stage + CUDA/ROCm twin). |
 | **Cluster deploy** | Set `METHYL_METHYLGRAPHER_IMAGE` (or site `actionConfig.methylgrapher_wgbs.image`), then `scripts/ensure_methylgrapher_image.sh` → **pull or load only**. |
 
-Rebuild the image only when **vg**, **methylGrapher-mojo**, or this Dockerfile changes — not on every study or release promote.
+Rebuild the image only when **vg**, **mojo-align**, or this Dockerfile changes — not on every study or release promote.
 
 ## Why arm64 builds vg from source
 

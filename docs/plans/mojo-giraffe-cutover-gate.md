@@ -20,9 +20,9 @@ Companion to [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md),
 | Gapless / local extend from dense pack | **PASS** toy + known-mapped Buffy C2T reads (multi-node walk follow-on) |
 | Production dense C2T pack (no-translation) | **PASS** 144 993 543 nodes under `/work/cache/mojo_segments/` |
 | Production dense G2A pack | **PASS** 144 993 543 nodes |
-| Buffy dual-map baseline (CPU `vg giraffe`) | **~6.2 h / sample** (instance 59 via `gpu_giraffe+vg_autoscale`) |
-| DS20M / Buffy-subset `graph.methyl` vs `cpu_vg` | **PENDING** operator |
-| Full Buffy dual-map Align ≤ ~2 h on GH200 | **IN PROGRESS** — measuring on `192-222-50-58` (task 896); see [`full-mojo-pangenome-wgbs-gates.md`](full-mojo-pangenome-wgbs-gates.md) |
+| Buffy-subset seed+extend | oracle `quartet_map` 13/13; production = stream_map | **PASS** stream_map 13/13 (2026-08-14; emit-time named-coords) |
+| DS20M / Buffy-subset `graph.methyl` vs `cpu_vg` | **PASS** 20k-line subset: python vs mojo MethylCall identical |
+| Full Buffy dual-map Align ≤ ~2 h on GH200 | **NOT MET (2026-08-14)** — Mojo path runs (linear_fastq + buffered GAF + emit-time named-coords); throughput still ≫2 h; dual-map crashed early (`R2 ended early`). Do **not** flip `METHYLGRAPHER_ALIGN_ENGINE` default. |
 | Site “Mojo map done” claim | **actionConfig** (not worker.env); sisters load NFS tar then restore caps |
 
 ## Cutover knobs (`pangenome_wgbs` only)

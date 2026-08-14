@@ -22,7 +22,8 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]  # mojo-align
+sys.path.insert(0, str(ROOT / "methylgrapher"))
 sys.path.insert(0, str(ROOT))
 
 from engine.segment_pack import (  # noqa: E402

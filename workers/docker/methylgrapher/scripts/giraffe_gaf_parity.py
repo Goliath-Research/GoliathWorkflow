@@ -7,7 +7,9 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]  # mojo-align
+if str(ROOT / "methylgrapher") not in sys.path:
+    sys.path.insert(0, str(ROOT / "methylgrapher"))
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

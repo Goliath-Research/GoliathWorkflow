@@ -1078,7 +1078,7 @@ def resolve_grch38_offsets_dir(
             return cand.resolve()
     raise RuntimeError(
         "Mojo QC SAM requires grch38-dense-v1 offsets "
-        "(run methylGrapher-mojo/scripts/build_grch38_offsets.py). "
+        "(run mojo-align/giraffe/scripts/build_grch38_offsets.py). "
         f"Searched: {', '.join(str(c) for c in candidates)}"
     )
 
@@ -1162,27 +1162,56 @@ def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
 
 
 def _mojo_named_coords_paths() -> Tuple[Path, Path]:
-    """Return (translate_script, pythonpath_root) for GBZ→GFA GAF rewrite."""
+    """Return (translate_script, pythonpath_root) for GBZ→GFA GAF rewrite.
+
+    Prefers mojo-align (flat staged tree or package layout). Legacy
+    methylGrapher-mojo remains last-resort rollback. In-container install
+    path stays ``/opt/methylgrapher-mojo``.
+    """
     overlay = Path(
         os.environ.get(
             "METHYLGRAPHER_MOJO_OVERLAY",
             "/work/epimethyl/images/methylgrapher-mojo-overlay",
         )
     )
-    candidates = [
-        Path("/home/ubuntu/methylGrapher-mojo"),
-        overlay,
-        Path("/opt/methylgrapher-mojo"),
-        Path("/work/epimethyl/images/mojo_named_coords"),
+    # Each entry: (script, PYTHONPATH root that contains ``engine.named_coords``).
+    candidates: List[Tuple[Path, Path]] = [
+        (
+            Path("/home/ubuntu/mojo-align/_flat_image/scripts/translate_mojo_gaf_named_coords.py"),
+            Path("/home/ubuntu/mojo-align/_flat_image"),
+        ),
+        (
+            Path("/home/ubuntu/mojo-align/giraffe/scripts/translate_mojo_gaf_named_coords.py"),
+            Path("/home/ubuntu/mojo-align/methylgrapher"),
+        ),
+        (overlay / "scripts" / "translate_mojo_gaf_named_coords.py", overlay),
+        (
+            Path("/opt/methylgrapher-mojo/scripts/translate_mojo_gaf_named_coords.py"),
+            Path("/opt/methylgrapher-mojo"),
+        ),
+        (
+            Path(
+                "/work/epimethyl/images/mojo_named_coords/scripts/"
+                "translate_mojo_gaf_named_coords.py"
+            ),
+            Path("/work/epimethyl/images/mojo_named_coords"),
+        ),
+        (
+            Path("/home/ubuntu/methylGrapher-mojo/scripts/translate_mojo_gaf_named_coords.py"),
+            Path("/home/ubuntu/methylGrapher-mojo"),
+        ),
     ]
-    for root in candidates:
-        script = root / "scripts" / "translate_mojo_gaf_named_coords.py"
-        eng = root / "engine" / "named_coords.py"
-        if script.is_file() and eng.is_file():
-            return script, root
+    for script, py_root in candidates:
+        if not script.is_file():
+            continue
+        if (py_root / "engine" / "named_coords.py").is_file():
+            return script, py_root
+        # Flat overlay without engine/ — accept if giraffe/python is on the script tree
+        if (script.parent.parent / "engine" / "named_coords.py").is_file():
+            return script, script.parent.parent
     raise FileNotFoundError(
         "translate_mojo_gaf_named_coords.py + engine/named_coords.py not found "
-        f"under {[str(c) for c in candidates]}"
+        f"under {[str(c[1]) for c in candidates]}"
     )
 
 

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Build epimethyl/methylgrapher:1.70-mojo from mojo-align (or legacy methylGrapher-mojo).
+# Build epimethyl/methylgrapher:1.70-mojo from mojo-align (preferred) or
+# legacy methylGrapher-mojo (rollback only).
 #
-# Stages from METHYLGRAPHER_MOJO_ROOT (default: sibling ../mojo-align,
-# ../methylGrapher-mojo, or /home/ubuntu/{mojo-align,methylGrapher-mojo}):
+# METHYLGRAPHER_MOJO_ROOT should point at the mojo-align checkout. When unset,
+# auto-detect prefers sibling ../mojo-align, then /home/ubuntu/mojo-align, then
+# the legacy methylGrapher-mojo tree.
+#
+# Stages into the image under /opt/methylgrapher-mojo (install prefix — not the
+# source repo name):
 #   - engine/          patched Python package
 #   - src/             native Mojo CLI + MethylCall hot path
 #   - mojo-env/        trimmed Mojo 1.0 runtime from the repo pixi env
