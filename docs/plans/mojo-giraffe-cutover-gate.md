@@ -22,7 +22,7 @@ Companion to [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md),
 | Production dense G2A pack | **PASS** 144 993 543 nodes |
 | Buffy-subset seed+extend | oracle `quartet_map` 13/13; production = stream_map | **PASS** stream_map 13/13 (2026-08-14; emit-time named-coords) |
 | DS20M / Buffy-subset `graph.methyl` vs `cpu_vg` | **PASS** 20k-line subset: python vs mojo MethylCall identical |
-| Full Buffy dual-map Align ≤ ~2 h on GH200 | **NOT MET (2026-08-14)** — Mojo path runs (linear_fastq + buffered GAF + emit-time named-coords); throughput still ≫2 h; dual-map crashed early (`R2 ended early`). Do **not** flip `METHYLGRAPHER_ALIGN_ENGINE` default. |
+| Full Buffy dual-map Align ≤ ~2 h on GH200 | **NOT MET (2026-08-14 retime)** — Mojo-native GAF emit + emit∥FASTQ overlap: stage `gaf_emit` ~**0.006 s**/8192 (was ~0.6–0.9 s); ~**78k pairs/s** ⇒ ~2.7 h/graph, ~5.4 h dual. PE convert `.n_reads` + pigz fail-loud. Do **not** flip `METHYLGRAPHER_ALIGN_ENGINE` default. |
 | Site “Mojo map done” claim | **actionConfig** (not worker.env); sisters load NFS tar then restore caps |
 
 ## Cutover knobs (`pangenome_wgbs` only)
