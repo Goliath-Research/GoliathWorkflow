@@ -67,6 +67,7 @@ log() { printf '[compare-extract-methyldackel] %s\n' "$*"; }
 
 log "running MethylDackel extract on $BAM (threads=$THREADS)"
 "$MD_BIN" extract \
+  -@ "$THREADS" \
   -o "$PREFIX" \
   -q 30 \
   -p 20 \
