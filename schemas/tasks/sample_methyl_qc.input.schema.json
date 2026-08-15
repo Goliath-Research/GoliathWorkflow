@@ -90,6 +90,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "alignmentMode": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Science alignment mode from instance context (linear|pangenome|pangenome_wgbs). Required when sample dirs contain ambiguous metrics families; binds from ${var.alignmentMode}.",
+      "title": "Alignmentmode"
+    },
     "alignmentPass": {
       "anyOf": [
         {

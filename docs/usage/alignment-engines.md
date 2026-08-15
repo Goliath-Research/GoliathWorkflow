@@ -49,6 +49,7 @@ Clone path on developer hosts is typically alongside this repo (`../mojo-align`)
 
 ## Related
 
+- [SamplePrep tooling (cross-repo)](../architecture/sample-prep-tooling.md)
 - [Mojo multi-GPU dual align](../architecture/mojo-multi-gpu-dual-align.md)
 - [Mojo fq2bam parity](../reference/mojo-fq2bam-meth-parity.md)
 - [Action parameter contract](../reference/action-parameter-contract.md)

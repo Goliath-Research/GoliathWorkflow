@@ -30,7 +30,13 @@ from .cycle_quality_screening import (
     screen_cycle_quality,
 )
 from .fragmentomics import apply_fragmentomics_to_payload
-from .metrics_family import MetricsFamily, detect_metrics_family
+from .metrics_family import (
+    MetricsFamily,
+    detect_metrics_family,
+    is_mojo_linear_metrics_payload,
+    peek_linear_metrics_json,
+)
+from .mojo_linear_qc import build_mojo_linear_guardrail_report
 from .qc_write_context import QcWriteContext
 from .wgbs_pangenome_qc import build_wgbs_pangenome_guardrail_report
 from .wgbs_parabricks_qc import apply_optional_guardrails, check_wgbs_guardrails
@@ -562,6 +568,18 @@ def build_sample_qc_v2_dict(
                 f"{sample_dir / f'{sample_name}.qc-metrics.tar'}"
             )
         payload, metrics_source = parabricks_loaded
+    elif family == MetricsFamily.MOJO_LINEAR:
+        # MojoFq2bamMeth JSON is Picard-shaped but incomplete vs Clara;
+        # do not require ParabricksMetricsPayload validation.
+        raw_mojo = peek_linear_metrics_json(sample_dir, sample_name)
+        if raw_mojo is None or not is_mojo_linear_metrics_payload(raw_mojo):
+            raise RuntimeError(
+                f"Missing MojoFq2bamMeth metrics JSON for {sample_name}: "
+                f"expected {sample_dir / f'{sample_name}.json'} with "
+                f"metrics_source=samtools+placeholders or engine=mojo_fq2bam_meth"
+            )
+        payload = dict(raw_mojo)
+        metrics_source = sample_dir / f"{sample_name}.json"
     else:
         # methylGrapher WGBS: never use stale linear Picard tables unless this
         # Align run explicitly recorded collectmultiplemetrics success.
@@ -619,7 +637,43 @@ def build_sample_qc_v2_dict(
             flagstat_error = f"BAM missing or empty for flagstat: {bam_path}"
 
     try:
-        if family == MetricsFamily.PARABRICKS:
+        if family == MetricsFamily.MOJO_LINEAR:
+            payload["guardrails"] = build_mojo_linear_guardrail_report(
+                payload, core_guardrails=core_guardrails
+            )
+            payload["guardrails"]["metrics_family"] = MetricsFamily.MOJO_LINEAR.value
+            # Drop incomplete Picard-shaped placeholders before export schema validate.
+            qy = payload.get("quality_yield") or {}
+            total_reads = int(qy.get("total_reads") or 0)
+            pf_reads = int(qy.get("pf_reads") or 0)
+            pf_bases = int(qy.get("pf_bases") or 0)
+            pf_q30 = int(qy.get("pf_q30_bases") or 0)
+            payload["quality_yield"] = {
+                "total_reads": total_reads,
+                "pf_reads": pf_reads,
+                "total_bases": int(qy.get("total_bases") or pf_bases),
+                "pf_bases": pf_bases,
+                "q20_bases": int(qy.get("q20_bases") or pf_q30),
+                "pf_q20_bases": int(qy.get("pf_q20_bases") or pf_q30),
+                "q30_bases": int(qy.get("q30_bases") or pf_q30),
+                "pf_q30_bases": pf_q30,
+                "q20_equivalent_yield": int(qy.get("q20_equivalent_yield") or pf_bases),
+                "pf_q20_equivalent_yield": int(qy.get("pf_q20_equivalent_yield") or pf_bases),
+            }
+            for drop_key in (
+                "engine",
+                "mapper",
+                "device",
+                "metrics_source",
+                "placeholder_fields",
+                "alignment_summary",
+                "mean_quality_by_cycle",
+                "gc_bias_summary",
+                "insert_size_metrics",
+                "pre_adapter_summaries",
+            ):
+                payload.pop(drop_key, None)
+        elif family == MetricsFamily.PARABRICKS:
             if str(metrics_source).endswith(".json"):
                 payload["guardrails"] = check_wgbs_guardrails(
                     str(metrics_source), print_report=False, core_guardrails=core_guardrails
@@ -717,7 +771,7 @@ def build_sample_qc_v2_dict(
                 error=flagstat_error,
             )
 
-    # Fragmentomics / bisulfite proxies need Parabricks insert / pre-adapter tables
+    # Fragmentomics / bisulfite proxies need real Parabricks insert / pre-adapter tables
     wgbs_picard = (
         family == MetricsFamily.METHYLGRAPHER_WGBS
         and bool((provenance or {}).get("collectmultiplemetrics"))
@@ -727,13 +781,17 @@ def build_sample_qc_v2_dict(
         apply_fragmentomics_to_payload(payload, fragmentomics)
         apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)
     else:
-        # Still allow real conversion sidecars when present
+        # Mojo linear placeholders and WGBS without Picard: conversion sidecars only
         apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)
 
     history_path = output_path_for_history or (sample_dir / f"{sample_name}.json")
+    # Constant/placeholder cycle series must not drive REALIGN_TRIM dispositions.
+    screening_cfg = cycle_screening
+    if family == MetricsFamily.MOJO_LINEAR and cycle_screening is not None:
+        screening_cfg = cycle_screening.model_copy(update={"enabled": False})
     _apply_screening_and_audit(
         payload,
-        cycle_screening=cycle_screening,
+        cycle_screening=screening_cfg,
         optional_guardrails=optional_guardrails,
         write_ctx=write_context,
         output_path=history_path,

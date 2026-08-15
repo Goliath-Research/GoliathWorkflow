@@ -31,7 +31,9 @@ Useful flags:
 
 | Mode | Family | Required artifacts | Family-specific guardrails |
 |------|--------|--------------------|----------------------------|
-| `linear` / `pangenome` | Parabricks | `{id}.json` or `qc-metrics.tar` with `quality_yield`; dedup metrics | `wgbs_parabricks_qc.py` + cycle screening (+ fragmentomics when enabled) |
+| `linear` / `pangenome` (Clara) | Parabricks | `{id}.json` or `qc-metrics.tar` with `quality_yield`; dedup metrics | `wgbs_parabricks_qc.py` + cycle screening (+ fragmentomics when enabled) |
+| `linear` (MojoFq2bamMeth) | Mojo linear | `{id}.json` with `metrics_source=samtools+placeholders` | `mojo_linear_qc.py` — PF%/Q30/mapped only; placeholders not Clara-equivalent hard fails |
+| `pangenome_wgbs` | methylGrapher WGBS | `{id}.alignment_metrics.json` (+ optional Picard when `collectmultiplemetrics`) | `wgbs_pangenome_qc.py` |
 | `pangenome_wgbs` | methylGrapher | `{id}.alignment_metrics.json` (`tool=methylGrapher`), GAF, QC BAM, dedup | `wgbs_pangenome_qc.py` (provenance / GAF / BAM / mapped rate); Parabricks core only if provenance `collectmultiplemetrics: true` |
 
 **Shared** across modes: Picard dedup → `summary_stats`; optional duplication/PF; alignment-derived rates; optional `samtools flagstat`; bisulfite sidecar; `overall_pass` = AND of evaluated details.

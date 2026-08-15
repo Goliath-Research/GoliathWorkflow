@@ -255,6 +255,94 @@ def test_build_qc_wgbs_picard_enrichment_when_flagged(tmp_path: Path):
     }
 
 
+def test_detect_ambiguous_artifacts_require_alignment_mode(tmp_path: Path):
+    d = _setup_wgbs_sample(tmp_path, "s1", with_linear_tar=True)
+    with pytest.raises(RuntimeError, match="Ambiguous alignment QC"):
+        detect_metrics_family(d, "s1", alignment_mode=None, parabricks_available=True)
+
+
+def test_detect_mojo_linear_family(tmp_path: Path):
+    sample = "mojo1"
+    d = tmp_path / sample
+    d.mkdir()
+    _write_text(d / f"{sample}.deduplicate_metrics.txt", _dedup_metrics())
+    (d / f"{sample}.bam").write_bytes(b"BAM\x01fake")
+    mojo_json = {
+        "sample_id": sample,
+        "engine": "mojo_fq2bam_meth",
+        "metrics_source": "samtools+placeholders",
+        "placeholder_fields": ["gc_bias_summary"],
+        "quality_yield": {
+            "total_reads": 1000,
+            "pf_reads": 950,
+            "pf_bases": 100000,
+            "pf_q30_bases": 90000,
+        },
+        "alignment_summary": {"total_reads": 1000, "mapped_reads": 900, "mapped_rate": 0.9},
+        "mean_quality_by_cycle": {"mean_quality": [36.0] * 50},
+        "gc_bias_summary": {"at_dropout": 1.0, "gc_dropout": 1.0},
+        "insert_size_metrics": {"median_insert_size": 200.0},
+        "pre_adapter_summaries": {
+            "ARTIFACT_NAME": ["Deamination", "OxoG"],
+            "TOTAL_QSCORE": [5, 40],
+        },
+    }
+    (d / f"{sample}.json").write_text(json.dumps(mojo_json), encoding="utf-8")
+    family, _, _ = detect_metrics_family(
+        d, sample, alignment_mode="linear", parabricks_available=False
+    )
+    assert family == MetricsFamily.MOJO_LINEAR
+
+
+def test_build_qc_mojo_linear_skips_placeholder_hard_fails(tmp_path: Path):
+    sample = "mojo2"
+    d = tmp_path / sample
+    d.mkdir()
+    _write_text(d / f"{sample}.deduplicate_metrics.txt", _dedup_metrics())
+    (d / f"{sample}.bam").write_bytes(b"BAM\x01fake")
+    mojo_json = {
+        "sample_id": sample,
+        "engine": "mojo_fq2bam_meth",
+        "metrics_source": "samtools+placeholders",
+        "placeholder_fields": ["gc_bias_summary", "pre_adapter_summaries.TOTAL_QSCORE"],
+        "quality_yield": {
+            "total_reads": 1000,
+            "pf_reads": 950,
+            "pf_bases": 100000,
+            "pf_q30_bases": 90000,
+        },
+        "alignment_summary": {"total_reads": 1000, "mapped_reads": 900, "mapped_rate": 0.9},
+        "mean_quality_by_cycle": {"mean_quality": [36.0] * 50},
+        "gc_bias_summary": {"at_dropout": 99.0, "gc_dropout": 99.0},
+        "insert_size_metrics": {"median_insert_size": 10.0},
+        "pre_adapter_summaries": {
+            "ARTIFACT_NAME": ["Deamination", "OxoG"],
+            "TOTAL_QSCORE": [99, 1],
+        },
+    }
+    (d / f"{sample}.json").write_text(json.dumps(mojo_json), encoding="utf-8")
+    payload = build_sample_qc_v2_dict(
+        d,
+        sample_id=sample,
+        validate_schema=True,
+        alignment_mode="linear",
+        alignment_guardrails=AlignmentGuardrailsConfig(enabled=True, flagstat_enabled=False),
+        cycle_screening=CycleScreeningConfig(enabled=True),
+    )
+    gr = payload["guardrails"]
+    assert gr["metrics_family"] == "mojo_linear"
+    assert gr["overall_pass"] is True
+    assert "mojo_placeholder_fields_skipped" in gr["details"]
+    assert "gc_dropout" not in gr["details"]
+    screening = gr.get("screening") or {}
+    # Cycle screening disabled for placeholder constant series
+    assert screening.get("disposition") in {
+        None,
+        "USE_CURRENT_ALIGNMENT",
+        "NO_CYCLE_METRICS",
+    } or screening.get("quality_pattern") in {None, "NO_CYCLE_METRICS", "OK"}
+
+
 def test_build_qc_wgbs_ignores_picard_tar_without_flag(tmp_path: Path):
     """Stale linear Picard tar must not enrich without collectmultiplemetrics flag."""
     sample = "HBCST-STALE"

@@ -319,6 +319,9 @@ def action_input_spec_for(action_name: str) -> Optional[ActionInputSpec]:
         "stepOverride",
         "comparison",
         "fixedDmpPanel",
+        # Bound when present; methyl_qc fails closed at runtime if artifacts are ambiguous.
+        "alignmentMode",
+        "primaryAnalyte",
     }
     required = ["tool"]
     if entry.action_config_key:

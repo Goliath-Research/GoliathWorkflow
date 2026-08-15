@@ -3,7 +3,7 @@
 WGBS Parabricks JSON QC Guardrail Checker (Updated with Pre-Adapter Artifacts)
 
 Enforces sequencing + alignment + deamination/artifact guardrails for WGBS.
-Run this BEFORE methylation extraction with your MethylDackel fork.
+Run this BEFORE methylation extraction (MethylExtractor on linear/stock-pangenome BAMs).
 """
 
 import argparse
@@ -157,12 +157,12 @@ def _build_wgbs_guardrail_report(
         "overall_pass": overall_pass,
         "details": results,
         "recommendation": (
-            "PASS: Safe to proceed to methylation extraction with your MethylDackel fork."
+            "PASS: Safe to proceed to methylation extraction (MethylExtractor)."
             if overall_pass
             else "FAIL: Do NOT proceed. Investigate library prep, sequencing, or bisulfite conversion."
         ),
         "next_steps": (
-            "Run MethylExtractor. "
+            "Run MethylExtractor (sample.methyl_extract), then sample.extraction_qc. "
             "Still verify quantitative conversion rate with lambda spike-in (≥99%) or non-CpG methylation (≤1–2%)."
         ),
     }

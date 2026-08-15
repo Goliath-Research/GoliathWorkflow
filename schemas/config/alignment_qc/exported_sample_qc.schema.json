@@ -811,6 +811,17 @@
           ],
           "default": null
         },
+        "mojo_placeholder_fields_skipped": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "oxog_qscore": {
           "anyOf": [
             {
@@ -978,6 +989,19 @@
           ],
           "default": null,
           "title": "Metrics Family"
+        },
+        "mojo_linear_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Present when metrics_family=mojo_linear: placeholder Picard-shaped fields did not vote on overall_pass.",
+          "title": "Mojo Linear Note"
         },
         "next_steps": {
           "title": "Next Steps",

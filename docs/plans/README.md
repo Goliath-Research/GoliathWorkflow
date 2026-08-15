@@ -129,6 +129,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`collapse-frozen-gene-features.plan.md`](collapse-frozen-gene-features.plan.md) | _(pending ADO)_ | Collapse frozen gene-feature panel | `collapse-groupby`, `tests-isoform`, `docs-contract`, `promote-plan` |
 | [`methylsample-bp-ranged-io.plan.md`](methylsample-bp-ranged-io.plan.md) | _(pending ADO)_ | MethylSample bp-ranged H5 I/O | `range-resolve`, `load-api`, `shard-iter`, `tests`, `docs-plans` |
 | [`fix-mojo-osz-methylcall.plan.md`](fix-mojo-osz-methylcall.plan.md) | _(pending ADO)_ | Fix Mojo MethylCall os:Z (all-zero met) | `carry-original`, `emit-osz`, `regression-test`, `overlay-sync`, `revalidate`, `plan-doc` |
+| [`cross-repo-tool-analysis.plan.md`](cross-repo-tool-analysis.plan.md) | **AB#703** | Cross-repo genomics tool analysis | `promote-plan`, `arch-doc`, `p0-qc-mode`, `p0-mojo-metrics`, `p0-cutover-paths`, `p2-extractor-tests` |
 
 Create each **User Story** under its Feature in Azure DevOps Boards. Copy the story title from the plan `todos[].content` field (seed prefixes `[todo-id]`). Mark stories **Closed** when the corresponding code is merged; close the Feature when all child stories are done.
 

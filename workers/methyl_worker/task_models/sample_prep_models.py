@@ -513,6 +513,14 @@ class MethylQcTaskInput(BaseModel):
     )
     executionScopeId: Optional[str] = None
     primaryAnalyte: Optional[str] = None
+    alignmentMode: Optional[str] = Field(
+        default=None,
+        description=(
+            "Science alignment mode from instance context "
+            "(linear|pangenome|pangenome_wgbs). Required when sample dirs contain "
+            "ambiguous metrics families; binds from ${var.alignmentMode}."
+        ),
+    )
     resolvedConfig: Optional[dict] = Field(
         default=None,
         description="Merged actionConfig.alignment_qc baked at instance configuration.",

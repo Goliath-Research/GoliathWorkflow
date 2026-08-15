@@ -842,6 +842,17 @@
           ],
           "default": null
         },
+        "mojo_placeholder_fields_skipped": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "oxog_qscore": {
           "anyOf": [
             {
@@ -1010,6 +1021,19 @@
           "default": null,
           "title": "Metrics Family"
         },
+        "mojo_linear_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Present when metrics_family=mojo_linear: placeholder Picard-shaped fields did not vote on overall_pass.",
+          "title": "Mojo Linear Note"
+        },
         "next_steps": {
           "title": "Next Steps",
           "type": "string"
@@ -1017,6 +1041,32 @@
         "overall_pass": {
           "title": "Overall Pass",
           "type": "boolean"
+        },
+        "picard_enrichment": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True when pangenome_wgbs Align collected Picard tables and core Parabricks guardrails were merged into details.",
+          "title": "Picard Enrichment"
+        },
+        "picard_enrichment_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Operator note for Picard enrichment / BS chemistry skew caveat.",
+          "title": "Picard Enrichment Note"
         },
         "recommendation": {
           "title": "Recommendation",

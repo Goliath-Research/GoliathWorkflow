@@ -2,9 +2,10 @@
 # Build epimethyl/methylgrapher:1.70-mojo from mojo-align (preferred) or
 # legacy methylGrapher-mojo (rollback only).
 #
-# METHYLGRAPHER_MOJO_ROOT should point at the mojo-align checkout. When unset,
-# auto-detect prefers sibling ../mojo-align, then /home/ubuntu/mojo-align, then
-# the legacy methylGrapher-mojo tree.
+# METHYLGRAPHER_MOJO_ROOT must point at the mojo-align checkout. When unset,
+# auto-detect uses only the sibling ../mojo-align next to this MethylPipeline repo.
+# Legacy methylGrapher-mojo is not auto-selected (set METHYLGRAPHER_MOJO_ROOT
+# explicitly if you need a rollback checkout).
 #
 # Stages into the image under /opt/methylgrapher-mojo (install prefix — not the
 # source repo name):
@@ -47,16 +48,15 @@ MOJO_ROOT="${METHYLGRAPHER_MOJO_ROOT:-}"
 if [[ -z "${MOJO_ROOT}" ]]; then
   if [[ -d "${REPO_ROOT}/../mojo-align/methylgrapher/engine" ]]; then
     MOJO_ROOT="$(cd "${REPO_ROOT}/../mojo-align" && pwd)"
-  elif [[ -d /home/ubuntu/mojo-align/methylgrapher/engine ]]; then
-    MOJO_ROOT=/home/ubuntu/mojo-align
-  elif [[ -d "${REPO_ROOT}/../methylGrapher-mojo/engine" ]]; then
-    MOJO_ROOT="$(cd "${REPO_ROOT}/../methylGrapher-mojo" && pwd)"
-  elif [[ -d /home/ubuntu/methylGrapher-mojo/engine ]]; then
-    MOJO_ROOT=/home/ubuntu/methylGrapher-mojo
   else
-    echo "ERROR: set METHYLGRAPHER_MOJO_ROOT to the mojo-align (or legacy methylGrapher-mojo) checkout" >&2
+    echo "ERROR: set METHYLGRAPHER_MOJO_ROOT to the mojo-align checkout" >&2
+    echo "  (expected sibling ${REPO_ROOT}/../mojo-align or an explicit path)" >&2
     exit 1
   fi
+fi
+if [[ ! -d "${MOJO_ROOT}/methylgrapher/engine" && ! -d "${MOJO_ROOT}/engine" ]]; then
+  echo "ERROR: METHYLGRAPHER_MOJO_ROOT=${MOJO_ROOT} is not a mojo-align (or flat) tree" >&2
+  exit 1
 fi
 
 log() { printf '[methylgrapher-mojo-image] %s\n' "$*"; }

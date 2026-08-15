@@ -294,6 +294,8 @@ class GuardrailDetails(BaseModel):
     wgbs_gaf_present: Optional[GuardrailMetric] = None
     wgbs_bam_present: Optional[GuardrailMetric] = None
     wgbs_bam_mapped_rate: Optional[GuardrailMetric] = None
+    # MojoFq2bamMeth linear (samtools + placeholders)
+    mojo_placeholder_fields_skipped: Optional[GuardrailMetric] = None
 
 
 class GuardrailReport(BaseModel):
@@ -315,6 +317,13 @@ class GuardrailReport(BaseModel):
     picard_enrichment_note: Optional[str] = Field(
         default=None,
         description="Operator note for Picard enrichment / BS chemistry skew caveat.",
+    )
+    mojo_linear_note: Optional[str] = Field(
+        default=None,
+        description=(
+            "Present when metrics_family=mojo_linear: placeholder Picard-shaped "
+            "fields did not vote on overall_pass."
+        ),
     )
 
 
