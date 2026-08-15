@@ -44,3 +44,13 @@ Harness: `mojo-align/fq2bam-meth/scripts/compare_gatk_picard_metrics.py`
 ## Concordance gates
 
 See [`docs/plans/mojo-fq2bam-concordance-gates.md`](../plans/mojo-fq2bam-concordance-gates.md). Rollback: `engine=parabricks`.
+
+## Comparison arms (originals retained)
+
+Before/after bakeoffs keep Clara `fq2bam_meth` selectable forever (`align.linear.parabricks`). Mojo is preferred science, not a deletion of Clara. Layout + report helpers: [`docs/architecture/sample-prep-tooling.md`](../architecture/sample-prep-tooling.md), plan [`comparison-arms-bakeoff.plan.md`](../plans/comparison-arms-bakeoff.plan.md).
+
+| Gate (2026-08-15) | Status |
+|-------------------|--------|
+| Clara vs Mojo linear wall (GH200 subset) | **PENDING** operator |
+| Linear BAM concordance scripts | Available (`parity_linear_parabricks_vs_mojo.sh`) |
+| Production site default flip to Mojo-only | **Not done** (by design) |

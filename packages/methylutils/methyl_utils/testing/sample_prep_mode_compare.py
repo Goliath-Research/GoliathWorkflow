@@ -1,6 +1,6 @@
 """Linear vs ``pangenome_wgbs`` SamplePrep experiment helpers (no DB).
 
-Layout contract (lab / QNAP shape):
+Layout contract (lab / QNAP shape) — legacy mode trees:
 
 ```text
 /work/samples/<sampleId>/
@@ -10,8 +10,19 @@ Layout contract (lab / QNAP shape):
   pangenome_wgbs/                # experiment-only mode tree
 ```
 
-Mode subdirs are temporary scaffolding for dual-align comparison, not a new
-production / lab / QNAP convention.
+Canonical **comparison arms** (coexist with mojo-align IDs):
+
+```text
+align.linear.parabricks/
+align.linear.mojo/
+align.pangenome_wgbs.vg/
+align.pangenome_wgbs.mojo/
+extract.methylextractor/
+extract.methyldackel/
+```
+
+Reports under ``/work/samples/_comparisons/<stamp>/``. Mode subdirs and align.*
+trees are experiment scaffolding, not a new production / lab / QNAP convention.
 """
 
 from __future__ import annotations
@@ -34,6 +45,62 @@ from .sample_prep_canary import (
 )
 
 COMPARE_MODES: Tuple[str, ...] = ("linear", "pangenome_wgbs")
+
+# Canonical before/after arms (mojo-align README + sample-prep-tooling.md).
+COMPARE_ALIGN_ARMS: Tuple[str, ...] = (
+    "align.linear.parabricks",
+    "align.linear.mojo",
+    "align.pangenome_wgbs.vg",
+    "align.pangenome_wgbs.mojo",
+)
+
+# Aliases accepted by arm helpers (mojo-align README uses align.pangenome.vg).
+_COMPARE_ALIGN_ARM_ALIASES: Dict[str, str] = {
+    "align.pangenome.vg": "align.pangenome_wgbs.vg",
+}
+
+COMPARE_EXTRACT_ARMS: Tuple[str, ...] = (
+    "extract.methylextractor",
+    "extract.methyldackel",
+)
+
+_ALIGN_ARM_TO_MODE: Dict[str, str] = {
+    "align.linear.parabricks": "linear",
+    "align.linear.mojo": "linear",
+    "align.pangenome_wgbs.vg": "pangenome_wgbs",
+    "align.pangenome.vg": "pangenome_wgbs",
+    "align.pangenome_wgbs.mojo": "pangenome_wgbs",
+}
+
+_ALIGN_ARM_ACTION_CONFIG: Dict[str, Dict[str, Any]] = {
+    "align.linear.parabricks": {
+        "parabricks": {"engine": "parabricks", "alignment_mode": "linear"},
+    },
+    "align.linear.mojo": {
+        "parabricks": {"engine": "mojo", "alignment_mode": "linear"},
+    },
+    "align.pangenome_wgbs.vg": {
+        "methylgrapher_wgbs": {
+            "alignment_mode": "pangenome_wgbs",
+            "align_engine": "cpu_vg",
+            "engine": "mojo",
+        },
+    },
+    "align.pangenome.vg": {
+        "methylgrapher_wgbs": {
+            "alignment_mode": "pangenome_wgbs",
+            "align_engine": "cpu_vg",
+            "engine": "mojo",
+        },
+    },
+    "align.pangenome_wgbs.mojo": {
+        "methylgrapher_wgbs": {
+            "alignment_mode": "pangenome_wgbs",
+            "align_engine": "gpu_giraffe",
+            "engine": "mojo",
+        },
+    },
+}
 
 _ALIGN_ACTION_NAMES = {
     "linear": {
@@ -554,3 +621,267 @@ def build_start_payload(
         body["actionConfig"] = dict(action_config)
     # Intentionally omit sampleStorage / sampleDestination (no QNAP archive).
     return body
+
+
+def align_arm_dir(sample_root: Path | str, arm: str) -> Path:
+    """Return ``/work/samples/<id>/<align.*>`` for a canonical comparison arm."""
+    arm = _COMPARE_ALIGN_ARM_ALIASES.get(arm, arm)
+    if arm not in COMPARE_ALIGN_ARMS and arm not in COMPARE_EXTRACT_ARMS:
+        raise ValueError(
+            f"unsupported comparison arm: {arm}; "
+            f"expected one of {COMPARE_ALIGN_ARMS + COMPARE_EXTRACT_ARMS}"
+        )
+    return Path(sample_root).expanduser().resolve() / arm
+
+
+def ensure_align_arm_dir(sample_root: Path | str, arm: str) -> Path:
+    arm = _COMPARE_ALIGN_ARM_ALIASES.get(arm, arm)
+    d = align_arm_dir(sample_root, arm)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def link_root_fastqs_into_align_arm(
+    sample_root: Path | str,
+    arm: str,
+    *,
+    sample_id: str,
+    method: str = "hardlink",
+) -> List[Path]:
+    """Hardlink (or symlink/copy) root FASTQs into an ``align.*`` sampleDir."""
+    if arm not in _ALIGN_ARM_TO_MODE:
+        raise ValueError(f"arm {arm} is not an align arm")
+    root = Path(sample_root).expanduser().resolve()
+    arm_dir = ensure_align_arm_dir(root, arm)
+    fastqs = discover_root_fastqs(root, sample_id)
+    if not fastqs:
+        raise FileNotFoundError(
+            f"No non-empty root FASTQs under {root} for sample_id={sample_id}"
+        )
+    linked: List[Path] = []
+    for src in fastqs:
+        dest = arm_dir / src.name
+        if dest.exists() or dest.is_symlink():
+            if dest.is_file() and dest.stat().st_size > 0:
+                linked.append(dest)
+                continue
+            dest.unlink(missing_ok=True)
+        if method == "symlink":
+            os.symlink(src, dest)
+        elif method == "copy":
+            import shutil
+
+            shutil.copy2(src, dest)
+        else:
+            try:
+                os.link(src, dest)
+            except OSError:
+                os.symlink(src, dest)
+        linked.append(dest)
+    return linked
+
+
+def ensure_comparison_arms(
+    sample_root: Path | str,
+    *,
+    sample_id: str,
+    arms: Optional[Sequence[str]] = None,
+    link_fastqs: bool = True,
+) -> Dict[str, Path]:
+    """Create coexisting align.* (and optional extract.*) dirs for a sample."""
+    root = Path(sample_root).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    selected = list(arms) if arms else list(COMPARE_ALIGN_ARMS)
+    out: Dict[str, Path] = {}
+    for arm in selected:
+        if arm in COMPARE_EXTRACT_ARMS:
+            out[arm] = ensure_align_arm_dir(root, arm)
+            continue
+        out[arm] = ensure_align_arm_dir(root, arm)
+        if link_fastqs and arm in _ALIGN_ARM_TO_MODE:
+            link_root_fastqs_into_align_arm(root, arm, sample_id=sample_id)
+    return out
+
+
+def alignment_mode_for_arm(arm: str) -> str:
+    arm = _COMPARE_ALIGN_ARM_ALIASES.get(arm, arm)
+    try:
+        return _ALIGN_ARM_TO_MODE[arm]
+    except KeyError as exc:
+        raise ValueError(f"not an align arm: {arm}") from exc
+
+
+def action_config_overlay_for_arm(arm: str) -> Dict[str, Any]:
+    """Engine overlay for one comparison arm (merge into instance actionConfig)."""
+    arm = _COMPARE_ALIGN_ARM_ALIASES.get(arm, arm)
+    try:
+        return dict(_ALIGN_ARM_ACTION_CONFIG[arm])
+    except KeyError as exc:
+        raise ValueError(f"no actionConfig overlay for arm: {arm}") from exc
+
+
+def build_align_arm_start_payload(
+    *,
+    sample_id: str,
+    arm: str,
+    sample_root: Path | str,
+    project_path: Path | str,
+    workflow_version_id: Optional[int],
+    primary_analyte: str,
+    reference_fasta: str,
+    fastq_storage: Mapping[str, Any],
+    fastq_prefix: str = "",
+    reference_gtf: Optional[str] = None,
+    library_protocol: Optional[str] = None,
+    pipeline_procedure: Optional[str] = None,
+    action_config: Optional[Mapping[str, Any]] = None,
+    program_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """sample-prep-start body for one ``align.*`` arm (explicit engine overlay)."""
+    mode = alignment_mode_for_arm(arm)
+    sample_dir = ensure_align_arm_dir(sample_root, arm)
+    link_root_fastqs_into_align_arm(sample_root, arm, sample_id=sample_id)
+    overlay = action_config_overlay_for_arm(arm)
+    merged: Dict[str, Any] = dict(action_config or {})
+    for key, slice_cfg in overlay.items():
+        base = dict(merged.get(key) or {})
+        base.update(slice_cfg)
+        merged[key] = base
+    return build_start_payload(
+        sample_id=sample_id,
+        mode=mode,
+        sample_dir=sample_dir,
+        project_path=project_path,
+        workflow_version_id=workflow_version_id,
+        primary_analyte=primary_analyte,
+        reference_fasta=reference_fasta,
+        fastq_storage=fastq_storage,
+        fastq_prefix=fastq_prefix,
+        reference_gtf=reference_gtf,
+        library_protocol=library_protocol,
+        pipeline_procedure=pipeline_procedure,
+        action_config=merged,
+        program_path=program_path,
+    )
+
+
+def comparisons_root(samples_base: Path | str = "/work/samples") -> Path:
+    return Path(samples_base).expanduser().resolve() / "_comparisons"
+
+
+def new_comparison_stamp(*, when: Optional[datetime] = None) -> str:
+    ts = when or datetime.now(timezone.utc)
+    return ts.strftime("%Y%m%dT%H%M%SZ")
+
+
+def ensure_comparison_report_dir(
+    samples_base: Path | str = "/work/samples",
+    *,
+    stamp: Optional[str] = None,
+) -> Path:
+    """Create ``/work/samples/_comparisons/<stamp>/`` and refresh ``latest`` symlink."""
+    stamp = stamp or new_comparison_stamp()
+    root = comparisons_root(samples_base)
+    out = root / stamp
+    out.mkdir(parents=True, exist_ok=True)
+    latest = root / "latest"
+    if latest.is_symlink() or latest.exists():
+        latest.unlink()
+    try:
+        os.symlink(out.name, latest)
+    except OSError:
+        # Cross-device or permission: leave stamp dir without latest link.
+        pass
+    return out
+
+
+def write_comparison_arms_report(
+    report_dir: Path | str,
+    *,
+    sample_id: str,
+    arms: Mapping[str, Mapping[str, Any]],
+    gates: Optional[Mapping[str, Any]] = None,
+    notes: Optional[Sequence[str]] = None,
+    methyldackel: Optional[Mapping[str, Any]] = None,
+) -> Tuple[Path, Path]:
+    """Write comparison.json + comparison.md for a multi-arm bakeoff.
+
+    ``arms`` maps align-arm id → metrics dict (wall_s, mapping_rate, …).
+    """
+    report_dir = Path(report_dir)
+    report_dir.mkdir(parents=True, exist_ok=True)
+    payload: Dict[str, Any] = {
+        "schema": "methylpipeline.comparison_arms",
+        "schema_version": "1.0.0",
+        "sample_id": sample_id,
+        "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "arms": dict(arms),
+        "gates": dict(gates or {}),
+        "notes": list(notes or []),
+        "originals_retained": [
+            "Clara fq2bam_meth (align.linear.parabricks)",
+            "vg giraffe cpu_vg (align.pangenome_wgbs.vg)",
+            "optional MethylDackel (extract.methyldackel)",
+        ],
+    }
+    if methyldackel is not None:
+        payload["extract_methyldackel"] = dict(methyldackel)
+
+    json_path = report_dir / "comparison.json"
+    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    lines = [
+        f"# Comparison arms — `{sample_id}`",
+        "",
+        f"Generated: `{payload['generated_at_utc']}`",
+        "",
+        "Original tools (Clara / vg / optional MethylDackel) are retained for before/after.",
+        "",
+        "## Arms",
+        "",
+        "| Arm | Key metrics |",
+        "|-----|-------------|",
+    ]
+    for arm, metrics in sorted(arms.items()):
+        focus = {
+            k: metrics.get(k)
+            for k in (
+                "wall_s",
+                "mapping_rate",
+                "duplication_rate",
+                "engine",
+                "align_engine",
+                "bam",
+                "status",
+            )
+            if k in metrics
+        }
+        lines.append(f"| `{arm}` | `{json.dumps(focus, sort_keys=True, default=str)}` |")
+    lines.append("")
+    if gates:
+        lines.append("## Gates")
+        lines.append("")
+        lines.append("| Gate | Status | Detail |")
+        lines.append("|------|--------|--------|")
+        for name, info in gates.items():
+            if isinstance(info, Mapping):
+                lines.append(
+                    f"| {name} | {info.get('status', '')} | {info.get('detail', '')} |"
+                )
+            else:
+                lines.append(f"| {name} | {info} | |")
+        lines.append("")
+    if methyldackel is not None:
+        lines.append("## MethylDackel extract A/B (optional)")
+        lines.append("")
+        lines.append(f"```json\n{json.dumps(methyldackel, indent=2, sort_keys=True)}\n```")
+        lines.append("")
+    if notes:
+        lines.append("## Notes")
+        lines.append("")
+        for note in notes:
+            lines.append(f"- {note}")
+        lines.append("")
+    md_path = report_dir / "comparison.md"
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return json_path, md_path

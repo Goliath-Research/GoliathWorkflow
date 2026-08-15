@@ -31,7 +31,7 @@ flowchart TD
   FQ[FASTQ] --> MODE{alignmentMode}
   MODE -->|linear| LIN[Clara fq2bam_meth or MojoFq2bamMeth]
   MODE -->|pangenome| PG[Clara giraffe BAM]
-  MODE -->|pangenome_wgbs| WGBS[Mojo Giraffe GAF plus QC BAM]
+  MODE -->|pangenome_wgbs| WGBS[Mojo Giraffe or vg giraffe GAF]
   LIN --> AQC[sample.methyl_qc alignment QC]
   PG --> AQC
   WGBS --> AQC
@@ -40,6 +40,60 @@ flowchart TD
   ME --> EQC[sample.extraction_qc]
   MCall --> EQC
 ```
+
+## Before / after comparison arms (originals retained)
+
+Mojo / MethylExtractor / MethylCall are the preferred science path. **Do not remove** Clara `fq2bam_meth`, `vg giraffe` (`cpu_vg`), or optional upstream MethylDackel — they stay first-class for before/after bakeoffs. Production site defaults are **not** flipped by comparison runs.
+
+| Arm | Align | Extract | Config knobs | Role |
+|-----|-------|---------|--------------|------|
+| Before (linear baseline) | Clara `fq2bam_meth` | MethylExtractor **or** optional MethylDackel | `parabricks.engine=parabricks` | Linear WGBS baseline |
+| After (Mojo linear) | `MojoFq2bamMeth` | MethylExtractor | `parabricks.engine=mojo` | Portable Clara substitute |
+| Before (graph oracle) | `vg giraffe` | MethylCall | `methylgrapher_wgbs.align_engine=cpu_vg` | Named-coordinate GAF baseline |
+| After (Mojo WGBS) | MojoGiraffe | MethylCall / MergeCpG | `align_engine=gpu_giraffe` / `mojo_giraffe` | Preferred `pangenome_wgbs` |
+
+Clara stock `pangenome` giraffe (BAM) remains for non-BS HPRC graphs; it is **not** a WGBS GAF substitute.
+
+### Side-by-side sample layout
+
+Canonical dirs under `/work/samples/<sampleId>/` (coexist; MethylPipeline creates them for compare harnesses):
+
+```text
+align.linear.parabricks/
+align.linear.mojo/
+align.pangenome_wgbs.vg/      # cpu_vg (mojo-align also uses align.pangenome.vg)
+align.pangenome_wgbs.mojo/
+extract.methylextractor/      # optional staging; production often writes H5 into sampleDir
+extract.methyldackel/         # optional A/B only — not a SamplePrep action
+```
+
+Reports: `/work/samples/_comparisons/<stamp>/comparison.md` (+ JSON). Helpers: `methyl_utils.testing.sample_prep_mode_compare` (align-arm APIs) and `scripts/compare_extract_methyldackel.sh`.
+
+### Comparison vs production procedure packs
+
+| Pack / overlay | Role | Notes |
+|----------------|------|-------|
+| `buffy_wgbs_pangenome_gene_fc` | **Production default** Buffy WGBS | Mojo Giraffe / MethylCall; do not flip away for bakeoffs |
+| `buffy_wgbs_linear_gene_fc` | Comparison / Clara linear | Pins Clara `fq2bam_meth` + MethylExtractor |
+| `buffy_wgbs_linear_mojo_gene_fc` | Comparison / Mojo linear | Pins `parabricks.engine=mojo` without changing site defaults |
+| Instance overlay `actionConfig.methylgrapher_wgbs.align_engine=cpu_vg` | Comparison vg dual-map | Same WGBS procedure topology; engine overlay only vs production Mojo |
+
+Example vg comparison overlay (instance / start payload — not a site edit):
+
+```json
+{
+  "pipelineProcedure": "buffy_wgbs_pangenome_gene_fc",
+  "actionConfig": {
+    "methylgrapher_wgbs": { "align_engine": "cpu_vg" }
+  }
+}
+```
+
+Side-by-side dirs + report: `scripts/comparison_arms_report.py --sample-id … --ensure-arms`. Optional extract A/B: `scripts/compare_extract_methyldackel.sh` → `extract.methyldackel/` (host MethylDackel; version recorded in report JSON).
+
+Release pins must keep Clara image + `vg` + MethylExtractor; MethylDackel is optional host tooling for extract A/B only.
+
+See [comparison-arms-bakeoff plan](../plans/comparison-arms-bakeoff.plan.md).
 
 ## Two QC stages (do not conflate)
 

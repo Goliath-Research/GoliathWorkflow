@@ -2,6 +2,12 @@
 
 Experiment-only mode trees under each sample root; FASTQs stay at the sample
 root (lab/QNAP layout). Does not set sampleStorage (no QNAP archive).
+
+Multi-arm before/after bakeoffs (Clara / Mojo / vg coexisting ``align.*`` dirs +
+``/work/samples/_comparisons/<stamp>`` reports) live in
+``methyl_utils.testing.sample_prep_mode_compare``
+(``ensure_comparison_arms``, ``write_comparison_arms_report``) and
+``scripts/comparison_arms_report.py``. See ``docs/architecture/sample-prep-tooling.md``.
 """
 
 from __future__ import annotations

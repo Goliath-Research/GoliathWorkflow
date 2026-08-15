@@ -8,14 +8,19 @@ from pathlib import Path
 from methyl_utils.test_data_registry import SamplePrepCanaryThresholds
 from methyl_utils.testing.sample_prep_canary import ModeReport
 from methyl_utils.testing.sample_prep_mode_compare import (
+    action_config_overlay_for_arm,
+    build_align_arm_start_payload,
     build_mode_compare_report,
     build_sample_compare_block,
     build_start_payload,
     discover_root_fastqs,
+    ensure_comparison_arms,
+    ensure_comparison_report_dir,
     extract_alignment_duration_ms,
     link_root_fastqs_into_mode,
     mode_sample_dir,
     sample_root_dir,
+    write_comparison_arms_report,
     write_mode_compare_markdown,
 )
 
@@ -135,3 +140,57 @@ def test_compare_report_hypothesis_and_markdown(tmp_path: Path) -> None:
     assert "experiment-only" in text
     assert "no QNAP archive" in text
     assert "S1" in text
+
+
+def test_ensure_comparison_arms_layout(tmp_path: Path) -> None:
+    sample_id = "S1"
+    root = sample_root_dir(tmp_path, sample_id)
+    root.mkdir()
+    (root / f"{sample_id}_1.fastq.gz").write_bytes(b"r1")
+    (root / f"{sample_id}_2.fastq.gz").write_bytes(b"r2")
+    arms = ensure_comparison_arms(
+        root,
+        sample_id=sample_id,
+        arms=["align.linear.parabricks", "align.linear.mojo", "extract.methyldackel"],
+    )
+    assert (arms["align.linear.parabricks"] / f"{sample_id}_1.fastq.gz").is_file()
+    assert (root / "extract.methyldackel").is_dir()
+    assert action_config_overlay_for_arm("align.linear.mojo")["parabricks"]["engine"] == "mojo"
+    body = build_align_arm_start_payload(
+        sample_id=sample_id,
+        arm="align.pangenome_wgbs.vg",
+        sample_root=root,
+        project_path="/tmp/p.json",
+        workflow_version_id=None,
+        primary_analyte="buffy_coat",
+        reference_fasta="/tmp/r.fa",
+        fastq_storage={"type": "local"},
+    )
+    assert body["alignmentMode"] == "pangenome_wgbs"
+    assert body["actionConfig"]["methylgrapher_wgbs"]["align_engine"] == "cpu_vg"
+
+
+def test_write_comparison_arms_report(tmp_path: Path) -> None:
+    rd = ensure_comparison_report_dir(tmp_path, stamp="20260815T120000Z")
+    j, m = write_comparison_arms_report(
+        rd,
+        sample_id="S1",
+        arms={
+            "align.linear.parabricks": {"status": "ok", "wall_s": 100.0, "engine": "parabricks"},
+            "align.linear.mojo": {"status": "ok", "wall_s": 80.0, "engine": "mojo"},
+        },
+        gates={
+            "clara_vs_mojo_linear_wall": {
+                "status": "PENDING",
+                "detail": "operator GH200; do not flip site defaults",
+            }
+        },
+        methyldackel={"tool": "MethylDackel", "status": "skipped"},
+    )
+    assert j.is_file() and m.is_file()
+    payload = json.loads(j.read_text(encoding="utf-8"))
+    assert payload["schema"] == "methylpipeline.comparison_arms"
+    assert "Clara fq2bam_meth" in payload["originals_retained"][0]
+    text = m.read_text(encoding="utf-8")
+    assert "align.linear.parabricks" in text
+    assert "MethylDackel" in text
