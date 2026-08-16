@@ -175,7 +175,9 @@ CREATE TABLE IF NOT EXISTS cfg.enrichment_library_preset (
   CONSTRAINT ck_cfg_enrichment_library_preset_status CHECK (status IN ('draft', 'published', 'retired'))
 );
 
--- Study analysis arms (portal.Samples FKs are soft refs on PG; MSSQL enforces portal FKs).
+-- Study analysis arms. After portal_clinical_schema.sql + legacy_cross_schema_fks.sql,
+-- portal_sample_id / lab_sample_id gain real FKs to portal."Samples" / portal."LabSamples"
+-- (same as MSSQL). Soft integer refs remain valid until that deploy step runs.
 CREATE TABLE IF NOT EXISTS cfg.study_group (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   study_row_id bigint NOT NULL REFERENCES cfg.study (id) ON DELETE CASCADE,

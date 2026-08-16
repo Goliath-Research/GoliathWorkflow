@@ -41,6 +41,23 @@ CREATE TABLE IF NOT EXISTS cfg.assay_procedure (
   CONSTRAINT ck_cfg_assay_procedure_status CHECK (status IN ('draft', 'published', 'retired'))
 );
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_list_pipeline_profiles'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION portal.sp_list_pipeline_profiles(
   p_published_only boolean DEFAULT false
 )
@@ -70,6 +87,23 @@ AS $$
   WHERE (NOT p_published_only OR p.status = 'published')
   ORDER BY p.name, p.version;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_get_pipeline_profile'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_get_pipeline_profile(
   p_name text,
@@ -103,6 +137,23 @@ AS $$
   ORDER BY p.id DESC
   LIMIT 1;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_list_pipeline_profile_catalog'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_list_pipeline_profile_catalog(
   p_include_advanced boolean DEFAULT false
@@ -152,6 +203,23 @@ AS $$
     p.version;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_list_assay_procedures'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION portal.sp_list_assay_procedures(
   p_published_only boolean DEFAULT false
 )
@@ -181,6 +249,23 @@ AS $$
   WHERE (NOT p_published_only OR p.status = 'published')
   ORDER BY p.name, p.version;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_get_assay_procedure'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_get_assay_procedure(
   p_name text,
@@ -214,6 +299,23 @@ AS $$
   ORDER BY p.id DESC
   LIMIT 1;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_list_assay_procedure_catalog'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_list_assay_procedure_catalog(
   p_analyte text DEFAULT NULL,
@@ -276,6 +378,23 @@ AS $$
   ORDER BY p.name, p.version;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_get_study_process_defaults'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION portal.sp_get_study_process_defaults(p_study_row_id bigint)
 RETURNS TABLE(
   study_row_id bigint,
@@ -318,6 +437,23 @@ AS $$
   ) ap ON TRUE
   WHERE s.id = p_study_row_id;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_set_study_process_defaults'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_set_study_process_defaults(
   p_study_row_id bigint,

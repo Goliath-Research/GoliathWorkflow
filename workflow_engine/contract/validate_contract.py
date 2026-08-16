@@ -21,18 +21,26 @@ SQL_DIRS = {
 
 # Patterns to detect object definitions in deploy scripts
 OBJECT_PATTERNS = [
-    re.compile(r"CREATE\s+(?:OR\s+ALTER\s+)?PROCEDURE\s+([\w.]+)", re.I),
-    re.compile(r"CREATE\s+(?:OR\s+ALTER\s+)?FUNCTION\s+([\w.]+)", re.I),
-    re.compile(r"CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)", re.I),
-    re.compile(r"CREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE\s+([\w.]+)", re.I),
+    re.compile(
+        r'CREATE\s+(?:OR\s+ALTER\s+)?(?:PROCEDURE|FUNCTION)\s+'
+        r'(?:\["?([\w]+)"?\]|"?([\w]+)"?)\.(?:\["?([\w]+)"?\]|"?([\w]+)"?)',
+        re.I,
+    ),
+    re.compile(
+        r'CREATE\s+(?:OR\s+REPLACE\s+)?(?:PROCEDURE|FUNCTION)\s+'
+        r'(?:\["?([\w]+)"?\]|"?([\w]+)"?)\.(?:\["?([\w]+)"?\]|"?([\w]+)"?)',
+        re.I,
+    ),
 ]
 
-# JSON payload columns must use native json (MSSQL) / jsonb (PG), not NVARCHAR(MAX) or text.
-FORBIDDEN_JSON_COL = re.compile(
-    r"^\s*(value_json|data_json|context_value_json|config_json|task_config_json)\s+"
-    r"(?:nvarchar\s*\(\s*max\s*\)|text)\s",
-    re.I | re.M,
-)
+
+def _normalize_match(m: re.Match[str]) -> str:
+    groups = [g for g in m.groups() if g]
+    if len(groups) >= 2:
+        return f"{groups[0]}.{groups[1]}".lower()
+    if groups:
+        return groups[0].lower()
+    return m.group(0).lower()
 
 
 def load_required_objects() -> list[str]:
@@ -41,8 +49,12 @@ def load_required_objects() -> list[str]:
         text = CONTRACT_YAML.read_text(encoding="utf-8")
         names: list[str] = []
         for line in text.splitlines():
-            if "name:" in line and ("wf." in line or "portal." in line or "dbo." in line):
-                m = re.search(r"name:\s*((?:wf|portal|dbo)\.[\w.]+)", line)
+            if "name:" in line and any(
+                s in line for s in ("wf.", "portal.", "dbo.", "cfg.", "rbac.")
+            ):
+                m = re.search(
+                    r"name:\s*((?:wf|portal|dbo|cfg|rbac|RBAC)\.[\w.]+)", line
+                )
                 if m:
                     names.append(m.group(1).lower())
         return names
@@ -64,8 +76,16 @@ def scan_sql_dir(directory: Path) -> set[str]:
         text = path.read_text(encoding="utf-8", errors="replace")
         for pat in OBJECT_PATTERNS:
             for m in pat.finditer(text):
-                found.add(m.group(1).lower())
+                found.add(_normalize_match(m))
     return found
+
+
+# JSON payload columns must use native json (MSSQL) / jsonb (PG), not NVARCHAR(MAX) or text.
+FORBIDDEN_JSON_COL = re.compile(
+    r"^\s*(value_json|data_json|context_value_json|config_json|task_config_json)\s+"
+    r"(?:nvarchar\s*\(\s*max\s*\)|text)\s",
+    re.I | re.M,
+)
 
 
 def audit_json_column_types(directories: dict[str, Path]) -> int:
@@ -108,18 +128,24 @@ def main() -> int:
         else:
             print(f"[{dialect}] all required contract objects present ({len(required)} checked)")
 
-    # Cross-dialect wf.* / portal.* parity (exclude optional dbo)
+    # Cross-dialect wf.* / portal.* / cfg.* parity (exclude optional dbo)
     wf_required = [n for n in required if n.startswith("wf.")]
     portal_required = [n for n in required if n.startswith("portal.")]
+    cfg_required = [n for n in required if n.startswith("cfg.")]
+    rbac_required = [n for n in required if n.startswith("rbac.")]
     mssql_wf = {n for n in results["mssql"] if n.startswith("wf.")}
     pg_wf = {n for n in results["postgres"] if n.startswith("wf.")}
     mssql_portal = {n for n in results["mssql"] if n.startswith("portal.")}
     pg_portal = {n for n in results["postgres"] if n.startswith("portal.")}
+    mssql_cfg = {n for n in results["mssql"] if n.startswith("cfg.")}
+    pg_cfg = {n for n in results["postgres"] if n.startswith("cfg.")}
+    mssql_rbac = {n for n in results["mssql"] if n.startswith("rbac.")}
+    pg_rbac = {n for n in results["postgres"] if n.startswith("rbac.")}
     only_mssql = sorted(mssql_wf - pg_wf)
     only_pg = sorted(pg_wf - mssql_wf)
     for name in wf_required:
         if name not in mssql_wf:
-            print(f"[mssql] contract requires {name} but not found in sql/")
+            print(f"[mssql] contract requires {name} but not found in sql_mssql/")
             exit_code = 1
         if name not in pg_wf:
             print(f"[postgres] contract requires {name} but not found in sql_pg/")
@@ -127,10 +153,26 @@ def main() -> int:
 
     for name in portal_required:
         if name not in mssql_portal:
-            print(f"[mssql] contract requires {name} but not found in sql/")
+            print(f"[mssql] contract requires {name} but not found in sql_mssql/")
             exit_code = 1
         if name not in pg_portal:
-            print(f"[postgres] contract requires {name} concept but not found in sql_pg/")
+            print(f"[postgres] contract requires {name} but not found in sql_pg/")
+            exit_code = 1
+
+    for name in cfg_required:
+        if name not in mssql_cfg:
+            print(f"[mssql] contract requires {name} but not found in sql_mssql/")
+            exit_code = 1
+        if name not in pg_cfg:
+            print(f"[postgres] contract requires {name} but not found in sql_pg/")
+            exit_code = 1
+
+    for name in rbac_required:
+        if name not in mssql_rbac:
+            print(f"[mssql] contract requires {name} but not found in sql_mssql/")
+            exit_code = 1
+        if name not in pg_rbac:
+            print(f"[postgres] contract requires {name} but not found in sql_pg/")
             exit_code = 1
 
     if only_mssql or only_pg:

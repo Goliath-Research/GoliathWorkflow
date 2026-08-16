@@ -16,6 +16,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 
 | Plan file | ADO Feature | Title | Child User Stories (todo ids) |
 |-----------|-------------|-------|-------------------------------|
+| [`sql-backend-schema-parity.plan.md`](sql-backend-schema-parity.plan.md) | _(pending ADO)_ | SQL backend schema parity (Azure SQL ↔ PostgreSQL) | `canonical-pg-inventory`, `close-sql-pg-drift`, `extract-mssql-legacy-ddl`, `port-clinical-ddl-pg`, `port-legacy-routines`, `contract-ci-docs` |
 | [`production-gpu-worker-layout.plan.md`](production-gpu-worker-layout.plan.md) | **AB#414** | Production GPU worker layout | `define-layout`, `extractor-ci`, `pipeline-ci`, `install-release`, `gpu-node-runbook`, `docker-shared`, `worker-provision` |
 | [`devops-ci-cd-release.plan.md`](devops-ci-cd-release.plan.md) | **AB#422** | DevOps CI/CD release pipeline | `me-release-ci`, `mp-release-ci`, `assemble-script`, `assemble-pipeline`, `deploy-pipeline`, `docs-ci-cd` |
 | [`alignment-qc-screening.plan.md`](alignment-qc-screening.plan.md) | **AB#429** | Alignment QC screening and remediation | `screening-core`, `guardrail-enhance`, `cohort-report`, `trim-action`, `workflow-remediation`, `validate-docs` |

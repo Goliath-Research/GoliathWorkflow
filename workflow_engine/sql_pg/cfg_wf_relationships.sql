@@ -148,6 +148,7 @@ LEFT JOIN wf.workflow_def d ON d.id = p.workflow_def_id
 LEFT JOIN wf.workflow_version v ON v.id = p.compiled_workflow_version_id;
 
 /* Retired cfg.action_definition view — browse wf actions + explicit data types. */
+DROP VIEW IF EXISTS cfg.v_action_definition_wf;
 CREATE OR REPLACE VIEW cfg.v_action_definition_wf AS
 SELECT
   wa.id AS workflow_action_id,

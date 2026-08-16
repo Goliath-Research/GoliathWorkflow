@@ -53,6 +53,7 @@ ALTER TABLE cfg.study_instance_link
 
 CREATE INDEX IF NOT EXISTS ix_cfg_sil_assay ON cfg.study_instance_link (assay_procedure_id);
 
+DROP VIEW IF EXISTS cfg.v_assay_procedure;
 CREATE OR REPLACE VIEW cfg.v_assay_procedure AS
 SELECT
   ap.id AS assay_procedure_id,
@@ -74,6 +75,7 @@ LEFT JOIN cfg.pipeline_profile pp ON pp.id = ap.default_pipeline_profile_id
 LEFT JOIN cfg.domain_program sp ON sp.id = ap.sample_prep_program_id
 LEFT JOIN cfg.domain_program lp ON lp.id = ap.lifecycle_program_id;
 
+DROP VIEW IF EXISTS cfg.v_study_instance;
 CREATE OR REPLACE VIEW cfg.v_study_instance AS
 SELECT
   l.id AS link_id,
@@ -97,6 +99,23 @@ INNER JOIN wf.workflow_instance i ON i.id = l.workflow_instance_id
 LEFT JOIN cfg.domain_program p ON p.id = l.domain_program_id
 LEFT JOIN cfg.pipeline_profile pr ON pr.id = l.pipeline_profile_id
 LEFT JOIN cfg.assay_procedure ap ON ap.id = l.assay_procedure_id;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_bind_assay_procedure'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_bind_assay_procedure(
   p_procedure_name text,
@@ -172,6 +191,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_link_study_instance'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_study_instance(
   p_study_row_id bigint,
   p_workflow_instance_id bigint,
@@ -207,6 +243,7 @@ END;
 $$;
 
 -- Catalog filter with typed primary_analyte + FK columns
+DROP FUNCTION IF EXISTS portal.sp_list_assay_procedure_catalog(text, boolean);
 CREATE OR REPLACE FUNCTION portal.sp_list_assay_procedure_catalog(
   p_analyte text DEFAULT NULL,
   p_include_advanced boolean DEFAULT false
@@ -277,6 +314,23 @@ AS $$
   ORDER BY p.name, p.version;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_get_study_process_defaults'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION portal.sp_get_study_process_defaults(p_study_row_id bigint)
 RETURNS TABLE(
   study_row_id bigint,
@@ -309,6 +363,23 @@ AS $$
   LEFT JOIN cfg.assay_procedure ap ON ap.id = s.default_assay_procedure_id
   WHERE s.id = p_study_row_id;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_set_study_process_defaults'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_set_study_process_defaults(
   p_study_row_id bigint,

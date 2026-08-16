@@ -4,12 +4,12 @@
 # Prerequisites:
 #   - psql (PostgreSQL client 15+)
 #   - Your client IP allowed in Azure PG firewall (or run from Azure VM / Cloud Shell)
-#   - Login granted CONNECT on database postgres (default Azure DB)
+#   - Login granted CONNECT on database epimethyl (canonical parity target)
 #
 # Native PostgreSQL auth (dba):
 #   export PGHOST=epimethyl.postgres.database.azure.com
 #   export PGPORT=5432
-#   export PGDATABASE=postgres
+#   export PGDATABASE=epimethyl
 #   export PGUSER=dba
 #   export PGPASSWORD='...'
 #   ./deploy_azure.sh
@@ -17,10 +17,13 @@
 # Microsoft Entra ID auth:
 #   export PGHOST=epimethyl.postgres.database.azure.com
 #   export PGPORT=5432
-#   export PGDATABASE=postgres
+#   export PGDATABASE=epimethyl
 #   export PGUSER='you@epimethyl.com'
 #   export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
 #   ./deploy_azure.sh
+#
+# Note: the leftover Azure PG database named "postgres" is stale (older wf-only
+# deploy). Do not treat it as the parity target.
 
 set -euo pipefail
 
@@ -29,7 +32,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 export PGHOST="${PGHOST:-epimethyl.postgres.database.azure.com}"
 export PGPORT="${PGPORT:-5432}"
-export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-postgres}}"
+export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-epimethyl}}"
 export PGSSLMODE="${PGSSLMODE:-require}"
 
 if [[ -z "${PGUSER:-}" ]]; then
@@ -78,6 +81,14 @@ SCRIPTS=(
   wf_sql_collection_bindings.sql
   portal_workflow_api.sql
   wf_drop_platform_sample_storage.sql
+  # Legacy EpiPortal clinical / RBAC / Meta stack (quoted PascalCase)
+  meta_schema.sql
+  rbac_schema.sql
+  portal_clinical_schema.sql
+  contract_schema.sql
+  onboarding_schema.sql
+  e_portal_schema.sql
+  legacy_cross_schema_fks.sql
   cfg_schema.sql
   cfg_registry_tables.sql
   cfg_wf_relationships.sql
@@ -91,6 +102,15 @@ SCRIPTS=(
   cfg_assay_procedure_links.sql
   cfg_analyte_catalog.sql
   cfg_hyperparameter_search.sql
+  # Modern portal API parity (sp_get_site, sp_get_study, sp_list_workflow_defs, …)
+  portal_modern_api_parity.sql
+  # Legacy clinical / RBAC / Meta / Contract / Onboarding / e_portal API parity
+  portal_clinical_api_parity.sql
+  rbac_api_parity.sql
+  meta_api_parity.sql
+  contract_api_parity.sql
+  onboarding_api_parity.sql
+  e_portal_api_parity.sql
 )
 
 echo "Target: host=$PGHOST db=$PGDATABASE user=$PGUSER sslmode=$PGSSLMODE"

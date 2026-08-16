@@ -57,6 +57,23 @@ CREATE INDEX IF NOT EXISTS ix_cfg_ht_instance ON cfg.hyperparameter_trial(workfl
 -- Create a search run and return its id. Instance creation happens in the portal
 -- middle-tier (Python) because PostgreSQL cannot write /work and finalization is
 -- an in-process step; trials are then recorded via sp_add_hyperparam_trial.
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_start_hyperparam_grid'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION portal.sp_start_hyperparam_grid(
   p_study_row_id bigint,
   p_display_name text,
@@ -151,6 +168,23 @@ END;
 $$;
 
 -- UI read: trials joined to live instance status.
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_get_hyperparam_search'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION portal.sp_get_hyperparam_search(
   p_search_id bigint
 )

@@ -1,5 +1,22 @@
 -- cfg repository API (PostgreSQL): upsert / get / list / publish / set compiled version
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = '_content_hash'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg._content_hash(doc jsonb)
 RETURNS text
 LANGUAGE sql
@@ -7,6 +24,23 @@ IMMUTABLE
 AS $$
   SELECT md5(doc::text);
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_upsert'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_upsert(
   p_kind text,
@@ -144,6 +178,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_get'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_get(
   p_kind text,
   p_name text,
@@ -232,6 +283,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_list'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_list(
   p_kind text,
   p_published_only boolean DEFAULT false
@@ -286,6 +354,23 @@ BEGIN
   END IF;
 END;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_publish'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_publish(
   p_kind text,
@@ -343,6 +428,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_set_compiled_version'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_set_compiled_version(
   p_name text,
   p_version text,
@@ -383,6 +485,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_link_action'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_action(
   p_action_name text,
   p_version text DEFAULT '1'
@@ -395,6 +514,23 @@ BEGIN
     'cfg.cfg_repo_link_action retired; use wf.workflow_action + wf.data_type (seed_action_catalog)';
 END;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_link_study_instance'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_study_instance(
   p_study_row_id bigint,
@@ -430,6 +566,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_link_reference_asset'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_reference_asset(
   p_asset_name text,
   p_version text DEFAULT '1',
@@ -460,6 +613,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_link_site_asset'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_site_asset(
   p_site_id bigint,
   p_reference_asset_id bigint,
@@ -480,6 +650,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_get_credential_secret'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_get_credential_secret(
   p_name text,
   p_version text DEFAULT NULL
@@ -499,6 +686,23 @@ BEGIN
   LIMIT 1;
 END;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_set_study_group'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_set_study_group(
   p_study_row_id bigint,
@@ -528,6 +732,23 @@ BEGIN
   FROM cfg.study_group g WHERE g.id = v_id;
 END;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_set_study_group_members'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_set_study_group_members(
   p_study_group_id bigint,
@@ -581,6 +802,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_list_study_groups'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_list_study_groups(p_study_row_id bigint)
 RETURNS TABLE(
   id bigint,
@@ -599,6 +837,23 @@ AS $$
   ORDER BY g.role, g.label;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_list_study_group_members'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_list_study_group_members(p_study_group_id bigint)
 RETURNS TABLE(
   id bigint,
@@ -614,6 +869,23 @@ AS $$
   WHERE m.study_group_id = p_study_group_id
   ORDER BY m.processing_sample_key;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_materialize_study_lists'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_materialize_study_lists(
   p_study_row_id bigint,

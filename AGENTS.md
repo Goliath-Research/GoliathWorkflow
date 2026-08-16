@@ -11,7 +11,7 @@ MethylPipeline is **not** tied to one disease or study. Cohorts and paths live o
 | Backend | Typical use | Populate reference data |
 |---------|-------------|-------------------------|
 | Azure SQL | Production gateway, portal | Already populated; refresh catalog via `seed_action_catalog.py` or MCP; genomes via `cfg_reference_assets_seed.sql` + site roles via `cfg_site_reference_assets_seed.sql` (one `pangenome_bundle` per site; WGBS is an `@links` swap, not a second role) |
-| PostgreSQL | Parity, dev gateway, CI | Schema via [`sql_pg/deploy_azure.sh`](workflow_engine/sql_pg/deploy_azure.sh) (dir is **`sql_pg`**, not `sql_pgsql`); action catalog via [`scripts/populate_postgres_reference_data.py`](scripts/populate_postgres_reference_data.py); genomes via same `cfg_reference_assets_seed.sql` + [reference-inventory-qnap.md](docs/deployment/reference-inventory-qnap.md) |
+| PostgreSQL | Schema twin / parity, dev gateway, CI (canonical DB **`epimethyl`**) | Schema via [`sql_pg/deploy_azure.sh`](workflow_engine/sql_pg/deploy_azure.sh) (dir is **`sql_pg`**, not `sql_pgsql`); action catalog via [`scripts/populate_postgres_reference_data.py`](scripts/populate_postgres_reference_data.py); live gap report via [`scripts/db_schema_inventory.py`](scripts/db_schema_inventory.py); genomes via same `cfg_reference_assets_seed.sql` + [reference-inventory-qnap.md](docs/deployment/reference-inventory-qnap.md) |
 
 When assisting with DB tasks:
 

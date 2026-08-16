@@ -28,6 +28,8 @@ jobs:
         run: pip install pyyaml
       - name: Validate DB object contract lockstep
         run: python workflow_engine/contract/validate_contract.py
+      - name: Inventory script smoke (offline --help)
+        run: python scripts/db_schema_inventory.py --help
 
   gateway-unit-tests:
     runs-on: ubuntu-latest

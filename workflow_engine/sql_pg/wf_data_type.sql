@@ -85,15 +85,15 @@ BEGIN
     LIMIT 1;
   END IF;
 
-  INSERT INTO wf.data_type(name, version, status, kind, element_type_id, content_hash)
+  INSERT INTO wf.data_type AS dt(name, version, status, kind, element_type_id, content_hash)
   VALUES (p_name, v_ver, v_st, p_kind, v_element_id, p_content_hash)
-  ON CONFLICT (name, version) DO UPDATE SET
+  ON CONFLICT ON CONSTRAINT uq_wf_data_type_name_version DO UPDATE SET
     status = EXCLUDED.status,
     kind = EXCLUDED.kind,
-    element_type_id = COALESCE(EXCLUDED.element_type_id, wf.data_type.element_type_id),
-    content_hash = COALESCE(EXCLUDED.content_hash, wf.data_type.content_hash),
+    element_type_id = COALESCE(EXCLUDED.element_type_id, dt.element_type_id),
+    content_hash = COALESCE(EXCLUDED.content_hash, dt.content_hash),
     updated_at_utc = (now() AT TIME ZONE 'utc')
-  RETURNING wf.data_type.id INTO v_id;
+  RETURNING dt.id INTO v_id;
 
   RETURN QUERY
   SELECT t.id, t.name, t.version, t.status::text, t.kind::text, t.element_type_id
@@ -131,7 +131,7 @@ BEGIN
     RAISE EXCEPTION 'wf.data_type not found: %', p_type_name;
   END IF;
 
-  DELETE FROM wf.data_type_field WHERE data_type_id = v_type_id;
+  DELETE FROM wf.data_type_field f WHERE f.data_type_id = v_type_id;
 
   FOR elem IN SELECT * FROM jsonb_array_elements(COALESCE(p_fields, '[]'::jsonb))
   LOOP
@@ -190,7 +190,7 @@ BEGIN
     RAISE EXCEPTION 'wf.data_type not found: %', p_type_name;
   END IF;
 
-  DELETE FROM wf.data_type_enum_value WHERE data_type_id = v_type_id;
+  DELETE FROM wf.data_type_enum_value e WHERE e.data_type_id = v_type_id;
 
   FOR v IN SELECT jsonb_array_elements_text(COALESCE(p_values, '[]'::jsonb))
   LOOP
@@ -428,6 +428,7 @@ AS $$
   SELECT * FROM wf.wf_repo_list_data_type_fields(p_name, p_version);
 $$;
 
+DROP FUNCTION IF EXISTS portal.sp_list_workflow_actions();
 CREATE OR REPLACE FUNCTION portal.sp_list_workflow_actions()
 RETURNS TABLE(
   id bigint,
@@ -458,6 +459,7 @@ AS $$
   ORDER BY a.action_name;
 $$;
 
+DROP FUNCTION IF EXISTS portal.sp_get_workflow_action(text);
 CREATE OR REPLACE FUNCTION portal.sp_get_workflow_action(p_action_name text)
 RETURNS TABLE(
   id bigint,

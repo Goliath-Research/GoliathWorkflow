@@ -30,8 +30,8 @@ Deployed by `cfg_wf_relationships.sql` (after `cfg_registry_tables.sql`):
 | `cfg.assay_procedure.analyte_id` | `cfg.analyte.id` | Typed analyte expectation (string `primary_analyte` kept) |
 | `portal.Samples.analyte_id` | `cfg.analyte.id` | Clinical sample matrix (enrollment hard-filter) |
 | `cfg.study_group.study_row_id` | `cfg.study.id` | Analysis arm (`control` / `disease`) |
-| `cfg.study_group_member.portal_sample_id` | `portal.Samples.ID` | Enrolled clinical sample (MSSQL FK) |
-| `cfg.study_group_member.lab_sample_id` | `portal.LabSamples.ID` | Optional lab run / processing key source |
+| `cfg.study_group_member.portal_sample_id` | `portal.Samples.ID` | Enrolled clinical sample (**FK on both Azure SQL and PostgreSQL** after `legacy_cross_schema_fks.sql`) |
+| `cfg.study_group_member.lab_sample_id` | `portal.LabSamples.ID` | Optional lab run / processing key source (**FK on both backends**) |
 
 Views: `cfg.v_domain_program_wf`, `cfg.v_action_definition_wf` (now a **wf** action + type browse view; `cfg.action_definition` retired), `cfg.v_reference_asset`, `cfg.v_site_reference_asset`, `cfg.v_study_instance`, `cfg.v_analyte`, `cfg.v_assay_procedure`.
 

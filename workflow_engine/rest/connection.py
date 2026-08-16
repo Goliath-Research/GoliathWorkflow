@@ -47,6 +47,8 @@ def resolve_schema_name() -> str:
 
 
 def build_postgres_conninfo(*, use_managed_identity: bool = False) -> str:
+    from urllib.parse import quote
+
     override = _env("METHYLPIPELINE_DB")
     if override:
         return override
@@ -54,12 +56,13 @@ def build_postgres_conninfo(*, use_managed_identity: bool = False) -> str:
     host = _env("POSTGRES_HOST", "localhost")
     port = _env("POSTGRES_PORT", "5432")
     db = _env("POSTGRES_DB", "methylpipeline")
-    user = _env("POSTGRES_USER", "postgres")
+    user = quote(_env("POSTGRES_USER", "postgres"), safe="")
+    sslmode = _env("PGSSLMODE", "require")
     if use_managed_identity:
         # Password is supplied at connect time via Entra token.
-        return f"postgresql://{user}@{host}:{port}/{db}?sslmode=require"
-    password = _env("POSTGRES_PASSWORD")
-    return f"postgresql://{user}:{password}@{host}:{port}/{db}"
+        return f"postgresql://{user}@{host}:{port}/{db}?sslmode={sslmode}"
+    password = quote(_env("POSTGRES_PASSWORD"), safe="")
+    return f"postgresql://{user}:{password}@{host}:{port}/{db}?sslmode={sslmode}"
 
 
 def build_mssql_conninfo(*, use_managed_identity: bool = False) -> str:

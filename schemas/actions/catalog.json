@@ -1414,7 +1414,8 @@
         "projectPath",
         "sampleId",
         "sampleDir",
-        "primaryAnalyte"
+        "primaryAnalyte",
+        "alignmentMode"
       ],
       "control": {
         "can_continue": false,

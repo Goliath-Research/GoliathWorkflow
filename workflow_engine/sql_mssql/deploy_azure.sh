@@ -100,6 +100,20 @@ SCRIPTS=(
   wf_sql_collection_bindings.sql
   portal_workflow_api.sql
   wf_drop_platform_sample_storage.sql
+  # Legacy EpiPortal stack (extracted from MethylPipeline.sql) — before cfg FKs
+  meta_schema.sql
+  meta_api.sql
+  portal_clinical_schema.sql
+  rbac_schema.sql
+  rbac_api.sql
+  portal_clinical_api.sql
+  contract_schema.sql
+  contract_api.sql
+  onboarding_schema.sql
+  onboarding_api.sql
+  e_portal_schema.sql
+  e_portal_api.sql
+  portal_modern_api.sql
   cfg_schema.sql
   cfg_registry_tables.sql
   cfg_json_column_alignment.sql

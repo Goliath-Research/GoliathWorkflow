@@ -58,8 +58,15 @@ CREATE TABLE IF NOT EXISTS wf.workflow_node (
   CHECK (node_type IN ('ACTION','SEQUENCE','PARALLEL','IF','SWITCH','REPEAT','WHILE','FOREACH'))
 );
 
-ALTER TABLE wf.workflow_version
-  ADD CONSTRAINT fk_wfv_root FOREIGN KEY (root_node_id) REFERENCES wf.workflow_node(id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_wfv_root'
+  ) THEN
+    ALTER TABLE wf.workflow_version
+      ADD CONSTRAINT fk_wfv_root FOREIGN KEY (root_node_id) REFERENCES wf.workflow_node(id);
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS ix_workflow_node_version ON wf.workflow_node(workflow_version_id);
 

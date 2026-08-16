@@ -314,6 +314,36 @@ objects:
       kind: procedure
       required: true
       notes: Upsert cfg.site_reference_asset (site role → reference_asset)
+    - name: cfg.cfg_repo_set_study_group
+      kind: procedure
+      required: true
+    - name: cfg.cfg_repo_set_study_group_members
+      kind: procedure
+      required: true
+    - name: cfg.cfg_repo_materialize_study_lists
+      kind: procedure
+      required: true
+
+  clinical_portal_api:
+    - name: portal.sp_list_samples_for_study_enrollment
+      kind: procedure
+      required: true
+      notes: Enrollment picker over portal.Samples + LabSamples
+    - name: portal.sp_set_sample_analyte
+      kind: procedure
+      required: true
+    - name: portal.sp_list_sites
+      kind: procedure
+      required: true
+    - name: portal.sp_list_studies
+      kind: procedure
+      required: true
+
+  rbac_api:
+    - name: rbac.spgetuseridbyemail
+      kind: procedure
+      required: true
+      notes: MSSQL RBAC.spGetUserIdByEmail; PG "RBAC".spgetuseridbyemail (contract names are lowercased)
 
   domain:
     - name: dbo.spMapDMP2Genes

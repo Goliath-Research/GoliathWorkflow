@@ -79,6 +79,7 @@ SELECT
   a.document_json->'aliases' AS aliases
 FROM cfg.analyte a;
 
+DROP VIEW IF EXISTS cfg.v_assay_procedure;
 CREATE OR REPLACE VIEW cfg.v_assay_procedure AS
 SELECT
   ap.id AS assay_procedure_id,
@@ -102,6 +103,23 @@ LEFT JOIN cfg.analyte an ON an.id = ap.analyte_id
 LEFT JOIN cfg.pipeline_profile pp ON pp.id = ap.default_pipeline_profile_id
 LEFT JOIN cfg.domain_program sp ON sp.id = ap.sample_prep_program_id
 LEFT JOIN cfg.domain_program lp ON lp.id = ap.lifecycle_program_id;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_bind_assay_procedure'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_bind_assay_procedure(
   p_procedure_name text,
@@ -189,6 +207,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_backfill_study_analyte_defaults'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_backfill_study_analyte_defaults()
 RETURNS TABLE(studies_updated bigint)
 LANGUAGE plpgsql
@@ -215,6 +250,23 @@ BEGIN
 END;
 $$;
 
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_list_analytes'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION portal.sp_list_analytes(p_published_only boolean DEFAULT false)
 RETURNS TABLE(
   id bigint,
@@ -236,6 +288,23 @@ AS $$
   WHERE (NOT p_published_only OR a.status = 'published')
   ORDER BY a.name, a.version;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_get_analyte'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_get_analyte(
   p_name text,
@@ -263,6 +332,23 @@ AS $$
   ORDER BY a.id DESC
   LIMIT 1;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_list_analyte_catalog'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_list_analyte_catalog(
   p_include_advanced boolean DEFAULT false
@@ -304,6 +390,23 @@ AS $$
     )
   ORDER BY a.name, a.version;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_set_sample_analyte'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_set_sample_analyte(
   p_portal_sample_id int,
@@ -354,6 +457,23 @@ END;
 $$;
 
 -- Enrollment picker is Azure SQL–primary. PG stub: filter by study analyte when portal.samples exists.
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_list_samples_for_study_enrollment'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION portal.sp_list_samples_for_study_enrollment(
   p_customer_id int DEFAULT NULL,
   p_study_row_id bigint DEFAULT NULL,
@@ -389,6 +509,23 @@ EXCEPTION
     RETURN;
 END;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_get_study_process_defaults'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_get_study_process_defaults(p_study_row_id bigint)
 RETURNS TABLE(
@@ -429,6 +566,23 @@ AS $$
   LEFT JOIN cfg.analyte an ON an.id = s.default_analyte_id
   WHERE s.id = p_study_row_id;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname = 'sp_set_study_process_defaults'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
 
 CREATE OR REPLACE FUNCTION portal.sp_set_study_process_defaults(
   p_study_row_id bigint,
@@ -582,6 +736,23 @@ END;
 $$;
 
 -- Membership hard-filter when portal.Samples.analyte_id is present.
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'cfg' AND p.proname = 'cfg_repo_set_study_group_members'
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_set_study_group_members(
   p_study_group_id bigint,
   p_members jsonb

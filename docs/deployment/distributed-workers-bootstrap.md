@@ -8,16 +8,25 @@ For the full production platform (gateway + Arc enroll), see [production-platfor
 
 | Backend | Role | Data state |
 |---------|------|------------|
-| **Azure SQL** | Production / portal | Populated — actions, workflow defs, instances, workers |
-| **PostgreSQL** | Parity / gateway dev / CI | Schema + procedures deployed; **reference tables often empty** |
+| **Azure SQL** | Production / portal (until cutover) | Populated — actions, workflow defs, instances, workers, clinical portal |
+| **PostgreSQL (`epimethyl`)** | Schema twin / gateway dev / CI | Full `wf` + `cfg` + clinical `portal` / `RBAC` / `Meta` / `Contract` / `Onboarding` / `e_portal` DDL + procs; **reference/runtime data often empty** |
 
-PostgreSQL is **not** a full clone of Azure SQL. For worker testing it needs **reference metadata** only:
+Canonical PostgreSQL database is **`epimethyl`**. The leftover Azure PG database named **`postgres`** is a stale older wf-only deploy — do not treat it as the twin.
 
-- `wf.workflow_action` + `wf.workflow_action_schema` (catalog)
+PostgreSQL is a **schema/procedure twin**, not a full data clone. For worker testing seed **reference metadata** only:
+
+- `wf.workflow_action` + `wf.data_type` (catalog)
 - `wf.workflow_def` … `workflow_edge` … (compiled DomainPrograms), *or* deploy via gateway
 - `portal.resource_profile` (optional, for archive/H5 defaults)
 
-Do **not** copy `workflow_instance`, `node_execution`, `wf.worker`, or production leases into PostgreSQL unless you intend a dedicated test environment.
+Do **not** copy `workflow_instance`, `node_execution`, `wf.worker`, or production leases into PostgreSQL unless you intend a dedicated test / cutover environment.
+
+Live gap report (tables, routines, cross-schema FKs):
+
+```bash
+python scripts/db_schema_inventory.py
+# optional gate: python scripts/db_schema_inventory.py --fail-on-gap
+```
 
 ### Populate empty PostgreSQL
 
@@ -25,7 +34,7 @@ Do **not** copy `workflow_instance`, `node_execution`, `wf.worker`, or productio
 source .venv/bin/activate
 
 export POSTGRES_HOST=epimethyl.postgres.database.azure.com
-export POSTGRES_DB=postgres
+export POSTGRES_DB=epimethyl
 export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 export PGSSLMODE=require

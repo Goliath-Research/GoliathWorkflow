@@ -7,7 +7,8 @@ rows. For genomes use ``cfg_reference_assets_seed.sql`` (via ``sql_pg/deploy_azu
 plus provision from myQNAPcloud — see ``docs/deployment/reference-inventory-qnap.md``.
 
 Azure SQL is the production database (populated, in use). PostgreSQL typically has
-the same schema/procedures but empty wf action tables. This script:
+the same schema/procedures but empty wf action tables. Canonical PG database is
+``epimethyl`` (not the stale ``postgres`` database on the same server). This script:
 
   1. Seeds action catalog + JSON schemas from the **git repo** (current catalog).
   2. Optionally copies workflow **definitions** (def/version/node/edge/bindings) from
@@ -20,7 +21,7 @@ Usage:
   source .venv/bin/activate
 
   # Catalog only (POSTGRES_* required)
-  export POSTGRES_HOST=... POSTGRES_DB=postgres POSTGRES_USER=dba POSTGRES_PASSWORD='...'
+  export POSTGRES_HOST=... POSTGRES_DB=epimethyl POSTGRES_USER=dba POSTGRES_PASSWORD='...'
   export PGSSLMODE=require
   python scripts/populate_postgres_reference_data.py
 
