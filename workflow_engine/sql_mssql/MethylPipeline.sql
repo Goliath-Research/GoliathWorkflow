@@ -1358,8 +1358,8 @@ BEGIN
             parent_node_execution_id, iteration_no, available_at_utc
         )
         VALUES (
-            @workflow_instance_id, @workflow_node_id, N'READY', 1,
-            @parent_node_execution_id, @iteration_no, SYSUTCDATETIME()
+            @workflow_instance_id, @workflow_node_id, N'PENDING', 1,
+            @parent_node_execution_id, @iteration_no, NULL
         );
         SET @ne_id = SCOPE_IDENTITY();
 
@@ -1402,7 +1402,11 @@ BEGIN
             RETURN;
         END
 
-        UPDATE wf.node_execution SET input_json = CAST(@fj AS json) WHERE id = @ne_id;
+        UPDATE wf.node_execution
+        SET status = N'READY',
+            input_json = CAST(@fj AS json),
+            available_at_utc = SYSUTCDATETIME()
+        WHERE id = @ne_id;
         RETURN;
     END
 
@@ -1969,10 +1973,15 @@ BEGIN
         RETURN;
     END
 
+    DECLARE @output_json_text NVARCHAR(MAX) = CASE
+        WHEN @output_json IS NULL THEN NULL
+        ELSE CONVERT(NVARCHAR(MAX), @output_json)
+    END;
+
     EXEC wf.wf_engine_on_action_complete
         @action_execution_id = @node_execution_id,
         @result_code = @result_code,
-        @output_json = @output_json;
+        @output_json = @output_json_text;
 
     SET @accepted = 1;
 
@@ -2100,6 +2109,7 @@ BEGIN
         INNER JOIN wf.workflow_action AS wa ON wa.id = wn.workflow_action_id
         INNER JOIN wf.workflow_instance AS wi ON wi.id = ne.workflow_instance_id
         WHERE ne.status = N'READY'
+          AND ne.input_json IS NOT NULL
           AND wn.node_type = N'ACTION'
           AND wi.status = N'RUNNING'
           AND (ne.available_at_utc IS NULL OR ne.available_at_utc <= @now)

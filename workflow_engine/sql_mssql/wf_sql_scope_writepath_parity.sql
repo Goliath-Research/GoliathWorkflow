@@ -396,8 +396,8 @@ BEGIN
             parent_node_execution_id, iteration_no, available_at_utc
         )
         VALUES (
-            @workflow_instance_id, @workflow_node_id, N'READY', 1,
-            @parent_node_execution_id, @iteration_no, SYSUTCDATETIME()
+            @workflow_instance_id, @workflow_node_id, N'PENDING', 1,
+            @parent_node_execution_id, @iteration_no, NULL
         );
         SET @ne_id = SCOPE_IDENTITY();
 
@@ -462,7 +462,9 @@ BEGIN
         END
 
         UPDATE wf.node_execution
-        SET input_json = CAST(@fj AS json)
+        SET status = N'READY',
+            input_json = CAST(@fj AS json),
+            available_at_utc = SYSUTCDATETIME()
         WHERE id = @ne_id;
         RETURN;
     END

@@ -152,6 +152,7 @@ BEGIN
         INNER JOIN wf.workflow_action AS wa ON wa.id = wn.workflow_action_id
         INNER JOIN wf.workflow_instance AS wi ON wi.id = ne.workflow_instance_id
         WHERE ne.status = N'READY'
+          AND ne.input_json IS NOT NULL
           AND wn.node_type = N'ACTION'
           AND wi.status = N'RUNNING'
           AND (ne.available_at_utc IS NULL OR ne.available_at_utc <= @now)

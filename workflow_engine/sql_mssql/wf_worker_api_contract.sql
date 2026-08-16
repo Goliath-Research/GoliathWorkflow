@@ -50,10 +50,16 @@ BEGIN
         RETURN;
     END
 
+    /* Engine still takes NVARCHAR(MAX); Azure SQL forbids implicit json → nvarchar. */
+    DECLARE @output_json_text NVARCHAR(MAX) = CASE
+        WHEN @output_json IS NULL THEN NULL
+        ELSE CONVERT(NVARCHAR(MAX), @output_json)
+    END;
+
     EXEC wf.wf_engine_on_action_complete
         @action_execution_id = @node_execution_id,
         @result_code = @result_code,
-        @output_json = @output_json;
+        @output_json = @output_json_text;
 
     SET @accepted = 1;
 
