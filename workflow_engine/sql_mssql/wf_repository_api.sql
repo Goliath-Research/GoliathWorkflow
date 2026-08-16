@@ -116,6 +116,15 @@ BEGIN
 
     DECLARE @instance_id bigint = (SELECT TOP 1 id FROM @created);
 
+    /* Workers claim via node_execution → FK requires instance_cursor row. */
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.instance_cursor WHERE workflow_instance_id = @instance_id
+    )
+    BEGIN
+        INSERT INTO wf.instance_cursor (workflow_instance_id, last_polled_at_utc, notes)
+        VALUES (@instance_id, SYSUTCDATETIME(), NULL);
+    END
+
     /* Best-effort: register opaque execution_scope when the helper exists. */
     IF OBJECT_ID(N'wf.wf_apply_execution_scope', N'P') IS NOT NULL
     BEGIN
