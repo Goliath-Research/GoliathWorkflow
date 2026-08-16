@@ -350,6 +350,24 @@ def diff_inventories(
     return result
 
 
+def _merge_case_variants(bucket: Dict[str, List[str]], schema: str) -> List[str]:
+    """Union table/routine names across PascalCase and lowercase schema keys.
+
+    For already-lowercase schemas (wf, cfg, portal, e_portal), ``schema`` and
+    ``schema.lower()`` are the same dict key — do not concatenate the list twice.
+    """
+    primary = list(bucket.get(schema, []))
+    lower = schema.lower()
+    if lower == schema:
+        return primary
+    seen = set(primary)
+    for name in bucket.get(lower, []):
+        if name not in seen:
+            primary.append(name)
+            seen.add(name)
+    return primary
+
+
 def write_outputs(payload: Dict[str, Any]) -> Tuple[Path, Path]:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     json_path = OUT_DIR / "schema_inventory_live.json"
@@ -382,12 +400,9 @@ def write_outputs(payload: Dict[str, Any]) -> Tuple[Path, Path]:
         p = payload["postgres"]
         lines.append(f"## PostgreSQL (`{p['database']}`)")
         lines.append("")
-        # Merge case variants for display
         for schema in CONTROLLED_SCHEMAS:
-            tables = p["tables"].get(schema, []) + p["tables"].get(schema.lower(), [])
-            routines = p["routines"].get(schema, []) + p["routines"].get(
-                schema.lower(), []
-            )
+            tables = _merge_case_variants(p["tables"], schema)
+            routines = _merge_case_variants(p["routines"], schema)
             lines.append(
                 f"- `{schema}`: {len(tables)} tables, {len(routines)} routines"
             )

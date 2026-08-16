@@ -1,6 +1,6 @@
 # Live schema inventory (Azure SQL vs PostgreSQL)
 
-Captured: `2026-08-16T18:15:16.629487+00:00`
+Captured: `2026-08-16T18:44:10.730125+00:00`
 
 Controlled schemas: `wf`, `cfg`, `portal`, `RBAC`, `Meta`, `Contract`, `Onboarding`, `e_portal`.
 
@@ -17,14 +17,14 @@ Controlled schemas: `wf`, `cfg`, `portal`, `RBAC`, `Meta`, `Contract`, `Onboardi
 
 ## PostgreSQL (`epimethyl`)
 
-- `wf`: 60 tables, 164 routines
-- `cfg`: 40 tables, 36 routines
-- `portal`: 50 tables, 202 routines
+- `wf`: 30 tables, 82 routines
+- `cfg`: 20 tables, 18 routines
+- `portal`: 25 tables, 101 routines
 - `RBAC`: 15 tables, 9 routines
 - `Meta`: 9 tables, 17 routines
 - `Contract`: 6 tables, 4 routines
 - `Onboarding`: 4 tables, 1 routines
-- `e_portal`: 34 tables, 34 routines
+- `e_portal`: 17 tables, 17 routines
 
 > Note: the Azure PG database named `postgres` is a stale older wf-only deploy. Canonical parity target is **`epimethyl`**.
 
