@@ -109,6 +109,54 @@ def test_build_command_includes_chg_chh_flags(tmp_path: Path) -> None:
     assert str(sample_dir) not in cmd[bam_idx + 1 : ref_idx + 1]
 
 
+def test_build_command_includes_chrom_parallel_when_supported(tmp_path: Path) -> None:
+    project = tmp_path / "project.json"
+    ref, action_config = _write_min_project(
+        project,
+        methyl_extract={
+            "extract_contexts": ["CG"],
+            "threads": 10,
+            "chrom_parallel": 2,
+            "max_rss_gb": 32,
+            "split": True,
+        },
+    )
+    sample_dir = tmp_path / "S1"
+    sample_dir.mkdir()
+    bam = sample_dir / "S1.bam"
+    bam.write_bytes(b"BAM")
+    fake_bin = tmp_path / "MethylExtractor"
+    fake_bin.write_text(
+        "#!/bin/sh\necho 'Usage: MethylExtractor --chrom-parallel --max-rss-gb --threads'\n",
+        encoding="utf-8",
+    )
+    fake_bin.chmod(0o755)
+
+    cfg = runner.resolve_methyl_extract_config(
+        project,
+        _task_input(
+            "S1",
+            sample_dir,
+            ref,
+            action_config,
+            resolved_methyl_extract={
+                **action_config["methyl_extract"],
+                "extractor_bin": str(fake_bin),
+            },
+        ),
+    )
+    paths = runner.MethylExtractPaths(
+        sample_dir=sample_dir,
+        sample_id="S1",
+        bam_path=bam,
+        log_path=sample_dir / "S1.methyl_extract.log",
+    )
+    cmd = runner.build_methyl_extractor_command(cfg, paths)
+    assert "--chrom-parallel=2" in cmd
+    assert "--max-rss-gb=32" in cmd
+    assert "--threads=10" in cmd
+
+
 def test_build_command_cg_only_skips_chg_chh(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
     ref, action_config = _write_min_project(

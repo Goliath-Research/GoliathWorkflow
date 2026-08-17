@@ -58,12 +58,23 @@ Under `{sampleDir}`:
 | Per-chrom HDF5 | `{chrom}-{ctx}.h5` | Marginal per-CpG counts (e.g. `1-CG.h5`) |
 | Read-level sidecar | `{chrom}-{ctx}.patterns.h5` | Per-tile read co-methylation histograms (when `--read-level`) |
 | Extraction log | `{sampleId}.methyl_extract.log` | Command log |
+| Phase timing | `{sampleId}.timing.json` | Elapsed-ms per chromosome (BAM vs write) |
 
 ### Read-level pattern sidecar (optional)
 
 When profile `actionConfig.methyl_extract.read_level.enabled` is true (or `--read-level`
 is passed), MethylExtractor also writes `{chrom}-{ctx}.patterns.h5` files. Schema:
 [`docs/reference/read_level_pattern_contract.md`](../../docs/reference/read_level_pattern_contract.md).
+
+Throughput knobs (operator-set, not code defaults):
+
+| Config | CLI | Role |
+|--------|-----|------|
+| `threads` | `--threads` | Total region-worker budget, split across in-flight chromosomes |
+| `chrom_parallel` | `--chrom-parallel` | Max chromosomes processed at once (memory-gated) |
+| `max_rss_gb` | `--max-rss-gb` | Peak RSS gate for chrom-parallel |
+
+MethylExtractor writes `{sampleId}.timing.json` next to the extraction manifest (phase elapsed-ms).
 
 SaMD / research profiles enable read-level **by default**. Missing `*.patterns.h5` does **not**
 fail sample prep or the validation lifecycle: extract warns and continues; `pipeline.info_measures`
@@ -73,10 +84,13 @@ Profile example:
 
 ```json
 "methyl_extract": {
+  "threads": 10,
+  "chrom_parallel": 2,
+  "max_rss_gb": 32,
   "read_level": { "enabled": true, "tile_size": 4 }
 }
 ```
 
-Worker CLI flags: `--read-level`, `--tile-size=<k>` (forwarded from resolved config).
+Worker CLI flags: `--read-level`, `--tile-size=<k>`, `--chrom-parallel`, `--max-rss-gb` (forwarded from resolved config).
 
 See [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md) for the full contract.

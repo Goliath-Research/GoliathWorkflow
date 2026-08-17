@@ -76,6 +76,16 @@ def test_validation_step_schema_has_no_runner_required_fields():
         )
 
 
+def test_methyl_extract_step_config_documents_chrom_parallel():
+    from methyl_utils.methyl_extract_config import MethylExtractStepConfig
+
+    cfg = MethylExtractStepConfig(chrom_parallel=2, max_rss_gb=32, threads=10)
+    dumped = cfg.model_dump(exclude_none=True)
+    assert dumped["chrom_parallel"] == 2
+    assert dumped["max_rss_gb"] == 32
+    assert dumped["threads"] == 10
+
+
 def test_progression_step_schema_artifact_registered():
     root = repo_schemas_config_dir()
     path = root / "progression.schema.json"

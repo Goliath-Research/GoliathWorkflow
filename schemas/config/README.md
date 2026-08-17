@@ -42,5 +42,7 @@ Pytest also enforces this: `packages/methylvalidation/tests/test_config_schema_e
 | `centroid.schema.json` | `MethylCentroidConfig` |
 | `queue_discovery_task_v1.schema.json` | `DiscoveryRunTaskV1` |
 | `alignment_qc/exported_sample_qc*.schema.json` | AlignmentQC export payloads |
+| `storage_transfer.schema.json` | `StorageTransferStepConfig` |
+| `methyl_extract.schema.json` | `methyl_utils.methyl_extract_config.MethylExtractStepConfig` |
 
 Registry: `packages/methylvalidation/methyl_validation/config_schema_registry.py`.

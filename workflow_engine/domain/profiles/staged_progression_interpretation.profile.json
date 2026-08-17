@@ -24,6 +24,8 @@
         "CHH"
       ],
       "threads": 10,
+      "chrom_parallel": 2,
+      "max_rss_gb": 32,
       "min_mapq": 20,
       "min_phred": 20,
       "split": true,

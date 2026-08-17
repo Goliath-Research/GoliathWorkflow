@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 logger = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ class MethylExtractConfig:
     read_level: bool
     tile_size: Optional[int]
     target_panel_bed: Optional[Path] = None
+    chrom_parallel: Optional[int] = None
+    max_rss_gb: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -301,6 +304,8 @@ def resolve_methyl_extract_config(
         read_level=read_level,
         tile_size=tile_size,
         target_panel_bed=target_panel_bed,
+        chrom_parallel=int(step_cfg["chrom_parallel"]) if step_cfg.get("chrom_parallel") is not None else None,
+        max_rss_gb=int(step_cfg["max_rss_gb"]) if step_cfg.get("max_rss_gb") is not None else None,
     )
 
 
@@ -590,13 +595,8 @@ def _extractor_bin(cfg: MethylExtractConfig) -> str:
     return found
 
 
-def _extractor_supports_read_level(bin_path: str) -> bool:
-    """Return True when ``MethylExtractor --help`` documents ``--read-level``.
-
-    Older aarch64 builds on some workers omit the flag; asking for it aborts
-    extraction with ``unrecognized option``. Probe help text rather than
-    hard-coding version strings.
-    """
+@lru_cache(maxsize=8)
+def _extractor_help_text(bin_path: str) -> str:
     try:
         proc = subprocess.run(
             [bin_path, "--help"],
@@ -606,9 +606,23 @@ def _extractor_supports_read_level(bin_path: str) -> bool:
             timeout=30,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return False
-    help_text = f"{proc.stdout or ''}\n{proc.stderr or ''}"
-    return "--read-level" in help_text
+        return ""
+    return f"{proc.stdout or ''}\n{proc.stderr or ''}"
+
+
+def _extractor_supports_flag(bin_path: str, flag: str) -> bool:
+    """Return True when ``MethylExtractor --help`` documents ``flag``."""
+    return flag in _extractor_help_text(bin_path)
+
+
+def _extractor_supports_read_level(bin_path: str) -> bool:
+    """Return True when ``MethylExtractor --help`` documents ``--read-level``.
+
+    Older aarch64 builds on some workers omit the flag; asking for it aborts
+    extraction with ``unrecognized option``. Probe help text rather than
+    hard-coding version strings.
+    """
+    return _extractor_supports_flag(bin_path, "--read-level")
 
 
 def build_methyl_extractor_command(cfg: MethylExtractConfig, paths: MethylExtractPaths) -> List[str]:
@@ -618,6 +632,10 @@ def build_methyl_extractor_command(cfg: MethylExtractConfig, paths: MethylExtrac
     ]
     if cfg.threads is not None:
         cmd.append(f"--threads={cfg.threads}")
+    if cfg.chrom_parallel is not None and _extractor_supports_flag(bin_path, "--chrom-parallel"):
+        cmd.append(f"--chrom-parallel={int(cfg.chrom_parallel)}")
+    if cfg.max_rss_gb is not None and _extractor_supports_flag(bin_path, "--max-rss-gb"):
+        cmd.append(f"--max-rss-gb={int(cfg.max_rss_gb)}")
     if cfg.min_mapq is not None:
         cmd.append(f"--min-mapq={cfg.min_mapq}")
     if cfg.min_phred is not None:

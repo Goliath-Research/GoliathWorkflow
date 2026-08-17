@@ -239,6 +239,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="StorageTransferStepConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="methyl_extract",
+        module="methyl_utils.methyl_extract_config",
+        class_name="MethylExtractStepConfig",
+        filename="methyl_extract.schema.json",
+        title="MethylExtractStepConfig",
+    ),
+    ConfigSchemaSpec(
         schema_id="rna_qc",
         module="rna_alignment_qc.models.config",
         class_name="RnaQcGuardrailConfig",
