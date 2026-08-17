@@ -183,6 +183,7 @@ nav:
       - architecture/index.md
       - Layer model: architecture/layer-model.md
       - Pipeline stages: architecture/pipeline-stages.md
+      - SamplePrep tooling: architecture/sample-prep-tooling.md
       - End-to-end workflow: architecture/end-to-end-workflow.md
       - RNA-seq workflow: architecture/end-to-end-workflow-rnaseq.md
       - Proteomics workflow: architecture/end-to-end-workflow-proteomics.md
@@ -256,6 +257,7 @@ nav:
 not_in_nav: |
   architecture/documentation-audit*.md
   architecture/integrity-and-design-review*.md
+  architecture/portal-UI.md
   architecture/worker-security-review.md
   architecture/worker-transport-decision.md
   deployment/buffy_gene_tier_a_cross_vm.md
