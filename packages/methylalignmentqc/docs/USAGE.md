@@ -38,7 +38,7 @@ Useful flags:
 
 **Shared** across modes: Picard dedup → `summary_stats`; optional duplication/PF; alignment-derived rates; optional `samtools flagstat`; bisulfite sidecar; `overall_pass` = AND of evaluated details.
 
-**Inference hazard:** when `alignmentMode` is omitted and both a Picard tar and methylGrapher provenance exist, inference can prefer Parabricks. Prefer an explicit mode on the worker task input. Operator detail: [Usage ch.03](../../../docs/usage/03-sample-prep-and-qc.qmd); theory: [ch.09](../../../docs/theory/chapters/09-methylalignmentqc.qmd).
+**Inference hazard:** when `alignmentMode` is omitted and both a Picard tar and methylGrapher provenance exist, inference can prefer Parabricks. Prefer an explicit mode on the worker task input. Operator detail: [Usage ch.03](../../../docs/usage/03-sample-prep-and-qc.md); theory: [ch.09](../../../docs/theory/chapters/09-methylalignmentqc.md).
 
 ## Typical Inputs
 

@@ -35,9 +35,9 @@ If a fact is duplicated, **link upward** — do not copy prose.
 
 ## Writing rules
 
-1. **Markdown only** for new pages (`.md`). Do not add Quarto `.qmd` books.
-2. **Mermaid** — use fenced ` ```mermaid ` blocks (dynamic in the site and on GitHub). Prefer editing `docs/diagrams/src/*.mmd` when a diagram is shared, then paste or reference the same source. Pre-rendered PNG/SVG under `docs/diagrams/out/` is optional (Marp / offline).
-3. **Math** — use `$inline$` and `$$…$$` blocks (MathJax). Give important equations an HTML id:
+1. **Markdown only** (`.md`). Do not add or keep Quarto `.qmd` files.
+2. **Mermaid** — use fenced ` ```mermaid ` blocks (dynamic in the site, on GitHub, and in Playwright PDF). Prefer editing `docs/diagrams/src/*.mmd` when a diagram is shared, then paste or reference the same source. Do **not** split HTML vs PDF with Quarto `content-visible` or PNG-only embeds. Pre-rendered PNG/SVG under `docs/diagrams/out/` is optional (Marp / offline only).
+3. **Math** — keep the original LaTeX. Use `$inline$` and `$$…$$` blocks (MathJax / arithmatex). Give important equations an HTML id:
    ```markdown
    <div id="eq-effect-size" markdown="1">
 

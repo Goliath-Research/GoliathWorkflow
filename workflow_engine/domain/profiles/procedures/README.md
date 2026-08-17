@@ -19,4 +19,4 @@ Loader: `pipeline_profiles.load_procedure` / `apply_pipeline_procedure` (via
 
 Schema: [`schemas/config/procedure.schema.json`](../../../../../schemas/config/procedure.schema.json).
 
-Docs: [Usage ch.24](../../../../../docs/usage/24-methylation-application-packs.qmd).
+Docs: [Usage ch.24](../../../../../docs/usage/24-methylation-application-packs.md).

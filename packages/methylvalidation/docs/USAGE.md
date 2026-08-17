@@ -1,6 +1,6 @@
 # MethylValidation Usage Guide
 
-> **Orchestration:** For new studies and production runs, use **`methyl-workflow-run`** with a DomainProgram and pipeline profile. This document describes the **`methyl-validation`** CLI — stage flags (`--stability`, `--freeze`, `--model`, …) are **legacy**; they remain documented because each flag maps to a workflow action and is still used in transitional scripts and narrow recovery. Start with [`docs/usage/04-orchestration-workflow-run.qmd`](../../../docs/usage/04-orchestration-workflow-run.qmd).
+> **Orchestration:** For new studies and production runs, use **`methyl-workflow-run`** with a DomainProgram and pipeline profile. This document describes the **`methyl-validation`** CLI — stage flags (`--stability`, `--freeze`, `--model`, …) are **legacy**; they remain documented because each flag maps to a workflow action and is still used in transitional scripts and narrow recovery. Start with [`docs/usage/04-orchestration-workflow-run.md`](../../../docs/usage/04-orchestration-workflow-run.md).
 
 ## Breaking change: Monte Carlo config snapshots
 
@@ -16,7 +16,7 @@ MethylValidation orchestrates repeated train/validation splits, **methyl-centroi
 4. **Final model training** (`--select-best-model`) — Select best backend from model-MC summaries and train final production model on all data.
 5. **On-demand evaluation/prediction** (`--post-model-validation` / `--predictor-only`) — Optional frozen-model descriptive holdouts or direct prediction use.
 
-Both workflows are controlled by the project configuration file. See the full Quarto documentation at `docs/theory/` for theoretical background and the complete configuration reference.
+Both workflows are controlled by the project configuration file. See `docs/theory/` for theoretical background and the complete configuration reference.
 For production migration policy, see [`ROLLOUT.md`](ROLLOUT.md).
 
 **Distributed / queue workers:** to pre-generate per-iteration task JSON, run `methyl-validation` subcommands `plan-runs` → `export-queue` → `run-task` (per worker) → `aggregate-results`, see [`DISTRIBUTED_QUEUE.md`](DISTRIBUTED_QUEUE.md).
@@ -292,7 +292,7 @@ Example profile fragment (`workflow_engine/domain/profiles/mc_gene_fc.profile.js
 }
 ```
 
-All `actionConfig.validation` fields are documented in the configuration reference (see `docs/reference/configuration-reference.qmd` or the Quarto book at `docs/theory/`).
+All `actionConfig.validation` fields are documented in the configuration reference (see `docs/reference/configuration-reference.md`).
 
 ### Stability + freeze controls (operationally important)
 
@@ -724,8 +724,8 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 
 ## Related Documentation
 
-- **Theory and algorithms:** `docs/theory/` (Quarto book)
-- **Two workflows in depth:** `docs/theory/chapters/12-two-workflows.qmd`
-- **Full configuration reference:** `docs/reference/configuration-reference.qmd`
-- **User guide:** `docs/usage/index.qmd`
+- **Theory and algorithms:** `docs/theory/`
+- **Two workflows in depth:** `docs/theory/chapters/12-two-workflows.md`
+- **Full configuration reference:** `docs/reference/configuration-reference.md`
+- **User guide:** `docs/usage/index.md`
 - **Implementation notes:** `packages/methylvalidation/docs/IMPLEMENTATION.md`

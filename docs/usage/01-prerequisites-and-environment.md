@@ -8,7 +8,6 @@ Set up a reproducible execution environment for all package CLIs and workflow st
 
 - Python environment in repo-local `.venv`
 - Installed package CLIs (`methyl-*`)
-- Quarto for manual rendering (optional for pipeline runs)
 - Optional: Chromium/Playwright for PDF export (`make docs-pdf`)
 
 ## Environment bootstrap

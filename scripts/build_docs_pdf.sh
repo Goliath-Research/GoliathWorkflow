@@ -11,7 +11,6 @@ source .venv/bin/activate
 pip install -q -r docs-requirements.txt
 python -m playwright install chromium >/dev/null
 
-rm -rf docs/theory/.quarto docs/usage/.quarto
 rm -rf site site-pdf
 mkdocs build --strict
 mkdir -p site-pdf

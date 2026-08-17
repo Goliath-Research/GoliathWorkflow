@@ -19,7 +19,7 @@ links both detectors to `cfdna` / `buffy_coat`. Empirical cells in
 
 ## Scope and evidence boundary
 
-- **MethylPipeline** was read from its canonical theory book (`docs/theory/chapters/*.qmd`)
+- **MethylPipeline** was read from its canonical theory book (`docs/theory/chapters/*.md`)
   and per-package theory/usage docs. In this repo the code is the source of truth and
   the theory book is written from the implemented behavior. Canonical orchestration is
   **`methyl-workflow-run` + DomainProgram + profile**; `methyl-validation --stability/--freeze/--model/--holdout-eval`
@@ -780,7 +780,7 @@ hold-out. MethylPipeline also provides **Workflow 3** (true held-out batch evalu
 batches (declared in `validation_partitions`) are excluded from production training at freeze and
 scored once by the frozen model, with QC-metric distributions (balanced accuracy, sensitivity,
 specificity, F1, ROC-AUC) produced by bootstrap with confidence intervals — the same bootstrap-CI
-reporting philosophy MethylIT uses. Theory: `docs/theory/chapters/12-two-workflows.qmd`. Operator
+reporting philosophy MethylIT uses. Theory: `docs/theory/chapters/12-two-workflows.md`. Operator
 entry: DomainProgram hold-out path or legacy `methyl-validation --holdout-eval`.
 
 ## Reference selection (the decision that governs everything in MethylIT)
@@ -874,12 +874,12 @@ is propagated from each DMP up to the objects being ranked, rather than a gene s
    of the mapped DMP p-values gives `gene_p_value` → Storey `gene_q_value` (with the honest caveat
    that mapped DMPs in one gene are spatially correlated, so the independence assumption is only
    approximate). Spec: `packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md`; theory
-   [`docs/theory/chapters/07-methylmapper.qmd`](../theory/chapters/07-methylmapper.md).
+   [`docs/theory/chapters/07-methylmapper.md`](../theory/chapters/07-methylmapper.md).
 4. **Downstream biology (summary only).** Once genes carry `gene_importance`, `methylenricher`
    can prioritize via PPI hubs (signal-weighted), CIS-BP annotate / motif_scan, and Enrichr library
    presets (`cancer-core`, …), optionally with disease-evidence boosts. Those layers **reuse** the
    propagated DMP weight rather than discarding it. Details live in theory
-   [`08-methylenricher.qmd`](../theory/chapters/08-methylenricher.md) — not duplicated here.
+   [`08-methylenricher.md`](../theory/chapters/08-methylenricher.md) — not duplicated here.
 5. **Weights into selection.** `methyl-gene-select` / `methyl-gene-feature-select` consume
    `gene_importance` and `feature_importance_*` so the signed, feature-resolved DMP weight orders
    the gene/feature panel that gets classified.
@@ -1085,9 +1085,9 @@ The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodolog
 
 ## Key sources reviewed
 
-- MethylPipeline: `docs/theory/chapters/01-methylutils.qmd`, `02-methylcentroid.qmd`,
-  `03-methyldetector.qmd`, `04-methylclassifier.qmd`, `05-methylpredictor-and-validation.qmd`,
-  `12-two-workflows.qmd`, `15-model-creation-and-validation.qmd`; package `docs/THEORY.md` files.
+- MethylPipeline: `docs/theory/chapters/01-methylutils.md`, `02-methylcentroid.md`,
+  `03-methyldetector.md`, `04-methylclassifier.md`, `05-methylpredictor-and-validation.md`,
+  `12-two-workflows.md`, `15-model-creation-and-validation.md`; package `docs/THEORY.md` files.
 - MethylIT_py Python source (`methylit` 0.4.2, external checkout e.g. `EDFi/`):
   `methylit/pipeline/{divergence,gof,potential_dimp,cutpoint,coverage,selection,predict}.py`,
   `methylit/models/{classifier,distributions}.py`, `profiles/{production,parity,smoke,dev}.yaml`,

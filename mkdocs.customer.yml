@@ -36,8 +36,6 @@ exclude_docs: |
   DOCUMENTATION_AUDIT.md
   DEPLOYMENT.md
   CONTRIBUTING.md
-  MethylPipeline-overview.qmd
-  MethylPipeline-analysis.qmd
   architecture_review.md
   config_parameter_matrix.md
   domain_program_language.md

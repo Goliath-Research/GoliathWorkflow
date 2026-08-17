@@ -1,6 +1,6 @@
 # MethylAlignmentQC Theoretical Foundation
 
-The canonical mathematical and statistical reference for this package is the Quarto chapter [`docs/theory/chapters/09-methylalignmentqc.qmd`](../../../docs/theory/chapters/09-methylalignmentqc.qmd).
+The canonical mathematical and statistical reference for this package is the theory chapter [`docs/theory/chapters/09-methylalignmentqc.md`](../../../docs/theory/chapters/09-methylalignmentqc.md).
 
 ## Scope
 

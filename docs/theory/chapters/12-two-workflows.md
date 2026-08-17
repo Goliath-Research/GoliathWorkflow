@@ -219,25 +219,27 @@ If profile `actionConfig.validation.require_biological_review_for_model=true`, `
 
 ### Workflow 1 Diagram
 
-::: {.content-visible when-format="html"}
-1. `project.json` (single unified config)
-2. `--stability`: `R` full-pipeline iterations
-3. Per iteration: centroid -> detector
-4. Detector metrics per iteration
-5. Stability computes recurrence `f̂(d)` across runs
-6. `stable_dmps_production.csv`
-7. `--freeze`
-8. Merge -> `stable_dmps_genomewide.csv`
-9. `production/project.json` with `fixed_dmp_panel`
-10. Freeze on all samples: centroid -> detector(fixed) -> mapper -> enricher
-11. Optional disease progression synthesis
-12. `biological-readiness`: enricher completeness + strict progression + readiness report
-13. `--model`: classifier -> predictor (and config-level biological gate check)
-:::
+```mermaid
+flowchart TD
+  cfg["project.json"]
+  stab["--stability: R full-pipeline iterations"]
+  iter["per iteration: centroid → detector"]
+  metrics["detector metrics per iteration"]
+  rec["stability recurrence f̂(d)"]
+  stable["stable_dmps_production.csv"]
+  freeze["--freeze"]
+  merge["merge → stable_dmps_genomewide.csv"]
+  prod["production/project.json with fixed_dmp_panel"]
+  all["all-sample freeze: centroid → detector(fixed) → mapper → enricher"]
+  prog["optional disease progression"]
+  ready["biological-readiness"]
+  model["--model: classifier → predictor"]
 
-::: {.content-visible when-format="pdf"}
+  cfg --> stab --> iter --> metrics --> rec --> stable --> freeze
+  freeze --> merge --> prod --> all --> prog --> ready --> model
+```
 
-:::
+*Workflow 1 — stability, freeze, and model creation (same Mermaid source for HTML and PDF).*
 
 ### Expected Outputs
 
@@ -297,18 +299,21 @@ After all iterations, the same aggregation as Workflow 1 produces `all_metrics.c
 
 ### Workflow 2 Diagram
 
-::: {.content-visible when-format="html"}
-1. `production/project.json` (frozen model)
-2. `project.json` (cohorts + validation settings)
-3. `--predictor-only`: `R` iterations, predictor only
-4. Per iteration: split -> merge frozen paths -> predictor
-5. `validation_metrics.json` per iteration
-6. Aggregate to `all_metrics.csv` + `metrics_summary.json`
-:::
+```mermaid
+flowchart TD
+  prod["production/project.json frozen model"]
+  cfg["project.json cohorts + validation settings"]
+  loop["--predictor-only: R iterations"]
+  step["split → merge frozen paths → predictor"]
+  metrics["validation_metrics.json per iteration"]
+  agg["all_metrics.csv + metrics_summary.json"]
 
-::: {.content-visible when-format="pdf"}
+  prod --> loop
+  cfg --> loop
+  loop --> step --> metrics --> agg
+```
 
-:::
+*Workflow 2 — frozen-model predictor-only evaluation (same Mermaid source for HTML and PDF).*
 
 ---
 

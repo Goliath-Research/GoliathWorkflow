@@ -1,6 +1,6 @@
 # MethylPredictor Theoretical Foundation
 
-The canonical mathematical and statistical reference for this package is the Quarto chapter [`docs/theory/chapters/05-methylpredictor-and-validation.qmd`](../../../docs/theory/chapters/05-methylpredictor-and-validation.qmd).
+The canonical mathematical and statistical reference for this package is the theory chapter [`docs/theory/chapters/05-methylpredictor-and-validation.md`](../../../docs/theory/chapters/05-methylpredictor-and-validation.md).
 
 ## Scope
 

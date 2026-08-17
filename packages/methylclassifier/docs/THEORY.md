@@ -1,6 +1,6 @@
 # MethylClassifier Theoretical Foundation
 
-The canonical mathematical and statistical reference for this package is the Quarto chapter [`docs/theory/chapters/04-methylclassifier.qmd`](../../../docs/theory/chapters/04-methylclassifier.qmd).
+The canonical mathematical and statistical reference for this package is the theory chapter [`docs/theory/chapters/04-methylclassifier.md`](../../../docs/theory/chapters/04-methylclassifier.md).
 
 ## Scope
 

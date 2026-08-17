@@ -1,6 +1,6 @@
 # MethylMapper Theoretical Foundation
 
-The canonical mathematical and statistical reference for this package is the Quarto chapter [`docs/theory/chapters/07-methylmapper.qmd`](../../../docs/theory/chapters/07-methylmapper.qmd).
+The canonical mathematical and statistical reference for this package is the theory chapter [`docs/theory/chapters/07-methylmapper.md`](../../../docs/theory/chapters/07-methylmapper.md).
 
 ## Scope
 

@@ -32,6 +32,6 @@ PostgreSQL greenfield: `bash workflow_engine/sql_pg/deploy_azure.sh` (includes b
 
 ## Related
 
-- [Usage ch.14](../../docs/usage/14-deployment-and-distributed-workflow.qmd)
+- [Usage ch.14](../../docs/usage/14-deployment-and-distributed-workflow.md)
 - [Production runbook](../../docs/deployment/production_runbook.md)
 - [Operator journey](../../docs/deployment/operator-journey.md)

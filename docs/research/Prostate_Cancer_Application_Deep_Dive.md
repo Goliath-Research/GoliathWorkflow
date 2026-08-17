@@ -2,7 +2,7 @@
 
 **Status:** research / application synthesis (not an operator runbook).  
 **Audience:** scientists, physicians, and insurance / medical-director readers who need to understand **why** MethylPipeline’s analyte, assay, and validation choices matter for prostate cancer.  
-**Follow-on operator surface:** [Methylation application packs](../usage/24-methylation-application-packs.md) (Alzheimer-style pack pattern); a dedicated `docs/usage/25-prostate-cancer-pack.qmd` is **not** in this note.
+**Follow-on operator surface:** [Methylation application packs](../usage/24-methylation-application-packs.md) (Alzheimer-style pack pattern); a dedicated `docs/usage/25-prostate-cancer-pack.md` is **not** in this note.
 
 **Related notes**
 

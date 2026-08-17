@@ -6,7 +6,7 @@ MethylExtractor exports metrics at extraction time; this package owns post-extra
 
 Upstream contract: MethylExtractor `docs/extraction_qc_contract.md` (when available in the extractor repo).
 
-Operator guide: [Usage ch.03 — Sample Prep and QC](../../docs/usage/03-sample-prep-and-qc.qmd).
+Operator guide: [Usage ch.03 — Sample Prep and QC](../../docs/usage/03-sample-prep-and-qc.md).
 
 ## CLI
 
@@ -40,5 +40,5 @@ See [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_ms
 
 ## Related
 
-- Theory: [`docs/theory/chapters/09a-methylextractionqc.qmd`](../../docs/theory/chapters/09a-methylextractionqc.qmd)
+- Theory: [`docs/theory/chapters/09a-methylextractionqc.md`](../../docs/theory/chapters/09a-methylextractionqc.md)
 - Alignment QC (upstream): [`packages/methylalignmentqc/docs/USAGE.md`](../methylalignmentqc/docs/USAGE.md)

@@ -21,7 +21,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Portal information architecture](portal-ia.md) | EpiPortal nav hierarchy, RBAC floors, fleet Drain/Stop/Resume, affinity display, screen → `portal.sp_*` inventory |
 | [Portal UI](portal-UI.md) | Pointer to portal-ia (Study catalog pickers, process packs) |
 | [Execution scopes & CAAS](../usage/17-content-addressed-action-store.md) | Experiment with the same workflow under varied config; idempotent cross-instance reuse ([deep dive](../../workflow_engine/docs/pipeline_architecture.md#execution-scopes-and-caas)) |
-| [Documentation audit (2026-07)](documentation-audit-2026-07.md) | Staleness findings + Quarto validation + remediation checklist |
+| [Documentation audit (2026-07)](documentation-audit-2026-07.md) | Historical staleness findings (Quarto-era); current toolchain is Markdown + Mermaid + MathJax |
 
 **Interactive hub:** [architecture canvas](../canvas/README.md#methylpipeline-architecture) (local vs gateway, config layers, DB contract; open in Cursor after sync)
 

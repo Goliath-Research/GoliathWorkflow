@@ -3,34 +3,34 @@
 
 After a baseline workflow-run (or legacy `methyl-validation` path) is understood, use a controlled **outer loop** to compare candidate settings—typically **Tier A** knobs in profile `actionConfig.validation` (e.g. `stability_dmp_freq`, `n_iterations` as budget, `stability_min_balanced_accuracy`). Tuning detector and model backends (Tier B/C) is a separate, often **nested** exercise; see the theory chapter on multi-stage search tradeoffs in `docs/theory/chapters/15-model-creation-and-validation.md` (*Optional pipeline hyperparameter search*).
 
-::: {.callout-important title="Assay procedure first, then HPO"}
-**Assay procedure packs** (`pipelineProcedure`) and hyperparameter search are complementary, not alternatives.
+!!! warning "Assay procedure first, then HPO"
 
-| Layer | Role | In the HPO grid? |
-|-------|------|------------------|
-| `pipelineProcedure` | Fixed assay recipe (library protocol, SamplePrep/lifecycle, informME/deconv on/off, gene FeatureCuts axis, covariate paths) | **No** — choose once on the instance/context base |
-| `pipelineProfile` | SaMD rung / research profile (`samd_research`, …) | Fixed per search request |
-| HPO overlay / grid axes | Tier-A `actionConfig` knobs (mostly `validation.*`) | **Yes** |
+    **Assay procedure packs** (`pipelineProcedure`) and hyperparameter search are complementary, not alternatives.
 
-Operator order:
+    | Layer | Role | In the HPO grid? |
+    |-------|------|------------------|
+    | `pipelineProcedure` | Fixed assay recipe (library protocol, SamplePrep/lifecycle, informME/deconv on/off, gene FeatureCuts axis, covariate paths) | **No** — choose once on the instance/context base |
+    | `pipelineProfile` | SaMD rung / research profile (`samd_research`, …) | Fixed per search request |
+    | HPO overlay / grid axes | Tier-A `actionConfig` knobs (mostly `validation.*`) | **Yes** |
 
-1. Pick analyte + **`pipelineProcedure`** (see [ch.24](24-methylation-application-packs.md)).
-2. Run a baseline with that procedure + `samd_research`.
-3. Sweep Tier-A knobs with `scenario-start` / `hyperparam-grid-start` (or legacy `methyl-hyperparam-search`) on the **same** procedure base.
-4. Operator-gated promote the winning overlay; freeze / model-MC with covariates **after** stability search.
+    Operator order:
 
-Do **not** put `pipelineProcedure`, aligner, or library protocol in grid axes. Changing procedure is a different study setup, not a trial. Typical axes for gene-FeatureCuts procedures (`buffy_wgbs_*_gene_fc`, `cfdna_wgbs_plasma`): `validation.stability_gene_featurecuts_max_dmps` / `_max_genes`, `stability_target_balanced_accuracy` / `gene_featurecuts_target_ba`, `stability_gene_freq`, `n_iterations` (budget).
-:::
+    1. Pick analyte + **`pipelineProcedure`** (see [ch.24](24-methylation-application-packs.md)).
+    2. Run a baseline with that procedure + `samd_research`.
+    3. Sweep Tier-A knobs with `scenario-start` / `hyperparam-grid-start` (or legacy `methyl-hyperparam-search`) on the **same** procedure base.
+    4. Operator-gated promote the winning overlay; freeze / model-MC with covariates **after** stability search.
 
-::: {.callout-note title="Production paths: scenario vs grid"}
-The `methyl-hyperparam-search` subprocess loop described below is the **legacy** driver.
+    Do **not** put `pipelineProcedure`, aligner, or library protocol in grid axes. Changing procedure is a different study setup, not a trial. Typical axes for gene-FeatureCuts procedures (`buffy_wgbs_*_gene_fc`, `cfdna_wgbs_plasma`): `validation.stability_gene_featurecuts_max_dmps` / `_max_genes`, `stability_target_balanced_accuracy` / `gene_featurecuts_target_ba`, `stability_gene_freq`, `n_iterations` (budget).
 
-**Scenario (assumption check):** `methyl-study-start scenario-start` with a `HyperparamScenarioRequest` overlay — one workflow instance + `executionScopeId`, no Cartesian axes. Use this to confirm personal assumptions or evaluate a stability target (BA gates, FeatureCuts caps, frequencies). JSON `null` clears a site/profile knob. Ensure the instance context (or study start base) already carries `pipelineProcedure`.
+!!! note "Production paths: scenario vs grid"
 
-**Grid search:** `methyl-study-start hyperparam-grid-start` expands axes into N instances (`cfg.hyperparameter_search_run` + trials). Score with `hyperparam-grid-score`.
+    The `methyl-hyperparam-search` subprocess loop described below is the **legacy** driver.
 
-Workers never run the outer loop. See [Portal remote control](../architecture/portal-remote-control.md) and [config propagation — methylation](../architecture/config-propagation-methylation.md).
-:::
+    **Scenario (assumption check):** `methyl-study-start scenario-start` with a `HyperparamScenarioRequest` overlay — one workflow instance + `executionScopeId`, no Cartesian axes. Use this to confirm personal assumptions or evaluate a stability target (BA gates, FeatureCuts caps, frequencies). JSON `null` clears a site/profile knob. Ensure the instance context (or study start base) already carries `pipelineProcedure`.
+
+    **Grid search:** `methyl-study-start hyperparam-grid-start` expands axes into N instances (`cfg.hyperparameter_search_run` + trials). Score with `hyperparam-grid-score`.
+
+    Workers never run the outer loop. See [Portal remote control](../architecture/portal-remote-control.md) and [config propagation — methylation](../architecture/config-propagation-methylation.md).
 
 ## What it is
 

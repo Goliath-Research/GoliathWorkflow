@@ -95,10 +95,11 @@ check_absent 'stability_gene_featurecuts_max_dmps": 500' 'Gene FC caps belong in
 
 check_absent 'package defaults in MonteCarloConfig' 'Do not document Python package defaults for MC tunables'
 
-# Usage/Theory are Markdown + dynamic Mermaid (MkDocs). Flag regressions to Quarto books
-# or pre-rendered PNG-only diagram embeds in active usage chapters.
-if rg -l '.' --glob 'docs/usage/**/*.qmd' --glob 'docs/theory/**/*.qmd' . >/tmp/doc_fresh_hits.txt 2>/dev/null; then
-  echo "FAIL: Quarto .qmd sources remain under docs/usage or docs/theory (convert to .md)" >&2
+# Markdown-first site: no Quarto .qmd sources anywhere in the repo.
+if find docs workflow_engine packages workers deploy scripts \
+    -name '*.qmd' -not -path '*/.venv/*' -not -path '*/site/*' \
+    -print >/tmp/doc_fresh_hits.txt 2>/dev/null && [[ -s /tmp/doc_fresh_hits.txt ]]; then
+  echo "FAIL: Quarto .qmd sources remain (convert to .md or delete)" >&2
   head -30 /tmp/doc_fresh_hits.txt >&2
   fail=1
 fi
@@ -108,6 +109,10 @@ if rg -l 'diagrams/out/.*\.png' --glob 'docs/usage/**/*.md' --glob 'docs/theory/
   head -30 /tmp/doc_fresh_hits.txt >&2
   fail=1
 fi
+
+# Leftover Quarto directives hide diagrams or break admonitions in MkDocs.
+check_absent 'content-visible when-format' 'Use one fenced mermaid block for HTML and PDF (Playwright); do not split with Quarto content-visible'
+check_absent '\{\.callout-' 'Use MkDocs admonitions (!!! warning / !!! note), not Quarto callouts'
 
 # Primary DMP export should be selected, not classifier-extended as the main narrative.
 check_absent 'dmps-\*-classifier-extended\.csv' 'Prefer dmps-*-selected.csv; classifier-extended is transitional'

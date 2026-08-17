@@ -67,16 +67,8 @@ node scripts/embed_marp_mermaid.mjs \
   --pdf "docs/presentations/regulatory-ready-platform-multiomics.pdf"
 ```
 
-### Option B: Quarto revealjs (quick wrapper)
-
-Create a tiny wrapper `.qmd` that includes each deck body, then:
-
-```bash
-quarto render your-wrapper.qmd --to revealjs
-```
-
 ## Usage Guidance
 
 - Keep command examples synchronized with `packages/methylvalidation/docs/USAGE.md`.
-- Keep configuration defaults synchronized with `docs/reference/configuration-reference.qmd`.
+- Keep configuration defaults synchronized with `docs/reference/configuration-reference.md`.
 - If workflow semantics change, update both decks in the same PR.

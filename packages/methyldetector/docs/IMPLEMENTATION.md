@@ -135,7 +135,7 @@ After biological filtering and `_compute_biological_importance`, the pipeline bu
 - **Discovery export** (`dmp_export_mode=dual`): `dmps-{chrom}-discovery.csv` is the full biologically filtered, importance-sorted table (no elbow unless `discovery_dynamic_dmp_cutoff_enabled=true`). `dmps-{chrom}-classifier.csv` mirrors the classifier panel. `dmp-export-{chrom}.meta.json` records counts and options.
 - **Unified mode** (`dmp_export_mode=unified`): single `dmps-{chrom}.csv` for the classifier panel; if fewer rows remain than `min_dmps_for_export` but more biological DMPs exist, the CSV is widened to that minimum while the pickle still uses the elbow subset.
 
-See also `docs/theory/chapters/03-methyldetector.qmd` (Discovery versus prediction exports).
+See also `docs/theory/chapters/03-methyldetector.md` (Discovery versus prediction exports).
 
 ---
 

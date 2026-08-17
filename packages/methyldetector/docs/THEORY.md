@@ -1,6 +1,6 @@
 # MethylDetector Theoretical Foundation
 
-The canonical mathematical and statistical reference for this package is the Quarto chapter [`docs/theory/chapters/03-methyldetector.qmd`](../../../docs/theory/chapters/03-methyldetector.qmd).
+The canonical mathematical and statistical reference for this package is the theory chapter [`docs/theory/chapters/03-methyldetector.md`](../../../docs/theory/chapters/03-methyldetector.md).
 
 ## Scope
 

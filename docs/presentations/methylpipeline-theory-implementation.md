@@ -237,9 +237,9 @@ Implications:
 
 ## Recommended references
 
-- `docs/theory/chapters/05-methylpredictor-and-validation.qmd`
-- `docs/theory/chapters/12-two-workflows.qmd`
-- `docs/reference/configuration-reference.qmd`
+- `docs/theory/chapters/05-methylpredictor-and-validation.md`
+- `docs/theory/chapters/12-two-workflows.md`
+- `docs/reference/configuration-reference.md`
 - `packages/methylvalidation/docs/IMPLEMENTATION.md`
 
 ---

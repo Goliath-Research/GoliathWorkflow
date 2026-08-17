@@ -44,7 +44,7 @@ This document is the canonical register of documentation coverage, canonical sou
 2. **Theory changes** — keep MathJax delimiters; add equation anchors for cross-links.
 3. **Usage changes** — update Usage chapters when CLI / artifact contracts change; keep `mkdocs.yml` nav in sync.
 4. **Implementation changes** — update `implementation/` or package IMPLEMENTATION when action catalog or compiler changes.
-5. **No new Quarto books** — Markdown + MkDocs only.
+5. **No `.qmd` files** — Markdown + MkDocs only. `scripts/check_doc_freshness.sh` fails if any remain.
 6. **Presentations** remain derivative exports from pillars.
 7. **Diagrams** — prefer inline Mermaid; shared sources under `docs/diagrams/src/` for Marp.
 8. **PDF** — Playwright print of rendered HTML (`make docs-pdf`), not TeX/Mermaid pre-render for the site.

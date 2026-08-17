@@ -51,6 +51,6 @@ flowchart TB
 
 Optional pre-rendered figure (repo-only / Marp): `docs/diagrams/out/distributed-runtime.svg`.
 
-**Deep dive:** [`workflow_engine/docs/pipeline_architecture.md`](../../workflow_engine/docs/pipeline_architecture.md) (Quarto HTML/PDF via `build_pipeline_architecture_qmd.py`).
+**Deep dive:** [`workflow_engine/docs/pipeline_architecture.md`](../../workflow_engine/docs/pipeline_architecture.md).
 
 **Worker protocol:** [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md). **OpenAPI:** [`contracts/openapi.yaml`](../../contracts/openapi.yaml).

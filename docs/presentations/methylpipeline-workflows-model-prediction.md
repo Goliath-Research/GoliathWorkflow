@@ -296,9 +296,9 @@ Outputs:
 
 ## Reference documents
 
-- `docs/usage/05-stage-stability.qmd`
-- `docs/usage/05-stage-freeze.qmd`
-- `docs/usage/06-stage-model.qmd`
+- `docs/usage/05-stage-stability.md`
+- `docs/usage/05-stage-freeze.md`
+- `docs/usage/06-stage-model.md`
 - `packages/methylvalidation/docs/USAGE.md`
 - `packages/methylvalidation/docs/STABILITY_FREEZE_READINESS.md`
 

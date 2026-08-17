@@ -80,7 +80,7 @@ To avoid methodological confusion, interpret these as **historical/auxiliary art
 
 The current docs/code governance already reduces this risk:
 
-1. The Quarto theory book (`docs/theory`) is the canonical method reference.
+1. The theory chapters (`docs/theory`) are the canonical method reference.
 2. Production workflow chapters describe the active ECDF-first detector/classifier path and the current model backends explicitly.
 3. Legacy modules remain in-repo for compatibility and experimentation, but publication claims should cite only methods documented as active in this book.
 

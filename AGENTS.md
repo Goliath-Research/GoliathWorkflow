@@ -25,7 +25,7 @@ When assisting with DB tasks:
 
 | Layer | Artifact | Docs |
 |-------|----------|------|
-| Study manifest | `/work/projects/<study>/configs/project_*.json` | [Project config (usage)](docs/usage/02-project-config-and-layout.qmd) |
+| Study manifest | `/work/projects/<study>/configs/project_*.json` | [Project config (usage)](docs/usage/02-project-config-and-layout.md) |
 | Pipeline profile | `workflow_engine/domain/profiles/*.profile.json` | [Domain program language](docs/reference/domain-program-language.md) |
 | Site manifest | `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | [Layer model](docs/architecture/layer-model.md) |
 | DomainProgram | `workflow_engine/domain/**/*.program.json` | [Layer model](docs/architecture/layer-model.md) |

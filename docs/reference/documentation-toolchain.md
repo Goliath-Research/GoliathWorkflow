@@ -16,7 +16,17 @@
 | **Cursor canvases** | `.canvas.tsx` in `docs/canvas/` | IDE hubs; site links to [`canvas/README.md`](../canvas/README.md) (sync + open in Cursor) |
 | **Marp decks** | `docs/presentations/` | Optional pre-rendered PNG from `docs/diagrams/out/` |
 
-**Decision:** Prefer **plain Markdown + Mermaid + MathJax** over Quarto books. Quarto was kept previously only for theory equations; that forced Mermaid pre-render (SVG/PNG) for PDF. MkDocs Material restores **dynamic Mermaid** while preserving LaTeX-style math in the browser and in Playwright PDFs.
+**Decision:** Prefer **plain Markdown + Mermaid + MathJax** over Quarto books. This is a **quality-preserving** replacement, not a simplification:
+
+| Quarto capability | Markdown-first equivalent |
+|-------------------|---------------------------|
+| LaTeX math (`$…$` / `$$…$$`, numbered eqs) | Same delimiters via **MathJax** (`pymdownx.arithmatex`); stable anchors with `<div id="eq-…">` |
+| Mermaid diagrams in HTML | Fenced ` ```mermaid ` (Material + GitHub render the same source) |
+| Mermaid in PDF | **Playwright** prints the live HTML after flattening Mermaid out of closed shadow DOM (`scripts/render_docs_pdf.py`) — vector-quality diagrams, not PNG embeds |
+| Callouts | MkDocs admonitions (`!!! warning` / `!!! note`) |
+| Section IDs `{#sec-…}` | Python-Markdown `attr_list` (already enabled) |
+
+Quarto was kept previously only for theory equations; that forced Mermaid pre-render (SVG/PNG) for PDF. MkDocs Material restores **dynamic Mermaid** while keeping the original LaTeX.
 
 ## Why this replaces Quarto Option A
 

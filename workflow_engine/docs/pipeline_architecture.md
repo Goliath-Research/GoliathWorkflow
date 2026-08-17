@@ -6,16 +6,7 @@ Presentation-oriented overview of how a **project configuration** (JSON), a **sc
 
 **Related code:** [`schemas/config/`](/home/ubuntu/MethylPipeline/schemas/config/), [`tools/methyl-config-editor/`](/home/ubuntu/MethylPipeline/tools/methyl-config-editor/), [`workflow_engine/`](/home/ubuntu/MethylPipeline/workflow_engine/)
 
-**Other formats (HTML / PDF):** Quarto source is [`pipeline_architecture.qmd`](pipeline_architecture.qmd), generated from this file.
-
-**Local HTML (diagrams need a live preview server — do not open `pipeline_architecture.html` directly in the browser or in the IDE preview):**
-
-```bash
-python workflow_engine/docs/build_pipeline_architecture_qmd.py
-quarto preview workflow_engine/docs/pipeline_architecture.qmd
-```
-
-Quarto serves the page at `http://localhost:…` and Mermaid renders in your normal browser. See [Rendering](#rendering-this-document) at the end of the `.qmd` for PDF commands.
+This Markdown file is the canonical source (inline Mermaid). Site topics that overlap live under [`docs/architecture/`](../../docs/architecture/index.md). Preview Mermaid on GitHub or in an editor with Mermaid support. Full-site PDF: `make docs-pdf`.
 
 ---
 
@@ -674,7 +665,7 @@ erDiagram
   }
 ```
 
-**See also:** [Usage ch.17 — Content-Addressed Action Store](/home/ubuntu/MethylPipeline/docs/usage/17-content-addressed-action-store.qmd), [hyperparameter-result-versioning plan](/home/ubuntu/MethylPipeline/docs/plans/hyperparameter-result-versioning.plan.md).
+**See also:** [Usage ch.17 — Content-Addressed Action Store](/home/ubuntu/MethylPipeline/docs/usage/17-content-addressed-action-store.md), [hyperparameter-result-versioning plan](/home/ubuntu/MethylPipeline/docs/plans/hyperparameter-result-versioning.plan.md).
 
 ### Scoped variables — declaration, assignment, and use
 
@@ -1105,8 +1096,8 @@ flowchart LR
 | [`workflow_engine/sql_pg/wf_sql_collection_bindings.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_pg/wf_sql_collection_bindings.sql) | Collection binding table and resolver |
 | [`workflow_engine/delphi/WORKFLOW_ENGINE_DELPHI.md`](/home/ubuntu/MethylPipeline/workflow_engine/delphi/WORKFLOW_ENGINE_DELPHI.md) | Scope variables, IF/SWITCH/WHILE, Monte Carlo bridge |
 | [`workflow_engine/CAPABILITY_CHECK.md`](/home/ubuntu/MethylPipeline/workflow_engine/CAPABILITY_CHECK.md) | Engine capabilities vs gaps |
-| [`docs/theory/chapters/05-methylpredictor-and-validation.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/05-methylpredictor-and-validation.qmd) | Theory: Monte Carlo splits and validation |
-| [`docs/theory/chapters/11-project-configuration.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/11-project-configuration.qmd) | Theory: project configuration |
+| [`docs/theory/chapters/05-methylpredictor-and-validation.md`](/home/ubuntu/MethylPipeline/docs/theory/chapters/05-methylpredictor-and-validation.md) | Theory: Monte Carlo splits and validation |
+| [`docs/theory/chapters/11-project-configuration.md`](/home/ubuntu/MethylPipeline/docs/theory/chapters/11-project-configuration.md) | Theory: project configuration |
 | [`tools/methyl-config-editor/README.md`](/home/ubuntu/MethylPipeline/tools/methyl-config-editor/README.md) | Config editor setup |
 | [`workflow_engine/README.md`](/home/ubuntu/MethylPipeline/workflow_engine/README.md) | SQL deploy order |
 

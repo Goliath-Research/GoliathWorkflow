@@ -14,4 +14,4 @@ Shared domain types, tagged JSON (`$type`), `resolvedConfig` helpers, CAAS conte
 ## Related
 
 - [Domain types contract](../../workflow_engine/contract/domain_types.md)
-- [Usage ch.17 CAAS](../../docs/usage/17-content-addressed-action-store.qmd)
+- [Usage ch.17 CAAS](../../docs/usage/17-content-addressed-action-store.md)

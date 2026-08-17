@@ -181,7 +181,7 @@ holdouts in `validation_partitions` inside `{manifest_path.name}`.
 | Enrichment | `samd_holdout_enrichment` | **non-empty** `locked_test` |
 | Pivotal | `samd_pivotal` | **non-empty** `pivotal_validation` |
 
-See `docs/usage/18-samd-study-lifecycle.qmd`.
+See `docs/usage/18-samd-study-lifecycle.md`.
 
 ## Validate
 

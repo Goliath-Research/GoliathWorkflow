@@ -107,8 +107,6 @@ exclude_docs: |
   **/*.pdf
   **/*.tex
   **/*.bib
-  /MethylPipeline-overview.qmd
-  /MethylPipeline-analysis.qmd
   /architecture_review.md
   /config_parameter_matrix.md
   /domain_program_language.md

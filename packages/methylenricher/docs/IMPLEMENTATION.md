@@ -2,7 +2,7 @@
 
 ## Canonical Theory
 
-For formulas, assumptions, and caveats, see [`docs/theory/chapters/08-methylenricher.qmd`](../../../docs/theory/chapters/08-methylenricher.qmd).
+For formulas, assumptions, and caveats, see [`docs/theory/chapters/08-methylenricher.md`](../../../docs/theory/chapters/08-methylenricher.md).
 
 ## Main Code Paths
 

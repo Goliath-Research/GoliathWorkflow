@@ -36,10 +36,9 @@ Internal map for `workflow_engine/`: gateway, database client, scheduler, and Do
 - `fixtures/` — SamplePrep and reference programs
 - `checks/` — study-specific program variants
 
-## Diagram generation
+## Diagrams
 
-- Source: [`pipeline_architecture.md`](pipeline_architecture.md)
-- Generator: [`build_pipeline_architecture_qmd.py`](build_pipeline_architecture_qmd.py) — Mermaid HTML + pre-rendered SVG for PDF
+- Architecture deep dive: [`pipeline_architecture.md`](pipeline_architecture.md) (inline Mermaid)
 - Shared assets: [`docs/diagrams/`](../../docs/diagrams/)
 
 ## Related docs

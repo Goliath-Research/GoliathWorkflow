@@ -7,4 +7,4 @@ Configure caps and modes under profile `actionConfig.dmp_selection` and `actionC
 ## Related
 
 - [IMPLEMENTATION.md](IMPLEMENTATION.md)
-- [Usage ch.05 stability](../../docs/usage/05-stage-stability.qmd)
+- [Usage ch.05 stability](../../docs/usage/05-stage-stability.md)

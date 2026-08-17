@@ -305,5 +305,5 @@ All are written under `--output-dir` / `output_dir`.
 
 ## Related documentation
 
-- [THEORY.md](THEORY.md) — Code-backed theoretical summary and pointer to the canonical Quarto theory book.
+- [THEORY.md](THEORY.md) — Code-backed theoretical summary and pointer to the canonical theory chapters.
 - [IMPLEMENTATION.md](IMPLEMENTATION.md) — How MethylPredictor uses MethylClassifier and computes metrics.

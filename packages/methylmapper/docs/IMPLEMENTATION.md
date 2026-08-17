@@ -2,7 +2,7 @@
 
 ## Canonical Theory
 
-For formulas, assumptions, and caveats, see [`docs/theory/chapters/07-methylmapper.qmd`](../../../docs/theory/chapters/07-methylmapper.qmd).
+For formulas, assumptions, and caveats, see [`docs/theory/chapters/07-methylmapper.md`](../../../docs/theory/chapters/07-methylmapper.md).
 
 ## Main Code Paths
 

@@ -5,4 +5,4 @@ Used inside MC stability DomainPrograms (`pipeline.gene_select`, gene FeatureCut
 ## Related
 
 - [IMPLEMENTATION.md](IMPLEMENTATION.md)
-- [Usage ch.05](../../docs/usage/05-stage-stability.qmd)
+- [Usage ch.05](../../docs/usage/05-stage-stability.md)

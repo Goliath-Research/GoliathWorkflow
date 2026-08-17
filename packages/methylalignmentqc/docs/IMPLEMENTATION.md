@@ -2,7 +2,7 @@
 
 ## Canonical Theory
 
-For scope and caveats, see [`docs/theory/chapters/09-methylalignmentqc.qmd`](../../../docs/theory/chapters/09-methylalignmentqc.qmd).
+For scope and caveats, see [`docs/theory/chapters/09-methylalignmentqc.md`](../../../docs/theory/chapters/09-methylalignmentqc.md).
 
 ## Main Code Paths
 

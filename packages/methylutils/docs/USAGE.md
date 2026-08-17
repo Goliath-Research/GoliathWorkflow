@@ -116,7 +116,7 @@ Each of those packages has its own [USAGE](../../methylcentroid/docs/USAGE.md) (
 
 ## Related documentation
 
-- [THEORY.md](THEORY.md) — Code-backed theoretical summary and pointer to the canonical Quarto theory book.
+- [THEORY.md](THEORY.md) — Code-backed theoretical summary and pointer to the canonical theory chapters.
 - [COHORT_TREE.md](COHORT_TREE.md) — `diseases.groups[].stages` as generic strata, leaf labels, comparisons, v2 spike appendix.
 - [IMPLEMENTATION.md](IMPLEMENTATION.md) — Package layout and how downstream packages use MethylUtils.
 - [../../../docs/theory/README.md](../../../docs/theory/README.md) — Canonical publication-grade theory book for the repository.

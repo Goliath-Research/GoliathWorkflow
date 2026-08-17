@@ -1,6 +1,6 @@
 # MethylUtils Theoretical Foundation
 
-The canonical mathematical and statistical reference for this package is the Quarto chapter [`docs/theory/chapters/01-methylutils.qmd`](../../../docs/theory/chapters/01-methylutils.qmd).
+The canonical mathematical and statistical reference for this package is the theory chapter [`docs/theory/chapters/01-methylutils.md`](../../../docs/theory/chapters/01-methylutils.md).
 
 ## Scope
 
