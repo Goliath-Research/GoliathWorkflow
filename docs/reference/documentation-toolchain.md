@@ -8,7 +8,7 @@
 | Pillar | Format | Build |
 |--------|--------|-------|
 | **All site docs** | Plain Markdown (`.md`) | `mkdocs build` → portable `site/` |
-| **Theory math** | `$…$` / `$$…$$` + MathJax | Rendered in HTML; PDF via Playwright print |
+| **Theory math** | `$…$` / `$$…$$` + MathJax | Rendered in the **MkDocs site**; PDF via Playwright print |
 | **Diagrams** | Fenced ` ```mermaid ` (dynamic JS) | Native in Material; GitHub-native too |
 | **PDF** | Playwright print of built HTML (HTTP + Mermaid flattened out of closed shadow DOM, scale-to-fit ≤ ~½ page) | `make docs-pdf` → `site-pdf/MethylPipeline-Documentation.pdf` |
 | **Static diagram PNGs** (optional) | `docs/diagrams/src/*.mmd` → `docs/diagrams/out/*` via `scripts/render_diagrams.sh` | Marp / offline only — not preferred for the MkDocs PDF path |
@@ -28,6 +28,8 @@
 
 Quarto was kept previously only for theory equations; that forced Mermaid pre-render (SVG/PNG) for PDF. MkDocs Material restores **dynamic Mermaid** while keeping the original LaTeX.
 
+**Preview caveat:** Cursor / VS Code Markdown preview does **not** load MathJax or Mermaid from `mkdocs.yml`. Raw `$…$` there is expected. Use `make docs-serve` (or `mkdocs serve`) to see typeset equations.
+
 ## Why this replaces Quarto Option A
 
 | Criterion | MkDocs Material (current) | Quarto books (retired) |
@@ -41,7 +43,9 @@ Quarto was kept previously only for theory equations; that forced Mermaid pre-re
 
 ## Equations without Quarto
 
-```markdown
+The fence is **authoring syntax** (raw on purpose). The paragraph after it is the **live MathJax render** — only in the MkDocs site, not in the IDE preview.
+
+````markdown
 Inline: threshold $\alpha$.
 
 Block with anchor:
@@ -53,9 +57,21 @@ e_i = |\Delta\mu_i| \cdot w_i
 $$
 
 </div>
-```
+````
 
-Cross-page: `[Eq. effect-size](../theory/chapters/01-methylutils.md#eq-effect-size)`.
+**Live render (MkDocs + MathJax):**
+
+Inline: threshold $\alpha$.
+
+<div id="eq-effect-size" markdown="1">
+
+$$
+e_i = |\Delta\mu_i| \cdot w_i
+$$
+
+</div>
+
+Cross-page: [Eq. centroid-moments](../theory/chapters/01-methylutils.md#eq-centroid-moments) (theory chapter, also MathJax).
 
 ## Diagram pipeline
 
@@ -73,7 +89,7 @@ Workflow diagrams must not use TikZ as a parallel source.
 ```bash
 source .venv/bin/activate
 pip install -r docs-requirements.txt
-mkdocs serve                 # dynamic local preview
+mkdocs serve                 # dynamic local preview — MathJax + Mermaid
 mkdocs build --strict        # writes ./site/
 mkdocs build -f mkdocs.customer.yml
 ```
