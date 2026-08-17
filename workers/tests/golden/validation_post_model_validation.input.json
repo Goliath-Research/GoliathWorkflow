@@ -9,6 +9,7 @@
   "testDiseaseCsv": null,
   "testGroupsJson": null,
   "tool": null,
+  "valGroupsJson": null,
   "valControlCsv": null,
   "valDiseaseCsv": null
 }

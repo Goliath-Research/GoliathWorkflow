@@ -158,6 +158,10 @@ class PostModelValidationTaskInput(BaseModel):
         description="Deprecated alias for testDiseaseCsv.",
     )
     testGroupsJson: Optional[str] = None
+    valGroupsJson: Optional[str] = Field(
+        default=None,
+        description="Deprecated alias for testGroupsJson.",
+    )
 
 
 class StabilitySummary(BaseModel):

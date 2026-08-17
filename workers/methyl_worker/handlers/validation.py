@@ -484,7 +484,8 @@ def _handle_validation_model_train(
         raise RuntimeError("validation.model_train requires projectPath")
     dumped = input.model_dump(mode="json")
     run_dir = Path(dumped.get("runDir") or project_path.parent)
-    bundle_h5 = dumped.get("bundleH5") or input.bundleDir or run_dir / "model_bundle" / "model_feature_bundle.h5"
+    # bundleDir is a directory; trainers require the .h5 file path.
+    bundle_h5 = dumped.get("bundleH5") or run_dir / "model_bundle" / "model_feature_bundle.h5"
     output_dir = Path(dumped.get("outputDir") or run_dir / "models")
     output_dir.mkdir(parents=True, exist_ok=True)
     if backend == "tabular_sklearn":
@@ -789,7 +790,7 @@ def _handle_validation_post_model_validation(
             config=config,
         )
     else:
-        raw_groups = input.testGroupsJson or input_json.get("valGroupsJson")
+        raw_groups = input.testGroupsJson or input.valGroupsJson
         test_groups_json = Path(raw_groups) if raw_groups else output_dir / "test_groups.json"
         if not test_groups_json.is_file():
             for candidate in (

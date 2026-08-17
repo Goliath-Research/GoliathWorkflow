@@ -148,6 +148,19 @@
       "default": null,
       "description": "Deprecated alias for testDiseaseCsv.",
       "title": "Valdiseasecsv"
+    },
+    "valGroupsJson": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Deprecated alias for testGroupsJson.",
+      "title": "Valgroupsjson"
     }
   },
   "title": "PostModelValidationTaskInput",

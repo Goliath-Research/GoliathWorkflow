@@ -104,3 +104,38 @@ def test_post_model_validation_multiclass_uses_root_default(tmp_path: Path) -> N
     assert runner.call_args.kwargs["test_groups_json"] == test_groups
     assert runner.call_args.kwargs["predictor_output_dir"] == expected / "predictors"
     assert runner.call_args.kwargs["logs_dir"] == expected / "logs"
+
+
+def test_post_model_validation_multiclass_accepts_val_groups_alias(tmp_path: Path) -> None:
+    mc_root = tmp_path / "monte_carlo_runs"
+    production_dir = mc_root / "production"
+    production_dir.mkdir(parents=True)
+    (production_dir / "project.json").write_text("{}", encoding="utf-8")
+    alias_groups = tmp_path / "legacy_val_groups.json"
+    alias_groups.write_text("{}", encoding="utf-8")
+    expected = mc_root / "post_model_validation"
+
+    with (
+        patch(
+            "methyl_worker.handlers.validation._load_mc_config",
+            return_value=(_config(production_dir), tmp_path / "project.json"),
+        ),
+        patch("methyl_validation.project_gen.infer_monte_carlo_layout", return_value="multiclass"),
+        patch(
+            "methyl_validation.pipeline_runner.run_post_model_validation_multiclass",
+            return_value=(True, [], []),
+        ) as runner,
+    ):
+        output = _handle_validation_post_model_validation(
+            "validation.post-model-validation",
+            "validation.post_model_validation",
+            PostModelValidationTaskInput(
+                projectPath=str(tmp_path / "project.json"),
+                valGroupsJson=str(alias_groups),
+            ),
+            runtime=TaskRuntimeContext(),
+            mc_root=mc_root,
+        )
+
+    assert output.outputDir == str(expected)
+    assert runner.call_args.kwargs["test_groups_json"] == alias_groups
