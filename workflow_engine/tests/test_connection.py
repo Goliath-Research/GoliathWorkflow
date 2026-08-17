@@ -43,6 +43,7 @@ class ConnectionConfigTests(unittest.TestCase):
 
     def test_postgres_conninfo_from_env(self) -> None:
         os.environ.pop("METHYLPIPELINE_DB", None)
+        os.environ.pop("PGSSLMODE", None)
         os.environ.update(
             {
                 "POSTGRES_HOST": "db.example.com",
@@ -54,7 +55,24 @@ class ConnectionConfigTests(unittest.TestCase):
         )
         self.assertEqual(
             build_postgres_conninfo(),
-            "postgresql://dba:secret@db.example.com:5433/methyl",
+            "postgresql://dba:secret@db.example.com:5433/methyl?sslmode=require",
+        )
+
+    def test_postgres_conninfo_honors_pgsslmode(self) -> None:
+        os.environ.pop("METHYLPIPELINE_DB", None)
+        os.environ.update(
+            {
+                "POSTGRES_HOST": "db.example.com",
+                "POSTGRES_PORT": "5433",
+                "POSTGRES_DB": "methyl",
+                "POSTGRES_USER": "dba",
+                "POSTGRES_PASSWORD": "secret",
+                "PGSSLMODE": "disable",
+            }
+        )
+        self.assertEqual(
+            build_postgres_conninfo(),
+            "postgresql://dba:secret@db.example.com:5433/methyl?sslmode=disable",
         )
 
     def test_mssql_conninfo_from_azure_env(self) -> None:
@@ -102,6 +120,7 @@ class ConnectionConfigTests(unittest.TestCase):
 
     def test_postgres_conninfo_sslmode_when_mi(self) -> None:
         os.environ.pop("METHYLPIPELINE_DB", None)
+        os.environ.pop("PGSSLMODE", None)
         os.environ.update(
             {
                 "POSTGRES_HOST": "pg.example.com",

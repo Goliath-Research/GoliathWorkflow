@@ -12,10 +12,10 @@ Usage::
     def _handle_example(
         _capability: str,
         _action_name: str,
-        input: BaseModel,
+        input: ExampleTaskInput,
         runtime: TaskRuntimeContext = Depends(get_runtime),
         log: logging.Logger = Depends(get_logger),
-    ) -> BaseModel:
+    ) -> ExampleTaskOutput:
         ...
 """
 
@@ -25,7 +25,7 @@ import inspect
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, get_type_hints
 
 from pydantic import BaseModel
 
@@ -111,6 +111,52 @@ def _is_depends(value: Any) -> bool:
     return isinstance(value, Depends)
 
 
+def _is_concrete_model(annotation: Any) -> bool:
+    return (
+        isinstance(annotation, type)
+        and issubclass(annotation, BaseModel)
+        and annotation is not BaseModel
+    )
+
+
+def _handler_input_model_cls(
+    handler: Callable[..., Any],
+    params: list[inspect.Parameter],
+) -> type[BaseModel] | None:
+    """Return the concrete BaseModel subclass annotated on the third parameter."""
+    if len(params) < 3:
+        return None
+    param = params[2]
+    annotation: Any = param.annotation
+    if annotation is inspect.Parameter.empty:
+        return None
+    if isinstance(annotation, str):
+        try:
+            hints = get_type_hints(handler)
+            annotation = hints.get(param.name)
+        except Exception:
+            annotation = handler.__globals__.get(annotation)
+    if _is_concrete_model(annotation):
+        return annotation
+    return None
+
+
+def coerce_handler_input(
+    input_model: BaseModel,
+    model_cls: type[BaseModel] | None,
+) -> BaseModel:
+    """Validate ``input_model`` as ``model_cls`` when the handler asked for a concrete type.
+
+    Catalog dispatch already called ``model_validate`` on the action input class.
+    This second pass only runs when the handler annotation is a *different*
+    concrete model (catalog/handler drift) so the operator sees a Pydantic
+    ``ValidationError`` instead of a handler ``RuntimeError``.
+    """
+    if model_cls is None or isinstance(input_model, model_cls):
+        return input_model
+    return model_cls.model_validate(input_model.model_dump(mode="json"))
+
+
 def call_in_process_handler(
     handler: Callable[..., BaseModel],
     capability: str,
@@ -123,14 +169,30 @@ def call_in_process_handler(
     """Invoke an in-process handler, injecting ``Depends(...)`` defaults.
 
     Always binds the first three parameters positionally as
-    ``(capability, action_name, input_model)``. Additional parameters whose
-    default is ``Depends(provider)`` are filled from ``HandlerInvokeContext``.
+    ``(capability, action_name, input_model)``. When the third parameter is
+    annotated with a concrete ``BaseModel`` subclass, ``input_model`` is
+    coerced to that class (Pydantic ``ValidationError`` on mismatch).
+    Additional parameters whose default is ``Depends(provider)`` are filled
+    from ``HandlerInvokeContext``.
 
     Backward compatible: a parameter named ``runtime`` without ``Depends`` still
     receives ``TaskRuntimeContext`` (positional if required, else keyword).
     """
     runtime_ctx = _normalize_runtime(runtime)
     log = logger or logging.getLogger(f"methyl_worker.action.{action_name}")
+
+    try:
+        sig = inspect.signature(handler)
+        params = list(sig.parameters.values())
+    except (TypeError, ValueError):
+        params = []
+        sig = None
+
+    if sig is not None:
+        input_model = coerce_handler_input(
+            input_model, _handler_input_model_cls(handler, params)
+        )
+
     invoke = HandlerInvokeContext(
         capability=capability,
         action_name=action_name,
@@ -139,12 +201,9 @@ def call_in_process_handler(
         logger=log,
     )
 
-    try:
-        sig = inspect.signature(handler)
-    except (TypeError, ValueError):
+    if sig is None:
         return handler(capability, action_name, input_model, runtime_ctx)
 
-    params = list(sig.parameters.values())
     if any(p.kind is inspect.Parameter.VAR_POSITIONAL for p in params):
         return handler(capability, action_name, input_model, runtime_ctx)
 
@@ -198,6 +257,7 @@ __all__ = [
     "ProjectPathDep",
     "RuntimeDep",
     "call_in_process_handler",
+    "coerce_handler_input",
     "get_action_name",
     "get_capability",
     "get_logger",

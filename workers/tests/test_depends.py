@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+import pytest
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from methyl_worker.depends import (
     Depends,
@@ -102,3 +103,35 @@ def test_path_helpers(tmp_path: Path) -> None:
     call_in_process_handler(handler, "cap", "demo.paths", tiny, None)
     assert seen["project_path"] == project
     assert seen["mc_root"] == mc.resolve()
+
+
+class _OtherInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: int
+
+
+def test_coerces_third_arg_to_concrete_annotation() -> None:
+    seen: dict = {}
+
+    def handler(capability: str, action_name: str, input: _TinyInput) -> BaseModel:
+        seen["type"] = type(input)
+        return input
+
+    class _Loose(BaseModel):
+        projectPath: str
+        monteCarloRunsRoot: str | None = None
+
+    loose = _Loose(projectPath="/tmp/p.json", monteCarloRunsRoot="/tmp/mc")
+    out = call_in_process_handler(handler, "cap", "demo.coerce", loose, None)
+    assert isinstance(out, _TinyInput)
+    assert seen["type"] is _TinyInput
+
+
+def test_mismatched_handler_annotation_raises_validation_error() -> None:
+    def handler(capability: str, action_name: str, input: _OtherInput) -> BaseModel:
+        return input
+
+    tiny = _TinyInput(projectPath="/tmp/p.json")
+    with pytest.raises(ValidationError):
+        call_in_process_handler(handler, "cap", "demo.mismatch", tiny, None)

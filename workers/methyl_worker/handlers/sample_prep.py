@@ -11,27 +11,55 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
-from pydantic import BaseModel
-
 from ..handler_helpers import (
     guardrails_from_payload,
     methyl_qc_result_code,
     qc_history_from_payload,
     screening_from_payload,
 )
-from ..task_models.sample_prep_models import MethylQcTaskOutput
+from ..task_models.sample_prep_models import (
+    ArchiveSampleTaskInput,
+    ArchiveSampleTaskOutput,
+    DeleteBamTaskInput,
+    DeleteFastqsTaskInput,
+    DeleteTaskOutput,
+    DemultiplexTaskInput,
+    DemultiplexTaskOutput,
+    DockerAlignTaskInput,
+    DownloadFastqTaskInput,
+    DownloadFastqTaskOutput,
+    ExtractionQcTaskInput,
+    ExtractionQcTaskOutput,
+    FragmentomicsTaskInput,
+    FragmentomicsTaskOutput,
+    MarkFailedTaskOutput,
+    MethylExtractTaskInput,
+    MethylExtractTaskOutput,
+    MethylGrapherWgbsAlignTaskInput,
+    MethylGrapherWgbsAlignTaskOutput,
+    MethylGrapherWgbsExtractTaskInput,
+    MethylQcTaskInput,
+    MethylQcTaskOutput,
+    ParabricksFq2bamTaskInput,
+    ParabricksGiraffeTaskInput,
+    ParabricksTaskOutput,
+    QcFailedTaskInput,
+    TrimFastqTaskInput,
+    TrimFastqTaskOutput,
+)
 from .common import resolve_reference_fasta
 
 logger = logging.getLogger(__name__)
 
-def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> MethylQcTaskOutput:
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir:
-        raise RuntimeError("methyl-qc task requires sampleDir in input_json")
 
-    sample_path = Path(str(sample_dir))
+def _handle_methyl_qc(
+    _capability: str, _action_name: str, input: MethylQcTaskInput
+) -> MethylQcTaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
+
+    sample_path = Path(sample_dir)
     if not sample_path.is_dir():
         raise RuntimeError(f"sampleDir not found: {sample_path}")
 
@@ -127,10 +155,10 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
             history = prior.get("qc_history")
             if isinstance(history, list):
                 write_ctx.prior_qc_history = [h for h in history if isinstance(h, dict)]
-        alignment_mode = (
-            input_json.get("alignmentMode")
-            or input_json.get("alignment_mode")
-            or (input_json.get("resolvedConfig") or {}).get("alignmentMode")
+        alignment_mode = input.alignmentMode or (
+            (input.resolvedConfig or {}).get("alignmentMode")
+            if isinstance(input.resolvedConfig, dict)
+            else None
         )
         process_samples_to_qc_jsons(
             [str(sample_path)],
@@ -150,10 +178,10 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
     else:
         import tempfile
 
-        alignment_mode = (
-            input_json.get("alignmentMode")
-            or input_json.get("alignment_mode")
-            or (input_json.get("resolvedConfig") or {}).get("alignmentMode")
+        alignment_mode = input.alignmentMode or (
+            (input.resolvedConfig or {}).get("alignmentMode")
+            if isinstance(input.resolvedConfig, dict)
+            else None
         )
         with tempfile.TemporaryDirectory(prefix="methyl-qc-") as tmp:
             out_dir = tmp
@@ -176,17 +204,13 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
 
 
 def _handle_methyl_extraction_qc(
-    _capability: str, _action_name: str, input: BaseModel
-) -> "ExtractionQcTaskOutput":
-    from ..task_models.sample_prep_models import ExtractionQcTaskOutput
-
+    _capability: str, _action_name: str, input: ExtractionQcTaskInput
+) -> ExtractionQcTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("methyl-extraction-qc task requires sampleDir and sampleId in input_json")
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
 
-    sample_path = Path(str(sample_dir))
+    sample_path = Path(sample_dir)
     if not sample_path.is_dir():
         raise RuntimeError(f"sampleDir not found: {sample_path}")
 
@@ -194,11 +218,11 @@ def _handle_methyl_extraction_qc(
     from methyl_extraction_qc.models.config import ExtractionQCConfig
     from methyl_extraction_qc.project_resolver import resolve_extraction_qc_config
 
-    project = input_json.get("project") or input_json.get("projectPath")
+    project = input.project or input.projectPath
     if project:
         config = resolve_extraction_qc_config(project, sample_paths=[str(sample_path)])
     else:
-        resolved = input_json.get("resolvedConfig")
+        resolved = input.resolvedConfig
         if isinstance(resolved, dict) and resolved.get("expected_chromosomes"):
             config = ExtractionQCConfig(
                 expected_chromosomes=[str(item) for item in resolved["expected_chromosomes"]]
@@ -239,7 +263,7 @@ def _handle_methyl_extraction_qc(
             "qcPath": str(qc_path),
             "overallPass": guardrails.overall_pass,
         },
-        workflow_node_key=input_json.get("workflowNodeKey") or "extraction_qc",
+        workflow_node_key=str(input_json.get("workflowNodeKey") or "extraction_qc"),
     )
     return ExtractionQcTaskOutput(
         status="ok",
