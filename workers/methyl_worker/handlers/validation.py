@@ -11,7 +11,21 @@ from typing import Any, Dict, List, Mapping, Optional
 from pydantic import BaseModel
 
 from ..depends import Depends, get_logger, get_monte_carlo_runs_root, get_runtime
+from ..task_models.pipeline_models import BiomarkerFilterTaskInput
 from ..task_models.runtime_models import TaskRuntimeContext
+from ..task_models.validation_models import (
+    FinalizeFreezeModelBundleTaskInput,
+    FreezeReadinessTaskInput,
+    LinkArtifactsTaskInput,
+    ModelBundleTaskInput,
+    ModelMcTaskInput,
+    ModelPredictTaskInput,
+    ModelTrainTaskInput,
+    PostModelValidationTaskInput,
+    PrepareFreezeTaskInput,
+    SelectBestModelTaskInput,
+    StabilityTaskInput,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +133,7 @@ def _backfill_planner_fields_from_snapshot(
 def _handle_validation_stability(
     _capability: str,
     _action_name: str,
-    input: BaseModel,
+    input: StabilityTaskInput,
     runtime: TaskRuntimeContext = Depends(get_runtime),
     log: logging.Logger = Depends(get_logger),
     mc_root: Path = Depends(get_monte_carlo_runs_root),
@@ -132,7 +146,7 @@ def _handle_validation_stability(
 
     profile_overrides = runtime.validationProfile
     config, _base = _load_mc_config(input_json, profile_overrides=profile_overrides)
-    output_dir = Path(input_json.get("outputDir") or mc_root / "stability")
+    output_dir = Path(input.outputDir or mc_root / "stability")
     log.info("validation.stability mc_root=%s output_dir=%s", mc_root, output_dir)
     from methyl_validation.modeling_modes import resolve_gene_stability_preferences
 
@@ -201,7 +215,7 @@ def _handle_validation_stability(
 def _handle_validation_biomarker_filter(
     _capability: str,
     _action_name: str,
-    input: BaseModel,
+    input: BiomarkerFilterTaskInput,
     runtime: TaskRuntimeContext = Depends(get_runtime),
 ):
     """In-process PPI-only biomarker gene pool filter on mapper combined genes."""
@@ -213,10 +227,8 @@ def _handle_validation_biomarker_filter(
     from methyl_gene_select.core.gene_featurecuts import _apply_biomarker_gene_pool_filter
     from methyl_worker.split_detector_task_models import BiomarkerFilterSummary, BiomarkerFilterTaskOutput
 
-    project_path = input_json.get("projectPath") or input_json.get("project")
-    if not project_path:
-        raise RuntimeError("validation.biomarker_filter requires projectPath")
-    run_dir = Path(str(input_json.get("runDir") or project_path)).resolve()
+    project_path = input.projectPath or input.project
+    run_dir = Path(str(input.runDir or project_path)).resolve()
     config, _base = _load_mc_config(
         input_json,
         profile_overrides=runtime.validationProfile,
@@ -255,7 +267,7 @@ def _handle_validation_biomarker_filter(
 def _handle_validation_prepare_freeze(
     _capability: str,
     _action_name: str,
-    input: BaseModel,
+    input: PrepareFreezeTaskInput,
     runtime: TaskRuntimeContext = Depends(get_runtime),
     mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
@@ -268,14 +280,14 @@ def _handle_validation_prepare_freeze(
         input_json,
         profile_overrides=runtime.validationProfile,
     )
-    stable_csv = input_json.get("stableDmpCsv") or config.freeze_stable_dmp_csv or str(
+    stable_csv = input.stableDmpCsv or config.freeze_stable_dmp_csv or str(
         mc_root / "stability" / "stable_dmps_production.csv"
     )
     result = prepare_freeze_project(
         base_project=base_project,
         stable_dmp_csv=str(stable_csv),
         monte_carlo_runs_root=mc_root,
-        production_output_dir=input_json.get("productionOutputDir") or config.production_output_dir,
+        production_output_dir=input.productionOutputDir or config.production_output_dir,
         config=config,
     )
     production_project = result.get("productionProject") or result.get("projectPath")
@@ -340,7 +352,7 @@ def _handle_validation_prepare_freeze(
 def _handle_validation_finalize_freeze_model_bundle(
     _capability: str,
     _action_name: str,
-    input: BaseModel,
+    input: FinalizeFreezeModelBundleTaskInput,
     runtime: TaskRuntimeContext = Depends(get_runtime),
     mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
@@ -359,9 +371,9 @@ def _handle_validation_finalize_freeze_model_bundle(
         profile_overrides=runtime.validationProfile,
     )
     production_project = (
-        input_json.get("projectPath")
-        or input_json.get("project")
-        or str(Path(input_json.get("productionOutputDir") or (mc_root / "production")) / "project.json")
+        input.projectPath
+        or input.project
+        or str(Path(input.productionOutputDir or (mc_root / "production")) / "project.json")
     )
     prod_path = Path(str(production_project))
     feature_mode, family = resolve_production_ecdf_feature_settings(prod_path, config=config)
@@ -381,14 +393,13 @@ def _handle_validation_finalize_freeze_model_bundle(
 
 
 def _handle_validation_stability_freeze_readiness(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: FreezeReadinessTaskInput
 ):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.stability_freeze_readiness import analyze_project_root
 
     from ..task_models.validation_models import ValidationFreezeReadinessOutput
 
-    project_path = input_json.get("projectPath") or input_json.get("project")
+    project_path = input.projectPath or input.project
     if not project_path:
         raise RuntimeError("validation.stability_freeze_readiness requires projectPath")
     from methyl_utils import load_project
@@ -424,15 +435,14 @@ def _handle_validation_stability_freeze_readiness(
 
 
 def _handle_validation_link_artifacts(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: LinkArtifactsTaskInput
 ):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.project_gen import link_run_artifacts_from_source
 
     from ..task_models.validation_models import ValidationLinkArtifactsOutput
 
-    source = input_json.get("sourceRunDir")
-    target = input_json.get("targetRunDir") or input_json.get("runDir")
+    source = input.sourceRunDir
+    target = input.targetRunDir or input.runDir
     if not source or not target:
         raise RuntimeError("validation.link_artifacts requires sourceRunDir and targetRunDir")
     linked = link_run_artifacts_from_source(source, target)
@@ -444,17 +454,16 @@ def _handle_validation_link_artifacts(
 
 
 def _handle_validation_model_bundle(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: ModelBundleTaskInput
 ):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.model_bundle import build_model_feature_bundle
 
     from ..task_models.validation_models import ValidationModelBundleOutput
 
-    project_path = input_json.get("projectPath") or input_json.get("project")
+    project_path = input.projectPath or input.project
     if not project_path:
         raise RuntimeError("validation.model_bundle requires projectPath")
-    bundle_dir = Path(input_json.get("bundleDir") or Path(str(project_path)).parent / "model_bundle")
+    bundle_dir = Path(input.bundleDir or Path(str(project_path)).parent / "model_bundle")
     manifest = build_model_feature_bundle(str(project_path), bundle_dir)
     bundle_h5 = bundle_dir / "model_feature_bundle.h5"
     return ValidationModelBundleOutput(
@@ -465,18 +474,18 @@ def _handle_validation_model_bundle(
 
 
 def _handle_validation_model_train(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: ModelTrainTaskInput
 ):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..task_models.validation_models import ValidationModelTrainOutput
 
-    backend = str(input_json.get("backend") or "tabular_sklearn")
-    project_path = Path(input_json.get("projectPath") or input_json.get("project") or "")
+    backend = str(input.backend or "tabular_sklearn")
+    project_path = Path(input.projectPath or input.project or "")
     if not project_path.is_file():
         raise RuntimeError("validation.model_train requires projectPath")
-    run_dir = Path(input_json.get("runDir") or project_path.parent)
-    bundle_h5 = input_json.get("bundleH5") or run_dir / "model_bundle" / "model_feature_bundle.h5"
-    output_dir = Path(input_json.get("outputDir") or run_dir / "models")
+    dumped = input.model_dump(mode="json")
+    run_dir = Path(dumped.get("runDir") or project_path.parent)
+    bundle_h5 = dumped.get("bundleH5") or input.bundleDir or run_dir / "model_bundle" / "model_feature_bundle.h5"
+    output_dir = Path(dumped.get("outputDir") or run_dir / "models")
     output_dir.mkdir(parents=True, exist_ok=True)
     if backend == "tabular_sklearn":
         from methyl_validation.tabular_backend import train_tabular_model
@@ -502,13 +511,13 @@ def _handle_validation_model_train(
 
 
 def _handle_validation_model_predict(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: ModelPredictTaskInput
 ):
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..task_models.validation_models import ValidationModelPredictOutput
 
-    backend = str(input_json.get("backend") or "tabular_sklearn")
-    project_path = Path(input_json.get("projectPath") or input_json.get("project") or "")
+    backend = str(input.backend or "tabular_sklearn")
+    project_path = Path(input.projectPath or input.project or "")
     if not project_path.is_file():
         raise RuntimeError("validation.model_predict requires projectPath")
     run_dir = Path(input_json.get("runDir") or project_path.parent)
@@ -546,7 +555,7 @@ def _handle_validation_model_predict(
 def _handle_validation_model_mc(
     _capability: str,
     _action_name: str,
-    input: BaseModel,
+    input: ModelMcTaskInput,
     runtime: TaskRuntimeContext = Depends(get_runtime),
     mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
@@ -560,18 +569,18 @@ def _handle_validation_model_mc(
         profile_overrides=runtime.validationProfile,
     )
     production_dir = Path(
-        input_json.get("productionOutputDir") or config.production_output_dir or mc_root / "production"
+        input.productionOutputDir or config.production_output_dir or mc_root / "production"
     )
     production_project = production_dir / "project.json"
-    backends = input_json.get("backends")
-    resume = input_json.get("resume")
+    backends = input.backends
+    resume = input.resume
     raw = run_model_mc_all(
         production_project=production_project,
         monte_carlo_runs_root=mc_root,
         config=config,
         backends=list(backends) if backends else None,
         resume=int(resume) if resume is not None else None,
-        require_artifact_reuse=bool(input_json.get("requireArtifactReuse", False)),
+        require_artifact_reuse=bool(input.requireArtifactReuse),
     )
     return ValidationModelMcOutput(
         status="ok",
@@ -583,7 +592,7 @@ def _handle_validation_model_mc(
 def _handle_validation_select_best_model(
     _capability: str,
     _action_name: str,
-    input: BaseModel,
+    input: SelectBestModelTaskInput,
     runtime: TaskRuntimeContext = Depends(get_runtime),
     mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
@@ -597,7 +606,7 @@ def _handle_validation_select_best_model(
         input_json,
         profile_overrides=runtime.validationProfile,
     )
-    model_mc_root = Path(input_json.get("modelMcRoot") or mc_root / "model_mc")
+    model_mc_root = Path(input.modelMcRoot or mc_root / "model_mc")
     enabled = list(config.get_enabled_backends())
     # Prefer enabled backends from resolved config; ignore stale multi-backend task defaults
     # when the profile/context only enables one (typical ECDF+covariates studies).
@@ -608,7 +617,7 @@ def _handle_validation_select_best_model(
         backends = requested
     else:
         backends = ["ecdf"]
-    metric = str(input_json.get("selectionMetric") or "balanced_accuracy")
+    metric = str(input.selectionMetric or "balanced_accuracy")
     stat = str(input_json.get("selectionStat") or "median")
     summaries_ready = bool(backends) and all(
         (model_mc_root / b / "metrics_summary.json").is_file() for b in backends
@@ -663,7 +672,7 @@ def _handle_validation_select_best_model(
 def _handle_validation_post_model_validation(
     _capability: str,
     _action_name: str,
-    input: BaseModel,
+    input: PostModelValidationTaskInput,
     runtime: TaskRuntimeContext = Depends(get_runtime),
     mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
@@ -681,22 +690,22 @@ def _handle_validation_post_model_validation(
         profile_overrides=runtime.validationProfile,
     )
     production_dir = Path(
-        input_json.get("productionOutputDir") or config.production_output_dir or mc_root / "production"
+        input.productionOutputDir or config.production_output_dir or mc_root / "production"
     )
     production_project = production_dir / "project.json"
     if not production_project.is_file():
         raise RuntimeError(f"production project not found: {production_project}")
     layout = infer_monte_carlo_layout(production_project, len(config.cohorts))
     output_dir = Path(
-        input_json.get("outputDir")
-        or input_json.get("runDir")
+        input.outputDir
+        or input.runDir
         or mc_root / "post_model_validation"
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     predictor_output_dir = output_dir / "predictors"
     if layout == "binary":
-        raw_test_control = input_json.get("testControlCsv") or input_json.get("valControlCsv")
-        raw_test_disease = input_json.get("testDiseaseCsv") or input_json.get("valDiseaseCsv")
+        raw_test_control = input.testControlCsv or input.valControlCsv
+        raw_test_disease = input.testDiseaseCsv or input.valDiseaseCsv
 
         def _first_existing(*candidates: Path) -> Optional[Path]:
             for c in candidates:
@@ -780,7 +789,7 @@ def _handle_validation_post_model_validation(
             config=config,
         )
     else:
-        raw_groups = input_json.get("testGroupsJson") or input_json.get("valGroupsJson")
+        raw_groups = input.testGroupsJson or input_json.get("valGroupsJson")
         test_groups_json = Path(raw_groups) if raw_groups else output_dir / "test_groups.json"
         if not test_groups_json.is_file():
             for candidate in (

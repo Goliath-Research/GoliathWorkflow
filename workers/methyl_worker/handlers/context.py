@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from methyl_validation.workflow_planner import ValidationPlanRequest, plan_validation_context
+from methyl_validation.workflow_planner import ValidationPlanRequest
 
 from ..depends import Depends, get_logger, get_runtime
 from ..task_models.context_models import ResolveProjectTaskInput, ResolveProjectTaskOutput
@@ -45,6 +45,8 @@ def _handle_validation_plan_iterations(
     runtime: TaskRuntimeContext = Depends(get_runtime),
     log: logging.Logger = Depends(get_logger),
 ) -> ValidationPlanTaskOutput:
+    from methyl_validation.workflow_planner import plan_validation_context
+
     log.info(
         "validation.plan_iterations projectPath=%s profile_overrides=%s",
         input.projectPath,

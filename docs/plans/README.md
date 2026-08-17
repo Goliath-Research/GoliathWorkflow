@@ -135,6 +135,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`comparison-arms-bakeoff.plan.md`](comparison-arms-bakeoff.plan.md) | **AB#710** | Comparison arms bakeoff (keep originals) | `docs-matrix`, `layout-harness`, `methyldackel-compare`, `bakeoff-gates-docs`, `comparison-procedures`, `promote-plan-ado` |
 | [`giraffe-2h-kernel.plan.md`](giraffe-2h-kernel.plan.md) | **AB#717** | Giraffe ≤2h kernel work | `profile-attribute`, `kernel-host-hits`, `kernel-gapless-cluster`, `kernel-seed-ht-batch`, `multi-gpu-parallel`, `buffy-retime-docs`, `promote-plan-ado` |
 | [`buffy-clara-bakeoff-readiness.plan.md`](buffy-clara-bakeoff-readiness.plan.md) | _(pending ADO)_ | Buffy Clara bakeoff readiness | `add-clara-15v15-context`, `optional-qnap-dest`, `smoke-then-full` |
+| [`typed-handler-basemodel.plan.md`](typed-handler-basemodel.plan.md) | _(pending ADO)_ | Typed in-process handler inputs | `dispatcher-coerce`, `annotate-handlers`, `typed-field-access`, `scaffold-docs` |
 
 Create each **User Story** under its Feature in Azure DevOps Boards. Copy the story title from the plan `todos[].content` field (seed prefixes `[todo-id]`). Mark stories **Closed** when the corresponding code is merged; close the Feature when all child stories are done.
 

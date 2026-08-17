@@ -131,12 +131,15 @@ from methyl_worker.depends import Depends, get_logger, get_runtime
 def _handle_example(
     _capability: str,
     _action_name: str,
-    input: BaseModel,
+    input: ExampleTaskInput,
     runtime: TaskRuntimeContext = Depends(get_runtime),
     log: logging.Logger = Depends(get_logger),
-) -> BaseModel:
+) -> ExampleTaskOutput:
     ...
 ```
+
+`call_in_process_handler` coerces the third argument to the annotated catalog
+input class. A catalog/handler mismatch raises Pydantic ``ValidationError``.
 
 Built-in providers: `get_runtime`, `get_logger`, `get_project_path`,
 `get_monte_carlo_runs_root`. Invocation goes through

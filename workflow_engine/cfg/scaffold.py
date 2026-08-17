@@ -11,16 +11,14 @@ _HANDLER_STUB = '''\
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
-from pydantic import BaseModel
+# from methyl_worker.task_models import {class_prefix}TaskInput, {class_prefix}TaskOutput
 
 
 def handle_{slug}(
     _capability: str,
     _action_name: str,
-    input: BaseModel,
-) -> BaseModel:
+    input: {class_prefix}TaskInput,
+) -> {class_prefix}TaskOutput:
     """Wire into ACTION_CATALOG in_process_handler after implementing science logic."""
     raise NotImplementedError(
         "Action {action_name!r} was scaffolded; implement worker handler."
@@ -228,7 +226,10 @@ def scaffold_action(
     else:
         handler_path.write_text(
             _HANDLER_STUB.format(
-                action_name=action_name, slug=slug, capability=capability
+                action_name=action_name,
+                slug=slug,
+                capability=capability,
+                class_prefix=class_prefix,
             ),
             encoding="utf-8",
         )

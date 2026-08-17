@@ -71,7 +71,7 @@ def _handle_methyl_qc(
         sample_path, str(sample_id) if sample_id else None
     )
 
-    project = input_json.get("project") or input_json.get("projectPath")
+    project = input.project or input.projectPath
     from methyl_alignment_qc.core import process_samples_to_qc_jsons
     from methyl_alignment_qc.core.qc_write_context import QcWriteContext
 
@@ -275,20 +275,15 @@ def _handle_methyl_extraction_qc(
 
 
 def _handle_methyl_fragmentomics(
-    _capability: str, _action_name: str, input: BaseModel
-):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
-    from ..task_models.sample_prep_models import FragmentomicsTaskOutput
-
-    project = input_json.get("project") or input_json.get("projectPath")
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
+    _capability: str, _action_name: str, input: FragmentomicsTaskInput
+) -> FragmentomicsTaskOutput:
+    project = input.project or input.projectPath
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
     if not project:
-        raise RuntimeError("methyl-fragmentomics task requires project in input_json")
-    if not sample_dir:
-        raise RuntimeError("methyl-fragmentomics task requires sampleDir in input_json")
+        raise RuntimeError("methyl-fragmentomics task requires projectPath")
 
-    sample_path = Path(str(sample_dir))
+    sample_path = Path(sample_dir)
     if not sample_path.is_dir():
         raise RuntimeError(f"sampleDir not found: {sample_path}")
 
@@ -326,31 +321,27 @@ def _handle_methyl_fragmentomics(
     )
 
 
-def _handle_mark_failed(_capability: str, _action_name: str, input: BaseModel):
-    from ..task_models.sample_prep_models import MarkFailedTaskOutput
-
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
-
+def _handle_mark_failed(
+    _capability: str, _action_name: str, input: QcFailedTaskInput
+) -> MarkFailedTaskOutput:
     return MarkFailedTaskOutput(
-        sampleId=input_json.get("sampleId"),
-        sampleDir=input_json.get("sampleDir"),
+        sampleId=input.sampleId,
+        sampleDir=input.sampleDir,
         status="QC_FAILED",
-        reason=input_json.get("reason") or "alignment_qc_failed",
+        reason=input.reason or "alignment_qc_failed",
     )
 
 
-def _handle_download_fastq(_capability: str, _action_name: str, input: BaseModel) -> DownloadFastqTaskOutput:
+def _handle_download_fastq(
+    _capability: str, _action_name: str, input: DownloadFastqTaskInput
+) -> DownloadFastqTaskOutput:
     from ..fastq_source import download_from_source
-    from ..task_models import DownloadFastqTaskInput, DownloadFastqTaskOutput
 
-    task = input if isinstance(input, DownloadFastqTaskInput) else DownloadFastqTaskInput.model_validate(
-        input.model_dump(mode="json")
-    )
-    dest = Path(str(task.sampleDir))
+    dest = Path(input.sampleDir)
     fastq_files = download_from_source(
-        task.fastqSource, dest, resolved_config=task.resolvedConfig
+        input.fastqSource, dest, resolved_config=input.resolvedConfig
     )
-    sample_id = task.sampleId or dest.name
+    sample_id = input.sampleId or dest.name
     return DownloadFastqTaskOutput(
         status="ok",
         sampleId=sample_id,
@@ -359,21 +350,16 @@ def _handle_download_fastq(_capability: str, _action_name: str, input: BaseModel
     )
 
 
-def _handle_trim_fastq(_capability: str, _action_name: str, input: BaseModel) -> TrimFastqTaskOutput:
+def _handle_trim_fastq(
+    _capability: str, _action_name: str, input: TrimFastqTaskInput
+) -> TrimFastqTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..fastq_trim_runner import run_fastp_trim
     from ..sample_prep_log import append_sample_prep_log
-    from ..task_models.sample_prep_models import TrimFastqTaskOutput
 
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("sample.trim_fastq requires sampleDir and sampleId")
-    reason = str(
-        input_json.get("remediationReason")
-        or input_json.get("qcAttemptReason")
-        or "REALIGN_TRIM"
-    )
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
+    reason = str(input.remediationReason or input_json.get("qcAttemptReason") or "REALIGN_TRIM")
     result = run_fastp_trim(
         sample_id=str(sample_id),
         sample_dir=str(sample_dir),
@@ -399,27 +385,26 @@ def _handle_trim_fastq(_capability: str, _action_name: str, input: BaseModel) ->
     return TrimFastqTaskOutput(status="ok", **result)
 
 
-def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input: BaseModel) -> ParabricksTaskOutput:
+def _handle_parabricks_fq2bam(
+    _capability: str, _action_name: str, input: ParabricksFq2bamTaskInput
+) -> ParabricksTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..parabricks_runner import run_fq2bam_meth
     from ..sample_prep_log import append_sample_prep_log
-    from ..task_models.sample_prep_models import ParabricksTaskOutput
 
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("sample.parabricks_fq2bam requires sampleDir and sampleId")
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
     reference_fasta = resolve_reference_fasta(input_json)
 
     result = run_fq2bam_meth(
-        sample_id=str(sample_id),
-        sample_dir=str(sample_dir),
+        sample_id=sample_id,
+        sample_dir=sample_dir,
         reference_fasta=reference_fasta,
-        project=input_json.get("projectPath") or input_json.get("project"),
+        project=input.projectPath or input.project,
         input_json=input_json,
     )
-    reason = str(input_json.get("remediationReason") or "")
-    if input_json.get("forceRealign"):
+    reason = str(input.remediationReason or "")
+    if input.forceRealign:
         reason = reason or f"forceRealign after trim_front2={input_json.get('trimFront2', '?')}"
     append_sample_prep_log(
         Path(str(sample_dir)),
@@ -429,36 +414,35 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input: BaseMo
         attempt=int(input_json.get("qcAttempt") or 1),
         reason=reason or "Parabricks fq2bam_meth alignment",
         inputs={
-            "forceRealign": bool(input_json.get("forceRealign")),
-            "alignmentPass": input_json.get("alignmentPass") or "initial",
+            "forceRealign": bool(input.forceRealign),
+            "alignmentPass": input.alignmentPass or "initial",
         },
         outputs=result,
-        workflow_node_key=input_json.get("workflowNodeKey") or "parabricks_fq2bam",
+        workflow_node_key=input.workflowNodeKey or "parabricks_fq2bam",
     )
     return ParabricksTaskOutput(status="ok", **result)
 
 
-def _handle_parabricks_giraffe(_capability: str, _action_name: str, input: BaseModel) -> ParabricksTaskOutput:
+def _handle_parabricks_giraffe(
+    _capability: str, _action_name: str, input: ParabricksGiraffeTaskInput
+) -> ParabricksTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..giraffe_runner import run_giraffe_align
     from ..sample_prep_log import append_sample_prep_log
-    from ..task_models.sample_prep_models import ParabricksTaskOutput
 
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("sample.parabricks_giraffe requires sampleDir and sampleId")
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
 
     site_path = input_json.get("siteConfigPath")
     result = run_giraffe_align(
-        sample_id=str(sample_id),
-        sample_dir=str(sample_dir),
-        project=input_json.get("projectPath") or input_json.get("project"),
+        sample_id=sample_id,
+        sample_dir=sample_dir,
+        project=input.projectPath or input.project,
         input_json=input_json,
         site_path=str(site_path) if site_path else None,
     )
-    reason = str(input_json.get("remediationReason") or "")
-    if input_json.get("forceRealign"):
+    reason = str(input.remediationReason or "")
+    if input.forceRealign:
         reason = reason or f"forceRealign after trim_front2={input_json.get('trimFront2', '?')}"
     append_sample_prep_log(
         Path(str(sample_dir)),
@@ -468,35 +452,32 @@ def _handle_parabricks_giraffe(_capability: str, _action_name: str, input: BaseM
         attempt=int(input_json.get("qcAttempt") or 1),
         reason=reason or "Parabricks giraffe pangenome alignment",
         inputs={
-            "forceRealign": bool(input_json.get("forceRealign")),
-            "alignmentPass": input_json.get("alignmentPass") or "initial",
+            "forceRealign": bool(input.forceRealign),
+            "alignmentPass": input.alignmentPass or "initial",
             "alignmentMode": "pangenome",
         },
         outputs=result,
-        workflow_node_key=input_json.get("workflowNodeKey") or "parabricks_giraffe",
+        workflow_node_key=input.workflowNodeKey or "parabricks_giraffe",
     )
     return ParabricksTaskOutput(status="ok", **result)
 
 
 def _handle_methylgrapher_wgbs_align(
-    _capability: str, _action_name: str, input: BaseModel
-) -> "MethylGrapherWgbsAlignTaskOutput":
+    _capability: str, _action_name: str, input: MethylGrapherWgbsAlignTaskInput
+) -> MethylGrapherWgbsAlignTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..methylgrapher_wgbs_runner import run_methylgrapher_wgbs_align
     from ..sample_prep_log import append_sample_prep_log
-    from ..task_models.sample_prep_models import MethylGrapherWgbsAlignTaskOutput
 
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("sample.methylgrapher_wgbs_align requires sampleDir and sampleId")
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
     result = run_methylgrapher_wgbs_align(
-        sample_id=str(sample_id),
-        sample_dir=str(sample_dir),
+        sample_id=sample_id,
+        sample_dir=sample_dir,
         input_json=input_json,
     )
-    reason = str(input_json.get("remediationReason") or "")
-    if input_json.get("forceRealign"):
+    reason = str(input.remediationReason or "")
+    if input.forceRealign:
         reason = reason or f"forceRealign after trim_front2={input_json.get('trimFront2', '?')}"
     append_sample_prep_log(
         Path(str(sample_dir)),
@@ -506,32 +487,29 @@ def _handle_methylgrapher_wgbs_align(
         attempt=int(input_json.get("qcAttempt") or 1),
         reason=reason or "methylGrapher C2T/G2A WGBS pangenome alignment",
         inputs={
-            "forceRealign": bool(input_json.get("forceRealign")),
-            "alignmentPass": input_json.get("alignmentPass") or "initial",
+            "forceRealign": bool(input.forceRealign),
+            "alignmentPass": input.alignmentPass or "initial",
             "alignmentMode": "pangenome_wgbs",
         },
         outputs=result,
-        workflow_node_key=input_json.get("workflowNodeKey") or "methylgrapher_wgbs_align",
+        workflow_node_key=input.workflowNodeKey or "methylgrapher_wgbs_align",
     )
     return MethylGrapherWgbsAlignTaskOutput(status="ok", **result)
 
 
-def _handle_methylgrapher_wgbs_extract(_capability: str, _action_name: str, input: BaseModel):
+def _handle_methylgrapher_wgbs_extract(
+    _capability: str, _action_name: str, input: MethylGrapherWgbsExtractTaskInput
+) -> MethylExtractTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..methylgrapher_wgbs_runner import run_methylgrapher_wgbs_extract
     from ..sample_prep_log import append_sample_prep_log
-    from ..task_models.sample_prep_models import MethylExtractTaskOutput
 
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    project = input_json.get("project") or input_json.get("projectPath")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("sample.methylgrapher_wgbs_extract requires sampleDir and sampleId")
-    if not project:
-        raise RuntimeError("sample.methylgrapher_wgbs_extract requires projectPath")
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
+    project = input.project or input.projectPath
     raw = run_methylgrapher_wgbs_extract(
-        sample_id=str(sample_id),
-        sample_dir=str(sample_dir),
+        sample_id=sample_id,
+        sample_dir=sample_dir,
         project=str(project),
         input_json=input_json,
     )
@@ -542,7 +520,7 @@ def _handle_methylgrapher_wgbs_extract(_capability: str, _action_name: str, inpu
         capability=_capability,
         attempt=int(input_json.get("qcAttempt") or 1),
         reason="methylGrapher graph-aware methylation extraction",
-        inputs={"forceRealign": bool(input_json.get("forceRealign"))},
+        inputs={"forceRealign": bool(input.forceRealign)},
         outputs=raw,
         workflow_node_key=input_json.get("workflowNodeKey") or "methylgrapher_wgbs_extract",
     )
@@ -555,15 +533,12 @@ def _handle_methylgrapher_wgbs_extract(_capability: str, _action_name: str, inpu
     )
 
 
-def _handle_delete_fastqs(_capability: str, _action_name: str, input: BaseModel) -> DeleteTaskOutput:
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
-    from ..task_models.sample_prep_models import DeleteTaskOutput
-
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir:
-        raise RuntimeError("sample.delete_fastqs requires sampleDir")
-    sample_path = Path(str(sample_dir))
+def _handle_delete_fastqs(
+    _capability: str, _action_name: str, input: DeleteFastqsTaskInput
+) -> DeleteTaskOutput:
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
+    sample_path = Path(sample_dir)
     removed = 0
     for pattern in ("*.fastq.gz", "*.fq.gz", "*.fastq", "*.fq"):
         for path in sample_path.glob(pattern):
@@ -577,15 +552,12 @@ def _handle_delete_fastqs(_capability: str, _action_name: str, input: BaseModel)
     )
 
 
-def _handle_delete_bam(_capability: str, _action_name: str, input: BaseModel) -> DeleteTaskOutput:
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
-    from ..task_models.sample_prep_models import DeleteTaskOutput
-
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("sample.delete_bam requires sampleDir and sampleId")
-    sample_path = Path(str(sample_dir))
+def _handle_delete_bam(
+    _capability: str, _action_name: str, input: DeleteBamTaskInput
+) -> DeleteTaskOutput:
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
+    sample_path = Path(sample_dir)
     removed = 0
     for name in (f"{sample_id}.bam", f"{sample_id}.BAM", f"{sample_id}.json"):
         path = sample_path / name
@@ -600,23 +572,20 @@ def _handle_delete_bam(_capability: str, _action_name: str, input: BaseModel) ->
     )
 
 
-def _handle_methyl_extract(_capability: str, _action_name: str, input: BaseModel):
+def _handle_methyl_extract(
+    _capability: str, _action_name: str, input: MethylExtractTaskInput
+) -> MethylExtractTaskOutput:
     from ..extract_runner import run_methyl_extract
-    from ..task_models.sample_prep_models import MethylExtractTaskOutput
 
     input_json: Dict[str, Any] = input.model_dump(mode="json")
 
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    project = input_json.get("project") or input_json.get("projectPath")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("sample.methyl_extract requires sampleDir and sampleId")
-    if not project:
-        raise RuntimeError("sample.methyl_extract requires project")
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
+    project = input.project or input.projectPath
 
     raw = run_methyl_extract(
-        sample_id=str(sample_id),
-        sample_dir=str(sample_dir),
+        sample_id=sample_id,
+        sample_dir=sample_dir,
         project=str(project),
         input_json=input_json,
     )
@@ -629,15 +598,16 @@ def _handle_methyl_extract(_capability: str, _action_name: str, input: BaseModel
     )
 
 
-def _handle_archive_sample(_capability: str, _action_name: str, input: BaseModel) -> ArchiveSampleTaskOutput:
+def _handle_archive_sample(
+    _capability: str, _action_name: str, input: ArchiveSampleTaskInput
+) -> ArchiveSampleTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..sample_archive import archive_from_task_input
     from ..sample_prep_log import append_sample_prep_log
-    from ..task_models.sample_prep_models import ArchiveSampleTaskOutput
 
     result = archive_from_task_input(input_json)
-    sample_dir = input_json.get("sampleDir")
-    sample_id = result.get("sampleId")
+    sample_dir = input.sampleDir
+    sample_id = result.get("sampleId") or input.sampleId
     if sample_dir and sample_id:
         append_sample_prep_log(
             Path(str(sample_dir)),
@@ -646,7 +616,7 @@ def _handle_archive_sample(_capability: str, _action_name: str, input: BaseModel
             capability=_capability,
             attempt=int(input_json.get("qcAttempt") or 1),
             reason=str(
-                input_json.get("rejectReason")
+                input.rejectReason
                 or result.get("skipReason")
                 or "Archive sample bundle to durable storage"
             ),
@@ -658,19 +628,18 @@ def _handle_archive_sample(_capability: str, _action_name: str, input: BaseModel
     return ArchiveSampleTaskOutput(status=status, **result)
 
 
-def _handle_demultiplex(_capability: str, _action_name: str, input: BaseModel) -> "DemultiplexTaskOutput":
+def _handle_demultiplex(
+    _capability: str, _action_name: str, input: DemultiplexTaskInput
+) -> DemultiplexTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..demultiplex_runner import run_demultiplex
     from ..sample_prep_log import append_sample_prep_log
-    from ..task_models.sample_prep_models import DemultiplexTaskOutput
 
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("sample.demultiplex requires sampleDir and sampleId")
-    resolved = dict(input_json.get("resolvedConfig") or {})
-    if input_json.get("barcodeTsv") and not resolved.get("barcode_tsv"):
-        resolved["barcode_tsv"] = input_json["barcodeTsv"]
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
+    resolved = dict(input.resolvedConfig or {})
+    if input.barcodeTsv and not resolved.get("barcode_tsv"):
+        resolved["barcode_tsv"] = input.barcodeTsv
     payload = {**input_json, "resolvedConfig": resolved}
     result = run_demultiplex(
         sample_id=str(sample_id),
@@ -692,36 +661,35 @@ def _handle_demultiplex(_capability: str, _action_name: str, input: BaseModel) -
     return DemultiplexTaskOutput(status=status, **result)
 
 
-def _handle_docker_align(_capability: str, _action_name: str, input: BaseModel) -> ParabricksTaskOutput:
+def _handle_docker_align(
+    _capability: str, _action_name: str, input: DockerAlignTaskInput
+) -> ParabricksTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..docker_align_runner import run_docker_align
     from ..sample_prep_log import append_sample_prep_log
-    from ..task_models.sample_prep_models import ParabricksTaskOutput
 
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    if not sample_dir or not sample_id:
-        raise RuntimeError("sample.docker_align requires sampleDir and sampleId")
+    sample_dir = input.sampleDir
+    sample_id = input.sampleId
     reference_fasta = resolve_reference_fasta(input_json)
     result = run_docker_align(
-        sample_id=str(sample_id),
-        sample_dir=str(sample_dir),
+        sample_id=sample_id,
+        sample_dir=sample_dir,
         reference_fasta=reference_fasta,
         input_json=input_json,
     )
     append_sample_prep_log(
-        Path(str(sample_dir)),
-        sample_id=str(sample_id),
+        Path(sample_dir),
+        sample_id=sample_id,
         action="sample.docker_align",
         capability=_capability,
         attempt=int(input_json.get("qcAttempt") or 1),
-        reason=str(input_json.get("remediationReason") or "Generic Docker methylation align"),
+        reason=str(input.remediationReason or "Generic Docker methylation align"),
         inputs={
-            "forceRealign": bool(input_json.get("forceRealign")),
-            "alignmentPass": input_json.get("alignmentPass") or "initial",
+            "forceRealign": bool(input.forceRealign),
+            "alignmentPass": input.alignmentPass or "initial",
         },
         outputs=result,
-        workflow_node_key=input_json.get("workflowNodeKey") or "docker_align",
+        workflow_node_key=input.workflowNodeKey or "docker_align",
     )
     return ParabricksTaskOutput(status="ok", **result)
 
