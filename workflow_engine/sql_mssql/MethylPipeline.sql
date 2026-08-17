@@ -1177,6 +1177,8 @@ BEGIN
     DECLARE @tf BIT;
     DECLARE @fc INT;
     DECLARE @fm NVARCHAR(1024);
+    DECLARE @repl_start INT;
+    DECLARE @repl_len INT;
 
     WHILE CHARINDEX(N'${', @resolved) > 0
     BEGIN
@@ -1203,7 +1205,20 @@ BEGIN
             RETURN;
         END
 
-        SET @resolved = STUFF(@resolved, @start, @end - @start + 1, ISNULL(@frag, N'null'));
+        -- Compiler JSON stores placeholders as strings ("${var.x}"). SQL fragments are
+        -- already typed JSON (quoted strings or objects). Replace the quoted slot.
+        SET @repl_start = @start;
+        SET @repl_len = @end - @start + 1;
+        IF @start > 1
+           AND SUBSTRING(@resolved, @start - 1, 1) = N'"'
+           AND @end < LEN(@resolved)
+           AND SUBSTRING(@resolved, @end + 1, 1) = N'"'
+        BEGIN
+            SET @repl_start = @start - 1;
+            SET @repl_len = @end - @start + 3;
+        END
+
+        SET @resolved = STUFF(@resolved, @repl_start, @repl_len, ISNULL(@frag, N'null'));
     END
 END;
 GO
