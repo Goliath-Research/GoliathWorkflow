@@ -35,7 +35,12 @@ Monitor:
 
 ```sql
 EXEC portal.sp_get_instance_tasks @workflow_instance_id = @instance_id;
+EXEC portal.sp_get_node_execution_detail @node_execution_id = @node_id;
 ```
+
+Failed download (missing FASTQ at the baked source URI): upload the file to that same `fastqSource` path, then `EXEC portal.sp_retry_failed_node` (`FAILED` → `READY`). Do not start a new instance unless knobs or URIs changed. See [portal-ia](../../docs/architecture/portal-ia.md) and [usage ch.11](../../docs/usage/11-troubleshooting-and-recovery.md).
+
+Study-filtered instance list and stage rollup: `portal.sp_list_study_instances` / `portal.sp_get_study_pipeline_progress`.
 
 ### Option B — Admin CLI (CI / Cursor developer mode)
 

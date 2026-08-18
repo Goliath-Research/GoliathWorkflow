@@ -12,7 +12,7 @@
 | Study MC → freeze → model | [`full_lifecycle.program.json`](../../workflow_engine/domain/fixtures/full_lifecycle.program.json) / [`study_validation_lifecycle.program.json`](../../workflow_engine/domain/fixtures/study_validation_lifecycle.program.json) |
 | SaMD profile ladder | [`docs/usage/18-samd-study-lifecycle.md`](../usage/18-samd-study-lifecycle.md) |
 
-Related stage chapters: [ch.03 Sample prep](../usage/03-sample-prep-and-qc.md) · [ch.05 Stability](../usage/05-stage-stability.md) · [ch.06 Freeze](../usage/06-stage-freeze.md) · [ch.07 Model](../usage/07-stage-model.md) · [ch.08 Post-model](../usage/08-stage-post-model-validation.md).
+Related stage chapters: [ch.03 Sample prep](../usage/03-sample-prep-and-qc.md) · [ch.05 Stability](../usage/05-stage-stability.md) · [ch.06 Freeze](../usage/06-stage-freeze.md) · [ch.07 Model](../usage/07-stage-model.md) · [ch.08 Post-model](../usage/08-stage-post-model-validation.md). Operator UI contract: [portal-ia](portal-ia.md) (study pipeline, monitor, retry).
 
 ---
 

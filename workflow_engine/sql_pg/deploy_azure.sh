@@ -111,6 +111,10 @@ SCRIPTS=(
   contract_api_parity.sql
   onboarding_api_parity.sql
   e_portal_api_parity.sql
+  portal_study_pipeline_api.sql
+  portal_ops_recovery_api.sql
+  portal_rbac_api.sql
+  portal_contract_api.sql
 )
 
 echo "Target: host=$PGHOST db=$PGDATABASE user=$PGUSER sslmode=$PGSSLMODE"

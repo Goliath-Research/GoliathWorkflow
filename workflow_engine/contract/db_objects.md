@@ -114,8 +114,14 @@ Deploy [`../sql/portal_workflow_api.sql`](../sql/portal_workflow_api.sql) (Azure
 | `portal.sp_get_action_schema` | Schema-driven parameter forms |
 | `portal.sp_list_workflow_definitions` | List defs (filter `source` = `portal` or `system`) |
 | `portal.sp_create_workflow_graph` | Create portal-owned workflow graph; validates actions exist |
-| `portal.sp_create_and_start_instance` | Create instance + `sp_start_workflow_instance` |
-| `portal.sp_get_instance_tasks` | Monitor node executions for results panel |
+| `portal.sp_create_and_start_instance` | Create instance + `sp_start_workflow_instance`; optional `scope_id` pack check |
+| `portal.sp_get_instance_tasks` | Monitor node executions (`engine_error_*`, lease, source URI) |
+| `portal.sp_list_study_instances` | Instances linked to a study |
+| `portal.sp_get_study_pipeline_progress` | Stage rollup for Study Overview |
+| `portal.sp_get_node_execution_detail` | Failed/stuck task detail |
+| `portal.sp_retry_failed_node` | Operator `FAILED` → `READY` |
+| `portal.sp_list/upsert_user`, `sp_grant_user_role` | Admin RBAC façade |
+| `portal.sp_list/upsert_contract`, `sp_set_contract_process_packs` | Contract + process-pack entitlements |
 
 Portal principals must not execute `wf.wf_repo_upsert_workflow_action` or admin delete procs. Catalog seed and system pipeline deploy use **direct-DB scripts** (`seed_action_catalog.py`, `deploy_workflow_definitions.sh`, `workflow_engine/ops`) from CI/release automation.
 

@@ -71,6 +71,8 @@ deploy_mssql() {
   sqlcmd "${args[@]}" -i "$dir/cfg_assay_procedure_links.sql"
   echo "==> mssql: cfg_analyte_catalog.sql"
   sqlcmd "${args[@]}" -i "$dir/cfg_analyte_catalog.sql"
+  echo "==> mssql: portal_contract_api.sql (catalog @scope_id + pack entitlements)"
+  sqlcmd "${args[@]}" -i "$dir/portal_contract_api.sql"
 }
 
 deploy_postgres() {
@@ -97,6 +99,8 @@ deploy_postgres() {
   psql -q -v ON_ERROR_STOP=1 -f "$dir/cfg_assay_procedure_links.sql"
   echo "==> postgres: cfg_analyte_catalog.sql"
   psql -q -v ON_ERROR_STOP=1 -f "$dir/cfg_analyte_catalog.sql"
+  echo "==> postgres: portal_contract_api.sql (catalog @scope_id + pack entitlements)"
+  psql -q -v ON_ERROR_STOP=1 -f "$dir/portal_contract_api.sql"
 }
 
 backends=()

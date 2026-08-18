@@ -128,6 +128,10 @@ SCRIPTS=(
   cfg_assay_procedure_links.sql
   cfg_analyte_catalog.sql
   cfg_hyperparameter_search.sql
+  portal_study_pipeline_api.sql
+  portal_ops_recovery_api.sql
+  portal_rbac_api.sql
+  portal_contract_api.sql
 )
 
 echo "Target: server=$SERVER database=$DATABASE user=$USER"

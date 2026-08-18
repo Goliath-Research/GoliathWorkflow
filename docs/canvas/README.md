@@ -9,6 +9,7 @@ Interactive architecture and documentation hubs built with [Cursor Canvas](https
 | [Docs hub](#methylpipeline-docs) | Documentation pillar navigation |
 | [Platform overview](#methylpipeline-platform-overview) | Quick platform + SaMD overview companion |
 | [Architecture](#methylpipeline-architecture) | Config layers, local vs gateway, DB contract |
+| [Portal IA](#portal-ia) | Study pipeline, monitor/retry, Admin RBAC + contract packs |
 | [DB runbook](#methylpipeline-db-runbook) | Operator DB / workflow runbook |
 | [Analyte comparison](#analyte-comparison) | Analyte comparison explorer |
 | [H PCa good MC](#h-pca-good-mc-analysis) | H PCa good MC analysis |
@@ -53,6 +54,12 @@ CURSOR_CANVASES_DIR="$HOME/.cursor/projects/my-workspace/canvases" \
 - **Source:** `docs/canvas/methylpipeline-architecture.canvas.tsx`
 - **Purpose:** Config layers, local vs gateway, DB contract
 - **Markdown companion:** [Architecture index](../architecture/index.md)
+
+### Portal IA {#portal-ia}
+
+- **Source:** `docs/canvas/portal-ia.canvas.tsx`
+- **Purpose:** EpiPortal study pipeline workspace, instance monitor + retry, Admin RBAC and contract process packs (SQL contract spec for the other repo)
+- **Markdown companion:** [Portal information architecture](../architecture/portal-ia.md)
 
 ### DB runbook {#methylpipeline-db-runbook}
 

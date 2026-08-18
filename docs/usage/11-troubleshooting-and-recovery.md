@@ -58,7 +58,8 @@ flowchart TB
 | Node `RUNNING`, stale lease | Worker crash/restart; claim only serves `READY` | Auto: claim path + `methyl-reclaim-leases.timer`. Manual: Azure SQL `EXEC portal.sp_reclaim_expired_leases …` / PostgreSQL `SELECT * FROM portal.sp_reclaim_expired_leases(…)` / CLI `methyl-reclaim-leases` ([lease doc](../architecture/workflow-idempotency-retry-lease.md)) |
 | `401` on claim/submit | Token mismatch | Re-issue token via `register_worker.sh`; sync `/etc/methyl/worker-token` |
 | Gateway unreachable | systemd down or wrong `WORKER_API_BASE` | `install_gateway_systemd.sh`, curl health |
-| Instance `FAILED` | Negative `result_code` from action | Inspect `node_execution.output_json`; fix science/config; new instance |
+| Instance `FAILED` | Negative `result_code` from action | Inspect Task detail (`portal.sp_get_node_execution_detail`: `engine_error_*`, `source_uri`). If the baked URI/knobs are still correct, **Retry** (`portal.sp_retry_failed_node`: `FAILED` → `READY`). If `actionConfig` / procedure / sample list was wrong, start a **new instance** |
+| Missing FASTQ at source | Object not at the baked `fastqSource` URI | Portal does **not** upload. Place the file on the same source path shown in Task detail, then Retry. Do not treat this as a config change |
 | Smoke fails immediately | DB env, missing `workflow_versions.json`, no worker | `bootstrap_distributed_workers.sh --verify`; deploy workflows; start worker |
 
 ## Local / legacy — common problems
@@ -74,7 +75,7 @@ flowchart TB
 1. Confirm release: `bash scripts/verify_setup.sh --runtime-bundle`
 2. Query instance + nodes in DB (`wf.workflow_instance`, `wf.node_execution`)
 3. Check worker logs: `journalctl -u methyl-worker -f`
-4. Do **not** assume automatic retry — prefer new instance when `actionConfig` changed
+4. Do **not** assume automatic retry of `FAILED` nodes — use **Retry** (`portal.sp_retry_failed_node`) only when the same `input_json` is still correct after an external fix (missing FASTQ now on source, transient GPU/network). Prefer a new instance when `actionConfig` changed
 5. Record `workflow_instance_id` and overrides for traceability
 
 ## Safe recovery sequence (local)
@@ -95,11 +96,12 @@ Prefer DomainProgram reruns for new studies.
 ## Operational guardrails
 
 - Keep original run directories and DB instance rows for traceability
-- Prefer new `workflow_instance` over manual `node_execution` edits
+- Prefer **Retry** (`FAILED` → `READY`) when inputs are unchanged after an external fix; prefer a new `workflow_instance` when knobs or URIs changed. Do not expose a free-form `node_execution` status editor
 - Document `resolvedConfig` overrides in operator notes
 
 ## See also
 
+- [Portal information architecture](../architecture/portal-ia.md) — instance monitor, Retry, missing FASTQ
 - [Logging and observability](../reference/logging-observability.md)
 - [Traceability](../reference/traceability-provenance.md)
 - [Operator journey](../deployment/operator-journey.md)

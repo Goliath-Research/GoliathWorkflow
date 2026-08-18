@@ -77,6 +77,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`universal-caas-idempotency.plan.md`](universal-caas-idempotency.plan.md) | _(pending ADO)_ | Universal worker-side CAAS idempotency (+ FOREACH) | `phase0-substrate`, `phase1-validation-caas`, `phase2-foreach-bundle`, `phase3-consolidate-reuse`, `phase4-sample-caas` |
 | [`release-stable-tier-a-ops.plan.md`](release-stable-tier-a-ops.plan.md) | _(pending ADO)_ | Release-stable Tier-A experimentation | `docs-release-boundary`, `docs-hyperparam-gene-fc`, `ops-release-pin` |
 | [`portal-multi-instance-hpo.plan.md`](portal-multi-instance-hpo.plan.md) | _(pending ADO)_ | Portal multi-instance hyperparameter grid | `rename-wf-execution-scope`, `typed-hpo-schemas`, `cfg-search-ledger`, `grid-expander`, `score-promote`, `legacy-bridge-docs`, `tests-promote-plan` |
+| [`portal-pipeline-ia.plan.md`](portal-pipeline-ia.plan.md) | _(pending ADO)_ | Portal pipeline IA, RBAC admin, and contract packs | `rewrite-portal-ia`, `sql-study-pipeline`, `sql-ops-recovery`, `sql-rbac-admin`, `sql-contract-packs`, `canvas-and-crosslinks` |
 | [`di_action-agnostic_assessment_0d376284.plan.md`](di_action-agnostic_assessment_0d376284.plan.md) | **AB#664** | DI action-agnostic assessment | (see plan frontmatter) |
 | [`methylit-standalone-doc.plan.md`](methylit-standalone-doc.plan.md) | **AB#668** | MethylIT Standalone Doc | (see plan frontmatter) |
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |

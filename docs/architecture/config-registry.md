@@ -156,7 +156,7 @@ Process-pack and analyte documents in git carry a `catalog` block; `scripts/sync
 - [`cfg_assay_procedure_links.sql`](../../workflow_engine/sql_mssql/cfg_assay_procedure_links.sql) + [PG](../../workflow_engine/sql_pg/cfg_assay_procedure_links.sql) — study defaults FKs, `study_instance_link.assay_procedure_id`, `cfg.v_assay_procedure`
 - [`cfg_analyte_catalog.sql`](../../workflow_engine/sql_mssql/cfg_analyte_catalog.sql) + [PG](../../workflow_engine/sql_pg/cfg_analyte_catalog.sql) — `cfg.analyte`, study/sample/assay analyte FKs, catalog + enrollment filter
 
-Day-2: [`scripts/deploy_process_pack_catalog.sh`](../../scripts/deploy_process_pack_catalog.sh). UI: [portal-ia.md](portal-ia.md) / [portal-UI.md](portal-UI.md).
+Day-2: [`scripts/deploy_process_pack_catalog.sh`](../../scripts/deploy_process_pack_catalog.sh). UI: [portal-ia.md](portal-ia.md) / [portal-UI.md](portal-UI.md). Customer process-pack entitlements (`Contract.ContractProcessPackEntitlements`, `portal.sp_*` + catalog `@scope_id`) are documented in [portal-ia](portal-ia.md#contracts--customers-limited-to-process-packs).
 
 ## Related
 

@@ -16,6 +16,8 @@ flowchart LR
 
 **Detailed Mermaid walkthrough (ingest → holdouts):** [`end-to-end-workflow.md`](end-to-end-workflow.md)
 
+Operator-facing Study workspace (stage rollup, instance monitor, `FAILED`→`READY` retry): [`portal-ia.md`](portal-ia.md).
+
 | Stage | Usage chapter | Primary packages |
 |-------|---------------|------------------|
 | Sample prep | [ch.03](../usage/03-sample-prep-and-qc.md) | workers, `methylalignmentqc`, native-Mojo methylGrapher (pangenome_wgbs) or explicit Parabricks/extract |
