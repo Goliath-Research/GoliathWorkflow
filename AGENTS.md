@@ -52,6 +52,7 @@ Gateway instances store enriched `context_json` (`projectPath`, `pipelineProfile
 
 - Use the repo virtualenv: `source .venv/bin/activate` before `python`, `pytest`, or `methyl-*` CLIs.
 - Production workers use `/work/epimethyl/current/runtime-bundle/` for profiles and programs, not a git checkout.
+- Shared `/work` access: `scripts/init_work_layout.sh` makes `/work/samples` (and `projects` / `cache`) other-writable; `/work/genomes` and `/work/epimethyl` stay worker-readable (`0755`).
 
 ## Example: gene FeatureCuts caps
 

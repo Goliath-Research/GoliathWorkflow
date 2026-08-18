@@ -25,9 +25,61 @@ check_path() {
 echo "==> Work layout verification"
 
 # Site manifest
-SITE="${METHYL_SITE_CONFIG:-/work/site/methyl_site.json}"
-WORK_ROOT="${WORK_ROOT:-/work}"
+WORK_ROOT="${METHYL_WORK_ROOT:-${WORK_ROOT:-/work}}"
+SITE="${METHYL_SITE_CONFIG:-$WORK_ROOT/site/methyl_site.json}"
 check_path "Site manifest" "$SITE" 0
+
+# Access modes: samples/projects/cache must be other-writable; genomes/site/epimethyl must not.
+is_other_writable() {
+  local perm last
+  perm="$(stat -c '%a' "$1" 2>/dev/null || echo 0)"
+  last="${perm: -1}"
+  case "$last" in
+    2|3|6|7) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+check_other_writable() {
+  local label="$1"
+  local path="$2"
+  local want_writable="$3"
+  if [[ ! -d "$path" ]]; then
+    warn "$label not found (optional): $path"
+    return 0
+  fi
+  if is_other_writable "$path"; then
+    if [[ "$want_writable" -eq 1 ]]; then
+      ok "$label other-writable -> $path"
+    else
+      warn "$label is other-writable (expected worker-readable only): $path"
+    fi
+  else
+    if [[ "$want_writable" -eq 1 ]]; then
+      err "$label not other-writable (workers sharing this mount cannot write): $path — run scripts/init_work_layout.sh"
+    else
+      ok "$label worker-readable -> $path"
+    fi
+  fi
+}
+
+# samples is the hard contract (every worker + Docker must create/overwrite).
+# projects/cache share the same init mode but do not fail an existing cluster.
+# genomes/site/epimethyl should not be world-writable.
+check_other_writable "Samples root" "$WORK_ROOT/samples" 1
+if [[ -d "$WORK_ROOT/projects" ]] && ! is_other_writable "$WORK_ROOT/projects"; then
+  warn "Projects root not other-writable: $WORK_ROOT/projects — run scripts/init_work_layout.sh"
+elif [[ -d "$WORK_ROOT/projects" ]]; then
+  ok "Projects root other-writable -> $WORK_ROOT/projects"
+fi
+if [[ -d "$WORK_ROOT/cache" ]] && ! is_other_writable "$WORK_ROOT/cache"; then
+  warn "Cache root not other-writable: $WORK_ROOT/cache — run scripts/init_work_layout.sh"
+elif [[ -d "$WORK_ROOT/cache" ]]; then
+  ok "Cache root other-writable -> $WORK_ROOT/cache"
+fi
+check_other_writable "Genomes root" "$WORK_ROOT/genomes" 0
+check_other_writable "Site root" "$WORK_ROOT/site" 0
+check_other_writable "Epimethyl root" "$WORK_ROOT/epimethyl" 0
 
 # When site exists with reference_selection pins, require pinned genome files
 if [[ -f "$SITE" ]]; then
@@ -75,7 +127,7 @@ PY
 fi
 
 # Runtime bundle (production)
-EPIMETHYL_CURRENT="${EPIMETHYL_CURRENT:-/work/epimethyl/current}"
+EPIMETHYL_CURRENT="${EPIMETHYL_CURRENT:-$WORK_ROOT/epimethyl/current}"
 RUNTIME_BUNDLE="$EPIMETHYL_CURRENT/runtime-bundle"
 check_path "Runtime bundle" "$RUNTIME_BUNDLE" 0
 if [[ -d "$RUNTIME_BUNDLE/domain/profiles" ]]; then

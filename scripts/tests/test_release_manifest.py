@@ -167,6 +167,9 @@ def test_release_scripts_pass_bash_syntax_check() -> None:
         "write_worker_env.sh",
         "package_methyl_extractor.sh",
         "bootstrap_epimethyl.sh",
+        "init_work_layout.sh",
+        "verify_work_layout.sh",
+        "preflight_worker_join.sh",
         "download_methyl_extractor_artifacts.sh",
         "assemble_release.sh",
     ]

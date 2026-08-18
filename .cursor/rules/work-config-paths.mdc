@@ -51,17 +51,19 @@ Or set `METHYL_PROFILE=samd_research` (name resolves under `METHYL_PROFILE_DIR`)
 ## `/work` layout (operator / cluster storage, not git)
 
 ```
-/work/epimethyl/              # deployed runtime (releases, venv, env, docker, cfg-store)
-/work/site/methyl_site.json   # materialized site (genomes, GTF, caches) — METHYL_SITE_CONFIG
+/work/epimethyl/              # deployed runtime (releases, venv, env, docker, cfg-store) — worker-readable 0755
+/work/site/methyl_site.json   # materialized site (genomes, GTF, caches) — METHYL_SITE_CONFIG — 0755
 /work/site/storage_endpoints/ # non-secret endpoint metadata only
-/work/genomes/                # reference genomes by species (provision recipes)
-/work/cache/                   # shared mapper/enricher caches
-/work/samples/{sample_id}/    # flat sample archive (not by laboratory)
-/work/projects/<study>/        # study-specific science
+/work/genomes/                # reference genomes by species (provision recipes) — worker-readable 0755
+/work/cache/                   # shared mapper/enricher caches — worker-writable 0777
+/work/samples/{sample_id}/    # flat sample archive (not by laboratory) — worker-writable 0777
+/work/projects/<study>/        # study-specific science — worker-writable 0777
   configs/project_*.json       # study manifests only
   data/                        # cohort CSVs
   <project_name>/              # outputs (monte_carlo_runs, …)
 ```
+
+Phase 0 creates these roots via `scripts/init_work_layout.sh` (also invoked from `bootstrap_epimethyl.sh` / `bootstrap_distributed_workers.sh`). `/work/samples` must stay other-writable so every worker — including Docker-as-root Parabricks — can create and overwrite sample dirs. Do not make `/work/genomes` or `/work/epimethyl` world-writable.
 
 Optional: a small instance context JSON on `/work` that only sets `projectPath` (and study-only overrides). **Do not** copy `*.program.json` to `/work/projects/.../configs/`.
 

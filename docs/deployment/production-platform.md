@@ -87,7 +87,20 @@ Dev/bootstrap may still use direct-DB `register_worker.sh` on a **trusted** host
 ## Phase 0 — Shared storage and site
 
 1. Mount fast shared storage at `/work` on the gateway VM and every GPU worker.
-2. Ensure study trees and samples layouts exist (`/work/projects/<study>/`, `/work/samples/`).
+2. Initialize the four-layer roots and access modes (once per share; idempotent):
+
+```bash
+bash scripts/init_work_layout.sh --work /work
+```
+
+| Path | Worker access | Mode |
+|------|---------------|------|
+| `/work/samples/` | writable by every worker (and Docker-as-root children) | `0777` + default ACL |
+| `/work/projects/`, `/work/cache/` | writable (study outputs, mapper caches) | `0777` + default ACL |
+| `/work/genomes/`, `/work/site/`, `/work/epimethyl/` | read-only for workers; ops / promote / provision write | `0755` |
+
+`bootstrap_epimethyl.sh` and `bootstrap_distributed_workers.sh` call this after the mount exists. The script does **not** recurse into existing trees. `verify_work_layout.sh` fails if `/work/samples` is not other-writable.
+
 3. Install site manifest: `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`), including **`reference_selection`** pins and concrete paths (see [`site_grch38.example.json`](../../tools/methyl-config-editor/configs/site_grch38.example.json)).
 4. Provision **selected** genomes under `/work/genomes/` from company storage when local pins are incomplete:
 

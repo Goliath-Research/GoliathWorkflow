@@ -144,12 +144,19 @@ if [[ "$SKIP_SEED" -eq 0 ]]; then
   "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql_mssql/seed_action_catalog.py" --regenerate-catalog --use-db
 fi
 
+# Shared /work roots + access modes (samples writable; genomes/epimethyl readable)
+WORK_ROOT="${METHYL_WORK_ROOT:-${WORK_ROOT:-/work}}"
+if [[ -d "$WORK_ROOT" && -x "$SCRIPT_DIR/init_work_layout.sh" ]]; then
+  echo "==> Initializing /work layout under $WORK_ROOT ..."
+  bash "$SCRIPT_DIR/init_work_layout.sh" --work "$WORK_ROOT" \
+    || echo "WARN: init_work_layout.sh failed (non-fatal)"
+fi
+
 # Configuration registry: import FS → cfg store → materialize onto /work (never secrets)
 SKIP_CFG="${SKIP_CFG:-0}"
 if [[ "$SKIP_CFG" -eq 0 ]]; then
   echo "==> Importing profiles/programs into cfg store and materializing onto /work ..."
   CFG_STORE="${METHYL_CFG_STORE:-/work/epimethyl/cfg-store}"
-  WORK_ROOT="${METHYL_WORK_ROOT:-/work}"
   export PYTHONPATH="${REPO_ROOT}/workflow_engine:${PYTHONPATH:-}"
   "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" import-fs \
     --repo-root "$REPO_ROOT" \

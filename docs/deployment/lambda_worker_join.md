@@ -53,7 +53,7 @@ flowchart LR
 
 ## A. Cluster bootstrap (once per release / share) — not on every VM
 
-1. Ops mounts QNAP so admin and workers see `/work/epimethyl`, `/work/genomes`, `/work/samples`, `/work/site`.
+1. Ops mounts QNAP so admin and workers see `/work/epimethyl`, `/work/genomes`, `/work/samples`, `/work/site`. Then `bash scripts/init_work_layout.sh --work /work` so `/work/samples` is other-writable and `/work/genomes` / `/work/epimethyl` stay worker-readable (`0755`).
 2. Run **Epimethyl-Release-Assemble** + approved **Epimethyl-Release-Deploy** until `/work/epimethyl/current/manifest.json` exists (MethylPipeline + MethylExtractor only).
 3. On a host that already sees that share and has NGC login: one Parabricks pull into `/work/epimethyl/docker` (first arch); later arches use `--skip-docker-pull` / `--skip-parabricks-pull`.
 4. Genomes/site stay Phase 0 ([production-platform.md](production-platform.md#phase-0-shared-storage-and-site)) — separate from worker enroll.

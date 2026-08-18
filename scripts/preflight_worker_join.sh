@@ -16,7 +16,7 @@ Options:
   --allow-missing-current  Do not require current/manifest.json
   --gpu                 Require nvidia-smi
   --require-api         Require WORKER_API_BASE (or METHYL_API_BASE) in the environment
-  --writable-probe      Write/remove a probe file under <root> (default: on)
+  --writable-probe      Write/remove a probe under /work/samples (default: on)
   --skip-writable-probe Skip writable probe
   -h, --help
 
@@ -60,13 +60,18 @@ echo "  root: $ROOT"
 [[ -d "$WORK" ]] || die "Shared work mount missing: $WORK (ops must mount QNAP → /work before join)"
 [[ -d "$ROOT" ]] || die "Epimethyl root missing: $ROOT (expected under the QNAP share)"
 
+SAMPLES="${METHYL_SAMPLES_DIR:-$WORK/samples}"
+if [[ ! -d "$SAMPLES" ]]; then
+  die "Samples root missing: $SAMPLES — run scripts/init_work_layout.sh after the share is mounted"
+fi
+
 if [[ "$WRITABLE_PROBE" -eq 1 ]]; then
-  PROBE="$ROOT/.join_preflight_$$"
-  if ! (umask 077; echo ok >"$PROBE") 2>/dev/null; then
-    die "Cannot write under $ROOT — check mount permissions / NFS export"
+  PROBE="$SAMPLES/.join_preflight_$$"
+  if ! (umask 000; echo ok >"$PROBE") 2>/dev/null; then
+    die "Cannot write under $SAMPLES — run scripts/init_work_layout.sh (samples must be other-writable for every worker)"
   fi
   rm -f "$PROBE"
-  info "Writable probe under $ROOT"
+  info "Writable probe under $SAMPLES"
 fi
 
 if [[ "$REQUIRE_CURRENT" -eq 1 ]]; then

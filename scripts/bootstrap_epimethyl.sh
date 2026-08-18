@@ -115,6 +115,13 @@ if [[ -n "$RELEASE_DIR" ]]; then
   info "  mode: production release ($RELEASE_DIR)"
 fi
 
+WORK_ROOT="${METHYL_WORK_ROOT:-${WORK_ROOT:-/work}}"
+if [[ -d "$WORK_ROOT" && -x "$SCRIPT_DIR/init_work_layout.sh" ]]; then
+  INIT_ARGS=(--work "$WORK_ROOT")
+  [[ "$DRY_RUN" -eq 1 ]] && INIT_ARGS+=(--dry-run)
+  run bash "$SCRIPT_DIR/init_work_layout.sh" "${INIT_ARGS[@]}"
+fi
+
 run mkdir -p "$ENV_DIR" "$DATA_DIR" "$RUNS_DIR"
 
 if [[ "$REQUIRE_ARC" -eq 1 && "$SKIP_ARC_CHECK" -eq 0 ]]; then

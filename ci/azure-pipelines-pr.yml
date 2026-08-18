@@ -73,7 +73,7 @@ steps:
     displayName: Doc freshness and diagram script tests
 
   - script: |
-      pytest scripts/tests/test_release_manifest.py -q
+      pytest scripts/tests/test_release_manifest.py scripts/tests/test_init_work_layout.py -q
     displayName: Release script contract tests
 
   - script: |

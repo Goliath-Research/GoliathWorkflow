@@ -46,6 +46,7 @@ Register pipelines per [`ci/README.md`](../../ci/README.md).
 | `scripts/deploy_workflow_definitions.sh` | Compile + deploy DomainPrograms via direct DB |
 | `scripts/verify_setup.sh` | Post-promote layout verification |
 | `scripts/verify_e2e_node.sh` | GPU worker pre-flight |
+| `scripts/init_work_layout.sh` | Phase 0 `/work` roots + access modes |
 | `scripts/verify_work_layout.sh` | Four-layer `/work` + env sanity |
 | `scripts/smoke_sample_prep.sh` | SamplePrep smoke (stub or live worker) |
 | `scripts/smoke_study_lifecycle.sh` | Validation lifecycle smoke |
