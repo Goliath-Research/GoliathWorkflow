@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -12,12 +13,18 @@ import sys
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
 FASTQ_SUFFIXES: Sequence[str] = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
 DEFAULT_MOJO_IMAGE = "epimethyl/methylgrapher:1.70-mojo"
+# {prefix}_1 / {prefix}_2 and Illumina {prefix}_R1[_001] / {prefix}_R2[_001]
+_FASTQ_MATE_RE = re.compile(
+    r"^(?P<prefix>.+)(?:_R|_r|_)(?P<mate>[12])(?:_[0-9]{3})?$"
+)
+_FASTQ_BARE_R_RE = re.compile(r"^R(?P<mate>[12])(?:_[0-9]{3})?$", re.IGNORECASE)
+_SKIP_FASTQ_DIR_NAMES = frozenset({"tmp", ".caas"})
 
 
 @dataclass(frozen=True)
@@ -295,23 +302,54 @@ def _matches_fastq(path: Path) -> bool:
     return any(name.endswith(suffix) for suffix in FASTQ_SUFFIXES)
 
 
+def _fastq_stem(path: Path) -> str:
+    name = path.name
+    lower = name.lower()
+    for suffix in FASTQ_SUFFIXES:
+        if lower.endswith(suffix):
+            return name[: -len(suffix)]
+    return path.stem
+
+
+def _mate_group(path: Path) -> Tuple[Tuple[str, str], str] | None:
+    """Return ((parent, prefix), mate) for a paired FASTQ, or None if unparseable."""
+    stem = _fastq_stem(path)
+    match = _FASTQ_MATE_RE.match(stem)
+    if match is None:
+        match = _FASTQ_BARE_R_RE.match(stem)
+        if match is None:
+            return None
+        prefix = "R"
+    else:
+        prefix = match.group("prefix")
+    parent = str(path.parent.resolve())
+    return (parent, prefix), match.group("mate")
+
+
 def _collect_fastqs(sample_dir: Path) -> List[Path]:
     found: List[Path] = []
     seen: set[Path] = set()
-    for pattern in ("*.fastq.gz", "*.fq.gz", "*.fastq", "*.fq"):
-        for match in sorted(sample_dir.glob(pattern)):
-            if match.is_file() and match not in seen:
-                seen.add(match)
-                found.append(match)
-        for match in sorted(sample_dir.glob(f"**/{pattern}")):
-            if match.is_file() and match not in seen:
-                seen.add(match)
-                found.append(match)
+    for path in sample_dir.rglob("*"):
+        if not path.is_file() or not _matches_fastq(path):
+            continue
+        rel_dirs = {part.lower() for part in path.relative_to(sample_dir).parts[:-1]}
+        if rel_dirs & _SKIP_FASTQ_DIR_NAMES:
+            continue
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        found.append(path)
     return sorted(found)
 
 
 def resolve_paired_fastqs(sample_dir: Path, sample_id: str) -> List[Path]:
-    """Return exactly two paired-end FASTQs for a sample."""
+    """Return paired-end FASTQs (one or more pairs) for a sample.
+
+    Clara ``fq2bam_meth`` accepts several ``--in-fq R1 R2`` pairs (multi-lane /
+    multi-flowcell). An even count of mate-paired files is valid. Trimmed
+    ``{id}_1.trimmed.fastq.gz`` / ``_2`` at *sample_dir* wins (remediation).
+    """
     trimmed = [
         sample_dir / f"{sample_id}_1.trimmed.fastq.gz",
         sample_dir / f"{sample_id}_2.trimmed.fastq.gz",
@@ -319,22 +357,52 @@ def resolve_paired_fastqs(sample_dir: Path, sample_id: str) -> List[Path]:
     if all(p.is_file() for p in trimmed):
         return trimmed
 
-    explicit = [
-        sample_dir / f"{sample_id}_1.fastq.gz",
-        sample_dir / f"{sample_id}_2.fastq.gz",
-    ]
-    if all(p.is_file() for p in explicit):
-        return explicit
+    all_fastqs = _collect_fastqs(sample_dir)
+    groups: Dict[Tuple[str, str], Dict[str, Path]] = {}
+    leftovers: List[Path] = []
+    for path in all_fastqs:
+        parsed = _mate_group(path)
+        if parsed is None:
+            leftovers.append(path)
+            continue
+        key, mate = parsed
+        groups.setdefault(key, {})[mate] = path
 
-    all_fastqs = [p for p in _collect_fastqs(sample_dir) if _matches_fastq(p)]
-    if len(all_fastqs) == 2:
-        return all_fastqs
-    if len(all_fastqs) < 2:
-        raise RuntimeError(f"Expected 2 FASTQ files under {sample_dir}, found {len(all_fastqs)}")
-    raise RuntimeError(
-        f"Expected exactly 2 FASTQ files under {sample_dir}, found {len(all_fastqs)}: "
-        + ", ".join(p.name for p in all_fastqs)
-    )
+    pairs: List[Tuple[Path, Path]] = []
+    for key in sorted(groups):
+        mates = groups[key]
+        if "1" in mates and "2" in mates:
+            pairs.append((mates["1"], mates["2"]))
+        else:
+            leftovers.extend(mates.values())
+
+    if not pairs:
+        raise RuntimeError(
+            f"Expected paired FASTQ files under {sample_dir}, found {len(all_fastqs)}"
+            + (f": {', '.join(p.name for p in all_fastqs)}" if all_fastqs else "")
+        )
+    if leftovers:
+        logger.warning(
+            "Ignoring unpaired FASTQ(s) under %s: %s",
+            sample_dir,
+            ", ".join(str(p.relative_to(sample_dir)) for p in leftovers),
+        )
+    ordered: List[Path] = []
+    for r1, r2 in pairs:
+        ordered.extend((r1, r2))
+    return ordered
+
+
+def _in_fq_flags(container_paths: Sequence[str]) -> List[str]:
+    """Clara/Parabricks ``--in-fq R1 R2`` repeated once per pair."""
+    if len(container_paths) < 2 or len(container_paths) % 2:
+        raise RuntimeError(
+            f"fq2bam_meth --in-fq requires an even number of FASTQs, got {len(container_paths)}"
+        )
+    flags: List[str] = []
+    for idx in range(0, len(container_paths), 2):
+        flags.extend(["--in-fq", container_paths[idx], container_paths[idx + 1]])
+    return flags
 
 
 def _has_qc_artifact(paths: ParabricksPaths) -> bool:
@@ -390,6 +458,11 @@ def _build_docker_command(
         in_fq_args.append(f"/workdir/{rel.as_posix()}")
 
     if cfg.engine == "mojo":
+        if len(in_fq_args) != 2:
+            raise RuntimeError(
+                "MojoFq2bamMeth accepts one FASTQ pair; "
+                f"found {len(in_fq_args)} files. Use Clara fq2bam_meth for multi-lane samples."
+            )
         cmd: List[str] = [
             _docker_bin(),
             "run",
@@ -454,9 +527,7 @@ def _build_docker_command(
         "pbrun",
         "fq2bam_meth",
         f"--ref=/genomes/{ref_basename}",
-        "--in-fq",
-        in_fq_args[0],
-        in_fq_args[1],
+        *_in_fq_flags(in_fq_args),
         f"--out-bam=/outputdir/{paths.bam_path.name}",
         f"--out-qc-metrics-dir=/outputdir/{paths.qc_metrics_dir.name}",
         f"--out-duplicate-metrics=/outputdir/{paths.dedup_metrics.name}",

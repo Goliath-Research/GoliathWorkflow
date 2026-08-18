@@ -42,6 +42,68 @@ def test_resolve_paired_fastqs_wrong_count(tmp_path: Path) -> None:
         runner.resolve_paired_fastqs(sample_dir, "S3")
 
 
+def test_resolve_paired_fastqs_multiple_lane_pairs(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_lanes"
+    lane_a = sample_dir / "AN000_flowcellA"
+    lane_b = sample_dir / "AN000_flowcellB"
+    lane_a.mkdir(parents=True)
+    lane_b.mkdir(parents=True)
+    (lane_a / "S_lanes_1.fastq.gz").write_bytes(b"a1")
+    (lane_a / "S_lanes_2.fastq.gz").write_bytes(b"a2")
+    (lane_b / "S_lanes_1.fastq.gz").write_bytes(b"b1")
+    (lane_b / "S_lanes_2.fastq.gz").write_bytes(b"b2")
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_lanes")
+    assert len(fastqs) == 4
+    assert [p.name for p in fastqs] == [
+        "S_lanes_1.fastq.gz",
+        "S_lanes_2.fastq.gz",
+        "S_lanes_1.fastq.gz",
+        "S_lanes_2.fastq.gz",
+    ]
+    assert {p.parent.name for p in fastqs} == {"AN000_flowcellA", "AN000_flowcellB"}
+
+
+def test_build_docker_command_multiple_in_fq_pairs(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_multi"
+    lane_a = sample_dir / "laneA"
+    lane_b = sample_dir / "laneB"
+    lane_a.mkdir(parents=True)
+    lane_b.mkdir(parents=True)
+    ref = tmp_path / "genomes" / "genome.fa"
+    ref.parent.mkdir(parents=True)
+    ref.write_text(">ref\n")
+    fqs = [
+        lane_a / "S_multi_1.fastq.gz",
+        lane_a / "S_multi_2.fastq.gz",
+        lane_b / "S_multi_1.fastq.gz",
+        lane_b / "S_multi_2.fastq.gz",
+    ]
+    for path in fqs:
+        path.write_bytes(b"x")
+
+    cfg = runner.ParabricksConfig(
+        image="nvcr.io/nvidia/clara/clara-parabricks:4.6.0-1",
+        gpu_flags=("--gpus", "all"),
+        bwa_threads=8,
+        extra_docker_args=(),
+        cleanup_tmp=True,
+        engine="parabricks",
+        align_device="auto",
+    )
+    paths = runner._resolve_paths(sample_dir, "S_multi", ref)
+    with patch.object(runner, "_docker_bin", return_value="/usr/bin/docker"):
+        cmd = runner._build_docker_command(cfg, paths, fqs)
+
+    assert cmd.count("--in-fq") == 2
+    first = cmd.index("--in-fq")
+    second = cmd.index("--in-fq", first + 1)
+    assert cmd[first + 1] == "/workdir/laneA/S_multi_1.fastq.gz"
+    assert cmd[first + 2] == "/workdir/laneA/S_multi_2.fastq.gz"
+    assert cmd[second + 1] == "/workdir/laneB/S_multi_1.fastq.gz"
+    assert cmd[second + 2] == "/workdir/laneB/S_multi_2.fastq.gz"
+
+
 def test_build_docker_command_mounts_and_flags(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S4"
     sample_dir.mkdir()

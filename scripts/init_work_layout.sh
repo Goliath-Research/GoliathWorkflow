@@ -22,7 +22,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '2,22p' "$0"
+  sed -n '2,20p' "$0"
 }
 
 WORK="${METHYL_WORK_ROOT:-${WORK_ROOT:-/work}}"
