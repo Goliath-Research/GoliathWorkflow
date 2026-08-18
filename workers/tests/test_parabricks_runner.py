@@ -64,6 +64,55 @@ def test_resolve_paired_fastqs_multiple_lane_pairs(tmp_path: Path) -> None:
     assert {p.parent.name for p in fastqs} == {"AN000_flowcellA", "AN000_flowcellB"}
 
 
+def test_resolve_paired_fastqs_r_separator_distinct_from_bare_underscore(
+    tmp_path: Path,
+) -> None:
+    sample_dir = tmp_path / "S_sep"
+    sample_dir.mkdir()
+    (sample_dir / "sample_1.fastq.gz").write_bytes(b"u1")
+    (sample_dir / "sample_2.fastq.gz").write_bytes(b"u2")
+    (sample_dir / "sample_R1.fastq.gz").write_bytes(b"r1")
+    (sample_dir / "sample_R2.fastq.gz").write_bytes(b"r2")
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_sep")
+    assert [p.name for p in fastqs] == [
+        "sample_1.fastq.gz",
+        "sample_2.fastq.gz",
+        "sample_R1.fastq.gz",
+        "sample_R2.fastq.gz",
+    ]
+
+
+def test_resolve_paired_fastqs_illumina_segments_are_distinct_pairs(
+    tmp_path: Path,
+) -> None:
+    sample_dir = tmp_path / "S_seg"
+    sample_dir.mkdir()
+    (sample_dir / "sample_R1_001.fastq.gz").write_bytes(b"a1")
+    (sample_dir / "sample_R2_001.fastq.gz").write_bytes(b"a2")
+    (sample_dir / "sample_R1_002.fastq.gz").write_bytes(b"b1")
+    (sample_dir / "sample_R2_002.fastq.gz").write_bytes(b"b2")
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_seg")
+    assert [p.name for p in fastqs] == [
+        "sample_R1_001.fastq.gz",
+        "sample_R2_001.fastq.gz",
+        "sample_R1_002.fastq.gz",
+        "sample_R2_002.fastq.gz",
+    ]
+
+
+def test_resolve_paired_fastqs_duplicate_mate_raises(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_dup"
+    sample_dir.mkdir()
+    (sample_dir / "sample_1.fastq.gz").write_bytes(b"gz")
+    (sample_dir / "sample_1.fastq").write_bytes(b"plain")
+    (sample_dir / "sample_2.fastq.gz").write_bytes(b"r2")
+
+    with pytest.raises(RuntimeError, match="Duplicate FASTQ mate 1"):
+        runner.resolve_paired_fastqs(sample_dir, "S_dup")
+
+
 def test_build_docker_command_multiple_in_fq_pairs(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S_multi"
     lane_a = sample_dir / "laneA"

@@ -20,10 +20,14 @@ logger = logging.getLogger(__name__)
 FASTQ_SUFFIXES: Sequence[str] = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
 DEFAULT_MOJO_IMAGE = "epimethyl/methylgrapher:1.70-mojo"
 # {prefix}_1 / {prefix}_2 and Illumina {prefix}_R1[_001] / {prefix}_R2[_001]
+# Capture separator and optional lane segment so sample_R1 ≠ sample_1 and
+# _001 ≠ _002 (they are distinct pairs, not collisions on the same mate slot).
 _FASTQ_MATE_RE = re.compile(
-    r"^(?P<prefix>.+)(?:_R|_r|_)(?P<mate>[12])(?:_[0-9]{3})?$"
+    r"^(?P<prefix>.+)(?P<sep>_R|_r|_)(?P<mate>[12])(?:_(?P<segment>[0-9]{3}))?$"
 )
-_FASTQ_BARE_R_RE = re.compile(r"^R(?P<mate>[12])(?:_[0-9]{3})?$", re.IGNORECASE)
+_FASTQ_BARE_R_RE = re.compile(
+    r"^R(?P<mate>[12])(?:_(?P<segment>[0-9]{3}))?$", re.IGNORECASE
+)
 _SKIP_FASTQ_DIR_NAMES = frozenset({"tmp", ".caas"})
 
 
@@ -311,8 +315,12 @@ def _fastq_stem(path: Path) -> str:
     return path.stem
 
 
-def _mate_group(path: Path) -> Tuple[Tuple[str, str], str] | None:
-    """Return ((parent, prefix), mate) for a paired FASTQ, or None if unparseable."""
+def _mate_group(path: Path) -> Tuple[Tuple[str, str, str, str], str] | None:
+    """Return ((parent, prefix, sep, segment), mate) or None if unparseable.
+
+    ``sep`` and ``segment`` are part of the pair identity so ``sample_R1`` does
+    not collide with ``sample_1``, and ``_R1_001`` does not collide with ``_R1_002``.
+    """
     stem = _fastq_stem(path)
     match = _FASTQ_MATE_RE.match(stem)
     if match is None:
@@ -320,10 +328,13 @@ def _mate_group(path: Path) -> Tuple[Tuple[str, str], str] | None:
         if match is None:
             return None
         prefix = "R"
+        sep = "R"
     else:
         prefix = match.group("prefix")
+        sep = match.group("sep")
+    segment = match.group("segment") or ""
     parent = str(path.parent.resolve())
-    return (parent, prefix), match.group("mate")
+    return (parent, prefix, sep, segment), match.group("mate")
 
 
 def _collect_fastqs(sample_dir: Path) -> List[Path]:
@@ -358,7 +369,7 @@ def resolve_paired_fastqs(sample_dir: Path, sample_id: str) -> List[Path]:
         return trimmed
 
     all_fastqs = _collect_fastqs(sample_dir)
-    groups: Dict[Tuple[str, str], Dict[str, Path]] = {}
+    groups: Dict[Tuple[str, str, str, str], Dict[str, Path]] = {}
     leftovers: List[Path] = []
     for path in all_fastqs:
         parsed = _mate_group(path)
@@ -366,7 +377,14 @@ def resolve_paired_fastqs(sample_dir: Path, sample_id: str) -> List[Path]:
             leftovers.append(path)
             continue
         key, mate = parsed
-        groups.setdefault(key, {})[mate] = path
+        mates = groups.setdefault(key, {})
+        if mate in mates:
+            existing = mates[mate]
+            raise RuntimeError(
+                f"Duplicate FASTQ mate {mate} under {sample_dir}: "
+                f"{existing.relative_to(sample_dir)} and {path.relative_to(sample_dir)}"
+            )
+        mates[mate] = path
 
     pairs: List[Tuple[Path, Path]] = []
     for key in sorted(groups):
