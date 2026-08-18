@@ -793,6 +793,8 @@
       "description": "Align bisulfite FASTQs to BAM using NVIDIA Clara Parabricks fq2bam_meth (Docker).",
       "dispatch": {
         "affinity_key_field": "sampleId",
+        "exclusive_worker": true,
+        "max_per_worker": 1,
         "prefer_continue_group": true,
         "prefer_previous_worker": true
       },
@@ -853,6 +855,8 @@
       "description": "Align FASTQs with Parabricks vg Giraffe (HPRC pangenome, GRCh38 surjection) + collectmultiplemetrics QC.",
       "dispatch": {
         "affinity_key_field": "sampleId",
+        "exclusive_worker": true,
+        "max_per_worker": 1,
         "prefer_continue_group": true,
         "prefer_previous_worker": true
       },
@@ -975,6 +979,8 @@
       "description": "Align RNA-Seq FASTQs and quantify gene counts using NVIDIA Clara Parabricks rna_fq2bam (STAR, Docker).",
       "dispatch": {
         "affinity_key_field": "sampleId",
+        "exclusive_worker": true,
+        "max_per_worker": 1,
         "prefer_continue_group": true,
         "prefer_previous_worker": true
       },

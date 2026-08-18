@@ -1060,7 +1060,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         domain_effects=_DE_PARABRICKS,
         action_config_key="parabricks",
         control=CONTROL_STOPPABLE,
-        dispatch=DISPATCH_SAMPLE_AFFINITY,
+        dispatch=DISPATCH_EXCLUSIVE_ONE,
     ),
     _in_process(
         "sample.parabricks_giraffe",
@@ -1078,7 +1078,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         domain_effects=_DE_PARABRICKS,
         action_config_key="parabricks",
         control=CONTROL_STOPPABLE,
-        dispatch=DISPATCH_SAMPLE_AFFINITY,
+        dispatch=DISPATCH_EXCLUSIVE_ONE,
     ),
     _in_process(
         "sample.methylgrapher_wgbs_align",
@@ -1113,7 +1113,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("sampleId", "sampleDir", "projectPath"),
         action_config_key="rna_align",
         control=CONTROL_STOPPABLE,
-        dispatch=DISPATCH_SAMPLE_AFFINITY,
+        dispatch=DISPATCH_EXCLUSIVE_ONE,
     ),
     _in_process(
         "sample.kallisto",
