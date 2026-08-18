@@ -124,8 +124,8 @@ def test_align_engine_from_resolved_config_ignores_host_env(
     env_pairs = materialize_align_docker_env(bundle)
     assert "METHYLGRAPHER_ALIGN_ENGINE=gpu_giraffe" in env_pairs
     assert "METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo" in env_pairs
-    assert "METHYLGRAPHER_MOJO_GIRAFFE_READY=1" in env_pairs
-    assert "METHYLGRAPHER_MOJO_SEGMENTS_CACHE=/work/cache/mojo_segments" in env_pairs
+    assert "MOJO_ALIGN_GIRAFFE_READY=1" in env_pairs
+    assert "MOJO_ALIGN_SEGMENTS_CACHE=/work/cache/mojo_segments" in env_pairs
     assert "METHYLGRAPHER_DUAL_GRAPH_PARALLEL=0" in env_pairs
     assert "METHYLGRAPHER_GPU_REQUIRE=1" in env_pairs
     assert any(p.startswith("MODULAR_NVPTX_COMPILER_PATH=") for p in env_pairs)
@@ -262,7 +262,7 @@ def test_mojo_giraffe_ready_false_materializes_zero(tmp_path: Path) -> None:
     cfg = _touch_bundle(tmp_path)
     cfg["mojo_giraffe_ready"] = False
     bundle = resolve_wgbs_bundle_from_resolved(cfg)
-    assert "METHYLGRAPHER_MOJO_GIRAFFE_READY=0" in materialize_align_docker_env(bundle)
+    assert "MOJO_ALIGN_GIRAFFE_READY=0" in materialize_align_docker_env(bundle)
 
 
 def test_mojo_segment_cache_mounts_always_added_for_qc_reuse(tmp_path: Path) -> None:

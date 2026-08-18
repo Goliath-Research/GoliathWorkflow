@@ -281,7 +281,7 @@
             }
           ],
           "default": null,
-          "description": "methylGrapher implementation: 'python' (stock 0.2.0 image) or 'mojo' (methylGrapher-mojo / patched engine image, tag :1.70-mojo). Operator-set per site/profile. Default when unset: python.",
+          "description": "methylGrapher implementation: 'python' (stock 0.2.0 image) or 'mojo' (mojo-align image (`:1.70-mojo-*`)). Operator-set per site/profile. Default when unset: python.",
           "title": "Engine"
         },
         "g2a": {

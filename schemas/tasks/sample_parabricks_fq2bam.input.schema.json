@@ -2,7 +2,7 @@
   "$defs": {
     "ParabricksStepConfig": {
       "additionalProperties": false,
-      "description": "Operator-tunable linear Align knobs (actionConfig.parabricks).\n\n``engine=parabricks`` keeps NVIDIA Clara fq2bam_meth. ``engine=mojo`` uses\nMojoFq2bamMeth in the methylGrapher-mojo image (NVIDIA/AMD/CPU via align_device).",
+      "description": "Operator-tunable linear Align knobs (actionConfig.parabricks).\n\n``engine=parabricks`` keeps NVIDIA Clara fq2bam_meth. ``engine=mojo`` uses\nMojoFq2bamMeth in the mojo-align image (NVIDIA/AMD/CPU via align_device).",
       "properties": {
         "align_device": {
           "anyOf": [

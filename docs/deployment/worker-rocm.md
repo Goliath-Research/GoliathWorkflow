@@ -5,9 +5,9 @@ Companion to [`docs/architecture/mojo-multi-gpu-dual-align.md`](../architecture/
 ## Image
 
 ```bash
-METHYLGRAPHER_MOJO_GPU_VARIANT=rocm \
-METHYLGRAPHER_MOJO_IMAGE_TAG=1.70-mojo-rocm \
-  bash scripts/build_methylgrapher_mojo_image.sh
+MOJO_ALIGN_GPU_VARIANT=rocm \
+MOJO_ALIGN_IMAGE_TAG=1.70-mojo-rocm \
+  bash scripts/build_mojo_align_image.sh
 ```
 
 Load on each ROCm worker (NFS tar pattern same as CUDA `:1.70-mojo`).

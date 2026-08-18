@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from methyl_worker.mojo_align_env import image_pin as mojo_align_image_pin
+
 logger = logging.getLogger(__name__)
 
 FASTQ_SUFFIXES: Sequence[str] = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
@@ -124,7 +126,7 @@ def resolve_collectmultiplemetrics_config(
         pb_slice = dict(ac["parabricks"])
         # Metrics need NVIDIA Clara ``pbrun`` even when linear align engine is mojo.
         pb_slice["engine"] = "parabricks"
-        # Drop align-image keys that may point at methylgrapher-mojo.
+        # Drop align-image keys that may point at the mojo-align image.
         for key in ("image", "mojoImage", "mojo_image"):
             pb_slice.pop(key, None)
         metrics_input["actionConfig"] = {"parabricks": pb_slice}
@@ -210,7 +212,7 @@ def resolve_parabricks_config(
             parabricks_image
             or _pick(payload, step_cfg, "mojoImage", "mojo_image")
             or _pick(payload, step_cfg, "parabricksImage", "image")
-            or os.environ.get("METHYL_METHYLGRAPHER_MOJO_IMAGE", "")
+            or mojo_align_image_pin()
             or DEFAULT_MOJO_IMAGE
         ).strip()
     else:

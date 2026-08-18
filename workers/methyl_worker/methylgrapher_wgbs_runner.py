@@ -26,6 +26,12 @@ from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
+from methyl_worker.mojo_align_env import (
+    INSTALL_PREFIX,
+    getenv as mojo_align_getenv,
+    overlay_dir as mojo_align_overlay_dir,
+)
+
 logger = logging.getLogger(__name__)
 
 METHYLGRAPHER_IMAGE_ENV = "METHYL_METHYLGRAPHER_IMAGE"
@@ -849,7 +855,7 @@ def add_mojo_segment_cache_mounts(
 
     Must run for **both** science Align and QC MojoGiraffe. When science GAF is
     reused, Align's docker block is skipped — without this, QC still sets
-    ``METHYLGRAPHER_MOJO_SEGMENTS_CACHE`` but never mounts it, and Mojo fails with
+    ``MOJO_ALIGN_SEGMENTS_CACHE`` but never mounts it, and Mojo fails with
     ``Permission denied: '/work'`` (node 890).
     """
     cache_root = mojo_segments_cache_path(bundle)
@@ -896,9 +902,9 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
         f"METHYLGRAPHER_GPU_GIRAFFE_FALLBACK={fallback}",
         f"METHYLGRAPHER_GIRAFFE_DEVICE={device}",
         f"METHYLGRAPHER_ALIGN_DEVICE={device}",
-        f"METHYLGRAPHER_MOJO_GIRAFFE_READY={ready}",
+        f"MOJO_ALIGN_GIRAFFE_READY={ready}",
         f"MODULAR_CACHE_DIR={modular}",
-        f"METHYLGRAPHER_MOJO_SEGMENTS_CACHE={segments}",
+        f"MOJO_ALIGN_SEGMENTS_CACHE={segments}",
         f"METHYLGRAPHER_DUAL_GRAPH_PARALLEL={dual_parallel}",
         # Fail closed when nvidia/amd DeviceContext cannot be created (no silent CPU).
         "METHYLGRAPHER_GPU_REQUIRE=1",
@@ -910,7 +916,7 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
     # Older NVIDIA drivers (<580) need system ptxas for Mojo CUDA create.
     ptxas = (
         os.environ.get("MODULAR_NVPTX_COMPILER_PATH", "").strip()
-        or "/opt/methylgrapher-mojo/cuda/bin/ptxas"
+        or f"{INSTALL_PREFIX}/cuda/bin/ptxas"
     )
     env.append(f"MODULAR_NVPTX_COMPILER_PATH={ptxas}")
     # Host HBM free-fraction → container preflight budget (same operator pin).
@@ -1045,14 +1051,14 @@ def resolve_grch38_offsets_dir(
 ) -> Path:
     """Directory with grch38-dense-v1 offsets (``meta.json`` + ``records.bin``).
 
-    Search order: ``METHYLGRAPHER_MOJO_SEGMENT_OFFSETS``,
+    Search order: ``MOJO_ALIGN_SEGMENT_OFFSETS``,
     ``{wl.gfa}.grch38_offsets``, cache siblings under mojo_segments.
     """
 
     def _ready(cand: Path) -> bool:
         return (cand / "meta.json").is_file() and (cand / "records.bin").is_file()
 
-    env = os.environ.get("METHYLGRAPHER_MOJO_SEGMENT_OFFSETS", "").strip()
+    env = mojo_align_getenv("SEGMENT_OFFSETS")
     candidates: List[Path] = []
     if env:
         env_p = Path(env).expanduser()
@@ -1120,12 +1126,7 @@ def build_qc_bam_mojo_sam_command(
 
 def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
     """Bind-mount host Mojo src/engine hotfixes into the Align/QC container."""
-    overlay = Path(
-        os.environ.get(
-            "METHYLGRAPHER_MOJO_OVERLAY",
-            "/work/epimethyl/images/methylgrapher-mojo-overlay",
-        )
-    )
+    overlay = mojo_align_overlay_dir()
     src_overlay = overlay / "src"
     if src_overlay.is_dir():
         for name in (
@@ -1140,7 +1141,7 @@ def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
             p = src_overlay / name
             if p.is_file():
                 docker_cmd.extend(
-                    ["-v", f"{p}:/opt/methylgrapher-mojo/src/{name}:ro"]
+                    ["-v", f"{p}:{INSTALL_PREFIX}/src/{name}:ro"]
                 )
     eng_dir = overlay / "engine"
     if eng_dir.is_dir():
@@ -1157,25 +1158,20 @@ def add_mojo_src_overlay_mounts(docker_cmd: List[str]) -> None:
             p = eng_dir / name
             if p.is_file():
                 docker_cmd.extend(
-                    ["-v", f"{p}:/opt/methylgrapher-mojo/engine/{name}:ro"]
+                    ["-v", f"{p}:{INSTALL_PREFIX}/engine/{name}:ro"]
                 )
 
 
 def _mojo_named_coords_paths() -> Tuple[Path, Path]:
     """Return (translate_script, pythonpath_root) for GBZ→GFA GAF rewrite.
 
-    Resolves only via ``METHYLGRAPHER_MOJO_ROOT``, overlay env, in-image
-    ``/opt/methylgrapher-mojo``, and ``/work/epimethyl/images/*`` mounts.
+    Resolves only via ``MOJO_ALIGN_ROOT``, overlay env, in-image
+    ``/opt/mojo-align``, and ``/work/epimethyl/images/*`` mounts.
     Hardcoded developer home paths are not consulted.
     """
-    overlay = Path(
-        os.environ.get(
-            "METHYLGRAPHER_MOJO_OVERLAY",
-            "/work/epimethyl/images/methylgrapher-mojo-overlay",
-        )
-    )
+    overlay = mojo_align_overlay_dir()
     scripts_root = (os.environ.get("METHYLGRAPHER_SCRIPTS") or "").strip()
-    mojo_root = (os.environ.get("METHYLGRAPHER_MOJO_ROOT") or "").strip()
+    mojo_root = mojo_align_getenv("ROOT")
 
     candidates: List[Tuple[Path, Path]] = []
     if scripts_root:
@@ -1199,8 +1195,8 @@ def _mojo_named_coords_paths() -> Tuple[Path, Path]:
         [
             (overlay / "scripts" / "translate_mojo_gaf_named_coords.py", overlay),
             (
-                Path("/opt/methylgrapher-mojo/scripts/translate_mojo_gaf_named_coords.py"),
-                Path("/opt/methylgrapher-mojo"),
+                Path(f"{INSTALL_PREFIX}/scripts/translate_mojo_gaf_named_coords.py"),
+                Path(INSTALL_PREFIX),
             ),
             (
                 Path(
@@ -1222,16 +1218,16 @@ def _mojo_named_coords_paths() -> Tuple[Path, Path]:
     searched = [str(c[1]) for c in candidates]
     raise FileNotFoundError(
         "translate_mojo_gaf_named_coords.py + engine/named_coords.py not found. "
-        "Set METHYLGRAPHER_MOJO_ROOT to a mojo-align checkout (or flat staged tree), "
-        "or METHYLGRAPHER_MOJO_OVERLAY / METHYLGRAPHER_SCRIPTS, or bake the script "
-        f"into the methylgrapher image under /opt/methylgrapher-mojo. Searched: {searched}"
+        "Set MOJO_ALIGN_ROOT to a mojo-align checkout (or flat staged tree), "
+        "or MOJO_ALIGN_OVERLAY / METHYLGRAPHER_SCRIPTS, or bake the script "
+        f"into the methylgrapher image under {INSTALL_PREFIX}. Searched: {searched}"
     )
 
 
 def _named_coords_index_dir(bundle: "MethylGrapherWgbsBundle") -> Path:
     cache = (
         (bundle.mojo_segments_cache or "").strip()
-        or os.environ.get("METHYLGRAPHER_MOJO_SEGMENTS_CACHE", "").strip()
+        or mojo_align_getenv("SEGMENTS_CACHE")
         or "/work/cache/mojo_segments"
     )
     return Path(cache) / "hprc-d9-bs.wl.gbz_to_gfa.named_coords"
@@ -2364,9 +2360,9 @@ def run_methylgrapher_wgbs_align(
                     docker_mojo_qc.extend(
                         [
                             "-e",
-                            "METHYLGRAPHER_MOJO_EMIT=sam",
+                            "MOJO_ALIGN_EMIT=sam",
                             "-e",
-                            f"METHYLGRAPHER_MOJO_SEGMENT_OFFSETS={offsets_dir}",
+                            f"MOJO_ALIGN_SEGMENT_OFFSETS={offsets_dir}",
                         ]
                     )
                     qc_mounts = set(mount_roots)

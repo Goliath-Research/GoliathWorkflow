@@ -12,7 +12,7 @@
 # can still be bypassed.
 set -euo pipefail
 
-ROOT="/opt/methylgrapher-mojo"
+ROOT="/opt/mojo-align"
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:$PYTHONPATH}"
 
 _mcall_engine="$(printf '%s' "${METHYLGRAPHER_MCALL_ENGINE:-native}" | tr '[:upper:]' '[:lower:]')"
@@ -27,7 +27,7 @@ if [[ -x "${MOJO_BIN}" ]]; then
   export PATH="${ROOT}/mojo-env/bin:${PATH}"
   # Mojo NVIDIA DeviceContext compile needs driver ≥580 OR a ptxas path.
   # (App code does not call CUDA Runtime; index H2D is Mojo enqueue_copy.)
-  # Image bake stages ptxas at /opt/methylgrapher-mojo/cuda/bin/ptxas.
+  # Image bake stages ptxas at /opt/mojo-align/cuda/bin/ptxas.
   if [[ -z "${MODULAR_NVPTX_COMPILER_PATH:-}" ]]; then
     for _ptx in \
       "${ROOT}/cuda/bin/ptxas" \

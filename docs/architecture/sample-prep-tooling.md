@@ -1,6 +1,6 @@
 # SamplePrep tooling (cross-repo)
 
-How MethylPipeline SamplePrep relates to **mojo-align**, **MethylExtractor**, legacy **methylGrapher-mojo**, and **NVIDIA Clara Parabricks**.
+How MethylPipeline SamplePrep relates to **mojo-align**, **MethylExtractor**, and **NVIDIA Clara Parabricks**.
 
 For the operator engine matrix see [Alignment engines](../usage/alignment-engines.md). For the full analysis and backlog see [cross-repo-tool-analysis plan](../plans/cross-repo-tool-analysis.plan.md) (AB#703).
 
@@ -10,7 +10,6 @@ For the operator engine matrix see [Alignment engines](../usage/alignment-engine
 |-----------|------|
 | **MethylPipeline** | Orchestrator: DomainProgram branching, workers, `methylalignmentqc` / `methylextractionqc`, `/work` contracts |
 | **mojo-align** | Canonical Mojo monorepo (`gpu-common`, `fq2bam-meth`, `giraffe`, `methylgrapher`) baked into `epimethyl/methylgrapher:1.70-mojo-*` |
-| **methylGrapher-mojo** | Pre-split monolith retained for rollback only — not for new development |
 | **MethylExtractor** | MethylDackel fork: BAM → per-chrom HDF5 + extraction JSON (linear / stock pangenome) |
 | **Clara Parabricks** | Explicit linear / stock-pangenome engines; optional Picard `collectmultiplemetrics` |
 
@@ -116,9 +115,9 @@ Task inputs must carry `alignmentMode` so family detection is fail-closed when a
 
 | Artifact | Typical path / pin |
 |----------|-------------------|
-| mojo-align → image | `METHYLGRAPHER_MOJO_ROOT` → `scripts/stage_flat_image_tree.sh` → `build_methylgrapher_mojo_image.sh` → `epimethyl/methylgrapher:1.70-mojo-{cuda,rocm}` |
-| In-container prefix | `/opt/methylgrapher-mojo` (name is historical; source of truth is mojo-align) |
-| Named-coords / overlays | `METHYLGRAPHER_MOJO_OVERLAY`, `/work/epimethyl/images/*` — **not** hardcoded developer home paths |
+| mojo-align → image | `MOJO_ALIGN_ROOT` → `scripts/stage_flat_image_tree.sh` → `build_mojo_align_image.sh` → `epimethyl/methylgrapher:1.70-mojo-{cuda,rocm}` |
+| In-container prefix | `/opt/mojo-align` |
+| Named-coords / overlays | `MOJO_ALIGN_OVERLAY`, `/work/epimethyl/images/*` — **not** hardcoded developer home paths |
 | MethylExtractor | `/work/epimethyl/methyl-extractor-{aarch64\|amd64}/bin/MethylExtractor` via `METHYL_EXTRACTOR_BIN` |
 | Clara | `METHYL_PARABRICKS_IMAGE` (e.g. `nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1`) |
 

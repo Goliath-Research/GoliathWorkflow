@@ -1,8 +1,8 @@
-# methylGrapher-mojo dual-ship image (native Mojo CLI + patched engine) for WGBS SamplePrep.
+# mojo-align dual-ship image (native Mojo CLI + patched engine) for WGBS SamplePrep.
 # Same vg/jemalloc=off story as Dockerfile; entrypoint stays `methylGrapher`.
 #
-# Build via scripts/build_methylgrapher_mojo_image.sh (stages engine/, src/, and a
-# trimmed mojo-env/ from METHYLGRAPHER_MOJO_ROOT before docker build).
+# Build via scripts/build_mojo_align_image.sh (stages engine/, src/, and a
+# trimmed mojo-env/ from MOJO_ALIGN_ROOT before docker build).
 #
 # Smoke:
 #   bash workers/docker/methylgrapher/smoke_64k.sh epimethyl/methylgrapher:1.70-mojo
@@ -29,10 +29,10 @@ ARG GPU_VARIANT=cuda
 ENV METHYLGRAPHER_GPU_VARIANT=${GPU_VARIANT}
 
 # Mojo 1.0 CUDA create on driver <580 needs system ptxas (staged by build script).
-COPY cuda/bin/ptxas /opt/methylgrapher-mojo/cuda/bin/ptxas
-RUN chmod +x /opt/methylgrapher-mojo/cuda/bin/ptxas \
-    && ln -sf /opt/methylgrapher-mojo/cuda/bin/ptxas /usr/local/bin/ptxas
-ENV MODULAR_NVPTX_COMPILER_PATH=/opt/methylgrapher-mojo/cuda/bin/ptxas
+COPY cuda/bin/ptxas /opt/mojo-align/cuda/bin/ptxas
+RUN chmod +x /opt/mojo-align/cuda/bin/ptxas \
+    && ln -sf /opt/mojo-align/cuda/bin/ptxas /usr/local/bin/ptxas
+ENV MODULAR_NVPTX_COMPILER_PATH=/opt/mojo-align/cuda/bin/ptxas
 
 ARG VG_VERSION=1.70.0
 ARG VG_PREBUILT=vg.arm64
@@ -56,36 +56,36 @@ RUN if [ "${GPU_VARIANT}" = "cuda" ]; then \
     fi
 
 # Patched engine + native Mojo CLI / MethylCall hot path + Giraffe GPU helper.
-COPY engine /opt/methylgrapher-mojo/engine
-COPY src /opt/methylgrapher-mojo/src
-COPY scripts /opt/methylgrapher-mojo/scripts
-COPY tests /opt/methylgrapher-mojo/tests
-COPY mojo-env /opt/methylgrapher-mojo/mojo-env
+COPY engine /opt/mojo-align/engine
+COPY src /opt/mojo-align/src
+COPY scripts /opt/mojo-align/scripts
+COPY tests /opt/mojo-align/tests
+COPY mojo-env /opt/mojo-align/mojo-env
 COPY methylGrapher.mojo.sh /usr/local/bin/methylGrapher
 ENV METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo \
     METHYLGRAPHER_GIRAFFE_DEVICE=auto \
     METHYLGRAPHER_GPU_REQUIRE=1 \
-    PYTHONPATH=/opt/methylgrapher-mojo/scripts:/opt/methylgrapher-mojo
+    PYTHONPATH=/opt/mojo-align/scripts:/opt/mojo-align
 # CuPy into mojo-env CPython 3.13 — Align quartet_map runs under PYTHONHOME.
 # Trimmed pixi env has no pip; bootstrap via ensurepip / get-pip.
-RUN if [ "${GPU_VARIANT}" = "cuda" ] && [ -x /opt/methylgrapher-mojo/mojo-env/bin/python3 ]; then \
-      /opt/methylgrapher-mojo/mojo-env/bin/python3 -m ensurepip --upgrade \
+RUN if [ "${GPU_VARIANT}" = "cuda" ] && [ -x /opt/mojo-align/mojo-env/bin/python3 ]; then \
+      /opt/mojo-align/mojo-env/bin/python3 -m ensurepip --upgrade \
         || curl -fsSL https://bootstrap.pypa.io/get-pip.py \
-           | /opt/methylgrapher-mojo/mojo-env/bin/python3 \
+           | /opt/mojo-align/mojo-env/bin/python3 \
         || true; \
-      /opt/methylgrapher-mojo/mojo-env/bin/python3 -m pip install --no-cache-dir \
+      /opt/mojo-align/mojo-env/bin/python3 -m pip install --no-cache-dir \
         "cupy-cuda12x[ctk]>=13.0" \
-        || /opt/methylgrapher-mojo/mojo-env/bin/python3 -m pip install --no-cache-dir \
+        || /opt/mojo-align/mojo-env/bin/python3 -m pip install --no-cache-dir \
           "cupy-cuda12x[ctk]" \
         || echo "WARN: mojo-env cupy not installed; GPU seed will host-fallback"; \
     fi
 # Validate Python engine at build time. Mojo help/Align JIT needs a visible GPU
 # arch (use smoke_64k.sh with --gpus); do not invoke Mojo here in the builder.
-RUN chmod +x /usr/local/bin/methylGrapher /opt/methylgrapher-mojo/mojo-env/bin/mojo \
-    && python3 -c "import sys; sys.path.insert(0,'/opt/methylgrapher-mojo'); from engine import cli; from engine.align_backends import normalize_align_engine; assert normalize_align_engine('mojo_giraffe')=='mojo_giraffe'; print('engine ok')" \
+RUN chmod +x /usr/local/bin/methylGrapher /opt/mojo-align/mojo-env/bin/mojo \
+    && python3 -c "import sys; sys.path.insert(0,'/opt/mojo-align'); from engine import cli; from engine.align_backends import normalize_align_engine; assert normalize_align_engine('mojo_giraffe')=='mojo_giraffe'; print('engine ok')" \
     && METHYLGRAPHER_MCALL_ENGINE=python methylGrapher help | head -5
 
-LABEL org.opencontainers.image.title="methylGrapher-mojo WGBS worker" \
+LABEL org.opencontainers.image.title="mojo-align WGBS worker" \
       org.opencontainers.image.description="Native Mojo MethylCall + MojoGiraffe GAF + MojoFq2bamMeth + patched engine + vg for dual Align" \
       methylpipeline.vg_version="${VG_VERSION}" \
       methylpipeline.methylgrapher_engine="mojo" \

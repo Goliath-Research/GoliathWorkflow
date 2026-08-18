@@ -36,7 +36,7 @@ class ParabricksStepConfig(BaseModel):
     """Operator-tunable linear Align knobs (actionConfig.parabricks).
 
     ``engine=parabricks`` keeps NVIDIA Clara fq2bam_meth. ``engine=mojo`` uses
-    MojoFq2bamMeth in the methylGrapher-mojo image (NVIDIA/AMD/CPU via align_device).
+    MojoFq2bamMeth in the mojo-align image (NVIDIA/AMD/CPU via align_device).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -204,7 +204,7 @@ class MethylGrapherWgbsStepConfig(BaseModel):
         default=None,
         description=(
             "methylGrapher implementation: 'python' (stock 0.2.0 image) or 'mojo' "
-            "(methylGrapher-mojo / patched engine image, tag :1.70-mojo). "
+            "(mojo-align image, tag :1.70-mojo). "
             "Operator-set per site/profile. Default when unset: python."
         ),
     )

@@ -1,6 +1,6 @@
 # Alignment engines
 
-MethylPipeline SamplePrep supports three `alignmentMode` values. This page is the operator matrix for choosing an engine; science contracts for the Mojo cutover live in the sibling [mojo-align](https://dev.azure.com/EpiMethyl/Development/_git/mojo-align) repository (`fq2bam-meth/`, `giraffe/`, `methylgrapher/`). Legacy `methylGrapher-mojo` remains a rollback checkout only.
+MethylPipeline SamplePrep supports three `alignmentMode` values. This page is the operator matrix for choosing an engine; science contracts for the Mojo cutover live in the sibling [mojo-align](https://dev.azure.com/EpiMethyl/Development/_git/mojo-align) repository (`fq2bam-meth/`, `giraffe/`, `methylgrapher/`). The `methylGrapher-mojo` git repo is archived.
 
 ## Mode matrix
 
@@ -45,7 +45,7 @@ See [Sample prep and QC](03-sample-prep-and-qc.md), [Sample preparation flow](..
 | `fq2bam-meth/docs/BENCHMARK_FQ2BAM_METH.md` | Clara vs Mojo linear bakeoff gates |
 | `giraffe/docs/ROCM_GIRAFFE_GATES.md` | AMD ROCm image and host gates |
 
-Clone path on developer hosts is typically alongside this repo (`../mojo-align`). Set `METHYLGRAPHER_MOJO_ROOT` to that checkout (or leave unset to auto-detect). Docker images are built via `scripts/build_methylgrapher_mojo_image.sh` and documented under [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md). The in-container install prefix remains `/opt/methylgrapher-mojo` (not a source-repo name).
+Clone path on developer hosts is typically alongside this repo (`../mojo-align`). Set `MOJO_ALIGN_ROOT` to that checkout (or leave unset to auto-detect). Docker images are built via `scripts/build_mojo_align_image.sh` and documented under [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md). The in-container install prefix is `/opt/mojo-align`. Env knobs use the `MOJO_ALIGN_*` family (one-release dual-read of deprecated `METHYLGRAPHER_MOJO_*`).
 
 ## Related
 
