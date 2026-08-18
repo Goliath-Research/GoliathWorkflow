@@ -163,6 +163,37 @@ def test_incremental_add_sample_applies_residualize():
     np.testing.assert_array_equal(np.asarray(mixed.mC), np.asarray(expected.mC))
 
 
+def test_incremental_add_sample_residualizes_novel_positions():
+    """Novel sites must use residualized mean, not a raw mC/uC rebuild."""
+    s1 = create_temp_sample([10, 20], [8, 2], [2, 8], [0, 0])
+    s2 = create_temp_sample([10, 20, 30], [2, 8, 9], [8, 2, 1], [0, 0, 0])
+
+    def bump(_path, _pos, mean):
+        return np.clip(np.asarray(mean, dtype=np.float64) + 0.2, 1e-6, 1.0 - 1e-6)
+
+    streamed = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+    streamed.residualize_apply = bump
+    streamed.add_sample(s1)
+    streamed.add_sample(s2)
+    expected = streamed.finalize()
+
+    first_only = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+    first_only.residualize_apply = bump
+    first_only.add_sample(s1)
+    centroid = first_only.finalize()
+    from methyl_utils.core.io import load_from_h5
+
+    sample2 = load_from_h5(s2)
+    mixed = centroid.add_sample(sample2, residualize_apply=bump, sample_path=str(s2))
+    np.testing.assert_array_equal(np.asarray(mixed.pos), np.asarray(expected.pos))
+    np.testing.assert_allclose(np.asarray(mixed.Sx), np.asarray(expected.Sx), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(np.asarray(mixed.Sx2), np.asarray(expected.Sx2), rtol=1e-5, atol=1e-5)
+    raw_new = 9.0 / 10.0
+    adj_new = np.clip(raw_new + 0.2, 1e-6, 1.0 - 1e-6)
+    pos30 = int(np.where(np.asarray(mixed.pos) == 30)[0][0])
+    np.testing.assert_allclose(float(np.asarray(mixed.Sx)[pos30]), adj_new, rtol=1e-5, atol=1e-5)
+
+
 def test_multiple_samples_are_averaged_correctly():
     # Two identical samples → averages should be the same
     pos = [1000, 2000]

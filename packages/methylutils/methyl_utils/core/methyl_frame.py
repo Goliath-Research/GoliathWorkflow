@@ -1154,7 +1154,7 @@ class MethylCentroid(MethylFrame):
             new_uC = sample_uC[new_pos_mask]
             new_tnc = sample_tnc[new_pos_mask]
             new_c = new_mC + new_uC
-            new_mean = np.where(new_c > 0, new_mC.astype(np.float32) / new_c.astype(np.float32), 0.0)
+            new_mean = sample_mean[new_pos_mask]
             new_swx2 = np.where(new_c > 0, (new_mC.astype(np.float64) ** 2) / new_c.astype(np.float64), 0.0).astype(np.float32)
             all_pos = np.concatenate([centroid_pos, new_pos])
             all_Sm = np.concatenate([centroid_Sm, new_mC])
