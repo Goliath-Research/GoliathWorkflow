@@ -32,6 +32,8 @@ ActionConfigKey = Literal[
     "validation",
     "derived_measures",
     "cell_deconvolution",
+    "residualize",
+    "methylation_confounder_scores",
     "info_measures",
     "progression",
     "parabricks",
@@ -62,6 +64,12 @@ DEFAULT_PIPELINE_ARGV_MAP: ArgvMap = (
     ("stepOverride", "--step-override"),
     ("resolvedConfigPath", "--resolved-config"),
 )
+CENTROID_ARGV_MAP: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP + (
+    ("residualizeCoefDir", "--residualize-coef-dir"),
+)
+CLASSIFIER_ARGV_MAP: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP + (
+    ("residualizeCoefDir", "--residualize-coef-dir"),
+)
 NodeType = Literal[
     "ACTION",
     "SEQUENCE",
@@ -91,6 +99,8 @@ PROJECT_ACTION_CONFIG_KEYS: FrozenSet[ActionConfigKey] = frozenset(
         "validation",
         "derived_measures",
         "cell_deconvolution",
+        "residualize",
+        "methylation_confounder_scores",
         "info_measures",
         "progression",
         "parabricks",
@@ -718,7 +728,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="MethylCentroid",
         action_config_key="centroid",
         context_vars=("group", "chromosome", "context", "outputDir", "stepOverride", "addSamples", "removeSamples", "centroidSeedDir"),
-        argv_map=DEFAULT_PIPELINE_ARGV_MAP,
+        argv_map=CENTROID_ARGV_MAP,
         domain_effects=_DE_CENTROID,
     ),
     _cli(
@@ -812,6 +822,50 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-cell-deconv",
         tool="MethylCellDeconv",
         action_config_key="cell_deconvolution",
+    ),
+    _cli(
+        "pipeline.residualize_fit",
+        "methyl-residualize-fit",
+        "pipeline.residualize_fit",
+        "Train-only M-value residualization coefficients (no Group label; freeze for inference).",
+        "modeling",
+        _PIPELINE_MODULE,
+        "ResidualizeFitTaskInput",
+        _PIPELINE_MODULE,
+        "ResidualizeFitTaskOutput",
+        cli_tool="methyl-residualize-fit",
+        tool="MethylResidualizeFit",
+        action_config_key="residualize",
+        context_vars=("outputDir", "stepOverride", "projectPath"),
+        argv_map=(
+            ("project", "--project"),
+            ("projectPath", "--project"),
+            ("outputDir", "--output-dir"),
+            ("stepOverride", "--step-override"),
+            ("resolvedConfigPath", "--resolved-config"),
+        ),
+    ),
+    _cli(
+        "pipeline.methylation_confounder_scores",
+        "methyl-confounder-scores",
+        "pipeline.methylation_confounder_scores",
+        "Label-free methylation confounder scores (smoking, clock, BMI, inflammation).",
+        "modeling",
+        _PIPELINE_MODULE,
+        "ConfounderScoresTaskInput",
+        _PIPELINE_MODULE,
+        "ConfounderScoresTaskOutput",
+        cli_tool="methyl-confounder-scores",
+        tool="MethylConfounderScores",
+        action_config_key="methylation_confounder_scores",
+        context_vars=("outputDir", "stepOverride", "projectPath"),
+        argv_map=(
+            ("project", "--project"),
+            ("projectPath", "--project"),
+            ("outputDir", "--output-dir"),
+            ("stepOverride", "--step-override"),
+            ("resolvedConfigPath", "--resolved-config"),
+        ),
     ),
     _cli(
         "pipeline.info_measures",
@@ -908,6 +962,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-classifier",
         tool="MethylClassifier",
         action_config_key="classifier",
+        argv_map=CLASSIFIER_ARGV_MAP,
     ),
     _cli(
         "pipeline.predictor",
@@ -922,6 +977,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-predictor",
         tool="MethylPredictor",
         action_config_key="predictor",
+        argv_map=CLASSIFIER_ARGV_MAP,
     ),
     _in_process(
         "context.resolve_project",

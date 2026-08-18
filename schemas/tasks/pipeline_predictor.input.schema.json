@@ -132,6 +132,19 @@
       "default": null,
       "title": "Projectpath"
     },
+    "residualizeCoefDir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional residualize_fit coefficient directory. Null/absent = raw betas (shipped path). Bind when scoring residualized centroids.",
+      "title": "Residualizecoefdir"
+    },
     "stepOverride": {
       "anyOf": [
         {

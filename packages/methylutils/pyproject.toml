@@ -10,6 +10,9 @@ repository = "https://github.com/epimethyl/MethylPipeline"
 documentation = "https://github.com/epimethyl/MethylPipeline/tree/main/packages/methylutils"
 keywords = ["methylation", "genomics", "bioinformatics", "ecdf", "gpu", "cuda"]
 packages = [{include = "methyl_utils"}]
+include = [
+    {path = "methyl_utils/data/confounder_panels/*.json", format = ["sdist", "wheel"]},
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
@@ -73,6 +76,11 @@ mypy = ">=1.10.0,<2.0.0"
 pre-commit = ">=3.7.0,<4.0.0"
 sphinx = ">=7.0.0,<8.0.0"
 sphinx-rtd-theme = ">=2.0.0,<3.0.0"
+
+[tool.poetry.scripts]
+methyl-residualize-fit = "methyl_utils.cli_residualize_fit:main"
+methyl-confounder-scores = "methyl_utils.cli_confounder_scores:main"
+methyl-residualize-sensitivity = "methyl_utils.cli_residualize_sensitivity:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -35,6 +35,11 @@ GOLDEN_INPUTS: Dict[str, Dict[str, Any]] = {
     "pipeline.predictor": {"tool": "MethylPredictor", "projectPath": "/work/p/project.json"},
     "pipeline.derived_measures": {"tool": "MethylDerivedMeasures", "projectPath": "/work/p/project.json"},
     "pipeline.cell_deconvolution": {"tool": "MethylCellDeconv", "projectPath": "/work/p/project.json"},
+    "pipeline.residualize_fit": {"tool": "MethylResidualizeFit", "projectPath": "/work/p/project.json"},
+    "pipeline.methylation_confounder_scores": {
+        "tool": "MethylConfounderScores",
+        "projectPath": "/work/p/project.json",
+    },
     "pipeline.info_measures": {"tool": "MethylInfoTheory", "projectPath": "/work/p/project.json"},
     "context.resolve_project": {"tool": "ContextResolveProject", "projectPath": "/work/p/project.json"},
     "sample.parabricks_giraffe": {
@@ -292,6 +297,20 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
         "n_samples": 10,
         "n_columns": 10,
         "n_ok": 10,
+    },
+    "pipeline.residualize_fit": {
+        "status": "ok",
+        "output_dir": "/work/p/production/residualize",
+        "n_files": 1,
+        "n_train_samples": 20,
+        "manifest_path": "/work/p/production/residualize/residualize_manifest.json",
+    },
+    "pipeline.methylation_confounder_scores": {
+        "status": "ok",
+        "output_dir": "/work/p/confounder_scores",
+        "output_csv": "/work/p/confounder_scores/confounder_scores.csv",
+        "n_samples": 10,
+        "n_columns": 10,
     },
     "pipeline.info_measures": {
         "status": "ok",

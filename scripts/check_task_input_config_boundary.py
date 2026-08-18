@@ -68,6 +68,8 @@ ALLOWLIST: FrozenSet[str] = frozenset(
         "stepOverride",
         "addSamples",
         "removeSamples",
+        "centroidSeedDir",
+        "residualizeCoefDir",
         "seed",
         "trainFraction",
         "layout",

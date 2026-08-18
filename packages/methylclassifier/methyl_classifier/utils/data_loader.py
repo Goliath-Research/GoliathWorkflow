@@ -23,6 +23,29 @@ class DataLoader:
     Handles loading samples from various sources and formats.
     """
 
+    residualize_coef_dir: Optional[str] = None
+
+    @staticmethod
+    def _attach_residualize(sample: Any, h5_path: Optional[Path] = None) -> Any:
+        coef_dir = DataLoader.residualize_coef_dir
+        if not coef_dir:
+            return sample
+        chrom = getattr(sample, "chrom", None)
+        ctx = getattr(sample, "ctx", None) or getattr(sample, "context", None)
+        if not chrom or not ctx:
+            return sample
+        from methyl_utils.residualize_runtime import load_applier
+
+        sample._residualize_applier = load_applier(coef_dir, str(chrom), str(ctx))
+        if h5_path is not None and not getattr(sample, "sample_id", None):
+            from methyl_utils.mvalue_residualize import sample_id_from_path
+
+            try:
+                sample.sample_id = sample_id_from_path(h5_path)
+            except Exception:
+                pass
+        return sample
+
     @staticmethod
     def load_sample(h5_path: Path, debug: bool = False):
         """
@@ -38,7 +61,8 @@ class DataLoader:
         from methyl_utils import MethylSample
 
         if h5_path.suffix.lower() == '.h5':
-            return MethylSample.load_from_h5(h5_path)
+            sample = MethylSample.load_from_h5(h5_path)
+            return DataLoader._attach_residualize(sample, h5_path)
         else:
             raise ValueError(f"Unsupported file format: {h5_path.suffix}")
 
@@ -456,6 +480,19 @@ class DataLoader:
                     finite = np.isfinite(raw)
                     values[mloc[finite]] = raw[finite]
                     availability_mask[mloc[finite]] = True
+        applier = getattr(sample, "_residualize_applier", None)
+        if applier is not None:
+            from methyl_utils.mvalue_residualize import sample_id_from_path
+
+            sid = getattr(sample, "sample_id", None) or getattr(sample, "name", None)
+            if not sid:
+                sid = "unknown"
+            filled = np.where(np.isfinite(values), values, 0.5)
+            adjusted = np.asarray(
+                applier.apply_for_sample(str(sid), dmp_arr, filled),
+                dtype=np.float64,
+            )
+            values = np.where(np.isfinite(values), adjusted, np.nan)
         feature_vector = np.full(len(dmp_arr), 0.5, dtype=np.float64)
         if values.size:
             valid = np.isfinite(values)

@@ -51,6 +51,7 @@ class MethylCentroidBuilder:
         self.metadata = metadata or {}
         self.binned_stats_bins = int(binned_stats_bins)
         self.bin_edges = np.linspace(0.0, 1.0, binned_stats_bins + 1, dtype=np.float64)
+        self.residualize_apply = None
 
         logger.info(f"MethylCentroidBuilder initialized → GPU: {self.use_gpu}, binned_stats_bins={binned_stats_bins}")
 
@@ -199,6 +200,17 @@ class MethylCentroidBuilder:
                 mC.astype(self.xp.float64) / total_cov,
                 self.xp.float64(0.0)
             ).astype(self.xp.float32)
+            if self.residualize_apply is not None:
+                to_np = (lambda a: cp.asnumpy(a) if self.use_gpu else np.asarray(a))
+                pos_np = np.asarray(to_np(pos), dtype=np.uint32)
+                mean_np = np.asarray(to_np(mean), dtype=np.float64)
+                adj = np.asarray(
+                    self.residualize_apply(sample_path, pos_np, mean_np),
+                    dtype=np.float64,
+                )
+                if adj.shape != mean_np.shape:
+                    raise ValueError("residualize_apply returned the wrong length")
+                mean = self.xp.asarray(adj, dtype=self.xp.float32)
             # c_i * x_i^2 = mC_i^2 / c_i
             swx2_inc = self.xp.where(
                 total_cov > 0,

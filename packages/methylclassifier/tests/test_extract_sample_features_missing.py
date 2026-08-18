@@ -27,3 +27,26 @@ def test_nan_at_matched_position_is_unavailable():
     assert stats["missing_positions"] == 2
     assert np.isfinite(feats[0])
     assert feats[1] == 0.5  # placeholder only
+
+
+def test_extract_sample_features_without_applier_is_identity():
+    class FakeSample:
+        sample_type = "test"
+        is_centroid = False
+        pos = np.array([10, 20], dtype=np.uint32)
+
+        def lookup_at_positions(self, dmp_arr, min_coverage=1, missing_value=np.nan):
+            values = np.array([0.2, 0.8], dtype=np.float64)
+            mask = np.array([True, True])
+            return values, mask
+
+        def get_coverage(self):
+            return np.array([10, 10], dtype=np.int64)
+
+    sample = FakeSample()
+    feats, avail, _ = DataLoader.extract_sample_features(
+        sample, np.array([10, 20], dtype=np.uint32)
+    )
+    assert avail.all()
+    np.testing.assert_allclose(feats, [0.2, 0.8])
+

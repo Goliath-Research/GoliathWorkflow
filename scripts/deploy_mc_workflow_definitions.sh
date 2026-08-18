@@ -54,11 +54,13 @@ VERSIONS_OUT="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}/workflow_versions_mc.jso
 
 PROGRAMS=(
   "fixtures/mc_stability.program.json"
+  "fixtures/mc_stability_residual.program.json"
   "fixtures/mc_stability_staged.program.json"
   "fixtures/mc_stability_smoke.program.json"
   "fixtures/mc_stability_ppi.program.json"
   "fixtures/mc_gene_enricher_stability.program.json"
   "fixtures/study_validation_lifecycle.program.json"
+  "fixtures/study_validation_lifecycle_residual.program.json"
   "fixtures/full_lifecycle.program.json"
   "fixtures/validation_freeze.program.json"
   "fixtures/validation_model.program.json"

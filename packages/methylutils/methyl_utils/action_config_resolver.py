@@ -42,6 +42,8 @@ ActionConfigKey = Literal[
     "proteomics_quant",
     "proteomics_qc",
     "protein_de_select",
+    "residualize",
+    "methylation_confounder_scores",
 ]
 
 DEFAULT_SITE_PATH = Path("/work/site/methyl_site.json")

@@ -97,6 +97,13 @@ class MethylCentroidConfig(BaseModel):
         ge=1,
         description="Number of bins for the required per-position ECDF histogram. Must be >= 1. Default 20.",
     )
+    residualize_coef_dir: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional coefficient directory from pipeline.residualize_fit. "
+            "When unset, centroid uses raw betas (shipped-pack path)."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod

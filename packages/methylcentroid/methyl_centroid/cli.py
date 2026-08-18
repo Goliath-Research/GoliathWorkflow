@@ -167,6 +167,13 @@ Examples:
         help='Disable result visualization'
     )
 
+    output_group.add_argument(
+        '--residualize-coef-dir',
+        type=Path,
+        default=None,
+        help='Optional residualize_fit coefficient directory. When omitted, centroids use raw betas.',
+    )
+
     return parser
 
 
@@ -227,6 +234,9 @@ def create_config_from_args(args: argparse.Namespace) -> MethylCentroidConfig:
         min_coverage=args.min_coverage,
         binned_stats_bins=args.binned_stats_bins,
         use_gpu=True if args.use_gpu is None else bool(args.use_gpu),
+        residualize_coef_dir=(
+            str(args.residualize_coef_dir) if getattr(args, "residualize_coef_dir", None) else None
+        ),
     )
 
 
@@ -430,6 +440,7 @@ def main() -> None:
                     args.project,
                     args.step_override,
                     resolved_config_path=getattr(args, "resolved_config", None),
+                    residualize_coef_dir=getattr(args, "residualize_coef_dir", None),
                 )
             else:
                 run_centroid_for_one_group(
@@ -440,6 +451,7 @@ def main() -> None:
                     chromosome=args.chromosome,
                     context=args.context,
                     resolved_config_path=getattr(args, "resolved_config", None),
+                    residualize_coef_dir=getattr(args, "residualize_coef_dir", None),
                 )
 
         elif args.batch_config:

@@ -14,6 +14,7 @@ Interactive architecture and documentation hubs built with [Cursor Canvas](https
 | [Analyte comparison](#analyte-comparison) | Analyte comparison explorer |
 | [H PCa good MC](#h-pca-good-mc-analysis) | H PCa good MC analysis |
 | [PCa detection fitness](#pca-detection-fitness) | PCa Detection doc × MethylPipeline fitness |
+| [Buffy M-value residualization](#buffy-mvalue-residualization) | Confounder-aware DMP calling (opt-in procedure) |
 
 ## Open in Cursor
 
@@ -81,6 +82,12 @@ CURSOR_CANVASES_DIR="$HOME/.cursor/projects/my-workspace/canvases" \
 
 - **Source:** `docs/canvas/pca-detection-fitness.canvas.tsx`
 - **Purpose:** PCa Detection doc × MethylPipeline fitness
+
+### Buffy M-value residualization {#buffy-mvalue-residualization}
+
+- **Source:** `docs/canvas/buffy-mvalue-residualization.canvas.tsx`
+- **Purpose:** Leakage rules, M-value formulas, isolation contract, and Ω-as-confounder caveat for the opt-in buffy residual procedure
+- **Markdown companion:** [Buffy M-value residualization](../research/buffy-mvalue-residualization.md)
 
 ## Edit workflow
 

@@ -100,6 +100,12 @@ The centroid builder stores histogram counts even though the mean and variance a
 
 This makes `methylcentroid` a crucial bridge package: it is the step where sample-level methylation is transformed into an empirical-distribution object that later packages can reuse without reloading the full cohort.
 
+## Optional M-value residualization {#sec-centroid-mvalue-residual}
+
+The shipped centroid path uses raw \(x_{si}=m_{si}/(m_{si}+u_{si})\). An **opt-in** transform, used only when `residualizeCoefDir` is bound, residualizes M-values against label-free covariates and maps residuals back to \((0,1)\) before updating \(S_x\), \(S_{x^2}\), and histogram bins. Raw \(S_m\)/\(S_u\) are unchanged. Absent coefficients, the builder is bit-identical to today.
+
+See [Buffy M-value residualization](../../research/buffy-mvalue-residualization.md) for leakage rules, the M-value formulas, and why this lives in a **forked** procedure rather than the default methylation lifecycle.
+
 ## Publication Guidance
 
 For publication text, the safest description is:

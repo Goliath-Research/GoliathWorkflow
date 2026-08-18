@@ -34,6 +34,29 @@ def _forbid_centroid_samples_key(step_dict: Any, source: str) -> None:
         )
 
 
+def _stamp_residualize_coef_dir(
+    batch: BatchProcessingConfig,
+    residualize_coef_dir: Optional[Union[str, Path]] = None,
+    step_cfg: Optional[Dict[str, Any]] = None,
+) -> BatchProcessingConfig:
+    """Bind optional residualize coefficients; absent means raw-beta (shipped) path."""
+    coef = residualize_coef_dir
+    if coef is None and isinstance(step_cfg, dict):
+        coef = step_cfg.get("residualize_coef_dir")
+        bc = step_cfg.get("base_config")
+        if coef is None and isinstance(bc, dict):
+            coef = bc.get("residualize_coef_dir")
+    if not coef:
+        return batch
+    return batch.model_copy(
+        update={
+            "base_config": batch.base_config.model_copy(
+                update={"residualize_coef_dir": str(coef)}
+            )
+        }
+    )
+
+
 def group_token_requests_all_groups(
     project_path: Union[str, Path],
     group: Union[str, int],
@@ -247,6 +270,7 @@ def run_centroids_for_all_groups(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
     resolved_config_path: Optional[Union[str, Path]] = None,
+    residualize_coef_dir: Optional[Union[str, Path]] = None,
 ) -> None:
     """
     Run MethylCentroid batch for every resolved group. For groups with subcluster and
@@ -273,6 +297,7 @@ def run_centroids_for_all_groups(
             batch = resolve_centroid_batch_config(
                 project_path, i, step_override_path,
                 resolved_config_path=resolved_config_path,
+                residualize_coef_dir=residualize_coef_dir,
             )
             run_batch_processing(batch)
 
@@ -286,6 +311,7 @@ def run_centroid_for_one_group(
     chromosome: Optional[str] = None,
     context: Optional[str] = None,
     resolved_config_path: Optional[Union[str, Path]] = None,
+    residualize_coef_dir: Optional[Union[str, Path]] = None,
 ) -> None:
     """
     Run MethylCentroid for a single group (by index or 'group1'/'group2').
@@ -304,6 +330,7 @@ def run_centroid_for_one_group(
             chromosome=chromosome,
             context=context,
             resolved_config_path=resolved_config_path,
+            residualize_coef_dir=residualize_coef_dir,
         )
         run_batch_processing(batch)
         return
@@ -317,6 +344,7 @@ def run_centroid_for_one_group(
             chromosome=chromosome,
             context=context,
             resolved_config_path=resolved_config_path,
+            residualize_coef_dir=residualize_coef_dir,
         )
         run_batch_processing(batch)
         return
@@ -347,6 +375,7 @@ def run_centroid_for_one_group(
             chromosome=chromosome,
             context=context,
             resolved_config_path=resolved_config_path,
+            residualize_coef_dir=residualize_coef_dir,
         )
         run_batch_processing(batch)
 
@@ -360,6 +389,7 @@ def resolve_centroid_batch_config(
     chromosome: Optional[str] = None,
     context: Optional[str] = None,
     resolved_config_path: Optional[Union[str, Path]] = None,
+    residualize_coef_dir: Optional[Union[str, Path]] = None,
 ) -> BatchProcessingConfig:
     """
     Build BatchProcessingConfig for one group from a project config.
@@ -472,4 +502,4 @@ def resolve_centroid_batch_config(
         batch = batch.model_copy(update={"chromosomes": [str(chromosome)]})
     if context is not None:
         batch = batch.model_copy(update={"contexts": [str(context)]})
-    return batch
+    return _stamp_residualize_coef_dir(batch, residualize_coef_dir, step_cfg)

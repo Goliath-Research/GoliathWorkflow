@@ -1573,6 +1573,8 @@ def _apply_cli_path_overrides(config: ClassificationConfig, args: argparse.Names
         config.output_path = str(args.output)
     if getattr(args, "min_observed_dmp_fraction", None) is not None:
         config.min_observed_dmp_fraction = float(args.min_observed_dmp_fraction)
+    if getattr(args, "residualize_coef_dir", None) is not None:
+        config.residualize_coef_dir = str(args.residualize_coef_dir)
 
 
 def _resolve_ovr_export_output_path(
@@ -1646,6 +1648,7 @@ def _export_ovr_pkl_from_config(config: ClassificationConfig, out_path: Path) ->
 
 def _run_one_classification(config: ClassificationConfig, label: Optional[str] = None) -> None:
     """Run classification once with the given config (used for single run and per-cancer-group loop)."""
+    DataLoader.residualize_coef_dir = config.residualize_coef_dir
     ovr_names = config.ovr_class_names or config.multiclass_class_names
     classifier_config = ClassifierConfig(
         model_path=config.model_path,
@@ -1887,6 +1890,13 @@ Config fields (in JSON):
         ),
     )
     
+    parser.add_argument(
+        '--residualize-coef-dir',
+        type=Path,
+        default=None,
+        help='Optional residualize_fit coefficient directory. When omitted, sample features are raw betas.',
+    )
+
     # No new args for temperature/calibration - handled in config
 
     parser.add_argument(

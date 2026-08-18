@@ -248,6 +248,7 @@ class MethylCentroid:
         cap_coverage_n_cap_method: str = "iqr",
         cap_coverage_n_cap_iqr_multiplier: float = 1.5,
         cap_coverage_n_cap_max_positions: int = 100_000,
+        residualize_coef_dir: Optional[str] = None,
     ):
         from contextlib import contextmanager
         import logging
@@ -365,6 +366,8 @@ class MethylCentroid:
                 f"binned_stats_bins must be >= 1 for ECDF centroids, got {binned_stats_bins}"
             )
         self._binned_stats = None
+        self.residualize_coef_dir = str(residualize_coef_dir) if residualize_coef_dir else None
+        self._residualize_apply_fn = None
 
         # Ensure output directory exists from the start
         try:
@@ -667,6 +670,7 @@ class MethylCentroid:
             cap_coverage_n_cap_iqr_multiplier=config.cap_coverage_n_cap_iqr_multiplier,
             cap_coverage_n_cap_max_positions=config.cap_coverage_n_cap_max_positions,
             binned_stats_bins=config.binned_stats_bins,
+            residualize_coef_dir=config.residualize_coef_dir,
         )
 
     @classmethod
@@ -699,6 +703,7 @@ class MethylCentroid:
             "cap_coverage_n_cap_iqr_multiplier": self._cap_coverage_n_cap_iqr_multiplier,
             "cap_coverage_n_cap_max_positions": self._cap_coverage_n_cap_max_positions,
             "binned_stats_bins": self.binned_stats_bins,
+            "residualize_coef_dir": self.residualize_coef_dir,
         }
 
         return MethylCentroidConfig(**config_dict)
@@ -791,7 +796,7 @@ class MethylCentroid:
             # Add the sample to centroid using new method
             if self._centroid is None:
                 # Create initial centroid from first sample
-                builder = _create_centroid_builder(
+                builder = self._new_centroid_builder(
                     self._min_coverage,
                     self.use_gpu,
                     binned_stats_bins=getattr(self, "binned_stats_bins", 20),
@@ -1164,7 +1169,7 @@ class MethylCentroid:
                             last_error = None
                             for attempt in range(2):
                                 try:
-                                    builder = _create_centroid_builder(
+                                    builder = self._new_centroid_builder(
                                         self._min_coverage,
                                         use_gpu_builder,
                                         binned_stats_bins=getattr(self, "binned_stats_bins", 20),
@@ -1873,6 +1878,32 @@ class MethylCentroid:
         chunk = usable_bytes // max(1, bytes_per_position)
         return int(max(1_000_000, min(chunk, 500_000_000)))
 
+    def _get_residualize_apply(self):
+        """Load the frozen M-value applier once per chrom×ctx; None = shipped-pack path."""
+        if not self.residualize_coef_dir:
+            return None
+        if self._residualize_apply_fn is not None:
+            return self._residualize_apply_fn
+        from methyl_utils.mvalue_residualize import sample_id_from_path
+        from methyl_utils.residualize_runtime import load_applier
+
+        applier = load_applier(self.residualize_coef_dir, self.chrom, self.ctx)
+        if applier is None:
+            return None
+
+        def _apply(sample_path, pos, mean):
+            return applier.apply_for_sample(sample_id_from_path(sample_path), pos, mean)
+
+        self._residualize_apply_fn = _apply
+        return _apply
+
+    def _new_centroid_builder(self, *args, **kwargs):
+        builder = _create_centroid_builder(*args, **kwargs)
+        fn = self._get_residualize_apply()
+        if fn is not None:
+            builder.residualize_apply = fn
+        return builder
+
     def _create_streaming_builder(self):
         """
         Create a streaming centroid builder with OOM-aware GPU fallback.
@@ -1891,7 +1922,7 @@ class MethylCentroid:
                     gpu_chunk_candidates.append(candidate)
             for chunk_size in gpu_chunk_candidates:
                 try:
-                    builder = _create_centroid_builder(
+                    builder = self._new_centroid_builder(
                         self._min_coverage,
                         True,
                         binned_stats_bins=bins,
@@ -1925,7 +1956,7 @@ class MethylCentroid:
                 self.ctx,
             )
 
-        return _create_centroid_builder(
+        return self._new_centroid_builder(
             self._min_coverage,
             False,
             binned_stats_bins=bins,
@@ -1954,7 +1985,7 @@ class MethylCentroid:
         prefix keeps the centroid correct instead of silently dropping samples after
         the failure.
         """
-        cpu_builder = _create_centroid_builder(
+        cpu_builder = self._new_centroid_builder(
             self._min_coverage,
             False,
             binned_stats_bins=getattr(self, "binned_stats_bins", 20),

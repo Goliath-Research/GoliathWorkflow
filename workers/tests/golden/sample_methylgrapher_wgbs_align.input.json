@@ -1,6 +1,8 @@
 {
   "alignmentPass": null,
+  "executionScopeId": null,
   "forceRealign": null,
+  "project": null,
   "projectPath": "/work/p/project.json",
   "remediationReason": null,
   "resolvedConfig": null,

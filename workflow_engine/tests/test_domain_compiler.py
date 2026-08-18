@@ -92,6 +92,29 @@ def test_compiler_preserves_iteration_dotted_refs_for_mc_gene_select():
     assert gene_select.input_template["projectPath"] == "${var.iteration.projectPath}"
 
 
+def test_residual_program_forks_compile_and_shipped_mc_stays_raw():
+    fixtures = Path(__file__).resolve().parents[1] / "domain/fixtures"
+    shipped = (fixtures / "mc_stability.program.json").read_text(encoding="utf-8")
+    lifecycle = (fixtures / "study_validation_lifecycle.program.json").read_text(encoding="utf-8")
+    assert "pipeline.residualize_fit" not in shipped
+    assert "pipeline.methylation_confounder_scores" not in shipped
+    assert "pipeline.residualize_fit" not in lifecycle
+    mc = compile_domain_program_file(fixtures / "mc_stability_residual.program.json", enrich_context=False)
+    lc = compile_domain_program_file(
+        fixtures / "study_validation_lifecycle_residual.program.json", enrich_context=False
+    )
+    mc_actions = {n.action_name for n in mc.workflow.nodes if n.node_type == "ACTION"}
+    lc_actions = {n.action_name for n in lc.workflow.nodes if n.node_type == "ACTION"}
+    assert "pipeline.residualize_fit" in mc_actions
+    assert "pipeline.methylation_confounder_scores" in mc_actions
+    assert "pipeline.cell_deconvolution" in mc_actions
+    assert "pipeline.residualize_fit" in lc_actions
+    centroid = next(n for n in mc.workflow.nodes if n.node_key == "centroid")
+    assert "residualizeCoefDir" in (centroid.input_template or {})
+    freeze_cent = next(n for n in lc.workflow.nodes if n.node_key == "freeze_centroid")
+    assert freeze_cent.action_name == "pipeline.centroid"
+
+
 def test_compiler_emits_validation_scope_output_bindings():
     program = DomainProgram.model_validate(
         {

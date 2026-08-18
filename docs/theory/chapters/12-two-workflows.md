@@ -124,6 +124,12 @@ flowchart TB
 
 `pipeline.cell_deconvolution` in this stage carries the method switch and analyte-driven trees documented in [§ methyldeconv](07a-methyldeconv.md#sec-methyldeconv). The remaining covariates (`derived_measures`, `info_measures`) and the biology step (`enricher`) are described in the [end-to-end workflow](../../architecture/end-to-end-workflow.md) and [§ methylenricher](08-methylenricher.md#sec-methylenricher).
 
+### Pre-MC covariates (residual procedure only) {#sec-pre-mc-covariates}
+
+The default study lifecycle above is **unchanged**. The opt-in procedure `buffy_wgbs_mvalue_residual_gene_fc` points at forked programs (`mc_stability_residual`, `study_validation_lifecycle_residual`) that compute Houseman Ω and methylation confounder scores **once before** Monte Carlo, then fit train-only M-value residualization inside each iteration and again at freeze. That is the opposite of post-freeze ALR stacking: residualization rewrites the betas that DMP calling sees; the ECDF second-stage still runs after freeze on the residual lifecycle.
+
+Do not gate residualize nodes onto `study_validation_lifecycle.program.json`. Isolation is a separate program JSON + procedure id. Research note: [Buffy M-value residualization](../../research/buffy-mvalue-residualization.md).
+
 ### Per-Analyte Action Inventory {#sec-analyte-actions}
 The set of actions that run — and how they are parameterized — is gated by the study `regulatory.primary_analyte`. Analyte defaults are merged into profile/site `actionConfig` by `merge_step_config` in `packages/methylutils/methyl_utils/analyte_profiles.py` (explicit profile/site keys always win). The three covered analytes:
 

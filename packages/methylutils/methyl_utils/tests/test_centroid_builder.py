@@ -82,6 +82,41 @@ def test_single_sample_passes_through():
     np.testing.assert_array_equal(centroid.uC.values, uC)
 
 
+def test_missing_residualize_apply_matches_explicit_none():
+    """Shipped-pack path: unset hook equals residualize_apply=None."""
+    sample = create_temp_sample([100, 200], [8, 2], [2, 8], [0, 0])
+    unset = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+    explicit = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+    explicit.residualize_apply = None
+    unset.add_sample(sample)
+    explicit.add_sample(sample)
+    a = unset.finalize()
+    b = explicit.finalize()
+    np.testing.assert_array_equal(np.asarray(a.Sx), np.asarray(b.Sx))
+    np.testing.assert_array_equal(np.asarray(a.Sx2), np.asarray(b.Sx2))
+    np.testing.assert_array_equal(np.asarray(a.mC), np.asarray(b.mC))
+    np.testing.assert_array_equal(np.asarray(a.uC), np.asarray(b.uC))
+    np.testing.assert_array_equal(a.binned_stats["bin_counts"], b.binned_stats["bin_counts"])
+
+
+def test_residualize_apply_rewrites_sx_not_raw_counts():
+    sample = create_temp_sample([100, 200], [8, 2], [2, 8], [0, 0])
+    raw = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+    adj = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+
+    def bump(_path, _pos, mean):
+        return np.clip(np.asarray(mean, dtype=np.float64) + 0.15, 1e-6, 1.0 - 1e-6)
+
+    adj.residualize_apply = bump
+    raw.add_sample(sample)
+    adj.add_sample(sample)
+    cr = raw.finalize()
+    ca = adj.finalize()
+    np.testing.assert_array_equal(np.asarray(cr.mC), np.asarray(ca.mC))
+    np.testing.assert_array_equal(np.asarray(cr.uC), np.asarray(ca.uC))
+    assert not np.allclose(np.asarray(cr.Sx), np.asarray(ca.Sx))
+
+
 def test_multiple_samples_are_averaged_correctly():
     # Two identical samples → averages should be the same
     pos = [1000, 2000]

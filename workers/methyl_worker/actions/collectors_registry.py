@@ -16,6 +16,7 @@ from ..collectors import (
 from ..task_models.pipeline_models import (
     CellDeconvolutionTaskOutput,
     CentroidTaskOutput,
+    ConfounderScoresTaskOutput,
     DerivedMeasuresTaskOutput,
     DetectorTaskOutput,
     DmpSelectTaskOutput,
@@ -24,6 +25,7 @@ from ..task_models.pipeline_models import (
     GeneSelectTaskOutput,
     InfoMeasuresTaskOutput,
     MapperTaskOutput,
+    ResidualizeFitTaskOutput,
 )
 
 
@@ -72,6 +74,20 @@ def collector_derived_measures(_entry: ActionCatalogEntry) -> ArtifactCollector:
 def collector_cell_deconvolution(_entry: ActionCatalogEntry) -> ArtifactCollector:
     return ManifestFirstCollector(
         output_model=CellDeconvolutionTaskOutput,
+        resolve_output_dir=_output_dir,
+    )
+
+
+def collector_residualize_fit(_entry: ActionCatalogEntry) -> ArtifactCollector:
+    return ManifestFirstCollector(
+        output_model=ResidualizeFitTaskOutput,
+        resolve_output_dir=_output_dir,
+    )
+
+
+def collector_confounder_scores(_entry: ActionCatalogEntry) -> ArtifactCollector:
+    return ManifestFirstCollector(
+        output_model=ConfounderScoresTaskOutput,
         resolve_output_dir=_output_dir,
     )
 

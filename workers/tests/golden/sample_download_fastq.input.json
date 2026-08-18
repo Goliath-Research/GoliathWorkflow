@@ -1,4 +1,5 @@
 {
+  "executionScopeId": null,
   "fastqSource": {
     "basePath": "/data/fastq",
     "contentHash": null,
@@ -8,6 +9,7 @@
     "scope": null,
     "type": "file"
   },
+  "projectPath": null,
   "resolvedConfig": null,
   "sampleDir": "/work/samples/S1",
   "sampleId": "S1",

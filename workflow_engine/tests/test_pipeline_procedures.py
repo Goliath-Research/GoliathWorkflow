@@ -30,6 +30,7 @@ _FIXTURES = _DOMAIN / "fixtures"
     "proc_id",
     [
         "buffy_wgbs_pangenome_gene_fc",
+        "buffy_wgbs_mvalue_residual_gene_fc",
         "buffy_wgbs_linear_gene_fc",
         "cfdna_wgbs_plasma",
         "cfdna_emseq_targeted",
@@ -58,6 +59,21 @@ def test_buffy_pangenome_procedure_flags() -> None:
     assert ctx["runDmpSelection"] is False
     assert (ctx.get("actionConfig") or {}).get("cell_deconvolution", {}).get("method") == "houseman"
     assert "study_validation_lifecycle.program.json" in str(ctx.get("lifecycleProgram"))
+
+
+def test_buffy_mvalue_residual_procedure_is_isolated() -> None:
+    ctx = apply_pipeline_procedure({}, load_procedure("buffy_wgbs_mvalue_residual_gene_fc"))
+    ctx = apply_pipeline_profile(ctx, load_profile(ctx["pipelineProfile"]))
+    assert ctx["pipelineProcedure"] == "buffy_wgbs_mvalue_residual_gene_fc"
+    assert "study_validation_lifecycle_residual.program.json" in str(ctx.get("lifecycleProgram"))
+    ac = ctx.get("actionConfig") or {}
+    assert "residualize" in ac
+    assert ac["residualize"]["composition_reference"] == "Neu"
+    assert "smoking_score" in ac["residualize"]["numeric_columns"]
+    shipped = apply_pipeline_procedure({}, load_procedure("buffy_wgbs_pangenome_gene_fc"))
+    assert "residualize" not in (shipped.get("actionConfig") or {})
+    assert "study_validation_lifecycle.program.json" in str(shipped.get("lifecycleProgram"))
+    assert "residual" not in str(shipped.get("lifecycleProgram"))
 
 
 def test_cfdna_plasma_clears_deconv_and_pins_lifecycle() -> None:

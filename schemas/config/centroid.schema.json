@@ -142,6 +142,19 @@
       "title": "Remove Samples",
       "type": "array"
     },
+    "residualize_coef_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional coefficient directory from pipeline.residualize_fit. When unset, centroid uses raw betas (shipped-pack path).",
+      "title": "Residualize Coef Dir"
+    },
     "use_gpu": {
       "default": true,
       "description": "Enable GPU acceleration when available",

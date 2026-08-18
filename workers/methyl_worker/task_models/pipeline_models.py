@@ -36,6 +36,10 @@ class CentroidTaskInput(BaseModel):
     centroidSeedDir: Optional[str] = None
     addSamples: Optional[List[str]] = None
     removeSamples: Optional[List[str]] = None
+    residualizeCoefDir: Optional[str] = Field(
+        default=None,
+        description="Optional residualize_fit coefficient directory. Absent = raw betas.",
+    )
     stepOverride: Optional[CentroidStepOverride] = None
 
 
@@ -133,6 +137,40 @@ class CellDeconvolutionTaskOutput(ActionOutputBase):
     n_ok: Optional[int] = None
 
 
+class ResidualizeFitTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str
+    project: Optional[str] = None
+    projectPath: Optional[str] = None
+    outputDir: Optional[str] = None
+    stepOverride: Optional[Dict[str, Any]] = None
+
+
+class ResidualizeFitTaskOutput(ActionOutputBase):
+    output_dir: Optional[str] = None
+    n_files: Optional[int] = None
+    n_train_samples: Optional[int] = None
+    manifest_path: Optional[str] = None
+
+
+class ConfounderScoresTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str
+    project: Optional[str] = None
+    projectPath: Optional[str] = None
+    outputDir: Optional[str] = None
+    stepOverride: Optional[Dict[str, Any]] = None
+
+
+class ConfounderScoresTaskOutput(ActionOutputBase):
+    output_dir: Optional[str] = None
+    output_csv: Optional[str] = None
+    n_samples: Optional[int] = None
+    n_columns: Optional[int] = None
+
+
 class InfoMeasuresTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -199,6 +237,13 @@ class ClassifierTaskInput(BaseModel):
     outputDir: Optional[str] = None
     stepOverride: Optional[ClassifierStepOverride] = None
     fixedDmpPanel: Optional[str] = None
+    residualizeCoefDir: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional residualize_fit coefficient directory. Null/absent = raw betas "
+            "(shipped path). Bind when scoring residualized centroids."
+        ),
+    )
 
 
 class ClassifierTaskOutput(ActionOutputBase):
@@ -216,6 +261,13 @@ class PredictorTaskInput(BaseModel):
     group: Optional[str] = None
     outputDir: Optional[str] = None
     stepOverride: Optional[PredictorStepOverride] = None
+    residualizeCoefDir: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional residualize_fit coefficient directory. Null/absent = raw betas "
+            "(shipped path). Bind when scoring residualized centroids."
+        ),
+    )
 
 
 class PredictorTaskOutput(ActionOutputBase):

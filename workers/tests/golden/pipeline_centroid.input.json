@@ -11,6 +11,7 @@
   "project": null,
   "projectPath": "/work/p/project.json",
   "removeSamples": null,
+  "residualizeCoefDir": null,
   "stepOverride": null,
   "tool": "MethylCentroid"
 }

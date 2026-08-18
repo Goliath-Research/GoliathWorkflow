@@ -85,6 +85,13 @@ class ClassificationConfig(BaseModel):
         default=False,
         description="True when ovr_detection_dirs lists M×N bipartite pairwises (multi-control × multi-disease).",
     )
+    residualize_coef_dir: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional residualize_fit coefficient directory. When unset, sample features "
+            "are raw betas (shipped-pack path)."
+        ),
+    )
     ovr_n_control_classes: Optional[int] = Field(
         default=None,
         description="M for ovr_bipartite_aggregate; N = len(ovr_class_names) - M.",

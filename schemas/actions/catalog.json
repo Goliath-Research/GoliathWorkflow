@@ -13,6 +13,7 @@
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
+        "residualizeCoefDir": "--residualize-coef-dir",
         "resolvedConfigPath": "--resolved-config",
         "stepOverride": "--step-override"
       },
@@ -294,6 +295,70 @@
       "tool": "MethylCellDeconv"
     },
     {
+      "action_config_key": "residualize",
+      "action_name": "pipeline.residualize_fit",
+      "argv_map": {
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-residualize-fit",
+      "category": "modeling",
+      "cli_tool": "methyl-residualize-fit",
+      "context_vars": [
+        "outputDir",
+        "stepOverride",
+        "projectPath"
+      ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
+      "default_node_type": "ACTION",
+      "description": "Train-only M-value residualization coefficients (no Group label; freeze for inference).",
+      "execution_mode": "cli",
+      "idempotency_enabled": true,
+      "input_schema_ref": "schemas/tasks/pipeline_residualize_fit.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_residualize_fit.output.schema.json",
+      "schema_id": "pipeline.residualize_fit",
+      "tool": "MethylResidualizeFit"
+    },
+    {
+      "action_config_key": "methylation_confounder_scores",
+      "action_name": "pipeline.methylation_confounder_scores",
+      "argv_map": {
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-confounder-scores",
+      "category": "modeling",
+      "cli_tool": "methyl-confounder-scores",
+      "context_vars": [
+        "outputDir",
+        "stepOverride",
+        "projectPath"
+      ],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
+      "default_node_type": "ACTION",
+      "description": "Label-free methylation confounder scores (smoking, clock, BMI, inflammation).",
+      "execution_mode": "cli",
+      "idempotency_enabled": true,
+      "input_schema_ref": "schemas/tasks/pipeline_methylation_confounder_scores.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_methylation_confounder_scores.output.schema.json",
+      "schema_id": "pipeline.methylation_confounder_scores",
+      "tool": "MethylConfounderScores"
+    },
+    {
       "action_config_key": "info_measures",
       "action_name": "pipeline.info_measures",
       "argv_map": {
@@ -467,6 +532,7 @@
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
+        "residualizeCoefDir": "--residualize-coef-dir",
         "resolvedConfigPath": "--resolved-config",
         "stepOverride": "--step-override"
       },
@@ -501,6 +567,7 @@
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
+        "residualizeCoefDir": "--residualize-coef-dir",
         "resolvedConfigPath": "--resolved-config",
         "stepOverride": "--step-override"
       },

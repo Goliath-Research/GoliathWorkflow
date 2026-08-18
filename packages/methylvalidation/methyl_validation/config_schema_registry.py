@@ -183,6 +183,20 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="CellDeconvStepConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="residualize",
+        module="methyl_utils.residualize_config",
+        class_name="ResidualizeStepConfig",
+        filename="residualize.schema.json",
+        title="ResidualizeStepConfig",
+    ),
+    ConfigSchemaSpec(
+        schema_id="methylation_confounder_scores",
+        module="methyl_utils.residualize_config",
+        class_name="ConfounderScoresStepConfig",
+        filename="methylation_confounder_scores.schema.json",
+        title="ConfounderScoresStepConfig",
+    ),
+    ConfigSchemaSpec(
         schema_id="info_measures",
         module="methyl_infotheory.config",
         class_name="InfoTheoryStepConfig",

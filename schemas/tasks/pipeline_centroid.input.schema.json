@@ -463,6 +463,19 @@
       "default": null,
       "title": "Removesamples"
     },
+    "residualizeCoefDir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional residualize_fit coefficient directory. Absent = raw betas.",
+      "title": "Residualizecoefdir"
+    },
     "stepOverride": {
       "anyOf": [
         {

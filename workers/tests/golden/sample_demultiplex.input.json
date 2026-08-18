@@ -1,5 +1,7 @@
 {
   "barcodeTsv": null,
+  "executionScopeId": null,
+  "project": null,
   "projectPath": null,
   "resolvedConfig": null,
   "sampleDir": "/work/samples/S1",

@@ -20,6 +20,8 @@ METHYL_ONLY_ACTIONS = frozenset(
         "pipeline.mapper",
         "pipeline.enricher",
         "pipeline.cell_deconvolution",
+        "pipeline.residualize_fit",
+        "pipeline.methylation_confounder_scores",
         "pipeline.derived_measures",
         "pipeline.info_measures",
         "pipeline.progression",

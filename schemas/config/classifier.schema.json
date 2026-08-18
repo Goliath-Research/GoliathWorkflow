@@ -428,6 +428,19 @@
       "description": "Project name for saving classifier as <project_name>-classifier.pkl and sample list. Used when save_classifier_path or samples_list_export_path are not set.",
       "title": "Project Name"
     },
+    "residualize_coef_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional residualize_fit coefficient directory. When unset, sample features are raw betas (shipped-pack path).",
+      "title": "Residualize Coef Dir"
+    },
     "samples": {
       "anyOf": [
         {
