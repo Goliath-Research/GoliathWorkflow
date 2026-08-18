@@ -51,4 +51,4 @@ explicit linear/stock path). See
 
 **Portal UX:** how EpiPortal should surface Drain / Stop / Resume (and keep it
 distinct from instance pause/cancel) is in
-[portal-ia.md](portal-ia.md#control-model-fleet-vs-in-flight-vs-run).
+[portal-ia.md](portal-ia.md#control-model-fleet-vs-in-flight-vs-run-vs-retry).
