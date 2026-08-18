@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS "Contract"."ContractProcessPackEntitlements" (
   CONSTRAINT "PK_Contract_ProcessPackEntitlements" PRIMARY KEY ("ContractID", "Modality"),
   CONSTRAINT "CK_CPPE_Modality" CHECK (
     "Modality" IN ('methylation', 'rnaseq', 'proteomics')
+  ),
+  CONSTRAINT "CK_CPPE_Range" CHECK (
+    "EffectiveToUtc" IS NULL OR "EffectiveToUtc" >= "EffectiveFromUtc"
   )
 );
 
@@ -24,6 +27,14 @@ BEGIN
     ALTER TABLE "Contract"."ContractProcessPackEntitlements"
       ADD CONSTRAINT "FK_CPPE_ContractID"
       FOREIGN KEY ("ContractID") REFERENCES "Contract"."Contracts" ("ContractID");
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'CK_CPPE_Range'
+  ) THEN
+    ALTER TABLE "Contract"."ContractProcessPackEntitlements"
+      ADD CONSTRAINT "CK_CPPE_Range" CHECK (
+        "EffectiveToUtc" IS NULL OR "EffectiveToUtc" >= "EffectiveFromUtc"
+      );
   END IF;
 END $$;
 
@@ -667,20 +678,20 @@ DECLARE
   v_now timestamptz := now() AT TIME ZONE 'utc';
 BEGIN
   IF p_scope_id IS NOT NULL THEN
-    v_pack := portal.fn_infer_process_pack_from_context(p_context_json);
-    IF NOT EXISTS (
-      SELECT 1 FROM portal.fn_contract_entitled_modalities(p_scope_id) m
-      WHERE m.modality = v_pack
-    ) THEN
-      RAISE EXCEPTION 'PROCESS_PACK_NOT_ENTITLED';
-    END IF;
-
     SELECT a.is_allowed, a.contract_id
       INTO v_allowed, v_cid
     FROM "Contract".spcontractvalidatescopeaccess(p_scope_id, v_now) a;
 
     IF NOT COALESCE(v_allowed, false) THEN
       RAISE EXCEPTION 'NO_ACTIVE_CONTRACT_FOR_SCOPE';
+    END IF;
+
+    v_pack := portal.fn_infer_process_pack_from_context(p_context_json);
+    IF NOT EXISTS (
+      SELECT 1 FROM portal.fn_contract_entitled_modalities(p_scope_id) m
+      WHERE m.modality = v_pack
+    ) THEN
+      RAISE EXCEPTION 'PROCESS_PACK_NOT_ENTITLED';
     END IF;
 
     SELECT wv.workflow_def_id INTO v_def_id

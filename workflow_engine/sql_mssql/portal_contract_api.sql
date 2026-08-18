@@ -524,23 +524,22 @@ BEGIN
 
     IF @scope_id IS NOT NULL
     BEGIN
+        DECLARE @Access TABLE (IsAllowed bit, ContractID int, ReasonCode nvarchar(64));
+        INSERT INTO @Access (IsAllowed, ContractID, ReasonCode)
+        EXEC Contract.spContractValidateScopeAccess @ScopeID = @scope_id;
+
+        DECLARE @allowed bit = (SELECT TOP (1) IsAllowed FROM @Access);
+        DECLARE @contract_id int = (SELECT TOP (1) ContractID FROM @Access);
+
+        IF ISNULL(@allowed, 0) = 0
+            THROW 50200, N'NO_ACTIVE_CONTRACT_FOR_SCOPE', 1;
+
         DECLARE @pack varchar(32) = portal.fn_infer_process_pack_from_context(@context_json);
         IF NOT EXISTS (
             SELECT 1 FROM portal.fn_contract_entitled_modalities(@scope_id)
             WHERE modality = @pack
         )
             THROW 50201, N'PROCESS_PACK_NOT_ENTITLED', 1;
-
-        DECLARE @Access TABLE (IsAllowed bit, ContractID int, ReasonCode nvarchar(64));
-        INSERT INTO @Access (IsAllowed, ContractID, ReasonCode)
-        EXEC Contract.spContractValidateScopeAccess @ScopeID = @scope_id;
-
-        DECLARE @reason nvarchar(64) = (SELECT TOP (1) ReasonCode FROM @Access);
-        DECLARE @allowed bit = (SELECT TOP (1) IsAllowed FROM @Access);
-        DECLARE @contract_id int = (SELECT TOP (1) ContractID FROM @Access);
-
-        IF ISNULL(@allowed, 0) = 0
-            THROW 50200, N'NO_ACTIVE_CONTRACT_FOR_SCOPE', 1;
 
         DECLARE @def_id bigint;
         SELECT @def_id = workflow_def_id FROM wf.workflow_version WHERE id = @workflow_version_id;
