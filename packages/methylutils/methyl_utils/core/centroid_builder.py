@@ -187,8 +187,10 @@ class MethylCentroidBuilder:
                     n_skip,
                 )
                 final_idx = final_idx[valid]
+                pos = pos[valid]
                 mC = mC[valid]
                 uC = uC[valid]
+                tnc = tnc[valid]
 
             # Defensive: clip so we never index with size (avoids OOB on any backend)
             final_idx = self.xp.clip(final_idx, 0, size_int - 1)
@@ -204,6 +206,10 @@ class MethylCentroidBuilder:
                 to_np = (lambda a: cp.asnumpy(a) if self.use_gpu else np.asarray(a))
                 pos_np = np.asarray(to_np(pos), dtype=np.uint32)
                 mean_np = np.asarray(to_np(mean), dtype=np.float64)
+                if pos_np.shape != mean_np.shape:
+                    raise ValueError(
+                        f"residualize pos/mean length mismatch: {pos_np.shape} vs {mean_np.shape}"
+                    )
                 adj = np.asarray(
                     self.residualize_apply(sample_path, pos_np, mean_np),
                     dtype=np.float64,

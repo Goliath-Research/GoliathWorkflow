@@ -50,3 +50,62 @@ def test_extract_sample_features_without_applier_is_identity():
     assert avail.all()
     np.testing.assert_allclose(feats, [0.2, 0.8])
 
+
+def test_chrom_ctx_uses_chromosome_metadata_not_context_series():
+    from methyl_classifier.utils.data_loader import chrom_ctx_for_residualize
+
+    class Sample:
+        chromosome = "21"
+        context_metadata = "CG"
+        _metadata = {"chromosome": "21", "context": "CG"}
+
+        @property
+        def context(self):
+            raise AssertionError("must not truth-test the per-position context Series")
+
+    chrom, ctx = chrom_ctx_for_residualize(Sample())
+    assert chrom == "21"
+    assert ctx == "CG"
+
+
+def test_chrom_ctx_from_h5_filename(tmp_path):
+    from methyl_classifier.utils.data_loader import chrom_ctx_for_residualize
+
+    class Sample:
+        _metadata = {}
+
+    path = tmp_path / "samples" / "S1" / "21-CG.h5"
+    chrom, ctx = chrom_ctx_for_residualize(Sample(), path)
+    assert chrom == "21"
+    assert ctx == "CG"
+
+
+def test_attach_residualize_loads_applier_from_metadata(monkeypatch, tmp_path):
+    from methyl_classifier.utils.data_loader import DataLoader
+
+    seen = {}
+
+    def fake_load_applier(coef_dir, chrom, ctx):
+        seen["args"] = (str(coef_dir), chrom, ctx)
+        return object()
+
+    monkeypatch.setattr(
+        "methyl_utils.residualize_runtime.load_applier",
+        fake_load_applier,
+    )
+    DataLoader.residualize_coef_dir = str(tmp_path / "coef")
+    DataLoader.residualize_chrom = None
+    DataLoader.residualize_ctx = None
+    try:
+        class Sample:
+            chromosome = "1"
+            context_metadata = "CG"
+            _metadata = {"chromosome": "1", "context": "CG"}
+            sample_id = None
+
+        sample = DataLoader._attach_residualize(Sample(), tmp_path / "S9" / "1-CG.h5")
+        assert getattr(sample, "_residualize_applier", None) is not None
+        assert seen["args"][1:] == ("1", "CG")
+    finally:
+        DataLoader.residualize_coef_dir = None
+

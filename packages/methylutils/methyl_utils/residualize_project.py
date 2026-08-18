@@ -37,15 +37,17 @@ def resolve_named_step_config(
 ) -> Tuple[T, List[Tuple[str, str]], str]:
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    step_cfg: Dict[str, Any] = dict(resolve_for_project(action_key, project))
+    # Worker path: baked ``resolved_config`` is the sole tool-parameter source.
+    # Do not re-merge site/profile via resolve_for_project (nulls stay null).
     if isinstance(resolved_config, dict):
         nested = resolved_config.get(action_key)
         if isinstance(nested, dict):
-            step_cfg.update(nested)
+            src = nested
         else:
-            for key in model_cls.model_fields:
-                if resolved_config.get(key) is not None:
-                    step_cfg[key] = resolved_config[key]
+            src = resolved_config
+        step_cfg = {k: src[k] for k in src if k in model_cls.model_fields}
+    else:
+        step_cfg = dict(resolve_for_project(action_key, project))
     if step_override_path is not None:
         override_path = Path(step_override_path)
         if override_path.exists():

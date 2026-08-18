@@ -1649,6 +1649,8 @@ def _export_ovr_pkl_from_config(config: ClassificationConfig, out_path: Path) ->
 def _run_one_classification(config: ClassificationConfig, label: Optional[str] = None) -> None:
     """Run classification once with the given config (used for single run and per-cancer-group loop)."""
     DataLoader.residualize_coef_dir = config.residualize_coef_dir
+    DataLoader.residualize_chrom = None
+    DataLoader.residualize_ctx = None
     ovr_names = config.ovr_class_names or config.multiclass_class_names
     classifier_config = ClassifierConfig(
         model_path=config.model_path,
@@ -1687,6 +1689,8 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
         if model_path_str:
             try:
                 chrom, context = extract_chrom_context_from_classifier(Path(model_path_str))
+                DataLoader.residualize_chrom = chrom
+                DataLoader.residualize_ctx = context
                 print(f"📋 Classifier trained on chromosome {chrom}, context {context}")
             except ValueError as e:
                 print(f"⚠️ {e}")

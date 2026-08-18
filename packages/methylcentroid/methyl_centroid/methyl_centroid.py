@@ -804,8 +804,12 @@ class MethylCentroid:
                 builder.add_sample(sample)
                 self._centroid = builder.finalize()
             else:
-                # Add sample to existing centroid
-                self._centroid = self._centroid.add_sample(methyl_sample)
+                # Add sample to existing centroid (same residualize hook as the builder)
+                self._centroid = self._centroid.add_sample(
+                    methyl_sample,
+                    residualize_apply=self._get_residualize_apply(),
+                    sample_path=str(sample),
+                )
 
             self._apply_centroid_filters()
             self.active_samples.add(sample_id)
@@ -842,7 +846,11 @@ class MethylCentroid:
             raise RuntimeError("Cannot remove sample: no centroid exists")
 
         try:
-            self._centroid = self._centroid.remove_sample(methyl_sample)
+            self._centroid = self._centroid.remove_sample(
+                methyl_sample,
+                residualize_apply=self._get_residualize_apply(),
+                sample_path=str(sample_path),
+            )
             self._apply_centroid_filters()
         except ValueError as e:
             raise RuntimeError(f"Failed to remove sample: {e}")
@@ -989,8 +997,9 @@ class MethylCentroid:
 
         all_samples = self.samples + self.add_samples
 
-        # Use streaming approach when GPU is enabled to avoid memory overhead and thread coordination
-        if self.use_gpu:
+        # Streaming builder applies residualize to every sample. Use it whenever
+        # residualize is bound, including CPU, so later samples do not mix raw Sx.
+        if self.use_gpu or self.residualize_coef_dir:
             self.logger.info(
                 f"Using streaming centroid builder for {self.ctx} (GPU enabled)"
             )
@@ -1256,7 +1265,11 @@ class MethylCentroid:
                         else:
                             # Load the actual MethylSample and add it
                             methyl_sample = self.load_sample(sample_path)
-                            self._centroid = self._centroid.add_sample(methyl_sample)
+                            self._centroid = self._centroid.add_sample(
+                                methyl_sample,
+                                residualize_apply=self._get_residualize_apply(),
+                                sample_path=str(sample_path),
+                            )
                         success = True
 
                         if success:

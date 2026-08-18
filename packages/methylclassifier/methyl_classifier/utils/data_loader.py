@@ -16,6 +16,68 @@ except ImportError:
         return iterable if iterable is not None else []
 
 
+def _parse_chrom_ctx_from_h5_name(h5_path: Optional[Path]) -> Tuple[Optional[str], Optional[str]]:
+    """Parse ``{chrom}-{ctx}.h5`` (e.g. ``1-CG.h5``). Chromosome may contain dashes."""
+    if h5_path is None:
+        return None, None
+    stem = Path(h5_path).stem
+    if "-" not in stem:
+        return None, None
+    chrom, ctx = stem.rsplit("-", 1)
+    if ctx in {"CG", "CHG", "CHH"} and chrom:
+        return chrom, ctx
+    return None, None
+
+
+def _unique_ctx_from_tnc(sample: Any) -> Optional[str]:
+    """If packed tnc bytes share one methylation context, return CG/CHG/CHH."""
+    df = getattr(sample, "_df", None)
+    if df is None or "tnc" not in getattr(df, "columns", []):
+        return None
+    try:
+        tnc = np.asarray(df["tnc"].values)[:4096]
+    except Exception:
+        return None
+    if tnc.size == 0:
+        return None
+    from methyl_utils import CONTEXT_NAMES, TNCBits
+
+    names = set()
+    for byte in np.unique(tnc):
+        name = CONTEXT_NAMES.get(TNCBits.from_byte(int(byte)).context, "UNKNOWN")
+        if name != "UNKNOWN":
+            names.add(name)
+    if len(names) == 1:
+        return next(iter(names))
+    return None
+
+
+def chrom_ctx_for_residualize(
+    sample: Any,
+    h5_path: Optional[Path] = None,
+    chrom: Optional[str] = None,
+    ctx: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Resolve chrom×ctx without truth-testing the per-position ``context`` Series."""
+    meta = getattr(sample, "_metadata", None) or {}
+    chrom = (
+        chrom
+        or getattr(sample, "chrom", None)
+        or getattr(sample, "chromosome", None)
+        or meta.get("chromosome")
+    )
+    ctx = (
+        ctx
+        or getattr(sample, "ctx", None)
+        or getattr(sample, "context_metadata", None)
+        or meta.get("context")
+    )
+    file_chrom, file_ctx = _parse_chrom_ctx_from_h5_name(h5_path)
+    chrom = chrom or file_chrom or DataLoader.residualize_chrom
+    ctx = ctx or file_ctx or DataLoader.residualize_ctx or _unique_ctx_from_tnc(sample)
+    return (str(chrom) if chrom else None, str(ctx) if ctx else None)
+
+
 class DataLoader:
     """
     Data loader for methylation samples.
@@ -24,14 +86,20 @@ class DataLoader:
     """
 
     residualize_coef_dir: Optional[str] = None
+    residualize_chrom: Optional[str] = None
+    residualize_ctx: Optional[str] = None
 
     @staticmethod
-    def _attach_residualize(sample: Any, h5_path: Optional[Path] = None) -> Any:
+    def _attach_residualize(
+        sample: Any,
+        h5_path: Optional[Path] = None,
+        chrom: Optional[str] = None,
+        ctx: Optional[str] = None,
+    ) -> Any:
         coef_dir = DataLoader.residualize_coef_dir
         if not coef_dir:
             return sample
-        chrom = getattr(sample, "chrom", None)
-        ctx = getattr(sample, "ctx", None) or getattr(sample, "context", None)
+        chrom, ctx = chrom_ctx_for_residualize(sample, h5_path, chrom=chrom, ctx=ctx)
         if not chrom or not ctx:
             return sample
         from methyl_utils.residualize_runtime import load_applier
@@ -297,6 +365,9 @@ class DataLoader:
 
                 try:
                     cg_sample = MethylSample.load_from_h5(context_files['CG'], chrom_positions)
+                    cg_sample = DataLoader._attach_residualize(
+                        cg_sample, context_files['CG'], chrom=chrom, ctx='CG'
+                    )
                     if debug:
                         print(f"      ✅ Chromosome {chrom}-CG: Loaded {len(cg_sample.pos):,} positions", flush=True)
                     contexts_to_merge.append(cg_sample)
@@ -318,6 +389,12 @@ class DataLoader:
                     if context in context_files:
                         try:
                             context_sample = MethylSample.load_from_h5(context_files[context], chrom_positions)
+                            context_sample = DataLoader._attach_residualize(
+                                context_sample,
+                                context_files[context],
+                                chrom=chrom,
+                                ctx=context,
+                            )
                             contexts_to_merge.append(context_sample)
                         except Exception as e:
                             print(f"⚠️ Warning: Failed to load {chrom}-{context}.h5: {e}")
@@ -331,6 +408,16 @@ class DataLoader:
             merged_sample = None
             try:
                 merged_sample = DataLoader._merge_context_samples(contexts_to_merge)
+                if merged_sample is not None:
+                    for src in contexts_to_merge:
+                        applier = getattr(src, "_residualize_applier", None)
+                        if applier is None:
+                            continue
+                        merged_sample._residualize_applier = applier
+                        sid = getattr(src, "sample_id", None)
+                        if sid:
+                            merged_sample.sample_id = sid
+                        break
             except Exception as e:
                 import traceback
                 print(f"❌ Failed to merge contexts for chromosome {chrom}: {e}")
@@ -481,6 +568,9 @@ class DataLoader:
                     values[mloc[finite]] = raw[finite]
                     availability_mask[mloc[finite]] = True
         applier = getattr(sample, "_residualize_applier", None)
+        if applier is None and DataLoader.residualize_coef_dir:
+            sample = DataLoader._attach_residualize(sample)
+            applier = getattr(sample, "_residualize_applier", None)
         if applier is not None:
             from methyl_utils.mvalue_residualize import sample_id_from_path
 

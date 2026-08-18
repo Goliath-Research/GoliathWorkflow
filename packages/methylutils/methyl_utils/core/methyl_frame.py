@@ -1096,7 +1096,12 @@ class MethylCentroid(MethylFrame):
         data["Swx2"] = np.asarray(self._get_values(df_cpu["Swx2"]), dtype=np.float32)
         return data
 
-    def add_sample(self, sample: "MethylSample") -> "MethylCentroid":
+    def add_sample(
+        self,
+        sample: "MethylSample",
+        residualize_apply=None,
+        sample_path=None,
+    ) -> "MethylCentroid":
         """
         Add a sample to this centroid, returning a new MethylCentroid.
         Accumulates N, Sx, Sx2, Sm, Su, Sc2, Swx2 and binned_stats.
@@ -1119,6 +1124,15 @@ class MethylCentroid(MethylFrame):
         sample_c = sample_mC.astype(np.uint32) + sample_uC.astype(np.uint32)
         with np.errstate(divide="ignore", invalid="ignore"):
             sample_mean = np.where(sample_c > 0, sample_mC.astype(np.float32) / sample_c.astype(np.float32), 0.0)
+        if residualize_apply is not None:
+            path = sample_path if sample_path is not None else getattr(sample, "sample_id", None)
+            adj = np.asarray(
+                residualize_apply(path, sample_pos, sample_mean),
+                dtype=np.float64,
+            )
+            if adj.shape != sample_mean.shape:
+                raise ValueError("residualize_apply returned the wrong length")
+            sample_mean = adj.astype(np.float32, copy=False)
         # c_i * x_i^2 = mC_i^2 / c_i
         sample_swx2 = np.where(sample_c > 0, (sample_mC.astype(np.float64) ** 2) / sample_c.astype(np.float64), 0.0).astype(np.float32)
         common_pos, idx_centroid, idx_sample = np.intersect1d(
@@ -1209,7 +1223,12 @@ class MethylCentroid(MethylFrame):
             out.set_binned_stats(bin_edges, all_bin_counts)
         return out
 
-    def remove_sample(self, sample: "MethylSample") -> "MethylCentroid":
+    def remove_sample(
+        self,
+        sample: "MethylSample",
+        residualize_apply=None,
+        sample_path=None,
+    ) -> "MethylCentroid":
         """Remove a sample from this centroid; subtracts N, Sx, Sx2, Sm, Su, Sc2, Swx2 and updates binned_stats."""
         centroid_cpu = self.to_cpu()
         sample_cpu = sample.to_cpu()
@@ -1228,6 +1247,15 @@ class MethylCentroid(MethylFrame):
         sample_c = sample_mC + sample_uC
         with np.errstate(divide="ignore", invalid="ignore"):
             sample_mean = np.where(sample_c > 0, sample_mC.astype(np.float32) / sample_c.astype(np.float32), 0.0)
+        if residualize_apply is not None:
+            path = sample_path if sample_path is not None else getattr(sample, "sample_id", None)
+            adj = np.asarray(
+                residualize_apply(path, sample_pos, sample_mean),
+                dtype=np.float64,
+            )
+            if adj.shape != sample_mean.shape:
+                raise ValueError("residualize_apply returned the wrong length")
+            sample_mean = adj.astype(np.float32, copy=False)
         sample_swx2 = np.where(sample_c > 0, (sample_mC.astype(np.float64) ** 2) / sample_c.astype(np.float64), 0.0).astype(np.float32)
         common_pos, idx_centroid, idx_sample = np.intersect1d(
             centroid_pos, sample_pos, assume_unique=True, return_indices=True
