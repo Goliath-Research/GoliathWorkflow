@@ -45,6 +45,11 @@ steps:
       pytest scripts/tests/test_check_package_install_contract.py scripts/tests/test_check_catalog_fixture_contract.py -q
     displayName: Package install and catalog fixture contracts
 
+  - task: UseNode@1
+    inputs:
+      version: "24.x"
+    displayName: Use Node.js 24 (npm diagram tools)
+
   - script: |
       # Optional Marp/offline diagram assets (site uses dynamic Mermaid).
       sudo apt-get update
