@@ -357,24 +357,46 @@ def _collect_fastqs(sample_dir: Path) -> List[Path]:
     return sorted(found)
 
 
-def resolve_paired_fastqs(sample_dir: Path, sample_id: str) -> List[Path]:
+def canonical_trimmed_fastqs(sample_dir: Path, sample_id: str) -> Tuple[Path, Path]:
+    """Remediation outputs that Align prefers: ``{id}_1.trimmed.fastq.gz`` / ``_2``."""
+    root = Path(sample_dir)
+    return (
+        root / f"{sample_id}_1.trimmed.fastq.gz",
+        root / f"{sample_id}_2.trimmed.fastq.gz",
+    )
+
+
+def _is_trimmed_fastq_name(path: Path) -> bool:
+    return ".trimmed." in path.name.lower()
+
+
+def resolve_paired_fastqs(
+    sample_dir: Path,
+    sample_id: str,
+    *,
+    prefer_trimmed: bool = True,
+) -> List[Path]:
     """Return paired-end FASTQs (one or more pairs) for a sample.
 
     Clara ``fq2bam_meth`` accepts several ``--in-fq R1 R2`` pairs (multi-lane /
     multi-flowcell). An even count of mate-paired files is valid. Trimmed
-    ``{id}_1.trimmed.fastq.gz`` / ``_2`` at *sample_dir* wins (remediation).
+    ``{id}_1.trimmed.fastq.gz`` / ``_2`` at *sample_dir* wins for Align
+    (remediation). Trim must pass ``prefer_trimmed=False`` so it never feeds
+    those outputs back into fastp.
     """
-    trimmed = [
-        sample_dir / f"{sample_id}_1.trimmed.fastq.gz",
-        sample_dir / f"{sample_id}_2.trimmed.fastq.gz",
-    ]
-    if all(p.is_file() for p in trimmed):
+    trimmed = list(canonical_trimmed_fastqs(sample_dir, sample_id))
+    if prefer_trimmed and all(p.is_file() for p in trimmed):
         return trimmed
 
+    skip = {p.resolve() for p in trimmed}
     all_fastqs = _collect_fastqs(sample_dir)
     groups: Dict[Tuple[str, str, str, str], Dict[str, Path]] = {}
     leftovers: List[Path] = []
     for path in all_fastqs:
+        if (not prefer_trimmed) and (
+            path.resolve() in skip or _is_trimmed_fastq_name(path)
+        ):
+            continue
         parsed = _mate_group(path)
         if parsed is None:
             leftovers.append(path)

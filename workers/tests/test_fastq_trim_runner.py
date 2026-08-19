@@ -40,6 +40,71 @@ def test_trim_discovers_noncanonical_paired_fastqs(tmp_path: Path) -> None:
     assert Path(out["trimmedR2"]).is_file()
 
 
+def test_trim_retry_does_not_feed_trimmed_outputs_into_fastp(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_retry"
+    sample_dir.mkdir()
+    r1 = sample_dir / "S_retry_1.fastq.gz"
+    r2 = sample_dir / "S_retry_2.fastq.gz"
+    r1.write_bytes(b"original-r1")
+    r2.write_bytes(b"original-r2")
+    existing_r1 = sample_dir / "S_retry_1.trimmed.fastq.gz"
+    existing_r2 = sample_dir / "S_retry_2.trimmed.fastq.gz"
+    existing_r1.write_bytes(b"already-trimmed-r1")
+    existing_r2.write_bytes(b"already-trimmed-r2")
+
+    seen: dict[str, str] = {}
+
+    def fake_run(cmd, **kwargs):
+        r1_in = Path(cmd[cmd.index("-i") + 1])
+        r2_in = Path(cmd[cmd.index("-I") + 1])
+        out_r1 = Path(cmd[cmd.index("-o") + 1])
+        out_r2 = Path(cmd[cmd.index("-O") + 1])
+        seen["r1_in"] = r1_in.name
+        seen["r2_in"] = r2_in.name
+        seen["r1_out"] = out_r1.name
+        seen["r2_out"] = out_r2.name
+        assert r1_in.resolve() != out_r1.resolve()
+        assert r2_in.resolve() != out_r2.resolve()
+        assert r1_in.read_bytes() == b"original-r1"
+        out_r1.write_bytes(b"fresh-trim-r1")
+        out_r2.write_bytes(b"fresh-trim-r2")
+
+        class _P:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _P()
+
+    with patch("methyl_worker.fastq_trim_runner.shutil.which", return_value="fastp"):
+        with patch("methyl_worker.fastq_trim_runner.subprocess.run", side_effect=fake_run):
+            out = run_fastp_trim(
+                sample_id="S_retry",
+                sample_dir=sample_dir,
+                input_json={"trimFront2": 5},
+            )
+
+    assert seen["r1_in"] == "S_retry_1.fastq.gz"
+    assert seen["r2_in"] == "S_retry_2.fastq.gz"
+    assert seen["r1_out"].endswith(".tmp")
+    assert Path(out["trimmedR1"]).read_bytes() == b"fresh-trim-r1"
+    assert Path(out["trimmedR2"]).read_bytes() == b"fresh-trim-r2"
+    assert not (sample_dir / "S_retry_1.trimmed.fastq.gz.tmp").exists()
+
+
+def test_trim_does_not_use_trimmed_outputs_as_only_inputs(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_only_trim"
+    sample_dir.mkdir()
+    (sample_dir / "S_only_trim_1.trimmed.fastq.gz").write_bytes(b"t1")
+    (sample_dir / "S_only_trim_2.trimmed.fastq.gz").write_bytes(b"t2")
+    with pytest.raises(RuntimeError, match="paired FASTQ"):
+        run_fastp_trim(
+            sample_id="S_only_trim",
+            sample_dir=sample_dir,
+            input_json={"trimFront2": 5},
+        )
+
+
 def test_trim_requires_paired_fastqs(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S_empty"
     sample_dir.mkdir()

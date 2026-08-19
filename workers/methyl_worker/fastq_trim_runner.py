@@ -48,11 +48,17 @@ def run_fastp_trim(
     if not sample_path.is_dir():
         raise RuntimeError(f"sampleDir not found: {sample_path}")
 
-    from methyl_worker.parabricks_runner import resolve_paired_fastqs
+    from methyl_worker.parabricks_runner import (
+        canonical_trimmed_fastqs,
+        resolve_paired_fastqs,
+    )
     from methyl_worker.work_share import share_work_tree
 
-    fastqs = resolve_paired_fastqs(sample_path, sample_id)
-    r1_in, r2_in = fastqs[0], fastqs[1]
+    r1_out, r2_out = canonical_trimmed_fastqs(sample_path, sample_id)
+    # Never discover the remediation outputs as inputs: Align prefers those
+    # names, and fastp -o/-O on the same path truncates the gzip in place.
+    fastqs = resolve_paired_fastqs(sample_path, sample_id, prefer_trimmed=False)
+    r1_in, r2_in = fastqs[0].resolve(), fastqs[1].resolve()
     if len(fastqs) > 2:
         logger.warning(
             "trim_fastq using first FASTQ pair for %s; additional pairs are not trimmed: %s",
@@ -60,12 +66,21 @@ def run_fastp_trim(
             ", ".join(p.name for p in fastqs[2:]),
         )
 
-    r1_out = sample_path / f"{sample_id}_1.trimmed.fastq.gz"
-    r2_out = sample_path / f"{sample_id}_2.trimmed.fastq.gz"
+    if r1_in == r1_out.resolve() or r2_in == r2_out.resolve():
+        raise RuntimeError(
+            f"trim_fastq refuses to read and write the same FASTQ for {sample_id}: "
+            f"{r1_in.name}, {r2_in.name}"
+        )
 
     fastp = shutil.which("fastp")
     if fastp is None:
         raise RuntimeError("fastp not found on PATH; install via apt or conda")
+
+    r1_tmp = r1_out.with_name(r1_out.name + ".tmp")
+    r2_tmp = r2_out.with_name(r2_out.name + ".tmp")
+    for tmp in (r1_tmp, r2_tmp):
+        if tmp.exists():
+            tmp.unlink()
 
     cmd = [
         fastp,
@@ -74,9 +89,9 @@ def run_fastp_trim(
         "-I",
         str(r2_in),
         "-o",
-        str(r1_out),
+        str(r1_tmp),
         "-O",
-        str(r2_out),
+        str(r2_tmp),
         "--disable_quality_filtering",
     ]
     if trims["trim_front1"]:
@@ -89,11 +104,18 @@ def run_fastp_trim(
         cmd.extend(["--trim_tail2", str(trims["trim_tail2"])])
 
     logger.info("Running fastp trim for %s: %s", sample_id, trims)
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "fastp failed")
-    if not r1_out.is_file() or not r2_out.is_file():
-        raise RuntimeError("fastp did not produce trimmed FASTQ outputs")
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "fastp failed")
+        if not r1_tmp.is_file() or not r2_tmp.is_file():
+            raise RuntimeError("fastp did not produce trimmed FASTQ outputs")
+        r1_tmp.replace(r1_out)
+        r2_tmp.replace(r2_out)
+    finally:
+        for tmp in (r1_tmp, r2_tmp):
+            if tmp.exists():
+                tmp.unlink()
 
     share_work_tree(sample_path)
 

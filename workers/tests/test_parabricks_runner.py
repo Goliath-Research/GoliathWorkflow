@@ -11,6 +11,23 @@ import pytest
 from methyl_worker import parabricks_runner as runner
 
 
+def test_resolve_paired_fastqs_prefers_trimmed_outputs(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_trim"
+    sample_dir.mkdir()
+    (sample_dir / "S_trim_1.fastq.gz").write_bytes(b"raw1")
+    (sample_dir / "S_trim_2.fastq.gz").write_bytes(b"raw2")
+    (sample_dir / "S_trim_1.trimmed.fastq.gz").write_bytes(b"t1")
+    (sample_dir / "S_trim_2.trimmed.fastq.gz").write_bytes(b"t2")
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_trim")
+    assert [p.name for p in fastqs] == [
+        "S_trim_1.trimmed.fastq.gz",
+        "S_trim_2.trimmed.fastq.gz",
+    ]
+    source = runner.resolve_paired_fastqs(sample_dir, "S_trim", prefer_trimmed=False)
+    assert [p.name for p in source] == ["S_trim_1.fastq.gz", "S_trim_2.fastq.gz"]
+
+
 def test_resolve_paired_fastqs_prefers_explicit_names(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()
