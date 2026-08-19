@@ -125,3 +125,18 @@ def test_trim_requires_paired_fastqs(tmp_path: Path) -> None:
             sample_dir=sample_dir,
             input_json={"trimFront2": 5},
         )
+
+
+def test_clara_trim_does_not_import_mojo_or_parabricks_runner() -> None:
+    """fastp trim must not pull Clara/Mojo aligner modules at import time."""
+    import methyl_worker.fastq_trim_runner as trim
+
+    source = Path(trim.__file__).read_text(encoding="utf-8")
+    assert "fastq_pairs" in source
+    assert "parabricks_runner" not in source
+    assert "mojo_align" not in source
+    import methyl_worker.fastq_pairs as pairs
+
+    pair_src = Path(pairs.__file__).read_text(encoding="utf-8")
+    assert "mojo_align" not in pair_src
+    assert "parabricks_runner" not in pair_src

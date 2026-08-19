@@ -64,10 +64,7 @@ def run_fastp_trim(
     if not sample_path.is_dir():
         raise RuntimeError(f"sampleDir not found: {sample_path}")
 
-    from methyl_worker.parabricks_runner import (
-        canonical_trimmed_fastqs,
-        resolve_paired_fastqs,
-    )
+    from methyl_worker.fastq_pairs import canonical_trimmed_fastqs, resolve_paired_fastqs
     from methyl_worker.work_share import share_work_tree
 
     r1_out, r2_out = canonical_trimmed_fastqs(sample_path, sample_id)
