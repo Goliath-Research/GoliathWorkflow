@@ -169,11 +169,6 @@ def _handle_methyl_qc(
             history = prior.get("qc_history")
             if isinstance(history, list):
                 write_ctx.prior_qc_history = [h for h in history if isinstance(h, dict)]
-        alignment_mode = getattr(input, "alignmentMode", None) or (
-            (input.resolvedConfig or {}).get("alignmentMode")
-            if isinstance(input.resolvedConfig, dict)
-            else None
-        )
         process_samples_to_qc_jsons(
             [str(sample_path)],
             out_dir,
@@ -186,17 +181,12 @@ def _handle_methyl_qc(
             core_guardrails=cfg.core_guardrails,
             write_context=write_ctx,
             sample_id=resolved_sample_id,
-            alignment_mode=str(alignment_mode) if alignment_mode else None,
+            alignment_mode=input.alignmentMode,
         )
         qc_path = Path(out_dir) / f"{resolved_sample_id}.json"
     else:
         import tempfile
 
-        alignment_mode = getattr(input, "alignmentMode", None) or (
-            (input.resolvedConfig or {}).get("alignmentMode")
-            if isinstance(input.resolvedConfig, dict)
-            else None
-        )
         with tempfile.TemporaryDirectory(prefix="methyl-qc-") as tmp:
             out_dir = tmp
             process_samples_to_qc_jsons(
@@ -204,7 +194,7 @@ def _handle_methyl_qc(
                 out_dir,
                 write_context=write_ctx,
                 sample_id=resolved_sample_id,
-                alignment_mode=str(alignment_mode) if alignment_mode else None,
+                alignment_mode=input.alignmentMode,
             )
             qc_path = Path(out_dir) / f"{resolved_sample_id}.json"
             _mirror_into_sample_dir(qc_path)
