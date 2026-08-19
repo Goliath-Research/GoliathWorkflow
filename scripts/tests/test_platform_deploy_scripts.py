@@ -110,6 +110,7 @@ def test_gateway_provision_has_no_work_share() -> None:
 def test_write_worker_env_omits_placeholder_api_base() -> None:
     text = (REPO_ROOT / "scripts/write_worker_env.sh").read_text(encoding="utf-8")
     assert "gateway.example.com" not in text
+    assert "read_existing_worker_api_base" in text
     assert 'WORKER_API_BASE="${WORKER_API_BASE:-}"' in text
 
 
