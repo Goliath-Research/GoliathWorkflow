@@ -169,7 +169,7 @@ def _handle_methyl_qc(
             history = prior.get("qc_history")
             if isinstance(history, list):
                 write_ctx.prior_qc_history = [h for h in history if isinstance(h, dict)]
-        alignment_mode = input.alignmentMode or (
+        alignment_mode = getattr(input, "alignmentMode", None) or (
             (input.resolvedConfig or {}).get("alignmentMode")
             if isinstance(input.resolvedConfig, dict)
             else None
@@ -192,7 +192,7 @@ def _handle_methyl_qc(
     else:
         import tempfile
 
-        alignment_mode = input.alignmentMode or (
+        alignment_mode = getattr(input, "alignmentMode", None) or (
             (input.resolvedConfig or {}).get("alignmentMode")
             if isinstance(input.resolvedConfig, dict)
             else None
