@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Deploy MethylPipeline wf schema to Azure Database for PostgreSQL.
+# Deploy MethylPipeline schema to Azure Database for PostgreSQL.
+#
+# Twin of workflow_engine/sql_mssql/deploy_azure.sh — every new table/proc/seed SQL
+# that exists in both trees must be listed in both SCRIPTS arrays (see
+# scripts/check_sql_deploy_twins.py). Canonical database name is epimethyl.
 #
 # Prerequisites:
 #   - psql (PostgreSQL client 15+)
@@ -55,6 +59,8 @@ fi
 
 SCRIPTS=(
   00_schema.sql
+  wf_instance_extension.sql
+  wf_json_column_alignment.sql
   03_engine_core.sql
   05_runtime_parity.sql
   06_scope_writepath_parity.sql
@@ -69,7 +75,6 @@ SCRIPTS=(
   wf_action_dispatch_concurrency.sql
   wf_action_dispatch_affinity.sql
   wf_data_type.sql
-  08_foreach_support.sql
   01_worker_api.sql
   wf_cluster_security_columns.sql
   wf_worker_enrollment.sql

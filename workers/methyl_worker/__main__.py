@@ -237,11 +237,15 @@ def _run_enroll_cli(args: argparse.Namespace) -> int:
             return 2
 
     client = WorkflowRestClient(args.api_base)
-    result = client.enroll(
-        args.cluster_key,
-        args.external_worker_key,
-        capabilities=capabilities,
-    )
+    try:
+        result = client.enroll(
+            args.cluster_key,
+            args.external_worker_key,
+            capabilities=capabilities,
+        )
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     worker_id = int(result["worker_id"])
     token = str(result["worker_token"])
     token_path = Path(args.token_file)

@@ -170,6 +170,9 @@ def test_release_scripts_pass_bash_syntax_check() -> None:
         "init_work_layout.sh",
         "verify_work_layout.sh",
         "preflight_worker_join.sh",
+        "provision_worker_node.sh",
+        "provision_gateway_node.sh",
+        "bootstrap_distributed_workers.sh",
         "download_methyl_extractor_artifacts.sh",
         "assemble_release.sh",
     ]

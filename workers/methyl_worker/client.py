@@ -111,6 +111,11 @@ class WorkflowRestClient:
                 return json.loads(body)
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 403:
+                raise RuntimeError(
+                    f"HTTP 403 {path}: enroll refused (portal IP/key not preregistered). "
+                    f"Fail closed — no SQL fallback. {detail}"
+                ) from exc
             raise RuntimeError(f"HTTP {exc.code} {path}: {detail}") from exc
         except URLError as exc:
             raise RuntimeError(f"Request failed {path}: {exc}") from exc

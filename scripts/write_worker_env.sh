@@ -89,6 +89,7 @@ METHYL_EXTRACTOR_BIN=$ME_BIN
 HDF5_PLUGIN_PATH=$PLUGIN_DIR
 PATH=$WORKER_PATH
 METHYL_PROFILE_DIR=$ROOT/current/runtime-bundle/domain/profiles
+TMPDIR=/var/tmp/methyl-samtools
 EOF
 
 if [[ -n "$PARABRICKS_IMAGE" ]]; then

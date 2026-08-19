@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Promoted release layout — no git checkout required at runtime.
-WorkingDirectory=/work/epimethyl/current
-EnvironmentFile=-/work/epimethyl/env/gateway.env
+# Gateway is local to this VM — not the worker /work share.
+WorkingDirectory=__EPIMETHYL_ROOT__
+EnvironmentFile=-__EPIMETHYL_ROOT__/env/gateway.env
 Environment=PATH=__EPIMETHYL_VENV__/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=__EPIMETHYL_VENV__/bin/methyl-gateway --host 127.0.0.1 --port 8080
 Restart=on-failure

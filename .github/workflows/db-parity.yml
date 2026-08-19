@@ -8,6 +8,9 @@ on:
       - 'workers/**'
       - 'scripts/check_task_input_config_boundary.py'
       - 'scripts/migrate_profile_action_config.py'
+      - 'scripts/check_sql_deploy_twins.py'
+      - 'workflow_engine/sql_mssql/deploy_azure.sh'
+      - 'workflow_engine/sql_pg/deploy_azure.sh'
   pull_request:
     paths:
       - 'workflow_engine/**'
@@ -15,6 +18,9 @@ on:
       - 'workers/**'
       - 'scripts/check_task_input_config_boundary.py'
       - 'scripts/migrate_profile_action_config.py'
+      - 'scripts/check_sql_deploy_twins.py'
+      - 'workflow_engine/sql_mssql/deploy_azure.sh'
+      - 'workflow_engine/sql_pg/deploy_azure.sh'
 
 jobs:
   contract-validate:
@@ -28,6 +34,8 @@ jobs:
         run: pip install pyyaml
       - name: Validate DB object contract lockstep
         run: python workflow_engine/contract/validate_contract.py
+      - name: SQL deploy_azure.sh twins (mssql ↔ pg)
+        run: python scripts/check_sql_deploy_twins.py
       - name: Inventory script smoke (offline --help)
         run: python scripts/db_schema_inventory.py --help
 

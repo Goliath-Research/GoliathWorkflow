@@ -1,0 +1,99 @@
+"""Platform deploy script contracts (DB twins, gateway, worker provision)."""
+
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _bash_n(name: str) -> None:
+    path = REPO_ROOT / "scripts" / name
+    subprocess.run(["bash", "-n", str(path)], check=True, capture_output=True)
+
+
+def test_platform_deploy_scripts_bash_syntax() -> None:
+    for name in (
+        "bootstrap_distributed_workers.sh",
+        "provision_gateway_node.sh",
+        "provision_worker_node.sh",
+        "install_gateway_systemd.sh",
+        "install_reclaim_leases_timer.sh",
+        "verify_e2e_node.sh",
+        "write_worker_env.sh",
+    ):
+        _bash_n(name)
+
+
+def test_bootstrap_rejects_worker_register() -> None:
+    proc = subprocess.run(
+        ["bash", str(REPO_ROOT / "scripts/bootstrap_distributed_workers.sh"), "--register-worker"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "not part of database bootstrap" in proc.stderr
+
+
+def test_provision_worker_rejects_sql_register_flag() -> None:
+    proc = subprocess.run(
+        ["bash", str(REPO_ROOT / "scripts/provision_worker_node.sh"), "--register-worker"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "not allowed" in proc.stderr
+
+
+def test_bootstrap_is_privileged_host_only() -> None:
+    text = (REPO_ROOT / "scripts/bootstrap_distributed_workers.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "init_work_layout.sh" not in text
+    assert "sync_cfg_profiles_and_action_catalog.py" in text
+    assert "sync-library-presets" in text
+    assert "deploy_process_pack_catalog.sh" in text
+    assert "POSTGRES_DB:-${PGDATABASE:-epimethyl}" in text or "epimethyl" in text
+
+
+def test_provision_worker_auto_detects_join_mode() -> None:
+    text = (REPO_ROOT / "scripts/provision_worker_node.sh").read_text(encoding="utf-8")
+    assert 'JOIN_MODE="auto"' in text
+    assert "Auto-detected join-mode=" in text
+    assert "register_worker.sh" not in text
+    assert "--skip-parabricks-pull" in text
+    assert "venv-$ARCH" in text
+    assert "init_work_layout.sh" in text
+
+
+def test_register_worker_sql_is_opt_in() -> None:
+    text = (REPO_ROOT / "scripts/register_worker.py").read_text(encoding="utf-8")
+    assert "METHYL_ALLOW_WORKER_SQL" in text
+    assert "Direct-DB register is disabled on GPU workers" in text
+
+
+def test_gateway_installers_reject_work_share() -> None:
+    gw = (REPO_ROOT / "scripts/install_gateway_systemd.sh").read_text(encoding="utf-8")
+    reclaim = (REPO_ROOT / "scripts/install_reclaim_leases_timer.sh").read_text(
+        encoding="utf-8"
+    )
+    provision = (REPO_ROOT / "scripts/provision_gateway_node.sh").read_text(
+        encoding="utf-8"
+    )
+    needle = 'ROOT" == /work'
+    assert needle in gw and needle in reclaim and needle in provision
+
+
+def test_gateway_provision_has_no_work_share() -> None:
+    text = (REPO_ROOT / "scripts/provision_gateway_node.sh").read_text(encoding="utf-8")
+    assert "/opt/methyl-gateway" in text
+    assert "Does not mount or write /work" in text
+    assert "parabricks" not in text.lower()
+    unit = (REPO_ROOT / "deploy/systemd/methyl-gateway.service").read_text(encoding="utf-8")
+    assert "__EPIMETHYL_ROOT__" in unit
+    assert "/work/epimethyl" not in unit

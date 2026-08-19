@@ -6,10 +6,13 @@ usage() {
   cat <<'EOF'
 Usage: scripts/install_gateway_systemd.sh [options]
 
+Install methyl-gateway on this VM's local disk. Do not point --root at /work
+(the worker share). Default: /opt/methyl-gateway
+
 Options:
-  --root PATH           Epimethyl root (default: /work/epimethyl)
+  --root PATH           Gateway local root (default: /opt/methyl-gateway)
   --arch KEY            aarch64 or amd64 (default: detect)
-  --runtime PATH        Path to runtime-bundle (default: <root>/current/runtime-bundle)
+  --runtime PATH        Path to runtime-bundle (default: <root>/runtime-bundle or this repo)
   --no-start            Install/enable only; do not start
   -h, --help
 EOF
@@ -19,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=detect_platform.sh
 source "$SCRIPT_DIR/detect_platform.sh"
 
-ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+ROOT="${EPIMETHYL_ROOT:-/opt/methyl-gateway}"
 ARCH=""
 RUNTIME=""
 NO_START=0
@@ -35,14 +38,31 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$ROOT" == /work || "$ROOT" == /work/* ]]; then
+  echo "Gateway --root must be this VM's local disk, not the worker /work share (got $ROOT)." >&2
+  exit 1
+fi
+
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Run as root: sudo bash $0 ..." >&2
   exit 1
 fi
 
 ARCH="${ARCH:-$(platform_arch_key "$(detect_uname_arch)")}"
-VENV="$ROOT/venv-${ARCH}"
-RUNTIME="${RUNTIME:-$(readlink -f "$ROOT/current/runtime-bundle" 2>/dev/null || echo "$SCRIPT_DIR/..")}"
+if [[ -x "$ROOT/venv-${ARCH}/bin/python" ]]; then
+  VENV="$ROOT/venv-${ARCH}"
+elif [[ -x "$ROOT/venv/bin/python" ]]; then
+  VENV="$ROOT/venv"
+else
+  VENV="$ROOT/venv-${ARCH}"
+fi
+if [[ -d "$ROOT/runtime-bundle" ]]; then
+  RUNTIME="${RUNTIME:-$(readlink -f "$ROOT/runtime-bundle")}"
+elif [[ -d "$ROOT/current/runtime-bundle" ]]; then
+  RUNTIME="${RUNTIME:-$(readlink -f "$ROOT/current/runtime-bundle")}"
+else
+  RUNTIME="${RUNTIME:-$SCRIPT_DIR/..}"
+fi
 DEPLOY="$RUNTIME/deploy/systemd"
 [[ -d "$DEPLOY" ]] || DEPLOY="$SCRIPT_DIR/../deploy/systemd"
 

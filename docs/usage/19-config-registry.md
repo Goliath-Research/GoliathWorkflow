@@ -11,7 +11,7 @@ Architecture detail: [`../architecture/config-registry.md`](../architecture/conf
 ```bash
 source .venv/bin/activate
 bash scripts/bootstrap_distributed_workers.sh
-# includes: cfg import-fs → sync-actions → materialize (set SKIP_CFG=1 to skip)
+# privileged host: deploy_azure.sh + Python process-pack / catalog / workflow populate
 ```
 
 ## Day-2 operations

@@ -62,7 +62,7 @@ source .venv/bin/activate
 export BACKEND_DB=postgres
 export POSTGRES_HOST=epimethyl.postgres.database.azure.com
 export POSTGRES_PORT=5432
-export POSTGRES_DB=methylpipeline
+export POSTGRES_DB=epimethyl
 export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 # Or: export METHYLPIPELINE_DB='postgresql://...'
@@ -82,21 +82,22 @@ export SQLCMD_TRUST_SERVER_CERTIFICATE=1   # when needed
 bash scripts/bootstrap_distributed_workers.sh
 ```
 
-The bootstrap script:
+The bootstrap script (privileged host only — GPU workers must not run it):
 
-1. Deploys wf schema parity DDL (`workflow_engine/sql_pg/deploy_azure.sh` or `workflow_engine/sql_mssql/deploy_azure.sh`)
-2. Runs `methyl-export-task-schemas` + `methyl-export-action-catalog`
-3. Runs `scripts/check_task_input_config_boundary.py`
-4. Seeds `wf.workflow_action` + task JSON schemas via `workflow_engine/sql_mssql/seed_action_catalog.py`
-5. Deploys compiled SamplePrep + StudyValidation workflows via `scripts/deploy_workflow_definitions.sh` (direct DB)
+1. Deploys schema DDL (`workflow_engine/sql_pg/deploy_azure.sh` or `workflow_engine/sql_mssql/deploy_azure.sh`) — twins, see `scripts/check_sql_deploy_twins.py`
+2. Exports task schemas + action catalog
+3. Seeds `wf.workflow_action` / `wf.data_type`
+4. Syncs process packs, analytes, pipeline profiles (`sync_cfg_profiles_and_action_catalog.py`, `deploy_process_pack_catalog.sh --sync`)
+5. `methyl-cfg sync-library-presets`
+6. Deploys DomainProgram graphs (`deploy_workflow_definitions.sh`)
 
 ## Enroll remote workers
 
-**Production:** do **not** put DB credentials on GPU workers. After bootstrap and gateway TLS are up:
+**Production:** do **not** put DB credentials on GPU workers. After database bootstrap and gateway TLS are up:
 
 1. Portal-preregister each VM public IP (`portal.sp_upsert_worker_enrollment`).
 2. Arc-connect the VM ([arc_worker_runbook.md](arc_worker_runbook.md)).
-3. Enroll through the gateway:
+3. Enroll through the gateway (`provision_worker_node.sh` or):
 
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
@@ -109,15 +110,7 @@ bash scripts/install_worker_systemd.sh
 
 Full story: [production-platform.md](production-platform.md) Phase 4.
 
-**Dev/bootstrap only** (trusted host with the same DB env as the gateway):
-
-```bash
-bash scripts/bootstrap_distributed_workers.sh --register-worker --skip-schema
-# or: bash scripts/register_worker.sh --cluster epimethyl --key "$(hostname -s)" \
-#       --env-file /work/epimethyl/env/worker.env
-```
-
-Read-only health check (no DDL/seed/deploy):
+Read-only health check (catalog + SQL twin scripts, no DDL/seed):
 
 ```bash
 bash scripts/bootstrap_distributed_workers.sh --verify

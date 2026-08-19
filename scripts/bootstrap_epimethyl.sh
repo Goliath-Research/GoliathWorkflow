@@ -182,8 +182,7 @@ if [[ -n "$RELEASE_DIR" ]]; then
   info "Next steps:"
   info "  1. source $ENV_DIR/worker.env"
   info "  2. Join enroll: $SCRIPTS_DIR/provision_worker_node.sh --finish-enroll (after Arc)"
-  info "  3. Or register: $SCRIPTS_DIR/register_worker.sh"
-  info "  4. Verify node: $SCRIPTS_DIR/verify_e2e_node.sh"
+  info "  3. Verify node: $SCRIPTS_DIR/verify_e2e_node.sh"
   exit 0
 fi
 
@@ -324,5 +323,5 @@ fi
 info "Bootstrap complete."
 info "Next steps:"
 info "  1. source $ENV_DIR/worker.env"
-info "  2. Register worker: $PIPELINE_DIR/scripts/register_worker.sh"
+info "  2. Enroll worker: methyl-worker enroll --api-base \"\$WORKER_API_BASE\" --cluster epimethyl --key \"\$(hostname -s)\""
 info "  3. Verify node: $PIPELINE_DIR/scripts/verify_e2e_node.sh"

@@ -150,7 +150,8 @@ build_runtime_bundle() {
            register_worker.sh build_release.sh package_methyl_extractor.sh \
            download_methyl_extractor_artifacts.sh assemble_release.sh bootstrap_epimethyl.sh \
            install_gateway_systemd.sh install_worker_systemd.sh \
-           install_reclaim_leases_timer.sh; do
+           install_reclaim_leases_timer.sh provision_gateway_node.sh \
+           provision_worker_node.sh preflight_worker_join.sh init_work_layout.sh; do
     [[ -f "$REPO_ROOT/scripts/$s" ]] && cp -f "$REPO_ROOT/scripts/$s" "$RUNTIME_DIR/scripts/"
   done
   chmod +x "$RUNTIME_DIR/scripts/"*.sh 2>/dev/null || true

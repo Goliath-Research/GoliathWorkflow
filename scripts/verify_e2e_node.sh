@@ -4,9 +4,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=detect_platform.sh
+source "$SCRIPT_DIR/detect_platform.sh"
 
 ENV_FILE="${EPIMETHYL_ENV_FILE:-/work/epimethyl/env/worker.env}"
+EPIMETHYL_ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+ARCH="$(platform_arch_key "$(detect_uname_arch)")"
+
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -14,12 +18,15 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-if [[ -f "$REPO_ROOT/.venv/bin/activate" ]]; then
+if [[ -f "$EPIMETHYL_ROOT/venv-${ARCH}/bin/activate" ]]; then
   # shellcheck disable=SC1091
-  source "$REPO_ROOT/.venv/bin/activate"
-elif [[ -f "${EPIMETHYL_ROOT:-/work/epimethyl}/venv/bin/activate" ]]; then
+  source "$EPIMETHYL_ROOT/venv-${ARCH}/bin/activate"
+elif [[ -f "$EPIMETHYL_ROOT/venv/bin/activate" ]]; then
   # shellcheck disable=SC1091
-  source "${EPIMETHYL_ROOT:-/work/epimethyl}/venv/bin/activate"
+  source "$EPIMETHYL_ROOT/venv/bin/activate"
+elif [[ -f "$SCRIPT_DIR/../.venv/bin/activate" ]]; then
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/../.venv/bin/activate"
 fi
 
 echo "============================================="
@@ -40,19 +47,24 @@ run_check() {
   fi
 }
 
-run_check "verify_setup" bash "$REPO_ROOT/scripts/verify_setup.sh"
+VERIFY_SETUP_ARGS=()
+if [[ -d "$EPIMETHYL_ROOT/current/runtime-bundle" ]]; then
+  VERIFY_SETUP_ARGS=(--runtime-bundle)
+  export EPIMETHYL_ROOT
+fi
+run_check "verify_setup" bash "$SCRIPT_DIR/verify_setup.sh" "${VERIFY_SETUP_ARGS[@]}"
 
 # Per-VM apt tools (samtools/bedtools/fastp) — not provided by shared /work.
-run_check "verify_host_tools" bash "$REPO_ROOT/scripts/verify_host_tools.sh"
+run_check "verify_host_tools" bash "$SCRIPT_DIR/verify_host_tools.sh"
 
 if command -v nvidia-smi >/dev/null 2>&1 && [[ -n "${METHYL_PARABRICKS_IMAGE:-}" ]]; then
-  run_check "verify_parabricks" bash "$REPO_ROOT/scripts/verify_parabricks.sh"
+  run_check "verify_parabricks" bash "$SCRIPT_DIR/verify_parabricks.sh"
 else
   echo "SKIP verify_parabricks (no GPU image or nvidia-smi)"
 fi
 
 if [[ -n "${METHYL_EXTRACTOR_BIN:-}" ]] || command -v MethylExtractor >/dev/null 2>&1; then
-  run_check "verify_methyl_extractor" bash "$REPO_ROOT/scripts/verify_methyl_extractor.sh"
+  run_check "verify_methyl_extractor" bash "$SCRIPT_DIR/verify_methyl_extractor.sh"
 else
   echo "SKIP verify_methyl_extractor (MethylExtractor not configured)"
 fi
@@ -61,8 +73,10 @@ run_check "methyl-worker --help" methyl-worker --help
 
 if [[ -n "${WORKER_ID:-}" && -n "${WORKER_TOKEN:-}" && -n "${WORKER_API_BASE:-}" ]]; then
   echo "Worker credentials present in environment (WORKER_ID=$WORKER_ID)"
+elif [[ -f /etc/methyl/worker-token ]]; then
+  echo "OK  enrolled token file /etc/methyl/worker-token"
 else
-  echo "WARN worker credentials not set; run scripts/register_worker.sh"
+  echo "WARN worker not enrolled; set WORKER_API_BASE and run methyl-worker enroll (portal IP prereg required)"
 fi
 
 echo ""

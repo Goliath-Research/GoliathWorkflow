@@ -1,8 +1,10 @@
 # GPU worker node deployment
 
-Host-native workers on shared storage under `/work/epimethyl`. Docker is used **only** for Parabricks alignment.
+Host-native workers on shared storage under `/work/epimethyl`. Docker is used **only** for Parabricks alignment. The gateway does **not** mount `/work`.
 
-**Production releases** (wheels, binary tarballs, shared Docker store): see [`production_release.md`](production_release.md), [`gpu_worker_runbook.md`](gpu_worker_runbook.md), and [`worker_provision.md`](worker_provision.md).
+**Production:** privileged host applies SQL twins + Python populate; gateway installs on local disk (`provision_gateway_node.sh`); GPU VMs use [`provision_worker_node.sh`](../../scripts/provision_worker_node.sh) (`--join-mode auto`). See [`production-platform.md`](production-platform.md), [`production_release.md`](production_release.md), [`gpu_worker_runbook.md`](gpu_worker_runbook.md), and [`worker_provision.md`](worker_provision.md).
+
+Git clones below are **lab-only**. Production workers have no git checkout.
 
 ## Directory layout
 
@@ -34,7 +36,9 @@ Production release layout (no git on workers):
   data/  runs/
 ```
 
-## Bootstrap a new node (development)
+## Bootstrap a new node (lab / git clone only)
+
+Prefer [`provision_worker_node.sh`](../../scripts/provision_worker_node.sh) in production. This git-clone path is for development hosts:
 
 ```bash
 export METHYL_PIPELINE_URL=<git-url>   # optional if seeding from local checkout
@@ -164,7 +168,6 @@ Templates in [`deploy/systemd/`](../../deploy/systemd/):
 ```bash
 sudo cp deploy/systemd/methyl-worker.service /etc/systemd/system/
 sudo cp deploy/systemd/methyl-worker@.service /etc/systemd/system/
-sudo cp deploy/systemd/methyl-gateway.service /etc/systemd/system/
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now methyl-worker.service          # omnibus
@@ -187,13 +190,13 @@ ExecStart=/work/epimethyl/venv-aarch64/bin/methyl-worker --api-base ${WORKER_API
 bash scripts/verify_e2e_node.sh
 ```
 
-## Control plane (once per environment)
+## Control plane (privileged host, not the GPU)
 
-Follow [production-platform.md](production-platform.md) Phases 2–3, or:
+Follow [production-platform.md](production-platform.md) Phases 2–3:
 
-1. [`workflow_engine/sql_mssql/deploy_azure.sh`](../../workflow_engine/sql_mssql/deploy_azure.sh) (production Azure SQL) or [`sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh) (parity/CI)
-2. `bash scripts/bootstrap_distributed_workers.sh` — schema + catalog seed + workflow deploy
-3. `sudo bash scripts/install_gateway_systemd.sh` + `setup_gateway_nginx.sh` — see [`production-platform.md`](production-platform.md#phase-3-single-gateway-vm)
+1. [`workflow_engine/sql_mssql/deploy_azure.sh`](../../workflow_engine/sql_mssql/deploy_azure.sh) or [`sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh) (twins)
+2. `bash scripts/bootstrap_distributed_workers.sh --skip-schema` — Python populate
+3. `scripts/provision_gateway_node.sh` — gateway on local disk, no `/work`
 
 ## Staged lifecycle smoke
 

@@ -151,16 +151,19 @@ Production OvR at scale uses **DataDrivenPipeline** / **ValidationPipeline** wit
 
 ## Local container
 
+Canonical database name is **`epimethyl`**. CI parity uses `methylpipeline_parity` (see `.github/workflows/db-parity.yml`). Prefer `deploy_azure.sh` over the ad-hoc loop below.
+
 ```bash
-docker run -d --name methyl-pg -e POSTGRES_PASSWORD=methyl -e POSTGRES_DB=methylpipeline -p 5432:5432 postgres:17
-for f in 00_schema.sql 03_engine_core.sql 05_runtime_parity.sql 06_scope_writepath_parity.sql 07_scope_encoding_parity.sql 01_worker_api.sql 02_repository_api.sql 04_admin.sql wf_action_schema.sql wf_repo_upsert_workflow_action.sql wf_action_dispatch_metadata.sql; do
-  psql "postgresql://postgres:methyl@localhost:5432/methylpipeline" -f "workflow_engine/sql_pg/$f"
-done
+docker run -d --name methyl-pg -e POSTGRES_PASSWORD=methyl -e POSTGRES_DB=epimethyl -p 5432:5432 postgres:17
+export PGHOST=localhost PGDATABASE=epimethyl PGUSER=postgres PGPASSWORD=methyl
+./workflow_engine/sql_pg/deploy_azure.sh
 ```
 
-## REST gateway (Linux production)
+**REST gateway (Linux production)**
 
-Install from repo root:
+Use [`scripts/provision_gateway_node.sh`](../../scripts/provision_gateway_node.sh) on the gateway VM (`--root /opt/methyl-gateway`). Do not mount `/work` on that VM.
+
+Install from repo root (lab):
 
 ```bash
 source .venv/bin/activate

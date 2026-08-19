@@ -4,7 +4,7 @@ Committed examples for production `/work/epimethyl/env/`. Copy and edit on the c
 
 | Template | Target on cluster | Consumers |
 |----------|-------------------|-----------|
-| `gateway.mssql.env.example` | `/work/epimethyl/env/gateway.env` | `methyl-gateway`, `methyl-study-start`, `deploy_workflow_definitions.sh`, `bootstrap_distributed_workers.sh` |
+| `gateway.mssql.env.example` | `/opt/methyl-gateway/env/gateway.env` (gateway VM local disk) | `methyl-gateway`, privileged-host `bootstrap_distributed_workers.sh` |
 | `gateway.postgres.env.example` | same | same |
 | `worker.env.example` | `/work/epimethyl/env/worker.env` | `methyl-worker` systemd units |
 

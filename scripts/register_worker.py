@@ -100,11 +100,16 @@ def enroll_via_gateway(
     from methyl_worker.client import WorkflowRestClient
 
     client = WorkflowRestClient(api_base)
-    result = client.enroll(
-        cluster_key,
-        worker_key,
-        capabilities=list(capabilities) if capabilities is not None else None,
-    )
+    try:
+        result = client.enroll(
+            cluster_key,
+            worker_key,
+            capabilities=list(capabilities) if capabilities is not None else None,
+        )
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        print("Enroll failed closed (no SQL fallback).", file=sys.stderr)
+        return 2
     worker_id = int(result["worker_id"])
     token = str(result["worker_token"])
     print("Enrolled worker via gateway (no DB credentials on this host):")
@@ -443,7 +448,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     env_path = _resolve_token_env_file(Path(args.env_file) if args.env_file else None)
 
     api_base = _gateway_api_base()
-    if api_base and not _direct_db_configured():
+    if api_base:
         return enroll_via_gateway(
             api_base=api_base,
             worker_key=worker_key,
@@ -453,6 +458,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             env_file=env_path,
             dry_run=args.dry_run,
         )
+
+    if os.environ.get("METHYL_ALLOW_WORKER_SQL") != "1":
+        print(
+            "Direct-DB register is disabled on GPU workers. "
+            "Set WORKER_API_BASE for methyl-worker enroll, or METHYL_ALLOW_WORKER_SQL=1 for lab only.",
+            file=sys.stderr,
+        )
+        return 2
 
     return register_worker(
         worker_key=worker_key,

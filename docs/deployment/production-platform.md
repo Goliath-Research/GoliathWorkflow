@@ -128,7 +128,7 @@ Site pins (not “latest in bucket”) decide which versions workers use. Portal
 
 ## Phase 1 — Release runtime (MethylPipeline + MethylExtractor)
 
-Workers and the gateway consume a **promoted release**, not a git checkout.
+GPU workers consume a **promoted release** on `/work`, not a git checkout. The gateway installs wheels onto **its own disk** (`/opt/methyl-gateway`) and does not mount this tree.
 
 ```
 /work/epimethyl/
@@ -137,7 +137,7 @@ Workers and the gateway consume a **promoted release**, not a git checkout.
   venv-aarch64/ | venv-amd64/
   methyl-extractor-aarch64/ | methyl-extractor-amd64/
   docker/                  # shared Docker data-root (Parabricks layers)
-  env/                     # worker.env, parabricks.env, gateway.env
+  env/                     # worker.env, parabricks.env (not gateway.env)
 ```
 
 | Step | Command / pipeline |
@@ -154,44 +154,52 @@ Details: [production_release.md](production_release.md), [platform_matrix.md](pl
 
 ## Phase 2 — Database (privileged host / CI)
 
-Run from a machine that may hold DB credentials or use CI secrets — **not** from workers.
+Run from a machine that may hold DB credentials — **not** from GPU workers and **not** from the gateway install path.
+
+Schema entrypoints are twins (every new object lands in **both** trees):
 
 ```bash
-source .venv/bin/activate   # or /work/epimethyl/venv-<arch>/bin/activate
-export BACKEND_DB=mssql     # production + EpiPortal today
-# AZURE_SQL_*  — or use a jump host with access
+# Azure SQL (production portal)
+./workflow_engine/sql_mssql/deploy_azure.sh
 
-bash scripts/bootstrap_distributed_workers.sh
+# PostgreSQL schema twin (canonical DB name: epimethyl)
+export PGDATABASE=epimethyl
+./workflow_engine/sql_pg/deploy_azure.sh
 ```
 
-This deploys schema parity, seeds `wf.workflow_action` + schemas, materializes cfg (when enabled), and deploys DomainProgram graphs (`deploy_workflow_definitions.sh`).
+Then populate process packs, analytes, action catalog, enrichment presets, and DomainProgram graphs:
 
-Also deploy portal enrollment / cluster security if not already in the schema bundle:
+```bash
+source .venv/bin/activate
+export BACKEND_DB=mssql     # or postgres
+bash scripts/bootstrap_distributed_workers.sh --skip-schema
+```
 
-- `workflow_engine/sql_mssql/wf_worker_enrollment.sql`
-- `workflow_engine/sql_mssql/portal_worker_enrollment_api.sql`
-- `workflow_engine/sql_mssql/wf_cluster_security_columns.sql`
+`bootstrap_distributed_workers.sh` without `--skip-schema` runs `deploy_azure.sh` then the Python populate. It does **not** touch `/work` or register GPU workers. Gate: `python scripts/check_sql_deploy_twins.py`.
 
-(PostgreSQL: `sql_pg/` counterparts — used for parity/CI, not the portal production path.)
-
-After breaking profile/schema changes, re-sync both DBs:
+After breaking profile/schema changes:
 
 ```bash
 python scripts/sync_cfg_profiles_and_action_catalog.py --backend mssql
-# and postgres if you keep a parity DB
 ```
 
 ---
 
-## Phase 3 — Single gateway VM
+## Phase 3 — Single gateway VM (no `/work`)
+
+The gateway does **not** mount the worker share. Genomes, samples, and releases stay on `/work` for GPU workers only.
 
 ### 3.1 Environment
 
 ```bash
-# From templates
-cp deploy/env/gateway.mssql.env.example /work/epimethyl/env/gateway.env
-# Merge security flags from deploy/env/gateway.security.env.example
+# Local install root on the gateway VM (not /work)
+sudo bash scripts/provision_gateway_node.sh \
+  --root /opt/methyl-gateway \
+  --release-dir /path/to/wheels-or-release \
+  --hostname <gateway-fqdn>
 ```
+
+Or by hand: copy [`deploy/env/gateway.mssql.env.example`](../../deploy/env/gateway.mssql.env.example) + [`gateway.security.env.example`](../../deploy/env/gateway.security.env.example) to `/opt/methyl-gateway/env/gateway.env`.
 
 Production `gateway.env` essentials:
 
@@ -213,12 +221,10 @@ Do **not** set `AZURE_SQL_USER` / `AZURE_SQL_PASSWORD` when managed identity is 
 ### 3.2 systemd + TLS
 
 ```bash
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_gateway_systemd.sh \
-  --root /work/epimethyl
+sudo bash scripts/install_gateway_systemd.sh --root /opt/methyl-gateway
 
 # TLS certs → /etc/ssl/methyl-gateway/{fullchain.pem,privkey.pem}
-bash /work/epimethyl/current/runtime-bundle/scripts/setup_gateway_nginx.sh \
-  --hostname <gateway-fqdn>
+bash scripts/setup_gateway_nginx.sh --hostname <gateway-fqdn>
 ```
 
 NSG: allow **443** from VPN and known worker egress; **close** public 8080.
@@ -253,20 +259,25 @@ Release content and genomes live on **QNAP → `/work`**. Azure builds artifacts
 
 In the **EpiPortal UI**, preregister this VM’s **public IP**, `cluster_key`, and worker `key` (usually `hostname -s`). The UI persists via `portal.sp_upsert_worker_enrollment`. Enroll fails if the client IP is not preregistered.
 
-### 4.2 Prepare (local install; default join-only)
+### 4.2 First GPU vs joiners
 
-With `/work` mounted and `/work/epimethyl/current/manifest.json` present:
+`provision_worker_node.sh` defaults to `--join-mode auto`: missing `current/manifest.json` seeds shared `/work` then enrolls; a present manifest enrolls **first** then installs VM-local Docker/CTK/host tools only.
 
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
+# First GPU (no current/manifest yet) — pass the assembled release:
+sudo bash /path/to/runtime-bundle/scripts/provision_worker_node.sh \
+  --gpu --join-mode first --release-dir /work/epimethyl/releases/<ver> \
+  --enroll-worker --enable-systemd --cluster gpu-west
+
+# Later GPUs:
 bash /work/epimethyl/current/runtime-bundle/scripts/preflight_worker_join.sh \
   --gpu --require-api --require-current
-
 sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
-  --gpu --join-mode join --prepare-only --cluster gpu-west
+  --gpu --join-mode join --enroll-worker --enable-systemd --cluster gpu-west
 ```
 
-`--join-mode join` (default) never promotes a release or re-pulls Parabricks. Use `--join-mode first` only as an admin escape hatch on a promote host.
+Joiners never re-promote or re-pull Parabricks. Direct-DB `--register-worker` is rejected.
 
 ### 4.3 Arc (company account; human-gated)
 
@@ -297,7 +308,7 @@ sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.s
   --cluster gpu-west
 ```
 
-`--enroll-worker` / `--register-worker` calls the gateway (production). It does **not** put SQL passwords on the worker.
+`--enroll-worker` calls the gateway (production). It does **not** put SQL passwords on the worker. `--register-worker` is rejected.
 
 Optional one-shot when Arc is already Connected:
 
@@ -366,12 +377,13 @@ See [production_runbook.md](production_runbook.md) and [Usage ch.04](../usage/04
 | `scripts/deploy_workflow_definitions.sh` | 2 — graphs |
 | `workflow_engine/sql_mssql/seed_action_catalog.py` | 2 — catalog |
 | `scripts/sync_cfg_profiles_and_action_catalog.py` | 2 — cfg + catalog refresh |
-| `scripts/install_gateway_systemd.sh` | 3 — gateway |
+| `scripts/install_gateway_systemd.sh` | 3 — gateway unit |
+| `scripts/provision_gateway_node.sh` | 3 — local venv + unit + nginx |
 | `scripts/setup_gateway_nginx.sh` | 3 — TLS |
 | `scripts/install_arc_agent.sh` / `verify_arc_prereqs.sh` | 4 — Arc (`az` / `azcmagent`) |
 | `scripts/preflight_worker_join.sh` | 4 — QNAP join preflight |
 | `scripts/setup_host.sh` / `setup_gpu_node.sh` | 4 — host + Docker |
-| `scripts/provision_worker_node.sh` | 4 — join / prepare / finish-enroll |
+| `scripts/provision_worker_node.sh` | 4 — first seed / join enroll / prepare / finish-enroll |
 | `scripts/install_worker_systemd.sh` | 4 — systemd |
 | `scripts/verify_e2e_node.sh` / `verify_parabricks.sh` / `verify_methyl_extractor.sh` | 4 — verify |
 
@@ -396,9 +408,10 @@ These may touch SQL with credentials on a **trusted** host or CI. They are **not
 
 ## Verification checklist
 
-- [ ] `/work/epimethyl/current/manifest.json` present on gateway and workers  
-- [ ] `curl` gateway health 200; admin seed routes 404  
-- [ ] `GATEWAY_REQUIRE_ARC_ATTEST=1` on gateway  
-- [ ] Each worker: Arc **Connected**, portal IP row, `/etc/methyl/worker-token`, systemd active  
-- [ ] `verify_e2e_node.sh` passes (Parabricks + MethylExtractor + venv)  
-- [ ] Smoke: `scripts/smoke_sample_prep.sh` / `smoke_study_lifecycle.sh` (or portal study)  
+- [ ] Privileged host: `sql_mssql`/`sql_pg` twins deployed + Python populate
+- [ ] Gateway health 200 on `https://<fqdn>/v1/health` (local disk; **no** `/work` mount); admin seed routes 404
+- [ ] `GATEWAY_REQUIRE_ARC_ATTEST=1` on gateway
+- [ ] `/work/epimethyl/current/manifest.json` present on **GPU workers** (first worker seeds the share)
+- [ ] Each worker: Arc **Connected**, portal IP row, `/etc/methyl/worker-token`, systemd active
+- [ ] `verify_e2e_node.sh` passes (Parabricks + MethylExtractor + `venv-<arch>`)
+- [ ] Smoke: `scripts/smoke_sample_prep.sh` / `smoke_study_lifecycle.sh` (or portal study)

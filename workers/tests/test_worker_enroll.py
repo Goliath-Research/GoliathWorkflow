@@ -48,6 +48,27 @@ class EnrollClientTests(unittest.TestCase):
         )
         self.assertEqual(out["worker_id"], 1)
 
+    def test_enroll_403_fail_closed(self) -> None:
+        from email.message import Message
+        from io import BytesIO
+        from urllib.error import HTTPError
+
+        client = WorkflowRestClient("http://gateway/v1", arc_resource_id="")
+        err = HTTPError(
+            "http://gateway/v1/workers/enroll",
+            403,
+            "Forbidden",
+            Message(),
+            BytesIO(b'{"error":"not preregistered"}'),
+        )
+        with patch("methyl_worker.client.urlopen", side_effect=err):
+            with self.assertRaises(RuntimeError) as ctx:
+                client.enroll("lambda", "vm-1")
+        msg = str(ctx.exception)
+        self.assertIn("403", msg)
+        self.assertIn("Fail closed", msg)
+        self.assertIn("no SQL fallback", msg)
+
 
 class ApiBasePrecedenceTests(unittest.TestCase):
     def test_worker_api_base_wins_over_methyl_api_base(self) -> None:

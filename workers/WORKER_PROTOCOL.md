@@ -74,7 +74,8 @@ Log root resolution: explicit `monteCarloRunsRoot`, any path under `monte_carlo_
 2. **Production:** Portal preregisters `(cluster_key, public_ip, external_worker_key)` via
    `portal.sp_upsert_worker_enrollment`, then the VM calls
    `POST /workers/enroll` (`methyl-worker enroll --api-base … --cluster … --key …`) and stores
-   `/etc/methyl/worker-token` (mode 600). **Dev only:** `scripts/register_worker.py` with DB env.
+   `/etc/methyl/worker-token` (mode 600). HTTP 403 fails closed (IP/key not preregistered).
+   Direct-DB `scripts/register_worker.py` requires `METHYL_ALLOW_WORKER_SQL=1` (lab only).
 3. Poll `POST /workers/tasks/request` with `worker_id`, `worker_token`, optional `capability` **narrowing filter**
 4. Honor `desired_state` / `command` on the response (`DRAIN`/`STOP` → no new claims; while running, heartbeat echoes the same and may abort if catalog `control.can_stop`)
 5. Parse `input_json` from the claim response when `has_task`

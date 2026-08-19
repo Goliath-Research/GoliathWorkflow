@@ -201,7 +201,7 @@ GATEWAY_TRUSTED_PROXY_CIDRS=127.0.0.1/32
 GATEWAY_REQUIRE_ARC_ATTEST=1
 ```
 
-**Dev/bootstrap only** (`scripts/register_worker.py` with Azure SQL / Postgres env on a trusted host):
+**Dev/bootstrap only** (`METHYL_ALLOW_WORKER_SQL=1` plus `scripts/register_worker.py` on a trusted host — never a GPU worker):
 
 ```bash
 bash scripts/register_worker.sh --cluster gpu-west --key "$(hostname -s)" \
@@ -229,8 +229,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://gateway/v1/admin/catal
   -H 'Content-Type: application/json' -d '{}'
 # Expect: health 200, admin 404
 
-# Catalog seed (direct DB, not gateway):
-set -a && source /work/epimethyl/env/gateway.env && set +a
+# Catalog seed (direct DB on privileged host, not gateway HTTP):
+# source the gateway VM's local env if you are on that host, e.g. /opt/methyl-gateway/env/gateway.env
+set -a && source /opt/methyl-gateway/env/gateway.env && set +a
 python workflow_engine/sql_mssql/seed_action_catalog.py
 ```
 

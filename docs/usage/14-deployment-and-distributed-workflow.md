@@ -71,22 +71,19 @@ The portal does **not** call the gateway. Catalog and DomainProgram deploy use *
 
 Use this ordered checklist once per environment (detail: [production-platform.md](../deployment/production-platform.md)):
 
-1. [ ] Mount shared storage at `/work/epimethyl` and study trees under `/work/projects/<study>/`
-2. [ ] Promote MethylPipeline + MethylExtractor release (`promote_release.sh`, pull Parabricks once)
-3. [ ] Deploy database schema (Azure SQL for production portal; PostgreSQL for parity/CI)
-4. [ ] Run portal SQL scripts (`portal_resource_profile.sql`, `portal_workflow_api.sql`, worker enrollment + cluster security)
-5. [ ] Bootstrap: `bash scripts/bootstrap_distributed_workers.sh` (catalog seed + workflow deploy)
-6. [ ] Install gateway (`gateway.mssql.env.example` → `/work/epimethyl/env/gateway.env`, managed identity)
-7. [ ] Enable `methyl-gateway` systemd + nginx TLS; set `GATEWAY_REQUIRE_ARC_ATTEST=1`
-8. [ ] Provision GPU workers (Arc in company Azure account): [`worker_provision.md`](../deployment/worker_provision.md)
-9. [ ] Portal-preregister each worker public IP, then `methyl-worker enroll` (no SQL on workers)
-10. [ ] Smoke test: `scripts/smoke_sample_prep.sh`, `scripts/smoke_study_lifecycle.sh`
+1. [ ] Deploy database schema + Python populate on a **privileged host** (`deploy_azure.sh` twins, then `bootstrap_distributed_workers.sh`)
+2. [ ] Install the gateway on a **gateway VM local disk** (`provision_gateway_node.sh` — no `/work` mount)
+3. [ ] Enable nginx TLS; set `GATEWAY_REQUIRE_ARC_ATTEST=1`; `https://<fqdn>/v1/health` returns 200
+4. [ ] Portal-preregister each GPU public IP
+5. [ ] First GPU worker seeds shared `/work` (layout, release, extractor, one Parabricks pull), then enrolls
+6. [ ] Later GPU workers: enroll first, then VM-local Docker/CTK only (`provision_worker_node.sh`)
+7. [ ] Smoke test: `scripts/smoke_sample_prep.sh`, `scripts/smoke_study_lifecycle.sh`
 
 ## Database deploy (dual-backend)
 
 Both backends implement the same **`wf`** schema contract. Choose one primary backend per environment; CI and local dev often use PostgreSQL.
 
-### PostgreSQL (recommended for new deployments)
+### PostgreSQL (schema twin / CI; canonical DB `epimethyl`)
 
 | Step | Command / doc |
 |------|----------------|
@@ -99,7 +96,7 @@ Both backends implement the same **`wf`** schema contract. Choose one primary ba
 export BACKEND_DB=postgres
 export POSTGRES_HOST=your-server.postgres.database.azure.com
 export POSTGRES_PORT=5432
-export POSTGRES_DB=methylpipeline
+export POSTGRES_DB=epimethyl
 export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 ./workflow_engine/sql_pg/deploy_azure.sh
@@ -108,7 +105,7 @@ export POSTGRES_PASSWORD='...'
 psql -f workflow_engine/sql_pg/wf_cluster_security_columns.sql
 ```
 
-### Azure SQL (legacy / phase-1)
+### Azure SQL (production portal)
 
 | Step | Command / doc |
 |------|----------------|
@@ -163,7 +160,7 @@ Copy and edit an example env file:
 | PostgreSQL | [`deploy/env/gateway.postgres.env.example`](../../deploy/env/gateway.postgres.env.example) |
 | Azure SQL | [`deploy/env/gateway.mssql.env.example`](../../deploy/env/gateway.mssql.env.example) |
 
-Install systemd unit [`deploy/systemd/methyl-gateway.service`](../../deploy/systemd/methyl-gateway.service) and nginx config [`deploy/nginx/methyl-gateway.conf`](../../deploy/nginx/methyl-gateway.conf).
+Install systemd + nginx with [`scripts/provision_gateway_node.sh`](../../scripts/provision_gateway_node.sh) (`--root /opt/methyl-gateway`, not `/work`). Unit template: [`deploy/systemd/methyl-gateway.service`](../../deploy/systemd/methyl-gateway.service). Nginx: [`deploy/nginx/methyl-gateway.conf`](../../deploy/nginx/methyl-gateway.conf).
 
 Key variables (see `workflow_engine/rest/connection.py`):
 

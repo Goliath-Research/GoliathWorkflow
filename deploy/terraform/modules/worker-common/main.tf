@@ -86,7 +86,7 @@ locals {
           # Default: join-only prepare (Docker/CTK/host). Arc approval + finish-enroll are manual.
           # See docs/deployment/lambda_worker_join.md
           bash "$SCRIPTS/provision_worker_node.sh" \
-            --gpu --join-mode join --cluster "$CLUSTER_KEY" \
+            --gpu --join-mode auto --cluster "$CLUSTER_KEY" \
             --root "$EPIMETHYL_ROOT" \
             ${provision_flags}
     runcmd:

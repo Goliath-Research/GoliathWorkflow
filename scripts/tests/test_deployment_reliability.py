@@ -29,7 +29,9 @@ def test_systemd_units_use_placeholders() -> None:
     ):
         text = (REPO_ROOT / rel).read_text(encoding="utf-8")
         assert "__EPIMETHYL_VENV__" in text
-        assert "venv-aarch64" not in text or "__EPIMETHYL_VENV__" in text
+        if "methyl-gateway.service" in rel or "methyl-reclaim-leases.service" in rel:
+            assert "__EPIMETHYL_ROOT__" in text
+            assert "/work/epimethyl" not in text
     timer = (REPO_ROOT / "deploy/systemd/methyl-reclaim-leases.timer").read_text(
         encoding="utf-8"
     )

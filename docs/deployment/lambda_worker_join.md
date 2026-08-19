@@ -60,6 +60,8 @@ flowchart LR
 
 ## B. Per worker (including the “first” Lambda box)
 
+`--join-mode auto` (default): if `current/manifest.json` is missing, this VM seeds shared `/work` then enrolls; if present, it enrolls first then installs only VM-local Docker/CTK/host tools.
+
 ### 1. Portal preregistration
 
 In the EpiPortal UI, preregister this VM’s **public IP**, `cluster_key`, and worker `key` (usually `hostname -s`).

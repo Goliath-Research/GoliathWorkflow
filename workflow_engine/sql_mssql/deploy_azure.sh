@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Deploy MethylPipeline wf schema parity scripts to Azure SQL.
+# Deploy MethylPipeline schema parity scripts to Azure SQL.
+#
+# Twin of workflow_engine/sql_pg/deploy_azure.sh — every new table/proc/seed SQL
+# that exists in both trees must be listed in both SCRIPTS arrays (see
+# scripts/check_sql_deploy_twins.py).
 #
 # Prerequisites:
 #   - sqlcmd (SQL Server command-line tools)
@@ -83,6 +87,7 @@ SCRIPTS=(
   wf_json_native_params.sql
   wf_workflow_edge_index_fixup.sql
   wf_worker_api_contract.sql
+  wf_reclaim_expired_leases.sql
   wf_cluster_security_columns.sql
   wf_worker_enrollment.sql
   wf_worker_capability_dispatch.sql
@@ -159,4 +164,4 @@ if [[ -x "$PYTHON_BIN" ]]; then
 fi
 
 echo "Deployed wf parity objects on $SERVER/$DATABASE"
-echo "Next: source .venv/bin/activate && bash scripts/bootstrap_distributed_workers.sh --skip-schema"
+echo "Next (privileged host): source .venv/bin/activate && bash scripts/bootstrap_distributed_workers.sh --skip-schema"

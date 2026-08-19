@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Bootstrap distributed remote worker testing (PostgreSQL or Azure SQL).
+# Privileged-host database bootstrap: schema (optional) + Python entity populate.
 #
-# End-to-end: deploy wf schema (optional) → export action catalog → seed DB →
-# deploy DomainProgram workflows → optionally register a worker.
+# GPU workers must not run this script. It applies dual-dialect DDL via
+# workflow_engine/sql_{mssql,pg}/deploy_azure.sh, then seeds process packs,
+# analytes, the action catalog, enrichment presets, and DomainProgram graphs.
 #
 # Usage:
-#   # PostgreSQL
+#   # PostgreSQL (canonical DB name: epimethyl)
 #   export BACKEND_DB=postgres
-#   export PGHOST=... PGDATABASE=postgres PGUSER=dba PGPASSWORD='...' PGSSLMODE=require
+#   export PGHOST=... PGDATABASE=epimethyl PGUSER=dba PGPASSWORD='...' PGSSLMODE=require
 #   bash scripts/bootstrap_distributed_workers.sh
 #
 #   # Azure SQL
@@ -19,14 +20,11 @@
 #
 # Options:
 #   --skip-schema          Skip DDL deploy (schema already applied)
-#   --skip-seed            Skip action catalog + JSON schema seed
+#   --skip-seed            Skip Python entity populate
 #   --skip-workflows       Skip deploy_workflow_definitions.sh
 #   --schema-only          Deploy DDL only
-#   --register-worker      Register wf.cluster/worker after seed (direct DB)
-#   --worker-key NAME      external_worker_key (default: hostname)
-#   --cluster KEY          cluster_key (default: epimethyl)
 #   --with-cluster-security  Azure SQL/PG: apply cluster IP-binding columns
-#   --verify               Read-only health check (schema artifacts, catalog drift, optional gateway ping)
+#   --verify               Read-only catalog/schema-script check (no DDL/seed)
 #   -h, --help
 
 set -euo pipefail
@@ -34,20 +32,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-API_BASE="${WORKER_API_BASE:-http://localhost:8080/v1}"
 SKIP_SCHEMA=0
 SKIP_SEED=0
 SKIP_WORKFLOWS=0
 SCHEMA_ONLY=0
-REGISTER_WORKER=0
 WITH_CLUSTER_SECURITY=0
 VERIFY_ONLY=0
-WORKER_KEY="${WORKER_KEY:-$(hostname -s 2>/dev/null || echo worker-1)}"
-CLUSTER_KEY="${CLUSTER_KEY:-epimethyl}"
-WORKER_ENV_FILE="${WORKER_ENV_FILE:-/work/epimethyl/env/worker.env}"
 
 usage() {
-  sed -n '2,34p' "$0"
+  sed -n '2,32p' "$0"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -56,17 +49,17 @@ while [[ $# -gt 0 ]]; do
     --skip-seed) SKIP_SEED=1; shift ;;
     --skip-workflows) SKIP_WORKFLOWS=1; shift ;;
     --schema-only) SCHEMA_ONLY=1; SKIP_SEED=1; SKIP_WORKFLOWS=1; shift ;;
-    --register-worker) REGISTER_WORKER=1; shift ;;
-    --worker-key) WORKER_KEY="${2:-}"; shift 2 ;;
-    --cluster) CLUSTER_KEY="${2:-}"; shift 2 ;;
-    --api-base) API_BASE="${2:-}"; shift 2 ;;
+    --register-worker|--worker-key|--cluster|--worker-env|--api-base)
+      echo "Worker register/enroll is not part of database bootstrap." >&2
+      echo "Use methyl-worker enroll on GPU VMs after the gateway is up." >&2
+      exit 2
+      ;;
     --use-gateway-only)
       echo "Note: --use-gateway-only removed; catalog seed/deploy use direct DB" >&2
       shift
       ;;
     --with-cluster-security) WITH_CLUSTER_SECURITY=1; shift ;;
     --verify) VERIFY_ONLY=1; SKIP_SCHEMA=1; SKIP_SEED=1; SKIP_WORKFLOWS=1; shift ;;
-    --worker-env) WORKER_ENV_FILE="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
   esac
@@ -76,7 +69,7 @@ PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
 [[ -x "$PYTHON_BIN" ]] || PYTHON_BIN=python3
 
 if [[ "$VERIFY_ONLY" -eq 1 ]]; then
-  echo "==> Bootstrap verify (read-only) ..."
+  echo "==> Database bootstrap verify (read-only) ..."
   fail=0
   cd "$REPO_ROOT"
   # shellcheck disable=SC1091
@@ -85,21 +78,11 @@ if [[ "$VERIFY_ONLY" -eq 1 ]]; then
   fi
   if ! methyl-export-action-catalog --check; then fail=1; fi
   if ! methyl-export-domain-schemas --check; then fail=1; fi
+  if ! "$PYTHON_BIN" "$SCRIPT_DIR/check_sql_deploy_twins.py"; then fail=1; fi
   if [[ -f "$REPO_ROOT/schemas/actions/catalog.json" ]]; then
     n="$(python3 -c 'import json; print(len(json.load(open("schemas/actions/catalog.json"))["actions"]))' 2>/dev/null || echo 0)"
     echo "Catalog actions on disk: $n"
   fi
-  if [[ -f /work/epimethyl/env/workflow_versions.json ]]; then
-    echo "OK: workflow_versions.json present"
-  else
-    echo "WARN: /work/epimethyl/env/workflow_versions.json missing (run deploy_workflow_definitions.sh)"
-  fi
-  if curl -fsS -o /dev/null "${API_BASE%/}/health" 2>/dev/null || curl -fsS -o /dev/null "$API_BASE" 2>/dev/null; then
-    echo "OK: gateway reachable at $API_BASE"
-  else
-    echo "WARN: gateway not reachable at $API_BASE (start methyl-gateway for live check)"
-  fi
-  bash "$SCRIPT_DIR/verify_work_layout.sh" || fail=1
   if [[ $fail -ne 0 ]]; then
     echo "Bootstrap verify failed." >&2
     exit 1
@@ -113,9 +96,13 @@ source "$REPO_ROOT/.venv/bin/activate"
 
 BACKEND="${BACKEND_DB:-postgres}"
 if [[ "$BACKEND" == "sql" ]]; then BACKEND=mssql; fi
+if [[ "$BACKEND" == "postgres" ]]; then
+  export POSTGRES_DB="${POSTGRES_DB:-${PGDATABASE:-epimethyl}}"
+  export PGDATABASE="${PGDATABASE:-$POSTGRES_DB}"
+fi
 
 if [[ "$SKIP_SCHEMA" -eq 0 ]]; then
-  echo "==> Deploying wf schema (${BACKEND}) ..."
+  echo "==> Deploying schema (${BACKEND}) ..."
   if [[ "$BACKEND" == "mssql" ]]; then
     DEPLOY_ARGS=()
     [[ "$WITH_CLUSTER_SECURITY" -eq 1 ]] && DEPLOY_ARGS+=(--with-cluster-security)
@@ -140,34 +127,24 @@ if [[ "$SKIP_SEED" -eq 0 ]]; then
   methyl-export-action-catalog
   python scripts/check_task_input_config_boundary.py
 
-  echo "==> Seeding wf.workflow_action + task JSON schemas (direct DB) ..."
+  echo "==> Seeding wf.workflow_action + wf.data_type ..."
   "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql_mssql/seed_action_catalog.py" --regenerate-catalog --use-db
-fi
 
-# Shared /work roots + access modes (samples writable; genomes/epimethyl readable)
-WORK_ROOT="${METHYL_WORK_ROOT:-${WORK_ROOT:-/work}}"
-if [[ -d "$WORK_ROOT" && -x "$SCRIPT_DIR/init_work_layout.sh" ]]; then
-  echo "==> Initializing /work layout under $WORK_ROOT ..."
-  bash "$SCRIPT_DIR/init_work_layout.sh" --work "$WORK_ROOT" \
-    || echo "WARN: init_work_layout.sh failed (non-fatal)"
-fi
+  echo "==> Syncing cfg process packs / analytes / profiles ..."
+  SYNC_BACKEND="$BACKEND"
+  [[ "$SYNC_BACKEND" == "mssql" ]] || SYNC_BACKEND=postgres
+  "$PYTHON_BIN" "$REPO_ROOT/scripts/sync_cfg_profiles_and_action_catalog.py" \
+    --backend "$SYNC_BACKEND" --skip-seed
 
-# Configuration registry: import FS → cfg store → materialize onto /work (never secrets)
-SKIP_CFG="${SKIP_CFG:-0}"
-if [[ "$SKIP_CFG" -eq 0 ]]; then
-  echo "==> Importing profiles/programs into cfg store and materializing onto /work ..."
-  CFG_STORE="${METHYL_CFG_STORE:-/work/epimethyl/cfg-store}"
+  echo "==> Process-pack catalog SQL + row sync ..."
+  bash "$SCRIPT_DIR/deploy_process_pack_catalog.sh" --backend "$SYNC_BACKEND" --sync
+
+  echo "==> Enrichment library presets ..."
   export PYTHONPATH="${REPO_ROOT}/workflow_engine:${PYTHONPATH:-}"
-  "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" import-fs \
-    --repo-root "$REPO_ROOT" \
-    --work-root "$WORK_ROOT" || echo "WARN: methyl-cfg import-fs failed (non-fatal)"
-  "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" link-site-assets \
-    --site default --deploy-db \
-    || echo "WARN: methyl-cfg link-site-assets failed (non-fatal; cfg.site_reference_asset stays empty)"
-  "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" sync-actions \
-    --repo-root "$REPO_ROOT" --from-json || echo "WARN: methyl-cfg sync-actions failed (non-fatal)"
-  "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" materialize \
-    --work-root "$WORK_ROOT" || echo "WARN: methyl-cfg materialize failed (non-fatal)"
+  CFG_STORE="${METHYL_CFG_STORE:-$REPO_ROOT/.cfg-store}"
+  mkdir -p "$CFG_STORE"
+  "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" sync-library-presets \
+    --repo-root "$REPO_ROOT"
 fi
 
 if [[ "$SKIP_WORKFLOWS" -eq 0 ]]; then
@@ -175,23 +152,14 @@ if [[ "$SKIP_WORKFLOWS" -eq 0 ]]; then
   bash "$SCRIPT_DIR/deploy_workflow_definitions.sh"
 fi
 
-if [[ "$REGISTER_WORKER" -eq 1 ]]; then
-  echo "==> Registering worker cluster=${CLUSTER_KEY} key=${WORKER_KEY} ..."
-  bash "$SCRIPT_DIR/register_worker.sh" \
-    --cluster "$CLUSTER_KEY" \
-    --key "$WORKER_KEY" \
-    --env-file "$WORKER_ENV_FILE"
-fi
-
 cat <<EOF
 
-Bootstrap complete.
+Database bootstrap complete (privileged host).
 
 Next:
-  # Start worker-only gateway (optional for claim/submit)
-  methyl-gateway
-
-  # Register a worker if not done above
-  bash scripts/register_worker.sh --cluster ${CLUSTER_KEY} --key ${WORKER_KEY}
+  1. Deploy the gateway VM (scripts/provision_gateway_node.sh) — no /work required
+  2. Portal-preregister each GPU public IP
+  3. First GPU worker: scripts/provision_worker_node.sh (seeds /work, then enrolls)
+  4. Later GPUs: same script (enroll first, VM-local only)
 
 EOF

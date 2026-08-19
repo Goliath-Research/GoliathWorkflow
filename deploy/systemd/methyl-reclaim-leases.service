@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/work/epimethyl/current
-EnvironmentFile=-/work/epimethyl/env/gateway.env
+WorkingDirectory=__EPIMETHYL_ROOT__
+EnvironmentFile=-__EPIMETHYL_ROOT__/env/gateway.env
 Environment=PATH=__EPIMETHYL_VENV__/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # Grace matches wf.sp_reclaim_expired_leases default; healthy heartbeats keep leases fresh.
 ExecStart=__EPIMETHYL_VENV__/bin/methyl-reclaim-leases --grace-seconds 60
