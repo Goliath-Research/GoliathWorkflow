@@ -27,6 +27,9 @@ todos:
   - id: tests-docs-plan
     content: Pytest + SQL contract + SamplePrepFlow.md; promote plan to docs/plans under AB#413
     status: completed
+  - id: archive-reject-reason
+    content: "Missing rejectReason on full archive binds as JSON null (SQL + compiler); QC-fail archives keep literal reason"
+    status: completed
   - id: resume-66
     content: "After deploy: RUNNING, release PENDING holds, requeue recoverables; leave download 2370 failed"
     status: completed
@@ -126,6 +129,8 @@ Tests: chmod-denied path retries; post-align share is invoked.
 - Optional belt: template substitution treats missing `sampleDestination`/`h5Destination` as JSON `null` instead of fail ([`wf_sql_foreach_support.sql`](workflow_engine/sql_mssql/wf_sql_foreach_support.sql) ~629–635) — needed so **already-planned** instance 66 archives can activate after requeue without rewriting every sample object.
 
 Tests: planner emits null; archive handler skip; SQL/PG missing-var → null for those two names (or inherit parent scope).
+
+**Follow-on (`rejectReason`):** full-archive `with` only set `mode: "full"`. Catalog still stamps `${var.rejectReason}`; nothing on the pass path writes that scope var, so bind dies with engine 10001 (instance 66 NE 4400). Treat missing `rejectReason` as JSON `null` in SQL (same belt as dest), compile unset `rejectReason` to null, and set `"rejectReason": null` on full-archive `with` blocks. QC-fail archives keep the literal reason.
 
 ## 6. Extract success ⇒ manifest on disk
 

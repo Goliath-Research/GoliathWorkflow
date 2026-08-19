@@ -123,7 +123,8 @@
                   "action": "sample.archive_sample",
                   "node_key": "archive_sample",
                   "with": {
-                    "mode": "full"
+                    "mode": "full",
+                    "rejectReason": null
                   }
                 },
                 {

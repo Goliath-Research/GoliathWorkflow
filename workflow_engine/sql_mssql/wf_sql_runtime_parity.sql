@@ -139,7 +139,7 @@ BEGIN
         END
 
         SET @vv = wf.wf_get_scope_variable_json(@workflow_instance_id, @node_execution_id, @var_name);
-        IF @vv IS NULL AND @var_name IN (N'sampleDestination', N'h5Destination')
+        IF @vv IS NULL AND @var_name IN (N'sampleDestination', N'h5Destination', N'rejectReason')
         BEGIN
             SET @out_fragment = N'null';
             RETURN;

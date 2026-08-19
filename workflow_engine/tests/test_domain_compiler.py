@@ -187,6 +187,20 @@ def test_parallel_block_edges_use_parallel_branch():
     assert all(e.branch_kind == "PARALLEL" for e in child_edges)
 
 
+def test_sample_prep_full_archive_binds_reject_reason_null():
+    result = compile_domain_program(_load("sample_prep.program.json"))
+    by_key = {n.node_key: n for n in result.workflow.nodes}
+    full = by_key["archive_sample"].input_template
+    assert full["mode"] == "full"
+    assert full["rejectReason"] is None
+    retry = by_key["archive_sample_retry"].input_template
+    assert retry["mode"] == "full"
+    assert retry["rejectReason"] is None
+    qc_only = by_key["archive_sample_qc_only"].input_template
+    assert qc_only["mode"] == "qc_only"
+    assert qc_only["rejectReason"] == "extraction_qc_failed"
+
+
 def test_sample_prep_still_compiles():
     result = compile_domain_program(_load("sample_prep.program.json"))
     wf = result.workflow

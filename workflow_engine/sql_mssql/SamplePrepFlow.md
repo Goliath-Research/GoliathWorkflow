@@ -45,7 +45,7 @@ The claim SP then:
 iteration is terminal (drain-then-fail). Siblings stay `READY`/`RUNNING`. After the last
 sample finishes, a remaining child `FAILED` marks the instance `FAILED`.
 
-**Archive:** `${var.sampleDestination}` always resolves (JSON `null` when no archive profile).
+**Archive:** `${var.sampleDestination}` always resolves (JSON `null` when no archive profile). Full-archive `rejectReason` is JSON `null` (QC-fail archives set a literal reason).
 The handler skips upload when destination is null. Do not omit the key from `samples[]`.
 
 ## Architecture

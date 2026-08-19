@@ -146,6 +146,11 @@ class ForeachContinuationSqlTests(unittest.TestCase):
                 f"{path.name} must treat missing sampleDestination as JSON null",
             )
             self.assertIn("h5Destination", text, path.name)
+            self.assertIn(
+                "rejectReason",
+                text,
+                f"{path.name} must treat missing rejectReason as JSON null",
+            )
 
 
 if __name__ == "__main__":

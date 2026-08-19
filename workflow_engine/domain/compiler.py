@@ -260,6 +260,12 @@ def _apply_catalog_template_rules(
             template[rule.field] = f"${{var.{rule.scope_var}}}"
 
 
+# Catalog context_vars that are optional on the success path. Missing `with`
+# must compile to JSON null, not `${var.X}` (SQL bind fails closed on missing
+# scope vars). QC-fail archives set rejectReason in `with` and override this.
+_OPTIONAL_NULL_CONTEXT_VARS = frozenset({"rejectReason"})
+
+
 def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     tool = entry.tool or entry.action_name
     template: Dict[str, Any] = {"tool": tool}
@@ -274,6 +280,10 @@ def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     params = step.with_ or step.in_ or {}
     for key, val in params.items():
         template[key] = _placeholder_for_value(val)
+
+    for key in _OPTIONAL_NULL_CONTEXT_VARS:
+        if template.get(key) == f"${{var.{key}}}":
+            template[key] = None
 
     _apply_catalog_template_rules(template, entry, params)
     return template

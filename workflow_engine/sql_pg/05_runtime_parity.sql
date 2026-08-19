@@ -116,7 +116,7 @@ BEGIN
       RETURN;
     END IF;
     v_v := wf.wf_get_scope_variable_json(p_workflow_instance_id, p_node_execution_id, v_var_name);
-    IF v_v IS NULL AND v_var_name IN ('sampleDestination', 'h5Destination') THEN
+    IF v_v IS NULL AND v_var_name IN ('sampleDestination', 'h5Destination', 'rejectReason') THEN
       p_out_fragment := 'null';
       RETURN;
     END IF;

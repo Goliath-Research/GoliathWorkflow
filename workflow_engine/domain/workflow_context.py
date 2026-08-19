@@ -323,6 +323,8 @@ def action_input_spec_for(action_name: str) -> Optional[ActionInputSpec]:
         # Bound when present; methyl_qc fails closed at runtime if artifacts are ambiguous.
         "alignmentMode",
         "primaryAnalyte",
+        # Full-archive SamplePrep has no reject reason; QC-fail nodes set it in `with`.
+        "rejectReason",
     }
     required = ["tool"]
     if entry.action_config_key:
