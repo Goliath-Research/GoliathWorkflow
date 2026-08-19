@@ -33,6 +33,22 @@ def _resolve_trim_values(input_json: Optional[Mapping[str, Any]]) -> Dict[str, i
     }
 
 
+def _staging_fastq_path(final: Path) -> Path:
+    """Sibling temp path that keeps the FASTQ/gzip suffix fastp keys off of.
+
+    ``name + ".tmp"`` would yield ``*.fastq.gz.tmp``. fastp gzip-compresses
+    only when the output name ends with ``.gz``, so that staging name writes
+    plain FASTQ that Align later opens as gzip.
+    """
+    name = final.name
+    lower = name.lower()
+    for suffix in (".fastq.gz", ".fq.gz", ".fastq", ".fq"):
+        if lower.endswith(suffix):
+            stem = name[: -len(suffix)]
+            return final.with_name(stem + ".tmp" + name[len(stem) :])
+    return final.with_name(name + ".tmp.gz")
+
+
 def run_fastp_trim(
     *,
     sample_id: str,
@@ -76,8 +92,8 @@ def run_fastp_trim(
     if fastp is None:
         raise RuntimeError("fastp not found on PATH; install via apt or conda")
 
-    r1_tmp = r1_out.with_name(r1_out.name + ".tmp")
-    r2_tmp = r2_out.with_name(r2_out.name + ".tmp")
+    r1_tmp = _staging_fastq_path(r1_out)
+    r2_tmp = _staging_fastq_path(r2_out)
     for tmp in (r1_tmp, r2_tmp):
         if tmp.exists():
             tmp.unlink()

@@ -7,7 +7,16 @@ from unittest.mock import patch
 
 import pytest
 
-from methyl_worker.fastq_trim_runner import run_fastp_trim
+from methyl_worker.fastq_trim_runner import _staging_fastq_path, run_fastp_trim
+
+
+def test_staging_fastq_path_keeps_gzip_suffix() -> None:
+    final = Path("/work/samples/S1/S1_1.trimmed.fastq.gz")
+    staging = _staging_fastq_path(final)
+    assert staging.name == "S1_1.trimmed.tmp.fastq.gz"
+    assert staging.name.endswith(".gz")
+    assert staging.parent == final.parent
+    assert staging != final
 
 
 def test_trim_discovers_noncanonical_paired_fastqs(tmp_path: Path) -> None:
@@ -86,9 +95,11 @@ def test_trim_retry_does_not_feed_trimmed_outputs_into_fastp(tmp_path: Path) -> 
 
     assert seen["r1_in"] == "S_retry_1.fastq.gz"
     assert seen["r2_in"] == "S_retry_2.fastq.gz"
-    assert seen["r1_out"].endswith(".tmp")
+    assert seen["r1_out"] == "S_retry_1.trimmed.tmp.fastq.gz"
+    assert seen["r2_out"].endswith(".gz")
     assert Path(out["trimmedR1"]).read_bytes() == b"fresh-trim-r1"
     assert Path(out["trimmedR2"]).read_bytes() == b"fresh-trim-r2"
+    assert not (sample_dir / "S_retry_1.trimmed.tmp.fastq.gz").exists()
     assert not (sample_dir / "S_retry_1.trimmed.fastq.gz.tmp").exists()
 
 
