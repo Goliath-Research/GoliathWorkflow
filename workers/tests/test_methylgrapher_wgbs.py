@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,8 @@ from methyl_worker.task_models.sample_prep_models import (
     MethylGrapherWgbsExtractTaskInput,
     MethylGrapherWgbsStepConfig,
 )
+
+_HAS_SAMTOOLS = shutil.which("samtools") is not None
 
 
 def _touch_bundle(root: Path) -> dict:
@@ -448,6 +451,7 @@ def test_run_binary_stdout_redirect(tmp_path: Path) -> None:
     assert out.read_bytes() == payload
 
 
+@pytest.mark.skipif(not _HAS_SAMTOOLS, reason="samtools not on PATH")
 def test_restore_sequences_streaming_not_dict_load(tmp_path: Path) -> None:
     """Restore must merge-join with matching lex collation (incl. numeric names)."""
     import pysam
@@ -837,6 +841,7 @@ def test_catalog_registers_methylgrapher_actions() -> None:
     )
 
 
+@pytest.mark.skipif(not _HAS_SAMTOOLS, reason="samtools not on PATH")
 def test_ensure_qc_bam_read_group_stamps_lb_like_linear_giraffe(tmp_path: Path) -> None:
     """Clara collectmultiplemetrics needs @RG LB=library (same as pbrun giraffe)."""
     import subprocess
