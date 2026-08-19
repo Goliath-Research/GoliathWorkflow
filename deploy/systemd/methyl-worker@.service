@@ -12,6 +12,8 @@ EnvironmentFile=-/work/epimethyl/env/proteomics.env
 EnvironmentFile=-/etc/methyl/worker-token
 Environment=WORKER_CAPABILITY=%i
 Environment=PATH=__EPIMETHYL_VENV__/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStartPre=/bin/mkdir -p /var/tmp/methyl-samtools
+ExecStartPre=/bin/chmod 1777 /var/tmp/methyl-samtools
 ExecStart=__EPIMETHYL_VENV__/bin/methyl-worker --api-base ${WORKER_API_BASE}
 Restart=on-failure
 RestartSec=10

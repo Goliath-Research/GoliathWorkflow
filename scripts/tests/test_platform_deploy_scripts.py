@@ -69,6 +69,14 @@ def test_provision_worker_auto_detects_join_mode() -> None:
     assert "--skip-parabricks-pull" in text
     assert "venv-$ARCH" in text
     assert "init_work_layout.sh" in text
+    assert "live_api_base" in text
+    join_idx = text.rfind('if [[ "$JOIN_MODE" == "join" ]]; then')
+    assert join_idx > 0
+    join_body = text[join_idx : text.find("else", join_idx)]
+    assert join_body.find("do_host_and_docker") < join_body.find("do_enroll")
+    layout_idx = text.find("=== Shared /work layout (first worker) ===")
+    preflight_idx = text.find("=== Preflight ===")
+    assert 0 < layout_idx < preflight_idx
 
 
 def test_register_worker_sql_is_opt_in() -> None:
@@ -97,3 +105,46 @@ def test_gateway_provision_has_no_work_share() -> None:
     unit = (REPO_ROOT / "deploy/systemd/methyl-gateway.service").read_text(encoding="utf-8")
     assert "__EPIMETHYL_ROOT__" in unit
     assert "/work/epimethyl" not in unit
+
+
+def test_write_worker_env_omits_placeholder_api_base() -> None:
+    text = (REPO_ROOT / "scripts/write_worker_env.sh").read_text(encoding="utf-8")
+    assert "gateway.example.com" not in text
+    assert 'WORKER_API_BASE="${WORKER_API_BASE:-}"' in text
+
+
+def test_worker_units_create_samtools_tmpdir() -> None:
+    for rel in (
+        "deploy/systemd/methyl-worker.service",
+        "deploy/systemd/methyl-worker@.service",
+    ):
+        text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        assert "ExecStartPre=/bin/mkdir -p /var/tmp/methyl-samtools" in text
+    setup = (REPO_ROOT / "scripts/setup_host.sh").read_text(encoding="utf-8")
+    assert "/var/tmp/methyl-samtools" in setup
+
+
+def test_preflight_allows_missing_samples_when_current_optional(
+    tmp_path: Path,
+) -> None:
+    work = tmp_path / "work"
+    root = work / "epimethyl"
+    root.mkdir(parents=True)
+    proc = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/preflight_worker_join.sh"),
+            "--work",
+            str(work),
+            "--root",
+            str(root),
+            "--allow-missing-current",
+            "--skip-writable-probe",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "Samples root missing" in proc.stdout or "Samples root missing" in proc.stderr

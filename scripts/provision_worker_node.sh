@@ -10,7 +10,7 @@ Usage: scripts/provision_worker_node.sh [options]
 Join modes:
   --join-mode auto      Default. Missing /work/epimethyl/current/manifest.json → first;
                         present → join.
-  --join-mode join      Enroll first, then VM-local only (never promote / Parabricks pull).
+  --join-mode join      VM-local host/Docker (skip Parabricks pull), then enroll.
   --join-mode first     Seed shared /work (layout, release, extractor, one Parabricks pull),
                         then enroll, then systemd.
 
@@ -154,8 +154,11 @@ resolve_venv_python() {
 
 do_enroll() {
   echo "=== Enroll worker (gateway) ==="
-  local api_base="${WORKER_API_BASE:-${METHYL_API_BASE:-}}"
-  [[ -n "$api_base" ]] || die "WORKER_API_BASE (or METHYL_API_BASE) is required — no SQL register on GPU VMs"
+  # Capture before sourcing shared worker.env — write_worker_env.sh may have
+  # omitted WORKER_API_BASE or left a seed-time value that must not override
+  # the live export on this VM.
+  local live_api_base="${WORKER_API_BASE:-${METHYL_API_BASE:-}}"
+  [[ -n "$live_api_base" ]] || die "WORKER_API_BASE (or METHYL_API_BASE) is required — no SQL register on GPU VMs"
   local venv_py=""
   venv_py="$(resolve_venv_python)" || die "Worker venv python not found under $ROOT/venv-$ARCH (seed /work first)"
   local worker_key
@@ -167,12 +170,13 @@ do_enroll() {
   # shellcheck disable=SC1091
   source "$ROOT/env/parabricks.env" 2>/dev/null || true
   set +a
-  api_base="${WORKER_API_BASE:-${METHYL_API_BASE:-$api_base}}"
-  local enroll_args=(enroll --api-base "$api_base" --cluster "$CLUSTER" --key "$worker_key")
+  export WORKER_API_BASE="$live_api_base"
+  local enroll_args=(enroll --api-base "$live_api_base" --cluster "$CLUSTER" --key "$worker_key")
   if [[ -n "$CAPABILITY" ]]; then
     enroll_args+=(--capabilities-json "[\"$CAPABILITY\"]")
   fi
   run env PYTHONPATH="${REPO_ROOT}/workers${PYTHONPATH:+:$PYTHONPATH}" \
+    WORKER_API_BASE="$live_api_base" \
     "$venv_py" -m methyl_worker "${enroll_args[@]}"
 }
 
@@ -209,18 +213,23 @@ do_host_and_docker() {
   run bash "$SCRIPTS/bootstrap_epimethyl.sh" "${boot_args[@]}"
 }
 
-do_shared_seed() {
-  echo "=== Seed shared /work (first worker) ==="
+ensure_work_layout() {
   local work_root
   work_root="$(dirname "$ROOT")"
   if [[ -x "$SCRIPTS/init_work_layout.sh" ]]; then
     run bash "$SCRIPTS/init_work_layout.sh" --work "$work_root"
   fi
+}
+
+do_shared_seed() {
+  echo "=== Seed shared /work (first worker) ==="
+  local work_root
+  work_root="$(dirname "$ROOT")"
+  ensure_work_layout
   [[ -d "$RELEASE_DIR" ]] || die "Release directory not found: $RELEASE_DIR (assemble/promote artifacts onto /work first)"
   do_host_and_docker 0
-  local work_root_check="$work_root"
-  if [[ ! -d "$work_root_check/genomes" || ! -d "$work_root_check/site" ]]; then
-    echo "NOTE: $work_root_check/genomes or $work_root_check/site missing after layout seed."
+  if [[ ! -d "$work_root/genomes" || ! -d "$work_root/site" ]]; then
+    echo "NOTE: $work_root/genomes or $work_root/site missing after layout seed."
     echo "      Download references onto the share (methyl-cfg provision-assets / scripts/provision_selected_genomes.sh)."
   fi
 }
@@ -236,6 +245,11 @@ if [[ "$FINISH_ENROLL" -eq 1 ]]; then
   do_systemd
   echo "Finish-enroll complete."
   exit 0
+fi
+
+if [[ "$JOIN_MODE" == "first" ]]; then
+  echo "=== Shared /work layout (first worker) ==="
+  ensure_work_layout
 fi
 
 if [[ "$SKIP_PREFLIGHT" -eq 0 ]]; then
@@ -267,11 +281,13 @@ if [[ "$PREPARE_ONLY" -eq 0 && "$REQUIRE_ARC" -eq 1 ]]; then
 fi
 
 if [[ "$JOIN_MODE" == "join" ]]; then
+  # Host tools (samtools/bedtools/docker) must exist before enroll probes
+  # resolve_worker_capabilities; the gateway persists that set.
+  do_host_and_docker 1
   if [[ "$PREPARE_ONLY" -eq 0 ]]; then
     REGISTER=1
     do_enroll
   fi
-  do_host_and_docker 1
 else
   do_shared_seed
   if [[ "$PREPARE_ONLY" -eq 0 ]]; then

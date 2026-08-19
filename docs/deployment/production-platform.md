@@ -261,7 +261,7 @@ In the **EpiPortal UI**, preregister this VM’s **public IP**, `cluster_key`, a
 
 ### 4.2 First GPU vs joiners
 
-`provision_worker_node.sh` defaults to `--join-mode auto`: missing `current/manifest.json` seeds shared `/work` then enrolls; a present manifest enrolls **first** then installs VM-local Docker/CTK/host tools only.
+`provision_worker_node.sh` defaults to `--join-mode auto`: missing `current/manifest.json` seeds shared `/work` then enrolls; a present manifest installs VM-local Docker/CTK/host tools (skip Parabricks pull) **then** enrolls so capability probe sees `samtools`/`bedtools`/`docker`.
 
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1

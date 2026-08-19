@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -289,5 +290,51 @@ def test_write_worker_env_from_manifest(tmp_path: Path) -> None:
     worker_env = (root / "env/worker.env").read_text(encoding="utf-8")
     assert "EPIMETHYL_RELEASE=2026.6.1" in worker_env
     assert "WORKER_API_BASE=http://test/v1" in worker_env
+    assert "TMPDIR=/var/tmp/methyl-samtools" in worker_env
     assert "METHYL_PARABRICKS_IMAGE=nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1" in worker_env
     assert str(root / "venv-aarch64/bin") in worker_env
+
+
+def test_write_worker_env_omits_api_base_when_unset(tmp_path: Path) -> None:
+    root = tmp_path / "epimethyl"
+    release = root / "releases" / "2026.6.1"
+    release.mkdir(parents=True)
+    manifest = {
+        "version": "2026.6.1",
+        "python": "3.12",
+        "parabricks_image": "",
+        "docker_data_root": "/work/epimethyl/docker",
+        "requirements_lock": "requirements-worker.lock",
+        "artifacts": {
+            "aarch64": {"methyl_extractor": "x.tar.gz", "sha256": ""},
+            "amd64": {"methyl_extractor": "x.tar.gz", "sha256": ""},
+        },
+    }
+    (release / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (root / "venv-aarch64" / "bin").mkdir(parents=True)
+    (root / "venv-aarch64" / "bin" / "python").write_text("", encoding="utf-8")
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("WORKER_API_BASE", "METHYL_API_BASE")
+    }
+    subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/write_worker_env.sh"),
+            "--root",
+            str(root),
+            "--manifest",
+            str(release / "manifest.json"),
+            "--arch",
+            "aarch64",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    worker_env = (root / "env/worker.env").read_text(encoding="utf-8")
+    assert "WORKER_API_BASE=" not in worker_env
+    assert "gateway.example.com" not in worker_env
+    assert "TMPDIR=/var/tmp/methyl-samtools" in worker_env

@@ -11,7 +11,7 @@ Options:
   --root PATH          Epimethyl root (default: /work/epimethyl)
   --manifest PATH      manifest.json (default: <root>/current/manifest.json)
   --arch KEY           aarch64 or amd64 (default: detect from uname)
-  --worker-api-base URL  WORKER_API_BASE (default: env or http://localhost:8080/v1)
+  --worker-api-base URL  WORKER_API_BASE (default: env WORKER_API_BASE; omit if unset)
   -h, --help           Show this help
 EOF
 }
@@ -23,7 +23,7 @@ source "$SCRIPT_DIR/detect_platform.sh"
 ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
 MANIFEST=""
 ARCH=""
-WORKER_API_BASE="${WORKER_API_BASE:-https://gateway.example.com/v1}"
+WORKER_API_BASE="${WORKER_API_BASE:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -80,7 +80,7 @@ cat >"$ENV_DIR/worker.env" <<EOF
 # EnvironmentFile= does not expand variables — PATH must be literal.
 EPIMETHYL_ROOT=$ROOT
 EPIMETHYL_RELEASE=$RELEASE_VERSION
-WORKER_API_BASE=$WORKER_API_BASE
+${WORKER_API_BASE:+WORKER_API_BASE=$WORKER_API_BASE}
 DOCKER_DATA_ROOT=$DOCKER_DATA_ROOT
 # WORKER_ID=
 # WORKER_TOKEN=

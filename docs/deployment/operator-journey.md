@@ -20,7 +20,7 @@ Single navigation page for production operators. Each step links to the canonica
 | 5 | Deploy DB schema + catalog + workflows (privileged host) | `bash scripts/bootstrap_distributed_workers.sh` |
 | 6 | Verify bootstrap (read-only) | `bash scripts/bootstrap_distributed_workers.sh --verify` |
 | 7 | Gateway VM (local disk, no `/work`) | `scripts/provision_gateway_node.sh` · [Phase 3](production-platform.md#phase-3-single-gateway-vm-no-work) |
-| 8 | Portal-preregister IP → first GPU seeds `/work` or joiners enroll first | [Lambda worker join](lambda_worker_join.md) · [Phase 4](production-platform.md#phase-4-each-gpu-worker-arc-enroll) |
+| 8 | Portal-preregister IP → first GPU seeds `/work`; joiners install host tools then enroll | [Lambda worker join](lambda_worker_join.md) · [Phase 4](production-platform.md#phase-4-each-gpu-worker-arc-enroll) |
 
 See [Lambda worker join](lambda_worker_join.md) (Azure vs QNAP vs NGC vs Arc), [Distributed workers bootstrap](distributed-workers-bootstrap.md), [arc_worker_runbook.md](arc_worker_runbook.md), and [GPU worker runbook](gpu_worker_runbook.md).
 
@@ -60,7 +60,7 @@ See [Production release](production_release.md).
 |--------|---------|
 | `bootstrap_distributed_workers.sh` | Privileged-host DDL + Python entity populate (+ `--verify`) |
 | `provision_gateway_node.sh` | Gateway VM local venv + systemd + nginx (no `/work`) |
-| `provision_worker_node.sh` | Auto first/join: seed `/work` then enroll, or enroll then VM-local |
+| `provision_worker_node.sh` | Auto first/join: seed `/work` then enroll, or host tools then enroll |
 | `assemble_release.sh` | Bundle MethylPipeline + MethylExtractor artifacts |
 | `promote_release.sh` | Flip `/work/epimethyl/current`, refresh venv, worker env |
 | `deploy_workflow_definitions.sh` | Compile + deploy DomainPrograms via direct DB (`methyl-study-start` / `ops`) |

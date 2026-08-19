@@ -16,7 +16,7 @@ Related: [production_release.md](production_release.md), [gpu_worker_runbook.md]
 
 ## Orchestrated path (recommended — staged Arc)
 
-Default is **`--join-mode auto`**: missing `current/manifest.json` seeds shared `/work` then enrolls; a present manifest enrolls **first** then VM-local only (never re-promote or re-pull Parabricks).
+Default is **`--join-mode auto`**: missing `current/manifest.json` seeds shared `/work` then enrolls; a present manifest installs **VM-local host/Docker first** (so enroll probes `samtools`/`docker`), then enrolls. Never re-promote or re-pull Parabricks.
 
 ```bash
 export WORKER_API_BASE=https://gateway.example.com/v1

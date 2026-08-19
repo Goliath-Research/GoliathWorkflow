@@ -57,6 +57,10 @@ WORKER_BIN="$VENV/bin/methyl-worker"
 
 PATH_LINE="$VENV/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+SCRATCH="${METHYL_SAMTOOLS_TMPDIR:-/var/tmp/methyl-samtools}"
+mkdir -p "$SCRATCH"
+chmod 1777 "$SCRATCH" 2>/dev/null || true
+
 _render_unit() {
   local src="$1" dest="$2"
   sed -e "s|__EPIMETHYL_ROOT__|$ROOT|g" \

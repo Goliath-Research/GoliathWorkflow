@@ -76,7 +76,7 @@ Use this ordered checklist once per environment (detail: [production-platform.md
 3. [ ] Enable nginx TLS; set `GATEWAY_REQUIRE_ARC_ATTEST=1`; `https://<fqdn>/v1/health` returns 200
 4. [ ] Portal-preregister each GPU public IP
 5. [ ] First GPU worker seeds shared `/work` (layout, release, extractor, one Parabricks pull), then enrolls
-6. [ ] Later GPU workers: enroll first, then VM-local Docker/CTK only (`provision_worker_node.sh`)
+6. [ ] Later GPU workers: VM-local host/Docker, then enroll (`provision_worker_node.sh`)
 7. [ ] Smoke test: `scripts/smoke_sample_prep.sh`, `scripts/smoke_study_lifecycle.sh`
 
 ## Database deploy (dual-backend)

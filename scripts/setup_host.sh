@@ -239,6 +239,13 @@ install_system_deps() {
   else
     info "Skipping msodbcsql18 (GPU workers: no SQL). Pass --with-odbc on bootstrap/dev hosts only."
   fi
+
+  # Per-VM spill for samtools sort. write_worker_env.sh sets TMPDIR to this path
+  # in shared worker.env; Python tempfile/samtools fail if the directory is missing.
+  local scratch="${METHYL_SAMTOOLS_TMPDIR:-/var/tmp/methyl-samtools}"
+  $sudo_cmd mkdir -p "$scratch"
+  $sudo_cmd chmod 1777 "$scratch" 2>/dev/null || true
+  info "Local samtools scratch: $scratch"
 }
 
 if [ "$SYSTEM_DEPS" -eq 1 ]; then

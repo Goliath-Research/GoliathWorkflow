@@ -62,7 +62,12 @@ echo "  root: $ROOT"
 
 SAMPLES="${METHYL_SAMPLES_DIR:-$WORK/samples}"
 if [[ ! -d "$SAMPLES" ]]; then
-  die "Samples root missing: $SAMPLES — run scripts/init_work_layout.sh after the share is mounted"
+  if [[ "$REQUIRE_CURRENT" -eq 0 ]]; then
+    warn "Samples root missing: $SAMPLES — first worker should run init_work_layout.sh before this check"
+    WRITABLE_PROBE=0
+  else
+    die "Samples root missing: $SAMPLES — run scripts/init_work_layout.sh after the share is mounted"
+  fi
 fi
 
 if [[ "$WRITABLE_PROBE" -eq 1 ]]; then
