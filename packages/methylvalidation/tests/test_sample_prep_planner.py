@@ -89,6 +89,8 @@ def test_explicit_samples_with_s3_storage(tmp_path: Path) -> None:
     assert s1["fastqSource"]["prefix"] == "S1/"
     assert s1["fastqSource"]["bucket"] == "bucket"
     assert s1["sampleDir"].endswith("/S1")
+    assert s1["sampleDestination"] is None
+    assert s1["h5Destination"] is None
 
 
 def test_planner_leaves_delete_fastqs_unset_for_profile_resolution(tmp_path: Path) -> None:
@@ -356,3 +358,4 @@ def test_prefix_base_on_fastq_storage(tmp_path: Path) -> None:
     )
     assert ctx["samples"][0]["fastqPrefix"] == "samples/S1/"
     assert ctx["samples"][0]["fastqSource"]["prefix"] == "samples/S1/"
+    assert ctx["samples"][0]["sampleDestination"] is None

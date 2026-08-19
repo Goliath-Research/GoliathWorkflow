@@ -474,6 +474,8 @@ def write_extraction_manifest(
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp.replace(path)
+    if not path.is_file() or path.stat().st_size <= 0:
+        raise RuntimeError(f"Extraction manifest not written: {path}")
     return path
 
 
@@ -496,6 +498,8 @@ def ensure_extraction_manifest(
         pattern_files=pattern_files,
     )
     path = write_extraction_manifest(sample_dir, sample_id, manifest)
+    if not path.is_file() or path.stat().st_size <= 0:
+        raise RuntimeError(f"Extraction manifest not written: {path}")
     logger.info("Wrote extraction manifest for %s (%s chromosomes)", sample_id, len(chromosomes))
     return path
 

@@ -308,6 +308,7 @@ def test_idempotent_skip_when_all_h5_present(tmp_path: Path) -> None:
     assert set(manifest["per_chromosome"]) == {"1"}
     assert manifest["per_chromosome"]["1"]["CG"]["mean_coverage"] == 12.0
     assert manifest["metadata"]["extractor"] == "MethylExtractor"
+    assert (sample_dir / "S3.extraction_manifest.json").stat().st_size > 0
 
 
 def test_build_manifest_from_stats_covers_all_chroms(tmp_path: Path) -> None:

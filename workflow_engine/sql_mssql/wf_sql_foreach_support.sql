@@ -327,18 +327,8 @@ BEGIN
         RETURN;
     END
 
-    IF EXISTS (
-        SELECT 1 FROM wf.node_execution
-        WHERE parent_node_execution_id = @foreach_execution_id AND status = N'FAILED'
-    )
-    BEGIN
-        UPDATE wf.node_execution SET status = N'FAILED', ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
-        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
-        RETURN;
-    END
-
-    /* Count finished children directly from node_execution — no shared counter, no lost-update race.
-       Each child's terminal status is committed before this proc is called. */
+    /* Drain all iterations before failing the instance. Action fail_task already
+       leaves the instance RUNNING so sibling FOREACH tasks stay claimable. */
     DECLARE @finished INT = (
         SELECT COUNT(*)
         FROM wf.node_execution
@@ -348,6 +338,16 @@ BEGIN
 
     IF @finished < @max
         RETURN;
+
+    IF EXISTS (
+        SELECT 1 FROM wf.node_execution
+        WHERE parent_node_execution_id = @foreach_execution_id AND status = N'FAILED'
+    )
+    BEGIN
+        UPDATE wf.node_execution SET status = N'FAILED', ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
+        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        RETURN;
+    END
 
     UPDATE wf.node_execution SET status = N'SUCCEEDED', ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
     EXEC wf.wf_engine_on_composite_complete @node_execution_id = @foreach_execution_id;
@@ -627,6 +627,11 @@ BEGIN
         END
 
         SET @vv = wf.wf_get_scope_variable_json(@workflow_instance_id, @node_execution_id, @var_name);
+        IF @vv IS NULL AND @var_name IN (N'sampleDestination', N'h5Destination')
+        BEGIN
+            SET @out_fragment = N'null';
+            RETURN;
+        END
         IF @vv IS NULL
         BEGIN
             SET @failed = 1;

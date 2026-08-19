@@ -48,10 +48,17 @@ def run_fastp_trim(
     if not sample_path.is_dir():
         raise RuntimeError(f"sampleDir not found: {sample_path}")
 
-    r1_in = sample_path / f"{sample_id}_1.fastq.gz"
-    r2_in = sample_path / f"{sample_id}_2.fastq.gz"
-    if not r1_in.is_file() or not r2_in.is_file():
-        raise RuntimeError(f"Expected paired FASTQs under {sample_path}: {r1_in.name}, {r2_in.name}")
+    from methyl_worker.parabricks_runner import resolve_paired_fastqs
+    from methyl_worker.work_share import share_work_tree
+
+    fastqs = resolve_paired_fastqs(sample_path, sample_id)
+    r1_in, r2_in = fastqs[0], fastqs[1]
+    if len(fastqs) > 2:
+        logger.warning(
+            "trim_fastq using first FASTQ pair for %s; additional pairs are not trimmed: %s",
+            sample_id,
+            ", ".join(p.name for p in fastqs[2:]),
+        )
 
     r1_out = sample_path / f"{sample_id}_1.trimmed.fastq.gz"
     r2_out = sample_path / f"{sample_id}_2.trimmed.fastq.gz"
@@ -87,6 +94,8 @@ def run_fastp_trim(
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "fastp failed")
     if not r1_out.is_file() or not r2_out.is_file():
         raise RuntimeError("fastp did not produce trimmed FASTQ outputs")
+
+    share_work_tree(sample_path)
 
     return {
         "sampleId": sample_id,

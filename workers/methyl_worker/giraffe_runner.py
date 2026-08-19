@@ -24,6 +24,7 @@ from methyl_worker.parabricks_runner import (
     resolve_paired_fastqs,
     resolve_parabricks_config,
 )
+from methyl_worker.work_share import share_work_tree
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +269,7 @@ def _run_docker(cmd: List[str], log_path: Path, *, step: str) -> None:
 
 
 def _result_payload(paths: ParabricksPaths) -> Dict[str, Optional[str]]:
+    share_work_tree(paths.sample_dir)
     metrics_json = str(paths.metrics_json) if paths.metrics_json.is_file() else None
     qc_tar = str(paths.qc_metrics_tar) if paths.qc_metrics_tar.is_file() else None
     return {

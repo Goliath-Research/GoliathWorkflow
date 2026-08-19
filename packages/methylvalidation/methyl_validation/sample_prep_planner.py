@@ -196,6 +196,9 @@ def _sample_entry(
         entry["sampleDestination"] = dest
         entry["h5Prefix"] = dest_pfx
         entry["h5Destination"] = dest
+    else:
+        entry["sampleDestination"] = None
+        entry["h5Destination"] = None
     return entry
 
 

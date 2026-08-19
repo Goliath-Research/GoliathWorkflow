@@ -85,6 +85,9 @@ def start_sample_prep(
         context["sampleDestination"] = None
         context["h5Destination"] = None
         context["disableArchive"] = True
+    elif context.get("sampleStorage") is None and context.get("h5Storage") is None:
+        context.setdefault("sampleDestination", None)
+        context.setdefault("h5Destination", None)
 
     program_path = body.get("program_path")
     if program_path is None and body.get("workflow_version_id") is None:

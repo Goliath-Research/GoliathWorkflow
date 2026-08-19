@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from methyl_worker.mojo_align_env import image_pin as mojo_align_image_pin
+from methyl_worker.work_share import share_work_tree
 
 logger = logging.getLogger(__name__)
 
@@ -669,6 +670,7 @@ def run_fq2bam_meth(
 
 
 def _result_payload(paths: ParabricksPaths) -> Dict[str, Optional[str]]:
+    share_work_tree(paths.sample_dir)
     metrics_json = str(paths.metrics_json) if paths.metrics_json.is_file() else None
     qc_tar = str(paths.qc_metrics_tar) if paths.qc_metrics_tar.is_file() else None
     return {

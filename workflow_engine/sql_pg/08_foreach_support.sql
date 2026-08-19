@@ -305,6 +305,17 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Drain all iterations before failing the instance so sibling FOREACH
+  -- tasks stay claimable after one sample fail_task.
+  SELECT count(*) INTO v_finished
+  FROM wf.node_execution
+  WHERE parent_node_execution_id = p_foreach_execution_id
+    AND status IN ('SUCCEEDED', 'FAILED', 'SKIPPED', 'CANCELLED');
+
+  IF v_finished < v_max THEN
+    RETURN;
+  END IF;
+
   IF EXISTS (
     SELECT 1 FROM wf.node_execution
     WHERE parent_node_execution_id = p_foreach_execution_id AND status = 'FAILED'
@@ -312,15 +323,6 @@ BEGIN
     UPDATE wf.node_execution SET status = 'FAILED', ended_at_utc = (now() AT TIME ZONE 'utc')
     WHERE id = p_foreach_execution_id;
     UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
-    RETURN;
-  END IF;
-
-  SELECT count(*) INTO v_finished
-  FROM wf.node_execution
-  WHERE parent_node_execution_id = p_foreach_execution_id
-    AND status IN ('SUCCEEDED', 'FAILED', 'SKIPPED', 'CANCELLED');
-
-  IF v_finished < v_max THEN
     RETURN;
   END IF;
 

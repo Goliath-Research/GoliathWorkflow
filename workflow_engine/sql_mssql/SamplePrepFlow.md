@@ -28,14 +28,25 @@ Sample stickiness is **not** hard-wired into the engine or DomainProgram IR. Sam
 catalog actions declare `dispatch.affinity_key_field: "sampleId"` plus
 `prefer_previous_worker` / `prefer_continue_group` (see
 [`docs/architecture/action-provider-registry.md`](../../docs/architecture/action-provider-registry.md)).
+GPU Align (`sample.parabricks_fq2bam`, giraffe, methylGrapher WGBS, rna_fq2bam) also
+sets `exclusive_worker` and `max_per_worker: 1` so **one Clara/Mojo align per VM**.
 The claim SP then:
 
 1. Prefers continuing an affinity key that already has `SUCCEEDED` work (QC/extract after align)
    over starting a fresh sample’s first step.
 2. Soft-prefers the worker that last completed that key when it is idle and capable; otherwise
    any capable worker may claim (shared `/work` remains the correctness path).
+3. Refuses a second claim while an exclusive Align is leased — do **not** park QC/extract/trim
+   at `PENDING` to steer GPUs.
 
 `wf` only sees opaque keys and catalog flags — no SamplePrep node names in SQL.
+
+**FOREACH (parallel samples):** one sample `FAILED` does **not** fail the instance until every
+iteration is terminal (drain-then-fail). Siblings stay `READY`/`RUNNING`. After the last
+sample finishes, a remaining child `FAILED` marks the instance `FAILED`.
+
+**Archive:** `${var.sampleDestination}` always resolves (JSON `null` when no archive profile).
+The handler skips upload when destination is null. Do not omit the key from `samples[]`.
 
 ## Architecture
 

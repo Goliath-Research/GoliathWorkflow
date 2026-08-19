@@ -111,6 +111,20 @@ def test_sample_prep_actions_have_domain_effects() -> None:
     assert "qcPass" in [v for v, _ in qc.domain_effects.scope_bindings]
 
 
+def test_gpu_align_actions_are_exclusive_one_per_worker() -> None:
+    exclusive = {
+        "sample.parabricks_fq2bam",
+        "sample.parabricks_giraffe",
+        "sample.parabricks_rna_fq2bam",
+        "sample.methylgrapher_wgbs_align",
+    }
+    for action_name in exclusive:
+        entry = next(e for e in ACTION_CATALOG if e.action_name == action_name)
+        dispatch = entry.to_catalog_dict()["dispatch"]
+        assert dispatch.get("exclusive_worker") is True, action_name
+        assert dispatch.get("max_per_worker") == 1, action_name
+
+
 def test_all_sample_prep_catalog_actions_have_golden_fixtures() -> None:
     from pathlib import Path
 

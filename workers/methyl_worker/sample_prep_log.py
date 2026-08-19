@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from methyl_worker.work_share import share_work_path
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -44,6 +46,14 @@ def append_sample_prep_log(
         "result_code": result_code,
         "workflow_node_key": workflow_node_key,
     }
-    with open(log_path, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, separators=(",", ":")) + "\n")
+    payload = json.dumps(record, separators=(",", ":")) + "\n"
+    try:
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(payload)
+    except PermissionError:
+        share_work_path(log_path.parent)
+        if log_path.exists():
+            share_work_path(log_path)
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(payload)
     return log_path

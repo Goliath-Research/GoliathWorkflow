@@ -139,6 +139,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`buffy-clara-bakeoff-readiness.plan.md`](buffy-clara-bakeoff-readiness.plan.md) | _(pending ADO)_ | Buffy Clara bakeoff readiness | `add-clara-15v15-context`, `optional-qnap-dest`, `smoke-then-full` |
 | [`archive-methylgrapher-mojo.plan.md`](archive-methylgrapher-mojo.plan.md) | _(pending ADO)_ | Archive methylGrapher-mojo / MOJO_ALIGN_* contract | `rename-contract`, `mojo-align-paths`, `mp-image-runner`, `archive-old-repo`, `mp-docs` |
 | [`typed-handler-basemodel.plan.md`](typed-handler-basemodel.plan.md) | _(pending ADO)_ | Typed in-process handler inputs | `dispatcher-coerce`, `annotate-handlers`, `typed-field-access`, `scaffold-docs` |
+| [`sample-prep-durability.plan.md`](sample-prep-durability.plan.md) | _(pending ADO)_ | SamplePrep durability (FOREACH drain, exclusive GPU, /work share, trim FASTQ, sampleDestination, extract manifest) | `foreach-drain`, `claim-exclusive`, `work-share`, `trim-resolve`, `sample-destination`, `extract-manifest`, `tests-docs-plan`, `resume-66` |
 
 Create each **User Story** under its Feature in Azure DevOps Boards. Copy the story title from the plan `todos[].content` field (seed prefixes `[todo-id]`). Mark stories **Closed** when the corresponding code is merged; close the Feature when all child stories are done.
 

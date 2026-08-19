@@ -87,6 +87,66 @@ class ForeachContinuationSqlTests(unittest.TestCase):
                 offenders.append(f"{path.name}:{name}")
         self.assertEqual([], offenders)
 
+    def test_parallel_continue_drains_before_instance_fail(self) -> None:
+        """One FAILED child must not fail the instance until all iterations finish."""
+        targets = (
+            MSSQL_DIR / "wf_sql_foreach_support.sql",
+            PG_DIR / "08_foreach_support.sql",
+        )
+        for path in targets:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            match = re.search(
+                r"CREATE\s+(?:OR\s+(?:ALTER|REPLACE)\s+)?PROCEDURE\s+"
+                r"wf\.wf_foreach_parallel_continue(?P<body>.*?)(?:\bGO\b|\$\$;)",
+                text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            self.assertIsNotNone(match, f"{path.name} missing wf_foreach_parallel_continue")
+            body = match.group("body")
+            finished_idx = re.search(
+                r"(?:@finished|v_finished)\s*<\s*(?:@max|v_max)",
+                body,
+                re.IGNORECASE,
+            )
+            self.assertIsNotNone(
+                finished_idx, f"{path.name} must wait until all FOREACH children finish"
+            )
+            fail_idx = re.search(
+                r"parent_node_execution_id\s*=\s*(?:@foreach_execution_id|p_foreach_execution_id)"
+                r".{0,200}status\s*=\s*N?'FAILED'",
+                body[finished_idx.end() :],
+                re.IGNORECASE | re.DOTALL,
+            )
+            self.assertIsNotNone(
+                fail_idx,
+                f"{path.name} must fail the instance only after all iterations are terminal",
+            )
+            early = body[: finished_idx.start()]
+            self.assertIsNone(
+                re.search(
+                    r"parent_node_execution_id\s*=\s*(?:@foreach_execution_id|p_foreach_execution_id)"
+                    r".{0,200}status\s*=\s*N?'FAILED'",
+                    early,
+                    re.IGNORECASE | re.DOTALL,
+                ),
+                f"{path.name} fail-fast on first FAILED child would strand sibling samples",
+            )
+
+    def test_archive_dest_missing_resolves_as_null(self) -> None:
+        scripts = (
+            MSSQL_DIR / "wf_sql_foreach_support.sql",
+            MSSQL_DIR / "wf_sql_runtime_parity.sql",
+            PG_DIR / "05_runtime_parity.sql",
+        )
+        for path in scripts:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            self.assertIn(
+                "sampleDestination",
+                text,
+                f"{path.name} must treat missing sampleDestination as JSON null",
+            )
+            self.assertIn("h5Destination", text, path.name)
+
 
 if __name__ == "__main__":
     unittest.main()
