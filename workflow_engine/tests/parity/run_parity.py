@@ -18,6 +18,65 @@ from typing import Any, Optional
 ROOT = Path(__file__).resolve().parents[2]
 SQL_PG = ROOT / "sql_pg"
 CONTRACT_SCRIPT = ROOT / "contract" / "validate_contract.py"
+# Portal/cfg/legacy stacks are out of scope for this harness. Stop after the
+# last wf engine script the worker/repository/scope tests need.
+_SKIP_DEPLOY_PREFIXES = (
+    "portal_",
+    "cfg_",
+    "meta_",
+    "rbac_",
+    "contract_",
+    "onboarding_",
+    "e_portal_",
+    "legacy_",
+)
+_PARITY_DEPLOY_STOP = "wf_sql_collection_bindings.sql"
+_REQUIRED_PARITY_SCRIPTS = (
+    "wf_reclaim_expired_leases.sql",
+    "wf_action_dispatch_affinity.sql",
+    "01_worker_api.sql",
+)
+
+
+def _parse_deploy_azure_scripts(deploy_sh: Path) -> list[str]:
+    text = deploy_sh.read_text(encoding="utf-8")
+    marker = "SCRIPTS=("
+    start = text.find(marker)
+    if start < 0:
+        raise ValueError(f"No SCRIPTS=( array in {deploy_sh}")
+    names: list[str] = []
+    for line in text[start + len(marker) :].splitlines():
+        stripped = line.strip()
+        if stripped.startswith(")"):
+            break
+        if not stripped or stripped.startswith("#"):
+            continue
+        token = stripped.split("#", 1)[0].strip().rstrip("\\").strip()
+        if token:
+            names.append(token)
+    return names
+
+
+def _parity_sql_scripts() -> list[Path]:
+    """Wf-engine slice of sql_pg/deploy_azure.sh (claim reads affinity columns)."""
+    names = _parse_deploy_azure_scripts(SQL_PG / "deploy_azure.sh")
+    out: list[Path] = []
+    for name in names:
+        if name.startswith(_SKIP_DEPLOY_PREFIXES):
+            continue
+        path = SQL_PG / name
+        if not path.is_file():
+            raise FileNotFoundError(f"deploy script missing: {path}")
+        out.append(path)
+        if name == _PARITY_DEPLOY_STOP:
+            break
+    have = {p.name for p in out}
+    missing = [n for n in _REQUIRED_PARITY_SCRIPTS if n not in have]
+    if missing:
+        raise RuntimeError(
+            f"parity deploy list missing {missing}; update sql_pg/deploy_azure.sh"
+        )
+    return out
 
 
 def _pg_dsn() -> str:
@@ -33,59 +92,41 @@ def _pg_env() -> dict[str, str]:
     env = os.environ.copy()
     if "PGPASSWORD" not in env and os.environ.get("POSTGRES_PASSWORD"):
         env["PGPASSWORD"] = os.environ["POSTGRES_PASSWORD"]
+    env.setdefault("PGHOST", os.environ.get("POSTGRES_HOST", "localhost"))
+    env.setdefault("PGPORT", os.environ.get("POSTGRES_PORT", "5432"))
+    env.setdefault("PGUSER", os.environ.get("POSTGRES_USER", "postgres"))
     return env
 
 
-def _run_psql(dsn: str, sql_path: Path) -> None:
-    subprocess.run(
-        ["psql", "-q", dsn, "-v", "ON_ERROR_STOP=1", "-f", str(sql_path)],
-        check=True,
+def _psql(dsn: str, extra_args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.run(
+        ["psql", "-q", "-v", "ON_ERROR_STOP=1", dsn, *extra_args],
         capture_output=True,
         text=True,
         env=_pg_env(),
     )
+    if check and proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip() or "(no psql output)"
+        raise RuntimeError(f"psql failed ({proc.returncode}): {detail}")
+    return proc
+
+
+def _run_psql(dsn: str, sql_path: Path) -> None:
+    _psql(dsn, ["-f", str(sql_path)])
 
 
 def deploy_postgres(dsn: str) -> None:
-    scripts = (
-        "00_schema.sql",
-        "03_engine_core.sql",
-        "05_runtime_parity.sql",
-        "06_scope_writepath_parity.sql",
-        "07_scope_encoding_parity.sql",
-        "01_worker_api.sql",
-        "02_repository_api.sql",
-        "04_admin.sql",
-        "wf_action_schema.sql",
-        "wf_repo_upsert_workflow_action.sql",
-        "wf_action_dispatch_metadata.sql",
-        "wf_action_dispatch_concurrency.sql",
-        "wf_repo_create_workflow_graph.sql",
-        "wf_sql_collection_bindings.sql",
-    )
-    for name in scripts:
-        _run_psql(dsn, SQL_PG / name)
+    for path in _parity_sql_scripts():
+        _run_psql(dsn, path)
 
 
 def _psql_query(dsn: str, sql: str) -> str:
-    proc = subprocess.run(
-        ["psql", "-q", dsn, "-t", "-A", "-c", sql],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=_pg_env(),
-    )
+    proc = _psql(dsn, ["-t", "-A", "-c", sql])
     return proc.stdout.strip()
 
 
 def _psql_query_optional(dsn: str, sql: str) -> None:
-    subprocess.run(
-        ["psql", "-q", dsn, "-t", "-A", "-c", sql],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=_pg_env(),
-    )
+    _psql(dsn, ["-t", "-A", "-c", sql], check=False)
 
 
 def seed_minimal_workflow(dsn: str) -> tuple[int, int, str]:
@@ -445,6 +486,8 @@ def main() -> int:
             "createdb",
             "-h",
             os.environ.get("POSTGRES_HOST", "localhost"),
+            "-p",
+            os.environ.get("POSTGRES_PORT", "5432"),
             "-U",
             os.environ.get("POSTGRES_USER", "postgres"),
             db_name,
