@@ -91,7 +91,21 @@ def _handle_methyl_qc(
         dest = sample_path / f"{resolved_sample_id}.alignment_qc.json"
         if qc_path.resolve() == dest.resolve():
             return
-        shutil.copy2(qc_path, dest)
+        from ..work_share import share_work_path
+
+        # copy2/copystat chmod on a root-owned NFS file raises EPERM even when
+        # mode is 0666. Share first, copy contents only, then open the dest.
+        if dest.exists():
+            share_work_path(dest)
+        try:
+            shutil.copy(qc_path, dest)
+        except OSError:
+            share_work_path(dest.parent)
+            if dest.exists():
+                share_work_path(dest)
+                dest.unlink()
+            shutil.copy(qc_path, dest)
+        share_work_path(dest)
 
     def _build_result(qc_path: Path) -> MethylQcTaskOutput:
         from ..sample_prep_log import append_sample_prep_log
