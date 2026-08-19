@@ -255,7 +255,12 @@ BEGIN
                     AND wn_cap.workflow_action_id = wa.id
               ) < wa.max_per_worker
           )
-        ORDER BY ne.available_at_utc ASC, ne.id ASC
+        -- Exclusive GPU work first when this worker is idle (see affinity file).
+        ORDER BY
+            CASE WHEN ISNULL(wa.exclusive_worker, 0) = 1
+                 THEN 0 ELSE 1 END,
+            ne.available_at_utc ASC,
+            ne.id ASC
     )
     UPDATE ne
     SET status = N'RUNNING',

@@ -825,10 +825,13 @@ BEGIN
                     AND wn_cap.workflow_action_id = wa.id
               ) < wa.max_per_worker
           )
-        -- Soft affinity (catalog flags): continue an affinity group before
-        -- starting a new one; prefer the worker that last completed that key.
-        -- Actions without affinity flags keep pure FIFO (both CASE arms = 1).
+        -- Exclusive GPU actions (idle workers only; busy workers already filtered
+        -- them out) outrank older trim/QC FIFO so Clara is not starved.
+        -- Then soft affinity: continue an affinity group; prefer last completer.
+        -- Actions without affinity flags keep FIFO on the remaining arms.
         ORDER BY
+            CASE WHEN ISNULL(wa.exclusive_worker, 0) = 1
+                 THEN 0 ELSE 1 END,
             CASE WHEN wa.prefer_continue_group = 1
                   AND ne.affinity_key IS NOT NULL
                   AND EXISTS (

@@ -13,6 +13,7 @@ class ReadyRow:
     prefer_continue_group: bool
     prefer_previous_worker: bool
     available_at: str
+    exclusive_worker: bool = False
 
 
 @dataclass(frozen=True)
@@ -27,8 +28,9 @@ def rank_key(
     *,
     worker_id: int,
     succeeded: list[SucceededRow],
-) -> tuple[int, int, str, int]:
+) -> tuple[int, int, int, str, int]:
     """Return a sort key equivalent to the claim SP ORDER BY arms."""
+    exclusive_rank = 0 if row.exclusive_worker else 1
     continue_rank = 1
     if (
         row.prefer_continue_group
@@ -45,7 +47,7 @@ def rank_key(
             if latest.completed_by_worker_id == worker_id:
                 sticky_rank = 0
 
-    return (continue_rank, sticky_rank, row.available_at, row.id)
+    return (exclusive_rank, continue_rank, sticky_rank, row.available_at, row.id)
 
 
 def pick(
@@ -86,6 +88,19 @@ def test_fallback_when_preferred_worker_busy_other_worker_can_claim() -> None:
     succeeded = [SucceededRow("sample-A", completed_by_worker_id=1, ended_at="2026-08-10T11:00:00")]
     # Worker 2 is not sticky for sample-A, but continue-group still wins over sample-B.
     assert pick(rows, worker_id=2, succeeded=succeeded).affinity_key == "sample-A"
+
+
+def test_exclusive_outranks_older_trim_when_idle() -> None:
+    """Idle worker: exclusive Clara beats older READY trim/QC FIFO."""
+    rows = [
+        ReadyRow(3326, "sample-old", True, True, "2026-08-18T17:16:54", exclusive_worker=False),
+        ReadyRow(3944, "sample-new", True, True, "2026-08-19T15:38:28", exclusive_worker=True),
+    ]
+    succeeded = [
+        SucceededRow("sample-old", completed_by_worker_id=1, ended_at="2026-08-18T16:00:00"),
+        SucceededRow("sample-new", completed_by_worker_id=1, ended_at="2026-08-19T15:36:00"),
+    ]
+    assert pick(rows, worker_id=3, succeeded=succeeded).id == 3944
 
 
 def test_no_affinity_flags_keep_fifo() -> None:
