@@ -97,8 +97,12 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Install worker package, dependencies, and pytest
-        run: pip install -e 'workers/[dev]' -e packages/methyldomain/ -e packages/methylutils/
+      - name: Install worker stack and pytest
+        run: |
+          python -m pip install -U pip pytest
+          # pip does not honor workers/[tool.uv.sources]; install local
+          # packages from scripts/packages.list first (same as Azure PR CI).
+          PYTHON_BIN=python bash scripts/install_packages.sh --with-deps
       - name: Worker unit tests and schema drift check
         run: |
           python -m pytest workers/tests/ -q
