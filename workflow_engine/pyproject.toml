@@ -14,6 +14,9 @@ dependencies = [
   "httpx>=0.27",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
 [project.scripts]
 methyl-gateway = "rest.gateway:main"
 methyl-workflow-run = "local.runner:main"
