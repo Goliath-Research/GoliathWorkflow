@@ -27,3 +27,7 @@ The canonical mathematical and statistical reference for this package is the the
 - `methyl_utils/statistical_tests.py`
 - `methyl_utils/methyl_centroid_pair.py`
 - `methyl_utils/ecdf_classifier.py`
+
+## Optional M-value residualization
+
+Train-only M-value residualization against label-free covariates is an **opt-in** transform used only when `residualizeCoefDir` is bound. Canonical math and isolation rules: [theory ch.02](../../../docs/theory/chapters/02-methylcentroid.md#sec-centroid-mvalue-residual) and [ch.12 pre-MC covariates](../../../docs/theory/chapters/12-two-workflows.md#sec-pre-mc-covariates). Per-confounder mechanics (Hannum 2013 age score, smoking, BMI, CRP, Ω ALR): [M-value residualization implementation](../../../docs/implementation/mvalue-residualization.md).

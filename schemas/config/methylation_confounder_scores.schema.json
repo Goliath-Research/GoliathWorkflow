@@ -12,7 +12,7 @@
         }
       ],
       "default": null,
-      "description": "JSON clock coefficients (Horvath/Hannum/PhenoAge). Operator-set path.",
+      "description": "JSON clock coefficients. Procedure default is Hannum 2013 (hannum2013_v1.json); operators may overlay Horvath/PhenoAge.",
       "title": "Age Clock Path"
     },
     "bmi_panel_path": {

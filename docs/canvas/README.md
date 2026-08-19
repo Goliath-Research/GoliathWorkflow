@@ -6,7 +6,7 @@ Interactive architecture and documentation hubs built with [Cursor Canvas](https
 
 | Canvas | Purpose |
 |--------|---------|
-| [Docs hub](#methylpipeline-docs) | Documentation pillar navigation |
+| [Docs hub](#methylpipeline-docs) | Documentation pillar navigation plus Research companion |
 | [Platform overview](#methylpipeline-platform-overview) | Quick platform + SaMD overview companion |
 | [Architecture](#methylpipeline-architecture) | Config layers, local vs gateway, DB contract |
 | [Portal IA](#portal-ia) | Study pipeline, monitor/retry, Admin RBAC + contract packs |
@@ -14,7 +14,7 @@ Interactive architecture and documentation hubs built with [Cursor Canvas](https
 | [Analyte comparison](#analyte-comparison) | Analyte comparison explorer |
 | [H PCa good MC](#h-pca-good-mc-analysis) | H PCa good MC analysis |
 | [PCa detection fitness](#pca-detection-fitness) | PCa Detection doc × MethylPipeline fitness |
-| [Buffy M-value residualization](#buffy-mvalue-residualization) | Confounder-aware DMP calling (opt-in procedure) |
+| [Buffy M-value residualization](#buffy-mvalue-residualization) | Confounder-aware DMP calling (opt-in procedure; Hannum age clock) |
 
 ## Open in Cursor
 
@@ -42,7 +42,7 @@ CURSOR_CANVASES_DIR="$HOME/.cursor/projects/my-workspace/canvases" \
 ### Docs hub {#methylpipeline-docs}
 
 - **Source:** `docs/canvas/methylpipeline-docs.canvas.tsx`
-- **Purpose:** Documentation pillar navigation
+- **Purpose:** Documentation pillar navigation plus Research companion (residualization Theory / Usage / Implementation)
 
 ### Platform overview {#methylpipeline-platform-overview}
 
@@ -86,8 +86,8 @@ CURSOR_CANVASES_DIR="$HOME/.cursor/projects/my-workspace/canvases" \
 ### Buffy M-value residualization {#buffy-mvalue-residualization}
 
 - **Source:** `docs/canvas/buffy-mvalue-residualization.canvas.tsx`
-- **Purpose:** Leakage rules, M-value formulas, isolation contract, and Ω-as-confounder caveat for the opt-in buffy residual procedure
-- **Markdown companion:** [Buffy M-value residualization](../research/buffy-mvalue-residualization.md)
+- **Purpose:** Leakage rules, M-value formulas, isolation contract, per-confounder list (Hannum age clock), and Ω-as-confounder caveat for the opt-in buffy residual procedure
+- **Markdown companion:** [Implementation](../implementation/mvalue-residualization.md) · [research note](../research/buffy-mvalue-residualization.md)
 
 ## Edit workflow
 

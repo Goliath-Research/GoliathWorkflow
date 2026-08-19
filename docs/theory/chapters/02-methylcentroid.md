@@ -104,7 +104,7 @@ This makes `methylcentroid` a crucial bridge package: it is the step where sampl
 
 The shipped centroid path uses raw \(x_{si}=m_{si}/(m_{si}+u_{si})\). An **opt-in** transform, used only when `residualizeCoefDir` is bound, residualizes M-values against label-free covariates and maps residuals back to \((0,1)\) before updating \(S_x\), \(S_{x^2}\), and histogram bins. Raw \(S_m\)/\(S_u\) are unchanged. Absent coefficients, the builder is bit-identical to today.
 
-See [Buffy M-value residualization](../../research/buffy-mvalue-residualization.md) for leakage rules, the M-value formulas, and why this lives in a **forked** procedure rather than the default methylation lifecycle.
+See [M-value residualization implementation](../../implementation/mvalue-residualization.md) for each confounder (Hannum 2013 age score, smoking, BMI, CRP, Ω ALR). Isolation and leakage rules: [Buffy M-value residualization](../../research/buffy-mvalue-residualization.md). This lives in a **forked** procedure rather than the default methylation lifecycle.
 
 ## Publication Guidance
 

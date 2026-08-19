@@ -14,7 +14,9 @@ import {
   Stat,
   Table,
   Text,
+  useCanvasAction,
   useCanvasState,
+  useHostTheme,
 } from "cursor/canvas";
 
 const LEAKAGE = [
@@ -37,18 +39,78 @@ const ISOLATION = [
 
 const PANELS = [
   ["Smoking", "smoking_ahr_v1.json", "AHRR cg05575921 + small Joehanes/Zeilinger set"],
-  ["Epigenetic age", "horvath2013_stub_v1.json", "Stub — replace with a full clock asset"],
+  ["Epigenetic age", "hannum2013_v1.json", "Hannum 2013 71-CpG blood clock; not a product DNAmAge"],
   ["BMI / adiposity", "bmi_adiposity_v1.json", "HIF3A, ABCG1, CPT1A and related sites"],
   ["Inflammation / CRP", "crp_inflammation_v1.json", "Small Wielscher/Ligthart-derived set"],
+];
+
+const CONFOUNDERS = [
+  [
+    "Smoking",
+    "smoking_ahr_v1.json",
+    "AHRR cg05575921 + F2RL3 / ALPPL2 / IER3 / GFI1",
+    "docs/implementation/mvalue-residualization.md#sec-smoking",
+  ],
+  [
+    "Epigenetic age",
+    "hannum2013_v1.json",
+    "Hannum 2013 71-CpG blood clock; residualization covariate, not a product DNAmAge",
+    "docs/implementation/mvalue-residualization.md#sec-epigenetic-age",
+  ],
+  [
+    "BMI / adiposity",
+    "bmi_adiposity_v1.json",
+    "HIF3A, ABCG1, CPT1A placeholder weights",
+    "docs/implementation/mvalue-residualization.md#sec-bmi",
+  ],
+  [
+    "Inflammation / CRP",
+    "crp_inflammation_v1.json",
+    "NLRC5 / AIM2 neighbourhood; placeholder weights",
+    "docs/implementation/mvalue-residualization.md#sec-inflammation",
+  ],
+  [
+    "Leukocyte mix Ω",
+    "cell_fractions.csv",
+    "Neu-referenced ALR; omit composition_columns to keep composition-mediated DMPs",
+    "docs/implementation/mvalue-residualization.md#sec-omega",
+  ],
 ];
 
 const SECTIONS = [
   { id: "isolation", label: "Isolation" },
   { id: "leakage", label: "Leakage" },
   { id: "math", label: "M-values" },
+  { id: "confounders", label: "Confounders" },
   { id: "topology", label: "Topology" },
   { id: "caveat", label: "Ω caveat" },
 ];
+
+function DocLink({ path, children }: { path: string; children?: string }) {
+  const dispatch = useCanvasAction();
+  const theme = useHostTheme();
+
+  return (
+    <span
+      role="link"
+      tabIndex={0}
+      onClick={() => dispatch({ type: "openFile", path })}
+      onKeyDown={(e: { key: string; preventDefault: () => void }) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          dispatch({ type: "openFile", path });
+        }
+      }}
+      style={{
+        color: theme.text.link,
+        cursor: "pointer",
+        textDecoration: "underline",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
 export default function BuffyMvalueResidualizationCanvas() {
   const [section, setSection] = useCanvasState("section", "isolation");
@@ -131,6 +193,28 @@ export default function BuffyMvalueResidualizationCanvas() {
             </CardBody>
           </Card>
           <Table headers={["Score", "Packaged panel", "Honesty"]} rows={PANELS} />
+        </Stack>
+      )}
+
+      {section === "confounders" && (
+        <Stack gap={16}>
+          <H2>Each confounder</H2>
+          <Text size="small" tone="secondary">
+            Product-facing write-up: docs/implementation/mvalue-residualization.md. Age default is
+            Hannum 2013, not a Horvath stub.
+          </Text>
+          <Stack gap={12}>
+            {CONFOUNDERS.map((row) => (
+              <Card key={row[3]}>
+                <CardHeader trailing={<Code>{row[1]}</Code>}>
+                  <DocLink path={row[3]}>{row[0]}</DocLink>
+                </CardHeader>
+                <CardBody>
+                  <Text size="small">{row[2]}</Text>
+                </CardBody>
+              </Card>
+            ))}
+          </Stack>
         </Stack>
       )}
 

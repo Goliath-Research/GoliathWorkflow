@@ -120,3 +120,17 @@ Each of those packages has its own [USAGE](../../methylcentroid/docs/USAGE.md) (
 - [COHORT_TREE.md](COHORT_TREE.md) — `diseases.groups[].stages` as generic strata, leaf labels, comparisons, v2 spike appendix.
 - [IMPLEMENTATION.md](IMPLEMENTATION.md) — Package layout and how downstream packages use MethylUtils.
 - [../../../docs/theory/README.md](../../../docs/theory/README.md) — Canonical publication-grade theory book for the repository.
+
+## Opt-in M-value residualization
+
+Do **not** enable residualization from `primary_analyte: buffy_coat`. Pick procedure `buffy_wgbs_mvalue_residual_gene_fc` (forked lifecycle). Operator chapter: [usage ch.24](../../../docs/usage/24-methylation-application-packs.md). Per-confounder mechanics: [M-value residualization implementation](../../../docs/implementation/mvalue-residualization.md).
+
+CLIs (same `--resolved-config` contract as other worker actions):
+
+| CLI | Action |
+|-----|--------|
+| `methyl-confounder-scores` | `pipeline.methylation_confounder_scores` |
+| `methyl-residualize-fit` | `pipeline.residualize_fit` |
+| `methyl-residualize-sensitivity` | Compare unadjusted vs residualized DMP / gene panels |
+
+The packaged age covariate is Hannum 2013 (`hannum2013_v1.json`), not a product DNAmAge. Overlay a different clock with `actionConfig.methylation_confounder_scores.age_clock_path`.

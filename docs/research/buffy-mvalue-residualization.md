@@ -2,7 +2,7 @@
 
 Research note for the **opt-in** buffy procedure `buffy_wgbs_mvalue_residual_gene_fc`. This is not a new omics process pack. Shipped methylation / RNA / proteomics process-packs, `buffy_wgbs_pangenome_gene_fc`, `mc_stability.program.json`, and `study_validation_lifecycle.program.json` keep today’s unadjusted DMP path.
 
-Companion canvas: [Buffy M-value residualization](../canvas/buffy-mvalue-residualization.canvas.tsx). Plan: [buffy-mvalue-residualization.plan.md](../plans/buffy-mvalue-residualization.plan.md).
+Companion canvas: [Buffy M-value residualization](../canvas/buffy-mvalue-residualization.canvas.tsx). Implementation (each confounder): [M-value residualization](../implementation/mvalue-residualization.md). Plan: [buffy-mvalue-residualization.plan.md](../plans/buffy-mvalue-residualization.plan.md).
 
 ## Isolation
 
@@ -47,14 +47,7 @@ Count summaries \(S_m\)/\(S_u\) stay **raw** (coverage gating, binomial thinning
 
 ## Confounder panels
 
-`pipeline.methylation_confounder_scores` is label-free and runs once per study. Panels are versioned JSON (package `methyl_utils/data/confounder_panels/` or a site/reference asset path):
-
-| Score | Packaged panel | Notes |
-|-------|----------------|-------|
-| Smoking | `smoking_ahr_v1.json` | AHRR `cg05575921` plus a small Joehanes/Zeilinger-style set (GRCh38) |
-| Epigenetic age | `horvath2013_stub_v1.json` | **Stub.** Replace with a full Horvath/Hannum/PhenoAge coefficient table as a site asset. Do not treat the stub as a biological clock. |
-| BMI / adiposity | `bmi_adiposity_v1.json` | Small replicated set (HIF3A, ABCG1, CPT1A, …) |
-| Inflammation / CRP | `crp_inflammation_v1.json` | Small Wielscher/Ligthart-derived set |
+`pipeline.methylation_confounder_scores` is label-free and runs once per study. Per-confounder mechanics (Hannum 2013 age score, smoking, BMI, CRP, Ω ALR) live in [M-value residualization implementation](../implementation/mvalue-residualization.md). Panels are versioned JSON under `methyl_utils/data/confounder_panels/` or a site/reference asset path.
 
 Missing or low-coverage panel CpGs set sample-level `score_status` (`ok` / `partial` / `insufficient_markers`). The action does not invent clinical BMI.
 

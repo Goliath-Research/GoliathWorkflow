@@ -50,7 +50,7 @@ Committed under
 | Procedure | Analyte | Defaults |
 |-----------|---------|----------|
 | `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | **Default** WGBS pangenome (native-Mojo methylGrapher on NVIDIA or AMD, `alignmentMode: pangenome_wgbs`); requires `hprc-d9-bs.wl.gfa` |
-| `buffy_wgbs_mvalue_residual_gene_fc` | `buffy_coat` | Opt-in M-value residualization before centroids/DMPs (Houseman Ω ALR + smoking/clock/BMI/CRP scores). Forked lifecycle; default buffy procedure is unchanged. See [research note](../research/buffy-mvalue-residualization.md). |
+| `buffy_wgbs_mvalue_residual_gene_fc` | `buffy_coat` | Opt-in M-value residualization before centroids/DMPs (Houseman Ω ALR + smoking/Hannum age/BMI/CRP scores). Forked lifecycle; default buffy procedure is unchanged. See [implementation](../implementation/mvalue-residualization.md) and the [research note](../research/buffy-mvalue-residualization.md). |
 | `buffy_wgbs_linear_gene_fc` | `buffy_coat` | Linear WGBS baseline via **explicit** Clara Parabricks (or MojoFq2bamMeth); same science knobs |
 | `cfdna_wgbs_plasma` | `cfdna` | Linear WGBS + fragmentomics (analyte merge), gene FeatureCuts, **no** cell deconv lifecycle |
 | `cfdna_emseq_targeted` | `cfdna` | `libraryProtocol: emseq_targeted`, `sample_prep_emseq`, panel BED + elevated `min_cov`, no deconv |

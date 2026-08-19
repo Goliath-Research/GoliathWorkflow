@@ -14,6 +14,20 @@ def test_load_panel_resolves_packaged_filename() -> None:
     assert any(s.illumina_id == "cg05575921" for s in panel.sites)
 
 
+def test_hannum2013_panel_is_real_blood_clock() -> None:
+    panel = load_panel("hannum2013_v1.json")
+    assert panel.panel_id == "hannum2013_v1"
+    assert panel.score_name == "age_score"
+    assert panel.score_kind == "weighted_beta"
+    assert panel.genome == "GRCh38"
+    assert len(panel.sites) == 71
+    assert all(s.weight != 0.0 for s in panel.sites)
+    chroms = {s.chrom for s in panel.sites}
+    assert chroms <= {str(i) for i in range(1, 23)} | {"X", "Y", "M", "MT"}
+    assert all(int(s.position) > 0 for s in panel.sites)
+    assert any(s.illumina_id == "cg16867657" for s in panel.sites)
+
+
 def test_confounder_scores_write_status_flags(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()

@@ -9,6 +9,7 @@ Developer-facing documentation for the workflow engine, workers, DomainProgram c
 | [Workers and gateway](workers-and-gateway.md) | poll/submit protocol, capabilities |
 | [DomainProgram compiler](domain-program-compiler.md) | compile, bind, deploy |
 | [Packages index](packages/index.md) | links to `packages/*/docs/IMPLEMENTATION.md` |
+| [M-value residualization](mvalue-residualization.md) | Opt-in confounder scores (Hannum age, smoking, BMI, CRP, Ω ALR) + train-only M-value OLS |
 
 **Engine deep dive:** [`workflow_engine/docs/pipeline_architecture.md`](../../workflow_engine/docs/pipeline_architecture.md) — DB tables, hyperparameter sets, CAAS, portal lifecycle.
 

@@ -104,7 +104,7 @@
     "methylation_confounder_scores": {
       "output_dir": "{output_base}/confounder_scores",
       "smoking_panel_path": "smoking_ahr_v1.json",
-      "age_clock_path": "horvath2013_stub_v1.json",
+      "age_clock_path": "hannum2013_v1.json",
       "bmi_panel_path": "bmi_adiposity_v1.json",
       "inflammation_panel_path": "crp_inflammation_v1.json",
       "contexts": [

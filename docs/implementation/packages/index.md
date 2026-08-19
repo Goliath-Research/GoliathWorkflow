@@ -4,7 +4,7 @@ Thin index linking each package's `IMPLEMENTATION.md`. Apply `implementation/pac
 
 | Package | Implementation | Theory stub | Usage |
 |---------|----------------|-------------|-------|
-| methylutils | [IMPLEMENTATION.md](../../../packages/methylutils/docs/IMPLEMENTATION.md) | [THEORY.md](../../../packages/methylutils/docs/THEORY.md) | [USAGE.md](../../../packages/methylutils/docs/USAGE.md) |
+| methylutils | [IMPLEMENTATION.md](../../../packages/methylutils/docs/IMPLEMENTATION.md) · [M-value residualization](../mvalue-residualization.md) | [THEORY.md](../../../packages/methylutils/docs/THEORY.md) | [USAGE.md](../../../packages/methylutils/docs/USAGE.md) |
 | methylcentroid | [IMPLEMENTATION.md](../../../packages/methylcentroid/docs/IMPLEMENTATION.md) | [THEORY ch.02](../../theory/chapters/02-methylcentroid.md) | [USAGE.md](../../../packages/methylcentroid/docs/USAGE.md) |
 | methyldetector | [IMPLEMENTATION.md](../../../packages/methyldetector/docs/IMPLEMENTATION.md) | [THEORY ch.03](../../theory/chapters/03-methyldetector.md) | [USAGE.md](../../../packages/methyldetector/docs/USAGE.md) |
 | methylclassifier | [IMPLEMENTATION.md](../../../packages/methylclassifier/docs/IMPLEMENTATION.md) | [THEORY ch.04](../../theory/chapters/04-methylclassifier.md) | [USAGE.md](../../../packages/methylclassifier/docs/USAGE.md) |

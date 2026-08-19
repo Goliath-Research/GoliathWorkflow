@@ -3,7 +3,7 @@
   "genome": "GRCh38",
   "score_name": "age_score",
   "score_kind": "clock",
-  "citation": "Stub for tests and smoke. Replace with the full Horvath 2013 353-CpG coefficient table (methylclock / pyaging / Clock Foundation) as a site/reference asset. Do not treat this stub as a biological age clock.",
+  "citation": "One-site test fixture only. The residual procedure default is hannum2013_v1.json. Do not use this file as a biological age clock.",
   "intercept": 0.0,
   "sites": [
     {

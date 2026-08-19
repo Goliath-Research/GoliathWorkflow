@@ -70,6 +70,7 @@ def test_buffy_mvalue_residual_procedure_is_isolated() -> None:
     assert "residualize" in ac
     assert ac["residualize"]["composition_reference"] == "Neu"
     assert "smoking_score" in ac["residualize"]["numeric_columns"]
+    assert ac["methylation_confounder_scores"]["age_clock_path"] == "hannum2013_v1.json"
     shipped = apply_pipeline_procedure({}, load_procedure("buffy_wgbs_pangenome_gene_fc"))
     assert "residualize" not in (shipped.get("actionConfig") or {})
     assert "study_validation_lifecycle.program.json" in str(shipped.get("lifecycleProgram"))

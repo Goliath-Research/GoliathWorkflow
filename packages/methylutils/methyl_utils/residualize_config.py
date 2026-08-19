@@ -85,7 +85,7 @@ class ConfounderScoresStepConfig(BaseModel):
     )
     age_clock_path: Optional[str] = Field(
         default=None,
-        description="JSON clock coefficients (Horvath/Hannum/PhenoAge). Operator-set path.",
+        description="JSON clock coefficients. Procedure default is Hannum 2013 (hannum2013_v1.json); operators may overlay Horvath/PhenoAge.",
     )
     bmi_panel_path: Optional[str] = Field(
         default=None,

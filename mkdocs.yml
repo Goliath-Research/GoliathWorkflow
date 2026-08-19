@@ -206,6 +206,7 @@ nav:
       - Workers and gateway: implementation/workers-and-gateway.md
       - GPU acceleration: implementation/gpu-acceleration.md
       - Packages: implementation/packages/index.md
+      - M-value residualization: implementation/mvalue-residualization.md
   - Deployment:
       - Operator journey: deployment/operator-journey.md
       - Production platform: deployment/production-platform.md

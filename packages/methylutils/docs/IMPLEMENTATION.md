@@ -35,6 +35,30 @@ The public `methyl_utils` package now exports:
 
 These functions are the intended shared entry points for detector/explorer style analyses.
 
+## M-value residualization and confounder scores
+
+Canonical per-confounder write-up: [docs/implementation/mvalue-residualization.md](../../../docs/implementation/mvalue-residualization.md). Code map only here.
+
+| Module | Role |
+|--------|------|
+| `methyl_utils/confounder_scores.py` | Label-free panel scores (`intercept + Σ w_i β_i`) |
+| `methyl_utils/mvalue_residualize.py` | M-value round-trip; apply frozen coefficients |
+| `methyl_utils/residualize_fit.py` | Train-only OLS; Neu-referenced ALR for Ω |
+| `methyl_utils/residualize_config.py` | Typed `actionConfig.residualize` / `methylation_confounder_scores` |
+| `methyl_utils/data/confounder_panels/` | Versioned GRCh38 JSON |
+
+| Confounder | Packaged panel / source |
+|------------|-------------------------|
+| Smoking | `smoking_ahr_v1.json` |
+| Epigenetic age | `hannum2013_v1.json` (Hannum 2013 71-CpG blood clock) |
+| BMI / adiposity | `bmi_adiposity_v1.json` |
+| Inflammation / CRP | `crp_inflammation_v1.json` |
+| Leukocyte Ω | `cell_fractions.csv` via `residualize.composition_columns` |
+
+`horvath2013_stub_v1.json` is a one-site test fixture, not the procedure default.
+
+Entry points: `methyl-confounder-scores`, `methyl-residualize-fit`, `methyl-residualize-sensitivity`; worker actions `pipeline.methylation_confounder_scores` and `pipeline.residualize_fit`.
+
 ## Aggregated ECDF OvR package support
 
 `methyl_utils.ecdf_aggregated_ovr` provides shared training/inference utilities for

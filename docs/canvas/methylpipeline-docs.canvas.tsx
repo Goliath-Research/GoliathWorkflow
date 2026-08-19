@@ -82,6 +82,39 @@ const PILLARS = [
   },
 ];
 
+const RESEARCH_CONFOUNDERS = [
+  [
+    "Smoking",
+    "smoking_ahr_v1.json",
+    "AHRR cg05575921 + small Joehanes/Zeilinger-style set",
+    "docs/implementation/mvalue-residualization.md#sec-smoking",
+  ],
+  [
+    "Epigenetic age",
+    "hannum2013_v1.json",
+    "Hannum 2013 71-CpG blood clock; residualization covariate, not a product DNAmAge",
+    "docs/implementation/mvalue-residualization.md#sec-epigenetic-age",
+  ],
+  [
+    "BMI / adiposity",
+    "bmi_adiposity_v1.json",
+    "Small HIF3A / ABCG1 / CPT1A set",
+    "docs/implementation/mvalue-residualization.md#sec-bmi",
+  ],
+  [
+    "Inflammation / CRP",
+    "crp_inflammation_v1.json",
+    "Small Wielscher/Ligthart-derived set",
+    "docs/implementation/mvalue-residualization.md#sec-inflammation",
+  ],
+  [
+    "Leukocyte mix Ω",
+    "Houseman / HiTIMED fractions",
+    "Neu-referenced ALR; omit composition_columns to keep composition-mediated DMPs",
+    "docs/implementation/mvalue-residualization.md#sec-omega",
+  ],
+];
+
 const STAGES = [
   "Sample prep",
   "QC gates",
@@ -228,6 +261,7 @@ export default function MethylPipelineDocsCanvas() {
         <Row gap={8}>
           <Pill tone="info">DomainProgram-first</Pill>
           <Pill tone="neutral">Theory · Usage · Implementation</Pill>
+          <Pill tone="info">Research companion</Pill>
         </Row>
       </Stack>
 
@@ -280,6 +314,72 @@ export default function MethylPipelineDocsCanvas() {
             </div>
           ))}
         </Grid>
+      </Stack>
+
+      <Stack gap={12}>
+        <H2>Research</H2>
+        <Callout tone="info" title="Exploratory notes, not product truth">
+          Research notes stay under docs/research/ and are excluded from the MkDocs site. Operators use
+          Usage; developers use Implementation. Each research pack still has the same Theory / Usage /
+          Implementation triptych as any other package.
+        </Callout>
+        <Card>
+          <CardHeader trailing={<Pill tone="info">buffy_wgbs_mvalue_residual_gene_fc</Pill>}>
+            Buffy M-value residualization
+          </CardHeader>
+          <CardBody>
+            <Stack gap={12}>
+              <Text size="small" tone="secondary">
+                Opt-in confounder-aware DMP calling. Shipped methylation packs stay on the unadjusted
+                path. Age covariate is Hannum 2013, not a product DNAmAge.
+              </Text>
+              <Grid columns={3} gap={12}>
+                <Stack gap={4}>
+                  <Text weight="semibold">Theory</Text>
+                  <DocLink path="docs/theory/chapters/02-methylcentroid.md">
+                    ch.02 M-value residualization
+                  </DocLink>
+                  <DocLink path="docs/theory/chapters/12-two-workflows.md">
+                    ch.12 pre-MC covariates
+                  </DocLink>
+                </Stack>
+                <Stack gap={4}>
+                  <Text weight="semibold">Usage</Text>
+                  <DocLink path="docs/usage/24-methylation-application-packs.md">
+                    ch.24 procedure pack
+                  </DocLink>
+                </Stack>
+                <Stack gap={4}>
+                  <Text weight="semibold">Implementation</Text>
+                  <DocLink path="docs/implementation/mvalue-residualization.md">
+                    Per-confounder chapter
+                  </DocLink>
+                </Stack>
+              </Grid>
+              <Text weight="semibold">Confounders</Text>
+              <Stack gap={8}>
+                {RESEARCH_CONFOUNDERS.map((row) => (
+                  <div key={row[3]}>
+                    <DocLink path={row[3]}>
+                      {row[0]}
+                    </DocLink>
+                    <Text size="small" tone="secondary">
+                      {row[1]} — {row[2]}
+                    </Text>
+                  </div>
+                ))}
+              </Stack>
+              <Row gap={16} style={{ flexWrap: "wrap" }}>
+                <DocLink path="docs/research/buffy-mvalue-residualization.md">
+                  Research note
+                </DocLink>
+                <DocLink path="docs/canvas/buffy-mvalue-residualization.canvas.tsx">
+                  Dedicated canvas
+                </DocLink>
+              </Row>
+            </Stack>
+          </CardBody>
+        </Card>
       </Stack>
 
       <Stack gap={12}>
