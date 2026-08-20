@@ -84,6 +84,36 @@ def test_sample_caas_enabled_defaults_on(monkeypatch, tmp_path: Path) -> None:
     assert root == (tmp_path / "S1").resolve()
 
 
+def test_commit_wrong_output_dir_still_keeps_sample_bam(tmp_path: Path, monkeypatch) -> None:
+    """Even if output_dir is study configs/, BAM must remain at sampleDir as a CAAS symlink."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    bam = sample_dir / "S1.bam"
+    bam.write_bytes(b"BAMDATA")
+    configs = tmp_path / "projects" / "study" / "configs"
+    configs.mkdir(parents=True)
+    caas_root = sample_dir
+
+    record = _record(
+        artifacts=[ArtifactRef(path=str(bam), bytes=7)],
+        input_sig="align-sig",
+        output_sig="align-out",
+    )
+    commit_artifacts_to_store(
+        caas_root,
+        "sample.parabricks_fq2bam",
+        "align-key",
+        record,
+        output_dir=configs,
+    )
+    assert bam.exists()
+    assert bam.is_symlink()
+    assert bam.read_bytes() == b"BAMDATA"
+    assert ".caas" in bam.resolve().parts
+    assert not list(configs.rglob("*.bam"))
+
+
 def test_resolve_project_root_from_mc_run_dir(tmp_path: Path) -> None:
     project_root = tmp_path / "Study"
     run_dir = project_root / "monte_carlo_runs" / "run_0001"

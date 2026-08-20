@@ -177,3 +177,51 @@ def test_stability_signature_includes_discovery_fingerprint(tmp_path: Path) -> N
     os.utime(disc, None)
     sig2 = compute_input_signature(entry, input_json, input_model)
     assert sig1 != sig2
+
+
+def test_sample_caas_commit_keeps_bam_in_sample_dir(tmp_path: Path, monkeypatch) -> None:
+    """Parabricks CAAS must leave the BAM at sampleDir, not under study configs/."""
+    monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path / "samples"))
+
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    bam = sample_dir / "S1.bam"
+    bam.write_bytes(b"BAMDATA")
+    fastq = sample_dir / "S1_1.fastq.gz"
+    fastq.write_bytes(b"FASTQ")
+
+    configs = tmp_path / "projects" / "study" / "configs"
+    project = configs / "project.json"
+    _write_study_project(project, tmp_path)
+
+    entry = find_catalog_entry("sample.parabricks_fq2bam")
+    assert entry is not None
+    input_json = {
+        "tool": "ParabricksFq2Bam",
+        "sampleId": "S1",
+        "sampleDir": str(sample_dir),
+        "projectPath": str(project),
+        "caasEnabled": True,
+    }
+    from methyl_worker.task_models.sample_prep_models import ParabricksTaskOutput
+
+    input_model = validate_input(entry, strip_runtime_input(input_json))
+    output = ParabricksTaskOutput(
+        status="ok",
+        sampleId="S1",
+        bamPath=str(bam),
+    )
+    record_action_execution(
+        entry, input_json, input_model, execution_result_from_output(output)
+    )
+
+    assert bam.exists()
+    assert bam.resolve().is_file()
+    assert bam.read_bytes() == b"BAMDATA"
+    assert ".caas" in bam.resolve().parts
+    assert sample_dir.resolve() in bam.resolve().parents or bam.resolve().parent == sample_dir.resolve()
+    # FASTQ in the shared sampleDir must not be stolen into the align CAAS entry.
+    assert fastq.is_file() and not fastq.is_symlink()
+    assert not list(configs.rglob("*.bam"))

@@ -20,6 +20,7 @@ from methyl_worker.action_skip import (
     _canonicalize_abs_path,
     artifacts_from_output,
     compute_input_signature,
+    resolve_action_output_dir,
 )
 from pydantic import BaseModel
 
@@ -185,3 +186,25 @@ def test_sample_caas_explicit_opt_out(monkeypatch) -> None:
     delete = find_catalog_entry("sample.delete_fastqs")
     assert delete is not None
     assert idempotency_enabled_for(delete) is False
+
+
+def test_sample_align_output_dir_is_sample_dir_not_project_configs(tmp_path: Path) -> None:
+    """Align/prep bind sampleDir; CAAS must not treat study projectPath.parent as output."""
+    entry = find_catalog_entry("sample.parabricks_fq2bam")
+    assert entry is not None
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    configs = tmp_path / "projects" / "study" / "configs"
+    configs.mkdir(parents=True)
+    project = configs / "project.json"
+    project.write_text("{}", encoding="utf-8")
+    resolved = resolve_action_output_dir(
+        entry,
+        {
+            "sampleId": "S1",
+            "sampleDir": str(sample_dir),
+            "projectPath": str(project),
+        },
+    )
+    assert resolved == sample_dir.resolve()
+    assert resolved != configs.resolve()

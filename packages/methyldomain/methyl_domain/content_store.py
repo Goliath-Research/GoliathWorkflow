@@ -163,7 +163,7 @@ def _should_commit_directory(output_dir: Path, artifacts: Sequence[ArtifactRef])
             owned.add(path.expanduser())
 
     for path in output_dir.rglob("*"):
-        if _ACTION_RESULTS_DIRNAME in path.parts:
+        if _ACTION_RESULTS_DIRNAME in path.parts or ".caas" in path.parts:
             continue
         if not (path.is_file() or path.is_symlink()):
             continue
@@ -266,7 +266,7 @@ def _move_tree_into_entry(
         if not path.is_file():
             continue
         rel = path.relative_to(source_root)
-        if any(part in exclude for part in rel.parts):
+        if any(part in exclude or part == ".caas" for part in rel.parts):
             continue
         dest = entry_dir / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -380,6 +380,14 @@ def _move_artifacts_into_entry(
                             src.unlink()
             else:
                 shutil.move(str(src_payload), str(dest))
+        # Restore the canonical product path as a symlink into the CAAS blob.
+        # Required when output_dir is not a parent of the artifact (wrong fallback
+        # such as study configs/) so BAM/FASTQ/H5 stay at sampleDir for QC/extract.
+        try:
+            if _abspath_nofollow(src) != _abspath_nofollow(dest):
+                _ensure_symlink(src, dest)
+        except OSError:
+            logger.debug("CAAS canonical relink failed for %s", src, exc_info=True)
         updated.append(
             ArtifactRef(
                 path=str(dest.resolve()),
@@ -450,6 +458,7 @@ def _relink_artifacts_from_entry(
     entry_dir: Path,
     *,
     output_dir: Optional[Path] = None,
+    canonical_paths: Optional[Sequence[Path]] = None,
 ) -> List[ArtifactRef]:
     """Create symlinks at canonical artifact paths pointing into entry_dir.
 
@@ -457,8 +466,16 @@ def _relink_artifacts_from_entry(
     ``verify_entry_artifacts`` / skip-replay still work after the product tree is
     wiped. Product locations are restored as relative symlinks when ``output_dir``
     is provided.
+
+    When ``canonical_paths`` is set (first commit, pre-move product locations),
+    do not invent new paths under ``output_dir`` for artifacts that never lived
+    there (e.g. BAM under sampleDir while output_dir wrongly resolved to study
+    configs/).
     """
     entry_dir = entry_dir.resolve()
+    canon_abs: Set[Path] = set()
+    if canonical_paths:
+        canon_abs = {_abspath_nofollow(Path(p)) for p in canonical_paths}
     relinked: List[ArtifactRef] = []
     for ref in artifacts:
         stored = _resolve_blob_in_entry(Path(ref.path), entry_dir)
@@ -476,7 +493,11 @@ def _relink_artifacts_from_entry(
             )
             continue
         if output_dir is not None:
-            _ensure_symlink(Path(output_dir) / rel, stored)
+            dest_link = Path(output_dir) / rel
+            if canon_abs and _abspath_nofollow(dest_link) not in canon_abs:
+                dest_link = None
+            if dest_link is not None:
+                _ensure_symlink(dest_link, stored)
         relinked.append(
             ArtifactRef(
                 path=str(stored.resolve()),
@@ -613,7 +634,7 @@ def commit_artifacts_to_store(
         moved = _move_tree_into_entry(
             out_dir,
             entry_dir,
-            exclude_names={_ACTION_RESULTS_DIRNAME},
+            exclude_names={_ACTION_RESULTS_DIRNAME, ".caas"},
         )
         stored_artifacts = [
             ArtifactRef(
@@ -626,7 +647,12 @@ def commit_artifacts_to_store(
         if out_dir.exists() and not any(out_dir.iterdir()):
             # Keep output_dir as a mount point; relink each stored file beneath it.
             pass
-        relinked = _relink_artifacts_from_entry(stored_artifacts, entry_dir, output_dir=out_dir)
+        relinked = _relink_artifacts_from_entry(
+            stored_artifacts,
+            entry_dir,
+            output_dir=out_dir,
+            canonical_paths=product_paths,
+        )
     else:
         stored_artifacts = _move_artifacts_into_entry(
             record.artifacts,
@@ -637,6 +663,7 @@ def commit_artifacts_to_store(
             stored_artifacts,
             entry_dir,
             output_dir=out_dir,
+            canonical_paths=product_paths,
         )
 
     if not relinked and product_paths:

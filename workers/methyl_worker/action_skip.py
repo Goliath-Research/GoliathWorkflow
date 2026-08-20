@@ -482,6 +482,14 @@ def resolve_action_output_dir(entry: ActionCatalogEntry, input_json: Mapping[str
     if explicit:
         return Path(str(explicit)).expanduser().resolve()
 
+    # Sample-scoped align/prep bind sampleDir, not outputDir. Falling through to
+    # projectPath (a study JSON) would treat configs/ as the product root; CAAS
+    # commit would then move BAM/FASTQ/H5 out of /work/samples/{id}/ and relink
+    # them under the study configs tree, breaking downstream QC and extract.
+    sample_dir = input_json.get("sampleDir")
+    if sample_dir:
+        return Path(str(sample_dir)).expanduser().resolve()
+
     action = entry.action_name
     if action == "validation.stability":
         mc_root = _resolve_monte_carlo_runs_root(input_json)
