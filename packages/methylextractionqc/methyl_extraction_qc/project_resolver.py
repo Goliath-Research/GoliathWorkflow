@@ -17,11 +17,6 @@ def resolve_extraction_qc_config(
     sample_paths: Optional[List[str]] = None,
 ) -> ExtractionQCConfig:
     project = load_project(project_path)
-    resolved = project.get_resolved_groups()
-    default_paths: List[str] = []
-    for _, group_paths in resolved:
-        default_paths.extend(group_paths)
-
     step_cfg = resolve_for_project("extraction_qc", project)
     guardrail_cfg = ExtractionQCGuardrailConfig()
     if isinstance(step_cfg.get("guardrails"), dict):
@@ -31,9 +26,18 @@ def resolve_extraction_qc_config(
     if step_cfg.get("expected_chromosomes"):
         chromosomes = [str(item) for item in step_cfg["expected_chromosomes"]]
 
-    paths = sample_paths if sample_paths is not None else default_paths
-    if step_cfg.get("sample_paths"):
-        paths = [str(item) for item in step_cfg["sample_paths"]]
+    # Per-sample worker QC always passes sample_paths. Do not call
+    # get_resolved_groups() in that case: it rewrites the cohort
+    # sample_qc_report.csv as a side effect and fails on root-owned NFS files.
+    if sample_paths is not None:
+        paths = list(sample_paths)
+    else:
+        default_paths: List[str] = []
+        for _, group_paths in project.get_resolved_groups():
+            default_paths.extend(group_paths)
+        paths = default_paths
+        if step_cfg.get("sample_paths"):
+            paths = [str(item) for item in step_cfg["sample_paths"]]
 
     return ExtractionQCConfig(
         guardrails=guardrail_cfg,

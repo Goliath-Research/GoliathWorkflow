@@ -62,6 +62,8 @@ def test_global_sample_qc_excludes_samples_without_h5_and_writes_artifacts(tmp_p
     assert eligible_path.is_file()
     assert ineligible_path.is_file()
     assert "ctrl_drop" in ineligible_path.read_text(encoding="utf-8")
+    for path in (report_path, eligible_path, ineligible_path):
+        assert path.stat().st_mode & 0o222, path
 
 
 def test_global_sample_qc_fails_when_group_becomes_empty(tmp_path: Path):

@@ -586,6 +586,15 @@ class ProjectConfig(BaseModel):
         with open(qc_dir / "ineligible_samples.txt", "w", encoding="utf-8") as f:
             for p in sorted(set(ineligible_sample_paths)):
                 f.write(f"{p}\n")
+        for artifact in (
+            csv_path,
+            qc_dir / "eligible_samples.txt",
+            qc_dir / "ineligible_samples.txt",
+        ):
+            try:
+                artifact.chmod(0o666)
+            except OSError:
+                logger.debug("Could not share-mode %s", artifact, exc_info=True)
 
     def _apply_sample_qc_with_side(
         self,
