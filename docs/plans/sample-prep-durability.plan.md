@@ -15,6 +15,9 @@ todos:
   - id: work-share
     content: Share share_work_path; call after Parabricks/trim; retry sample_prep_log append on EACCES
     status: completed
+  - id: work-share-writes
+    content: Write-path EACCES retry (extract log, QC JSON, manifest); one docker chmod -R; Clara umask 000
+    status: completed
   - id: trim-resolve
     content: trim_fastq uses resolve_paired_fastqs instead of hardcoded _1/_2 names
     status: completed
@@ -37,7 +40,7 @@ todos:
 
 # SamplePrep durability (instance 66 classes)
 
-> **Status: IMPLEMENTED.** Product fixes in git; Azure SQL FOREACH drain, dest-null token belt, and exclusive-GPU claim procs deployed 2026-08-19. Instance 66 resumed (download 2370 left FAILED).
+> **Status: IMPLEMENTED.** Product fixes in git; Azure SQL FOREACH drain, dest-null token belt, and exclusive-GPU claim procs deployed 2026-08-19. Instance 66 resumed (download 2370 left FAILED). `/work` share was incomplete (post-align only); write-path retry + one `chmod -R` + Clara umask landed 2026-08-20.
 
 Instance 66 (`Healthy_vs_PCa_low` SamplePrep) is **FAILED**. The original 23 even-FASTQ aligns succeeded; the cohort is not finished. Do **not** special-case this run in Python. Fix the product, deploy SQL, then resume 66 (leave download **2370** / `600138_21X_22_3` failed).
 
@@ -100,17 +103,19 @@ Verify: `wf.wf_repo_list_actions` shows exclusive flags; a STOPPING worker gets 
 
 No more PENDING holds.
 
-## 3. Writable `/work` after Docker align
+## 3. Writable `/work` after Docker align (and every later writer)
 
-**Bug:** QC/trim `EACCES` on `{sampleDir}/{sampleId}.sample_prep_log.jsonl`. Clara runs as `--user uid:gid` but does not `chmod` outputs. Sister VMs share NFS with **different numeric uids** named `ubuntu`. WGBS already has [`share_work_path` / `share_work_tree`](workers/methyl_worker/methylgrapher_wgbs_runner.py); Parabricks does not call them.
+**Bug:** QC/trim `EACCES` on `{sampleDir}/{sampleId}.sample_prep_log.jsonl`. Clara runs as `--user uid:gid` but often still writes as root and does not `chmod` outputs. Sister VMs share NFS with **different numeric uids** named `ubuntu`. Post-align `share_work_tree` does not cover later writers: extract `{sampleId}.methyl_extract.log`, `{sampleId}.extraction_manifest.json`, and project `alignment_qc/{sampleId}.json` (first-pass QC writes `0644` as uid A; post-Clara QC on uid B cannot overwrite). Per-file Docker chmod on a 50k-entry tree is too slow.
 
 **Fix:**
 
-- Move `share_work_path` / `share_work_tree` to a small worker helper (e.g. `workers/methyl_worker/work_share.py`); keep WGBS imports.
-- After successful `fq2bam` / giraffe / trim, `share_work_tree(sample_dir)`.
-- [`append_sample_prep_log`](workers/methyl_worker/sample_prep_log.py): if append gets `EACCES`, `share_work_path` on parent + file and retry once.
+- [`work_share.py`](../../workers/methyl_worker/work_share.py): `ensure_work_writable` / `open_work` / `append_work_text` / `run_with_work_write` share ancestors + existing file and retry once on `PermissionError`.
+- `share_work_tree`: local chmod walk, then **one** Docker `chmod -R a+rwX` if any path hits `EPERM` (not one container per file).
+- Clara / Giraffe / Mojo docker argv: `--entrypoint sh` + `umask 000` so root-owned outputs are other-writable.
+- After fq2bam / giraffe / trim / extract / docker_align: `share_work_tree(sample_dir)`.
+- Alignment QC and extraction QC handlers share the JSON dest before write (project `alignment_qc/` and per-sample mirrors).
 
-Tests: chmod-denied path retries; post-align share is invoked.
+Tests: chmod-denied path retries; tree share uses one recursive docker chmod; docker argv contains umask 000.
 
 ## 4. Trim FASTQ discovery = align discovery
 

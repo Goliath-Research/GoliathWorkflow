@@ -24,7 +24,7 @@ from methyl_worker.parabricks_runner import (
     resolve_paired_fastqs,
     resolve_parabricks_config,
 )
-from methyl_worker.work_share import share_work_tree
+from methyl_worker.work_share import docker_umask_prefix, docker_umask_suffix, share_work_tree
 
 logger = logging.getLogger(__name__)
 
@@ -121,25 +121,28 @@ def _build_giraffe_docker_command(
         "-w",
         "/workdir",
         *cfg.extra_docker_args,
+        *docker_umask_prefix(),
         cfg.image,
-        "pbrun",
-        "giraffe",
-        f"--read-group={read_group}",
-        f"--sample={paths.sample_id}",
-        "--read-group-library=library",
-        "--read-group-platform=ILLUMINA",
-        f"--read-group-pu={paths.sample_id}",
-        f"--gbz-name={_container_path(mount_root, graph.gbz)}",
-        f"--dist-name={_container_path(mount_root, graph.dist)}",
-        f"--minimizer-name={_container_path(mount_root, graph.minimizer)}",
-        f"--zipcodes-name={_container_path(mount_root, graph.zipcodes)}",
-        f"--ref-paths={_container_path(mount_root, graph.ref_paths)}",
-        "--in-fq",
-        in_fq_args[0],
-        in_fq_args[1],
-        f"--out-bam=/outputdir/{paths.bam_path.name}",
-        f"--out-duplicate-metrics=/outputdir/{paths.dedup_metrics.name}",
-        f"--logfile=/outputdir/{paths.log_path.name}",
+        *docker_umask_suffix(
+            "pbrun",
+            "giraffe",
+            f"--read-group={read_group}",
+            f"--sample={paths.sample_id}",
+            "--read-group-library=library",
+            "--read-group-platform=ILLUMINA",
+            f"--read-group-pu={paths.sample_id}",
+            f"--gbz-name={_container_path(mount_root, graph.gbz)}",
+            f"--dist-name={_container_path(mount_root, graph.dist)}",
+            f"--minimizer-name={_container_path(mount_root, graph.minimizer)}",
+            f"--zipcodes-name={_container_path(mount_root, graph.zipcodes)}",
+            f"--ref-paths={_container_path(mount_root, graph.ref_paths)}",
+            "--in-fq",
+            in_fq_args[0],
+            in_fq_args[1],
+            f"--out-bam=/outputdir/{paths.bam_path.name}",
+            f"--out-duplicate-metrics=/outputdir/{paths.dedup_metrics.name}",
+            f"--logfile=/outputdir/{paths.log_path.name}",
+        ),
     ]
 
 
@@ -168,13 +171,16 @@ def _build_collect_metrics_docker_command(
         "-w",
         "/workdir",
         *cfg.extra_docker_args,
+        *docker_umask_prefix(),
         cfg.image,
-        "pbrun",
-        "collectmultiplemetrics",
-        f"--ref=/genomes/{ref_basename}",
-        f"--bam=/workdir/{paths.bam_path.name}",
-        f"--out-qc-metrics-dir=/outputdir/{paths.qc_metrics_dir.name}",
-        "--gen-all-metrics",
+        *docker_umask_suffix(
+            "pbrun",
+            "collectmultiplemetrics",
+            f"--ref=/genomes/{ref_basename}",
+            f"--bam=/workdir/{paths.bam_path.name}",
+            f"--out-qc-metrics-dir=/outputdir/{paths.qc_metrics_dir.name}",
+            "--gen-all-metrics",
+        ),
     ]
 
 

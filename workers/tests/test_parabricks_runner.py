@@ -199,6 +199,8 @@ def test_build_docker_command_mounts_and_flags(tmp_path: Path) -> None:
     assert "/usr/bin/docker run --rm --gpus all" in joined
     assert f"{sample_dir.resolve()}:/workdir" in cmd
     assert f"{ref.parent.resolve()}:/genomes:ro" in cmd
+    assert cmd[cmd.index(cfg.image) - 2 : cmd.index(cfg.image)] == ["--entrypoint", "sh"]
+    assert "umask 000" in " ".join(cmd)
     assert "pbrun" in cmd
     assert "fq2bam_meth" in cmd
     assert "--in-fq" in cmd
@@ -320,6 +322,8 @@ def test_build_mojo_fq2bam_docker_command(tmp_path: Path) -> None:
     assert "-device" in cmd
     assert "amd" in cmd
     assert cfg.image in cmd
+    assert "--entrypoint" in cmd
+    assert "umask 000" in " ".join(cmd)
 
 
 def test_resolve_mojo_engine_defaults_image(tmp_path: Path) -> None:

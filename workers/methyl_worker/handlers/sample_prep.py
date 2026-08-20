@@ -47,6 +47,7 @@ from ..task_models.sample_prep_models import (
     TrimFastqTaskInput,
     TrimFastqTaskOutput,
 )
+from ..work_share import ensure_work_writable, run_with_work_write, share_work_path
 from .common import resolve_reference_fasta
 
 logger = logging.getLogger(__name__)
@@ -91,18 +92,14 @@ def _handle_methyl_qc(
         dest = sample_path / f"{resolved_sample_id}.alignment_qc.json"
         if qc_path.resolve() == dest.resolve():
             return
-        from ..work_share import share_work_path
-
         # copy2/copystat chmod on a root-owned NFS file raises EPERM even when
         # mode is 0666. Share first, copy contents only, then open the dest.
-        if dest.exists():
-            share_work_path(dest)
+        ensure_work_writable(dest)
         try:
             shutil.copy(qc_path, dest)
         except OSError:
-            share_work_path(dest.parent)
+            ensure_work_writable(dest)
             if dest.exists():
-                share_work_path(dest)
                 dest.unlink()
             shutil.copy(qc_path, dest)
         share_work_path(dest)
@@ -162,6 +159,8 @@ def _handle_methyl_qc(
         cfg = resolve_alignment_qc_config(str(project))
         out_dir = cfg.output_dir
         qc_path = Path(out_dir) / f"{resolved_sample_id}.json"
+        if qc_path.exists():
+            ensure_work_writable(qc_path)
         if qc_path.is_file():
             # Use module-level json (do not re-import here — that makes `json` a
             # function-local name and breaks _build_result when this branch is skipped).
@@ -169,20 +168,25 @@ def _handle_methyl_qc(
             history = prior.get("qc_history")
             if isinstance(history, list):
                 write_ctx.prior_qc_history = [h for h in history if isinstance(h, dict)]
-        process_samples_to_qc_jsons(
-            [str(sample_path)],
-            out_dir,
-            validate_schema=cfg.validate_schema,
-            fragmentomics=cfg.fragmentomics,
-            bisulfite_conversion=cfg.bisulfite_conversion,
-            cycle_screening=cfg.cycle_screening,
-            optional_guardrails=cfg.optional_guardrails,
-            alignment_guardrails=cfg.alignment_guardrails,
-            core_guardrails=cfg.core_guardrails,
-            write_context=write_ctx,
-            sample_id=resolved_sample_id,
-            alignment_mode=input.alignmentMode,
-        )
+        mirror = sample_path / f"{resolved_sample_id}.alignment_qc.json"
+
+        def _write_project_qc() -> None:
+            process_samples_to_qc_jsons(
+                [str(sample_path)],
+                out_dir,
+                validate_schema=cfg.validate_schema,
+                fragmentomics=cfg.fragmentomics,
+                bisulfite_conversion=cfg.bisulfite_conversion,
+                cycle_screening=cfg.cycle_screening,
+                optional_guardrails=cfg.optional_guardrails,
+                alignment_guardrails=cfg.alignment_guardrails,
+                core_guardrails=cfg.core_guardrails,
+                write_context=write_ctx,
+                sample_id=resolved_sample_id,
+                alignment_mode=input.alignmentMode,
+            )
+
+        run_with_work_write(_write_project_qc, Path(out_dir), qc_path, mirror)
         qc_path = Path(out_dir) / f"{resolved_sample_id}.json"
     else:
         import tempfile
@@ -242,10 +246,13 @@ def _handle_methyl_extraction_qc(
                     config = None
             else:
                 config = None
-    qc_path = process_sample_extraction_qc(
-        sample_path,
-        str(sample_id),
-        config=config,
+    qc_path = run_with_work_write(
+        lambda: process_sample_extraction_qc(
+            sample_path,
+            str(sample_id),
+            config=config,
+        ),
+        sample_path / f"{sample_id}.extraction_qc.json",
     )
 
     from ..sample_prep_log import append_sample_prep_log

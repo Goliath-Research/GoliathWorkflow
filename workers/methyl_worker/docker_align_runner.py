@@ -144,6 +144,10 @@ def run_docker_align(
             with tarfile.open(qc_tar, "a") as tar:
                 tar.add(metrics_json, arcname=metrics_json.name)
 
+    from methyl_worker.work_share import share_work_tree
+
+    share_work_tree(sample_path)
+
     return {
         "sampleId": sample_id,
         "bamPath": str(bam_path),

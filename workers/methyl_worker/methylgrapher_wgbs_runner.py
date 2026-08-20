@@ -384,9 +384,9 @@ def _find_paired_fastqs(sample_dir: Path, sample_id: str) -> Tuple[Path, Path]:
 
 
 def _append_log(log_path: Path, text: str) -> None:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("a", encoding="utf-8") as fh:
-        fh.write(text.rstrip() + "\n")
+    from methyl_worker.work_share import append_work_text
+
+    append_work_text(log_path, text.rstrip() + "\n")
 
 
 def _align_docker_user() -> str:

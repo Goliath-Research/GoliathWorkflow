@@ -19,7 +19,12 @@ from methyl_worker.fastq_pairs import (  # noqa: F401 — re-export for aligner 
     canonical_trimmed_fastqs,
     resolve_paired_fastqs,
 )
-from methyl_worker.work_share import share_work_tree
+from methyl_worker.work_share import (
+    append_work_text,
+    docker_umask_prefix,
+    docker_umask_suffix,
+    share_work_tree,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -388,27 +393,30 @@ def _build_docker_command(
             "-w",
             "/workdir",
             *cfg.extra_docker_args,
+            *docker_umask_prefix(),
             cfg.image,
-            "methylGrapher",
-            "MojoFq2bamMeth",
-            "-fq1",
-            in_fq_args[0],
-            "-fq2",
-            in_fq_args[1],
-            "-ref",
-            f"/genomes/{ref_basename}",
-            "-out_bam",
-            f"/outputdir/{paths.bam_path.name}",
-            "-out_qc_dir",
-            f"/outputdir/{paths.qc_metrics_dir.name}",
-            "-sample_id",
-            paths.sample_id,
-            "-t",
-            str(cfg.bwa_threads),
-            "-device",
-            cfg.align_device,
-            "-work_dir",
-            f"/outputdir/{paths.tmp_dir.name}",
+            *docker_umask_suffix(
+                "methylGrapher",
+                "MojoFq2bamMeth",
+                "-fq1",
+                in_fq_args[0],
+                "-fq2",
+                in_fq_args[1],
+                "-ref",
+                f"/genomes/{ref_basename}",
+                "-out_bam",
+                f"/outputdir/{paths.bam_path.name}",
+                "-out_qc_dir",
+                f"/outputdir/{paths.qc_metrics_dir.name}",
+                "-sample_id",
+                paths.sample_id,
+                "-t",
+                str(cfg.bwa_threads),
+                "-device",
+                cfg.align_device,
+                "-work_dir",
+                f"/outputdir/{paths.tmp_dir.name}",
+            ),
         ]
         return cmd
 
@@ -428,29 +436,28 @@ def _build_docker_command(
         "-w",
         "/workdir",
         *cfg.extra_docker_args,
+        *docker_umask_prefix(),
         cfg.image,
-        "pbrun",
-        "fq2bam_meth",
-        f"--ref=/genomes/{ref_basename}",
-        *_in_fq_flags(in_fq_args),
-        f"--out-bam=/outputdir/{paths.bam_path.name}",
-        f"--out-qc-metrics-dir=/outputdir/{paths.qc_metrics_dir.name}",
-        f"--out-duplicate-metrics=/outputdir/{paths.dedup_metrics.name}",
-        f"--logfile=/outputdir/{paths.log_path.name}",
-        f"--tmp-dir=/outputdir/{paths.tmp_dir.name}",
-        f"--bwa-cpu-thread-pool={cfg.bwa_threads}",
-        "--gpusort",
-        "--gpuwrite",
+        *docker_umask_suffix(
+            "pbrun",
+            "fq2bam_meth",
+            f"--ref=/genomes/{ref_basename}",
+            *_in_fq_flags(in_fq_args),
+            f"--out-bam=/outputdir/{paths.bam_path.name}",
+            f"--out-qc-metrics-dir=/outputdir/{paths.qc_metrics_dir.name}",
+            f"--out-duplicate-metrics=/outputdir/{paths.dedup_metrics.name}",
+            f"--logfile=/outputdir/{paths.log_path.name}",
+            f"--tmp-dir=/outputdir/{paths.tmp_dir.name}",
+            f"--bwa-cpu-thread-pool={cfg.bwa_threads}",
+            "--gpusort",
+            "--gpuwrite",
+        ),
     ]
     return cmd
 
 
 def _append_log(log_path: Path, text: str) -> None:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(log_path, "a", encoding="utf-8") as handle:
-        handle.write(text)
-        if not text.endswith("\n"):
-            handle.write("\n")
+    append_work_text(log_path, text)
 
 
 def _package_qc_metrics(paths: ParabricksPaths) -> Optional[Path]:

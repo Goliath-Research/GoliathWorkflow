@@ -14,6 +14,15 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
+
+from methyl_worker.work_share import (
+    append_work_text,
+    ensure_work_writable,
+    replace_work_file,
+    share_work_tree,
+    write_work_text,
+)
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_EXTRACT_CONTEXTS: tuple[str, ...] = ("CG", "CHG", "CHH")
@@ -189,8 +198,8 @@ def _materialize_chrom_mapping(
         mapping = dict(chrom_mapping_raw)
         _validate_chrom_mapping(mapping, chromosomes)
         out = sample_dir / ".chrom_mapping.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(mapping, indent=2) + "\n", encoding="utf-8")
+        ensure_work_writable(out)
+        write_work_text(out, json.dumps(mapping, indent=2) + "\n")
         return out.resolve()
 
     if chrom_mapping_raw is None or (
@@ -198,8 +207,8 @@ def _materialize_chrom_mapping(
     ):
         mapping = _derive_chrom_mapping_object(chromosomes, reference_fasta, step_cfg)
         out = sample_dir / ".chrom_mapping.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(mapping, indent=2) + "\n", encoding="utf-8")
+        ensure_work_writable(out)
+        write_work_text(out, json.dumps(mapping, indent=2) + "\n")
         return out.resolve()
 
     path = Path(str(chrom_mapping_raw)).expanduser().resolve()
@@ -472,8 +481,9 @@ def write_extraction_manifest(
     """Atomically write ``{sampleId}.extraction_manifest.json`` (overwrites stubs)."""
     path = sample_dir / f"{sample_id}.extraction_manifest.json"
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    ensure_work_writable(path)
+    write_work_text(tmp, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    replace_work_file(tmp, path)
     if not path.is_file() or path.stat().st_size <= 0:
         raise RuntimeError(f"Extraction manifest not written: {path}")
     return path
@@ -680,11 +690,7 @@ def build_methyl_extractor_command(cfg: MethylExtractConfig, paths: MethylExtrac
 
 
 def _append_log(log_path: Path, text: str) -> None:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(log_path, "a", encoding="utf-8") as handle:
-        handle.write(text)
-        if not text.endswith("\n"):
-            handle.write("\n")
+    append_work_text(log_path, text)
 
 
 def run_methyl_extract(
@@ -703,6 +709,7 @@ def run_methyl_extract(
     cfg = resolve_methyl_extract_config(str(project), payload)
     if not cfg.sample_dir.is_dir():
         raise RuntimeError(f"sampleDir not found: {cfg.sample_dir}")
+    ensure_work_writable(cfg.sample_dir)
 
     expected = expected_h5_files(cfg.chromosomes, cfg.extract_contexts)
     pattern_expected = (
@@ -730,6 +737,7 @@ def run_methyl_extract(
             h5_files=expected,
             pattern_files=pattern_present,
         )
+        share_work_tree(cfg.sample_dir)
         return {
             "sampleId": cfg.sample_id,
             "h5Files": expected,
@@ -753,6 +761,7 @@ def run_methyl_extract(
                 h5_files=expected,
                 pattern_files=[],
             )
+            share_work_tree(cfg.sample_dir)
             return {
                 "sampleId": cfg.sample_id,
                 "h5Files": expected,
@@ -822,6 +831,7 @@ def run_methyl_extract(
         h5_files=h5_files,
         pattern_files=pattern_files,
     )
+    share_work_tree(cfg.sample_dir)
 
     return {
         "sampleId": cfg.sample_id,

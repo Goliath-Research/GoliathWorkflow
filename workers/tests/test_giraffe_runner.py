@@ -86,6 +86,8 @@ def test_build_giraffe_docker_command_mounts_graph_and_ref_paths(tmp_path: Path)
 
     assert "pbrun" in cmd
     assert "giraffe" in cmd
+    assert "--entrypoint" in cmd
+    assert "umask 000" in " ".join(cmd)
     assert f"{graph.mount_root.resolve()}:/pangenome:ro" in cmd
     assert graph.mount_root.resolve() == (tmp_path / "pangenome").resolve()
     assert "--gbz-name=/pangenome/graph.gbz" in cmd
@@ -114,6 +116,8 @@ def test_build_collect_metrics_docker_command(tmp_path: Path) -> None:
         cmd = runner._build_collect_metrics_docker_command(cfg, paths, ref)
 
     assert "collectmultiplemetrics" in cmd
+    assert "--entrypoint" in cmd
+    assert "umask 000" in " ".join(cmd)
     assert "--gen-all-metrics" in cmd
     assert f"--ref=/genomes/{ref.name}" in cmd
     assert "--bam=/workdir/S2.bam" in cmd

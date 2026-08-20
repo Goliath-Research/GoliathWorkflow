@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from methyl_worker.work_share import share_work_path
+from methyl_worker.work_share import append_work_text
 
 
 def _utc_now_iso() -> str:
@@ -34,7 +34,6 @@ def append_sample_prep_log(
     """Append one JSON line to {sampleDir}/{sampleId}.sample_prep_log.jsonl."""
     sample_dir = Path(sample_dir)
     log_path = sample_prep_log_path(sample_dir, sample_id)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
     record = {
         "ts_utc": _utc_now_iso(),
         "action": action,
@@ -47,13 +46,4 @@ def append_sample_prep_log(
         "workflow_node_key": workflow_node_key,
     }
     payload = json.dumps(record, separators=(",", ":")) + "\n"
-    try:
-        with log_path.open("a", encoding="utf-8") as fh:
-            fh.write(payload)
-    except PermissionError:
-        share_work_path(log_path.parent)
-        if log_path.exists():
-            share_work_path(log_path)
-        with log_path.open("a", encoding="utf-8") as fh:
-            fh.write(payload)
-    return log_path
+    return append_work_text(log_path, payload)
