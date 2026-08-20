@@ -12,6 +12,7 @@ import pytest
 from methyl_domain.action_result import (
     ActionExecutionRecord,
     ArtifactRef,
+    artifact_ref_for,
     caas_entry_dir,
     caas_entry_manifest_path,
     instance_ledger_path,
@@ -21,8 +22,10 @@ from methyl_domain.content_store import (
     caas_enabled,
     commit_artifacts_to_store,
     link_entry_into_place,
+    read_caas_entry,
     resolve_caas_root,
     resolve_project_root,
+    verify_entry_artifacts,
 )
 from methyl_domain.sample_content_store import (
     sample_caas_enabled,
@@ -112,6 +115,63 @@ def test_commit_wrong_output_dir_still_keeps_sample_bam(tmp_path: Path, monkeypa
     assert bam.read_bytes() == b"BAMDATA"
     assert ".caas" in bam.resolve().parts
     assert not list(configs.rglob("*.bam"))
+
+
+def test_second_commit_does_not_replace_prior_caas_blob_with_symlink(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """artifact_ref_for records resolve()d CAAS paths; later commit must copy, not rewrite."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    bam = sample_dir / "S1.bam"
+    bam.write_bytes(b"BAM-V1")
+
+    first = _record(
+        artifacts=[ArtifactRef(path=str(bam), bytes=6)],
+        input_sig="align-a",
+        output_sig="align-a",
+    )
+    commit_artifacts_to_store(
+        sample_dir,
+        "sample.parabricks_fq2bam",
+        "key-a",
+        first,
+        output_dir=sample_dir,
+    )
+    blob_a = bam.resolve()
+    assert ".caas" in blob_a.parts
+    assert blob_a.is_file() and not blob_a.is_symlink()
+    assert blob_a.read_bytes() == b"BAM-V1"
+
+    second = _record(
+        artifacts=[artifact_ref_for(blob_a)],
+        input_sig="align-b",
+        output_sig="align-b",
+    )
+    commit_artifacts_to_store(
+        sample_dir,
+        "sample.parabricks_fq2bam",
+        "key-b",
+        second,
+        output_dir=sample_dir,
+    )
+
+    assert blob_a.is_file() and not blob_a.is_symlink()
+    assert blob_a.read_bytes() == b"BAM-V1"
+    entry_a = caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "key-a")
+    rec_a = read_caas_entry(sample_dir, "sample.parabricks_fq2bam", "key-a")
+    assert rec_a is not None
+    assert verify_entry_artifacts(rec_a)
+    linked = link_entry_into_place(
+        sample_dir,
+        "sample.parabricks_fq2bam",
+        "key-a",
+        output_dir=sample_dir,
+    )
+    assert linked is not None
+    assert bam.resolve() == blob_a.resolve()
+    assert (entry_a / "S1.bam").is_file() and not (entry_a / "S1.bam").is_symlink()
 
 
 def test_resolve_project_root_from_mc_run_dir(tmp_path: Path) -> None:
@@ -574,3 +634,5 @@ def test_plan_iterations_commit_recovers_run_layout_from_caas_symlink_paths(
     # Must copy, not steal, from the old content key.
     assert (old_entry / "run_0001" / "project.json").is_file()
     assert (old_entry / "run_0002" / "project.json").is_file()
+    assert not (old_entry / "run_0001" / "project.json").is_symlink()
+    assert not (old_entry / "run_0002" / "project.json").is_symlink()

@@ -13,6 +13,9 @@ Helpers here cover both sides:
   ``chmod -R a+rwX`` via Docker-as-root when local chmod hits ``EPERM``.
 - **Write path:** ``ensure_work_writable`` / ``open_work`` / ``append_work_text``
   share the parent tree and retry once on ``PermissionError``.
+- **Identity:** Align containers use ``--user 1000:1000`` (override
+  ``METHYL_ALIGN_DOCKER_USER``) so sister VMs share one numeric owner. Clara
+  may still ignore ``--user``; umask + ``share_work_tree`` remain the fallback.
 """
 
 from __future__ import annotations
@@ -71,6 +74,20 @@ def _is_under(path: Path, root: Path) -> bool:
         return True
     except (ValueError, OSError):
         return False
+
+
+def align_docker_user() -> str:
+    """Docker ``--user`` for Align/Extract writes on shared NFS ``/work``.
+
+    Prefer ``1000:1000`` so every sister sees the same owner (hosts are all
+    named ``ubuntu`` but have different numeric uids). Override with
+    ``METHYL_ALIGN_DOCKER_USER=uid:gid``. Clara images may still ignore
+    ``--user`` and write as root; pair with ``docker_umask_*``.
+    """
+    explicit = (os.environ.get("METHYL_ALIGN_DOCKER_USER") or "").strip()
+    if explicit:
+        return explicit
+    return "1000:1000"
 
 
 def docker_umask_prefix() -> tuple[str, str]:

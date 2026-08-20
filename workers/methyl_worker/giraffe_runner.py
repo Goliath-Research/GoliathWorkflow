@@ -24,7 +24,12 @@ from methyl_worker.parabricks_runner import (
     resolve_paired_fastqs,
     resolve_parabricks_config,
 )
-from methyl_worker.work_share import docker_umask_prefix, docker_umask_suffix, share_work_tree
+from methyl_worker.work_share import (
+    align_docker_user,
+    docker_umask_prefix,
+    docker_umask_suffix,
+    share_work_tree,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +100,7 @@ def _build_giraffe_docker_command(
     graph: PangenomeGraphBundle,
     fastqs: Sequence[Path],
 ) -> List[str]:
-    uid = os.getuid()
-    gid = os.getgid()
     mount_root = graph.mount_root
-
     in_fq_args: List[str] = []
     for fastq in fastqs:
         rel = fastq.relative_to(paths.sample_dir)
@@ -111,7 +113,7 @@ def _build_giraffe_docker_command(
         "--rm",
         *cfg.gpu_flags,
         "--user",
-        f"{uid}:{gid}",
+        align_docker_user(),
         "-v",
         f"{paths.sample_dir.resolve()}:/workdir",
         "-v",
@@ -151,8 +153,6 @@ def _build_collect_metrics_docker_command(
     paths: ParabricksPaths,
     reference_fasta: Path,
 ) -> List[str]:
-    uid = os.getuid()
-    gid = os.getgid()
     genome_dir = reference_fasta.parent
     ref_basename = reference_fasta.name
     return [
@@ -161,7 +161,7 @@ def _build_collect_metrics_docker_command(
         "--rm",
         *cfg.gpu_flags,
         "--user",
-        f"{uid}:{gid}",
+        align_docker_user(),
         "-v",
         f"{paths.sample_dir.resolve()}:/workdir",
         "-v",

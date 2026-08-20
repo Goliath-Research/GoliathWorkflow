@@ -20,6 +20,7 @@ from methyl_worker.fastq_pairs import (  # noqa: F401 — re-export for aligner 
     resolve_paired_fastqs,
 )
 from methyl_worker.work_share import (
+    align_docker_user,
     docker_umask_prefix,
     docker_umask_suffix,
     share_work_tree,
@@ -363,8 +364,7 @@ def _build_docker_command(
 ) -> List[str]:
     genome_dir = paths.reference_fasta.parent
     ref_basename = paths.reference_fasta.name
-    uid = os.getuid()
-    gid = os.getgid()
+    docker_user = align_docker_user()
 
     in_fq_args: List[str] = []
     for fastq in fastqs:
@@ -383,7 +383,7 @@ def _build_docker_command(
             "--rm",
             *cfg.gpu_flags,
             "--user",
-            f"{uid}:{gid}",
+            docker_user,
             "-e",
             f"METHYLGRAPHER_ALIGN_DEVICE={cfg.align_device}",
             "-e",
@@ -430,7 +430,7 @@ def _build_docker_command(
         "--rm",
         *cfg.gpu_flags,
         "--user",
-        f"{uid}:{gid}",
+        docker_user,
         "-v",
         f"{paths.sample_dir.resolve()}:/workdir",
         "-v",

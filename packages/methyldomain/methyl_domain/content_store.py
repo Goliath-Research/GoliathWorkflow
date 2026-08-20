@@ -122,6 +122,22 @@ def resolve_project_root(input_json: Mapping[str, Any]) -> Optional[Path]:
     return path
 
 
+def _is_durable_caas_blob(path: Path) -> bool:
+    """True when ``path`` is a real file stored under a ``.caas/`` content-key.
+
+    Product paths (``sampleDir/S1.bam``, ``output_dir/summary.json``) are never
+    this. ``artifact_ref_for`` records ``Path.resolve()``, so a later commit may
+    see the blob path instead of the product symlink. Rewriting that file as a
+    symlink into a new entry destroys skip-replay for the prior key.
+    """
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False
+    except OSError:
+        return False
+    return ".caas" in path.parts
+
+
 def _is_under(child: Path, parent: Path) -> bool:
     try:
         child.resolve().relative_to(parent.resolve())
@@ -380,11 +396,15 @@ def _move_artifacts_into_entry(
                             src.unlink()
             else:
                 shutil.move(str(src_payload), str(dest))
-        # Restore the canonical product path as a symlink into the CAAS blob.
-        # Required when output_dir is not a parent of the artifact (wrong fallback
-        # such as study configs/) so BAM/FASTQ/H5 stay at sampleDir for QC/extract.
+        # Restore the canonical product path as a symlink into this entry.
+        # Do not rewrite a durable blob under ``.caas/`` — harvest often records
+        # resolve()d CAAS paths; replacing that file would break skip-replay of
+        # the prior content-key.
         try:
-            if _abspath_nofollow(src) != _abspath_nofollow(dest):
+            if (
+                _abspath_nofollow(src) != _abspath_nofollow(dest)
+                and not _is_durable_caas_blob(src)
+            ):
                 _ensure_symlink(src, dest)
         except OSError:
             logger.debug("CAAS canonical relink failed for %s", src, exc_info=True)
