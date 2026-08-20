@@ -1,11 +1,14 @@
 """Sample-scoped CAAS store under ``/work/samples/{sample_id}/.caas/``.
 
-Phase 4 of universal CAAS: sample-prep actions write/read a per-sample store
-instead of the study ``{project_root}/.caas/``. Destructive and control-flow
-actions remain hard opt-outs.
+Sample-prep and alignment actions write/read a per-sample store instead of the
+study ``{project_root}/.caas/``. That store exists to skip repeated GPU/IO work
+(FASTQ download, Parabricks/Mojo/methylGrapher align, QC, extract).
 
-Enable with ``METHYL_SAMPLE_CAAS_ENABLED=1`` (or task ``sampleCaasEnabled: true``).
-Default remains off until operators opt in.
+CAAS is **on by default**. Operators may reject it with task
+``sampleCaasEnabled: false`` / ``caasEnabled: false``, or
+``METHYL_SAMPLE_CAAS_ENABLED=0`` (false/no/off). Destructive and control-flow
+actions remain hard opt-outs. ``sample.archive_sample`` stays etag-only (QNAP
+upload skip is not CAAS replay).
 """
 
 from __future__ import annotations
@@ -33,15 +36,23 @@ SAMPLE_SCOPED_PREFIXES = (
 
 
 def sample_caas_env_enabled() -> bool:
+    """Return True unless ``METHYL_SAMPLE_CAAS_ENABLED`` explicitly disables."""
     env = os.environ.get("METHYL_SAMPLE_CAAS_ENABLED", "").strip().lower()
-    return env in {"1", "true", "yes", "on"}
+    if env in {"0", "false", "no", "off"}:
+        return False
+    if env in {"1", "true", "yes", "on"}:
+        return True
+    return True
 
 
 def sample_caas_enabled(input_json: Optional[Mapping[str, Any]] = None) -> bool:
+    """Return True unless the operator explicitly rejected sample-scoped CAAS."""
     if input_json is not None:
         if input_json.get("sampleCaasEnabled") is True:
             return True
         if input_json.get("sampleCaasEnabled") is False:
+            return False
+        if input_json.get("caasEnabled") is False:
             return False
     return sample_caas_env_enabled()
 

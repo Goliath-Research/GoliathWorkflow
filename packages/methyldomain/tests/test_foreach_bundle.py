@@ -131,9 +131,12 @@ def test_commit_read(tmp_path: Path) -> None:
     assert read_iteration_bundle(tmp_path, key)["status"] == "completed"
 
 
-def test_sample_opt_outs() -> None:
+def test_sample_opt_outs(monkeypatch) -> None:
+    monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
     assert sample_caas_opt_out_reason("sample.delete_bam") == "destructive"
-    assert sample_caas_enabled_for_action("sample.download_fastq") is False
+    assert sample_caas_opt_out_reason("sample.archive_sample") == "remote_upload_etag_only"
+    assert sample_caas_enabled_for_action("sample.download_fastq") is True
+    assert sample_caas_enabled_for_action("sample.delete_bam") is False
 
 
 def test_sample_root(tmp_path: Path, monkeypatch) -> None:

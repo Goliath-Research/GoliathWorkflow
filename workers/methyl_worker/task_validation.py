@@ -28,6 +28,7 @@ RUNTIME_INPUT_KEYS = frozenset({
     "executionScopeId",
     "hyperparamSetId",
     "caasEnabled",
+    "sampleCaasEnabled",
 })
 
 

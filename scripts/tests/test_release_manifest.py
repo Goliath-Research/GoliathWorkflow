@@ -291,6 +291,7 @@ def test_write_worker_env_from_manifest(tmp_path: Path) -> None:
     assert "EPIMETHYL_RELEASE=2026.6.1" in worker_env
     assert "WORKER_API_BASE=http://test/v1" in worker_env
     assert "TMPDIR=/var/tmp/methyl-samtools" in worker_env
+    assert "METHYL_SAMPLE_CAAS_ENABLED=1" in worker_env
     assert "METHYL_PARABRICKS_IMAGE=nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1" in worker_env
     assert str(root / "venv-aarch64/bin") in worker_env
 

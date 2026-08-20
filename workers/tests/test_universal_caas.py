@@ -31,11 +31,16 @@ def test_default_on_validation_model_mc() -> None:
     assert idempotency_opt_out_reason_for(entry) is None
 
 
-def test_sample_deferred_opt_out() -> None:
+def test_sample_align_caas_default_on(monkeypatch) -> None:
+    monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
     entry = find_catalog_entry("sample.download_fastq")
     assert entry is not None
-    assert idempotency_enabled_for(entry) is False
-    assert idempotency_opt_out_reason_for(entry) == "sample_scoped_caas_deferred"
+    assert idempotency_enabled_for(entry) is True
+    assert idempotency_opt_out_reason_for(entry) is None
+    align = find_catalog_entry("sample.parabricks_fq2bam")
+    assert align is not None
+    assert idempotency_enabled_for(align) is True
+    assert idempotency_opt_out_reason_for(align) is None
 
 
 def test_destructive_sample_hard_opt_out() -> None:
@@ -166,11 +171,17 @@ def test_foreach_bundle_roundtrip(tmp_path: Path) -> None:
     assert again is not None
 
 
-def test_sample_caas_opt_in(monkeypatch) -> None:
-    monkeypatch.setenv("METHYL_SAMPLE_CAAS_ENABLED", "1")
+def test_sample_caas_explicit_opt_out(monkeypatch) -> None:
+    monkeypatch.setenv("METHYL_SAMPLE_CAAS_ENABLED", "0")
     entry = find_catalog_entry("sample.download_fastq")
     assert entry is not None
-    assert idempotency_enabled_for(entry) is True
+    assert idempotency_enabled_for(entry) is False
+    assert idempotency_opt_out_reason_for(entry) == "sample_caas_disabled"
+    align = find_catalog_entry("sample.parabricks_fq2bam")
+    assert align is not None
+    assert idempotency_enabled_for(align, {"sampleCaasEnabled": True}) is True
+    assert idempotency_enabled_for(align, {"sampleCaasEnabled": False}) is False
+    assert idempotency_enabled_for(align, {"caasEnabled": False}) is False
     delete = find_catalog_entry("sample.delete_fastqs")
     assert delete is not None
     assert idempotency_enabled_for(delete) is False

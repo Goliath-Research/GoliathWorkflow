@@ -50,6 +50,8 @@ CLI tools write JSON manifests under `{output_dir}/.action_results/{action_name}
 
 The worker reads and validates manifests after subprocess exit; legacy artifact scraping remains as fallback until all tools emit manifests.
 
+Sample-scoped CAAS is **on by default** for align/prep (`/work/samples/{sample_id}/.caas/`). Study actions use `{project_root}/.caas/`. Reject sample CAAS only with `sampleCaasEnabled: false`, `caasEnabled: false`, `METHYL_SAMPLE_CAAS_ENABLED=0`, or `forceRerun`. `sample.archive_sample` stays etag-only and is not CAAS replay.
+
 Sample prep also appends `{sampleDir}/{sampleId}.sample_prep_log.jsonl` for an operator-visible timeline.
 
 Workflow runs append a unified `{logRoot}/action_run_log.jsonl` with one line per ACTION (pipeline, validation, sample prep when a log root resolves). Each record includes timing (`started_at_utc`, `finished_at_utc`, `duration_ms`), branch fields (`result_code`, `status`, `exit_code`), full typed `inputs` and `outputs`, plus `skipped`, `action_revision`, and signature fields when idempotent skip applies.

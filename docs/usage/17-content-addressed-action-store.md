@@ -12,8 +12,8 @@ CAAS is **enabled by default** for every project and workflow run. No environmen
 
 ### When to disable
 
-- **Per instance / task:** `"caasEnabled": false` in instance context or task input.
-- **Worker / site opt-out:** `METHYL_CAAS_ENABLED=0` (also accepts `false`, `no`, `off`).
+- **Per instance / task:** `"caasEnabled": false` in instance context or task input. Sample-scoped align/prep can also be rejected with `"sampleCaasEnabled": false`.
+- **Worker / site opt-out:** `METHYL_CAAS_ENABLED=0` (also accepts `false`, `no`, `off`). Sample-scoped store: `METHYL_SAMPLE_CAAS_ENABLED=0`.
 
 Disable only for debugging when you need to inspect plain files without symlinks.
 
@@ -48,7 +48,7 @@ Directory fingerprints used inside signatures prefer **content digests** (size +
 | `{project_root}/.caas/foreach_bundle/{content_key}/` | FOREACH iteration-bundle short-circuit record |
 | `{project_root}/.caas/instances/{hyperparamSetId}.json` | Instance ledger: `{action}:{run_key}` → `content_key` |
 | `{output_dir}/.action_results/{action}.{run_key}.json` | Canonical skip/replay manifest (may reference CAAS paths) |
-| `/work/samples/{sample_id}/.caas/` | Optional sample-scoped store (`METHYL_SAMPLE_CAAS_ENABLED=1`) |
+| `/work/samples/{sample_id}/.caas/` | Sample-scoped store for align/prep (default-on; reject with `sampleCaasEnabled: false` or `METHYL_SAMPLE_CAAS_ENABLED=0`) |
 
 Canonical output paths (e.g. under `run_0001/detections/...`) become **symlinks** into `.caas/` after a successful commit.
 
@@ -76,8 +76,9 @@ CAAS is **default-on** for every catalog ACTION unless an explicit opt-out appli
 |-------|-------------|
 | `pipeline.*`, `validation.*`, `context.*`, typed `workflow.const_*` / `json_path_*` | Eligible (study `.caas/`) |
 | `workflow.fs_stat` | Opt-out: `mtime_sensitive` |
-| `sample.delete_*`, `sample.qc_failed`, `sample.archive_sample` | Hard opt-out (destructive / control-flow / etag-only) |
-| Other `sample.*` / `parabricks.*` / `proteomics.*` / `align.*` | Deferred: `sample_scoped_caas_deferred` until `METHYL_SAMPLE_CAAS_ENABLED=1` |
+| `sample.delete_*`, `sample.qc_failed` | Hard opt-out (destructive / control-flow) |
+| `sample.archive_sample` | Hard opt-out: `remote_upload_etag_only` (QNAP etag/md5 skip is not CAAS; it does not restore BAMs into `/work`) |
+| Other `sample.*` / `parabricks.*` / `proteomics.*` / `align.*` / `methylgrapher.*` | Eligible (sample `/work/samples/{id}/.caas/`). Reject only with `sampleCaasEnabled: false`, `caasEnabled: false`, `METHYL_SAMPLE_CAAS_ENABLED=0`, or `forceRerun` |
 
 ### FOREACH iteration bundles
 
@@ -112,8 +113,9 @@ Or set `"forceRerun": true` in context / per-action input, or `METHYL_FORCE_RERU
 
 ## Observability checklist
 
-- [ ] No opt-out is set (`caasEnabled` not false; `METHYL_CAAS_ENABLED` not `0`/`false`)
-- [ ] `{project_root}/.caas/` appears after first successful idempotent action
+- [ ] No opt-out is set (`caasEnabled` / `sampleCaasEnabled` not false; `METHYL_CAAS_ENABLED` / `METHYL_SAMPLE_CAAS_ENABLED` not `0`/`false`)
+- [ ] `{project_root}/.caas/` appears after first successful idempotent study action
+- [ ] `/work/samples/{sample_id}/.caas/` appears after first successful align/prep action
 - [ ] `.action_results/*.json` records include `content_key` and `hyperparam_set_id` (schema 1.2)
 - [ ] Second instance with unchanged upstream config reuses entries (check `skipped: true` in `action_run_log.jsonl`)
 - [ ] Config change produces a new `content_key` without deleting the old store entry
@@ -126,4 +128,4 @@ Or set `"forceRerun": true` in context / per-action input, or `METHYL_FORCE_RERU
 - [Hyperparameter result versioning plan](../plans/hyperparameter-result-versioning.plan.md)
 - `packages/methyldomain/methyl_domain/content_store.py` — commit, relink, ledger implementation
 - `packages/methyldomain/methyl_domain/foreach_bundle.py` — FOREACH iteration-bundle store
-- `packages/methyldomain/methyl_domain/sample_content_store.py` — sample-scoped CAAS (opt-in)
+- `packages/methyldomain/methyl_domain/sample_content_store.py` — sample-scoped CAAS (default-on for align/prep)

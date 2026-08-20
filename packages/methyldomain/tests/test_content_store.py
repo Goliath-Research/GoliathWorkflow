@@ -21,7 +21,12 @@ from methyl_domain.content_store import (
     caas_enabled,
     commit_artifacts_to_store,
     link_entry_into_place,
+    resolve_caas_root,
     resolve_project_root,
+)
+from methyl_domain.sample_content_store import (
+    sample_caas_enabled,
+    sample_caas_enabled_for_action,
 )
 
 
@@ -59,6 +64,24 @@ def test_caas_enabled_defaults_on(monkeypatch) -> None:
     assert caas_enabled({}) is False
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     assert caas_enabled({}) is True
+
+
+def test_sample_caas_enabled_defaults_on(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
+    monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path))
+    assert sample_caas_enabled() is True
+    assert sample_caas_enabled_for_action("sample.parabricks_fq2bam") is True
+    assert sample_caas_enabled({"sampleCaasEnabled": False}) is False
+    assert sample_caas_enabled({"caasEnabled": False}) is False
+    monkeypatch.setenv("METHYL_SAMPLE_CAAS_ENABLED", "0")
+    assert sample_caas_enabled() is False
+    assert sample_caas_enabled({"sampleCaasEnabled": True}) is True
+    monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
+    root = resolve_caas_root(
+        {"sampleId": "S1"},
+        action_name="sample.parabricks_fq2bam",
+    )
+    assert root == (tmp_path / "S1").resolve()
 
 
 def test_resolve_project_root_from_mc_run_dir(tmp_path: Path) -> None:

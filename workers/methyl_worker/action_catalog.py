@@ -1860,8 +1860,9 @@ IDEMPOTENT_VALIDATION_ACTIONS: FrozenSet[str] = frozenset(
     }
 )
 
-# Hard opt-outs (destructive, control-flow, time-varying). Sample-scoped prep is
-# deferred unless METHYL_SAMPLE_CAAS_ENABLED (see sample_content_store).
+# Hard opt-outs (destructive, control-flow, time-varying, remote etag-only).
+# Sample-scoped align/prep uses CAAS unless the operator explicitly rejects it
+# (see sample_content_store).
 _HARD_IDEMPOTENCY_OPT_OUT: Dict[str, str] = {
     "workflow.fs_stat": "mtime_sensitive",
     "sample.delete_fastqs": "destructive",
@@ -1870,10 +1871,19 @@ _HARD_IDEMPOTENCY_OPT_OUT: Dict[str, str] = {
     "sample.qc_failed": "control_flow",
 }
 
-_SAMPLE_SCOPED_PREFIXES = ("sample.", "parabricks.", "proteomics.", "align.")
+_SAMPLE_SCOPED_PREFIXES = (
+    "sample.",
+    "parabricks.",
+    "proteomics.",
+    "align.",
+    "methylgrapher.",
+)
 
 
-def idempotency_opt_out_reason_for(entry: ActionCatalogEntry) -> Optional[str]:
+def idempotency_opt_out_reason_for(
+    entry: ActionCatalogEntry,
+    input_json: Optional[Mapping[str, Any]] = None,
+) -> Optional[str]:
     """Return opt-out reason when CAAS skip/replay must not apply; else None."""
     if entry.idempotency_opt_out_reason:
         return entry.idempotency_opt_out_reason
@@ -1883,21 +1893,24 @@ def idempotency_opt_out_reason_for(entry: ActionCatalogEntry) -> Optional[str]:
         try:
             from methyl_domain.sample_content_store import sample_caas_enabled_for_action
 
-            if sample_caas_enabled_for_action(entry.action_name):
+            if sample_caas_enabled_for_action(entry.action_name, input_json):
                 return None
         except Exception:
             pass
-        return "sample_scoped_caas_deferred"
+        return "sample_caas_disabled"
     return None
 
 
-def idempotency_enabled_for(entry: ActionCatalogEntry) -> bool:
+def idempotency_enabled_for(
+    entry: ActionCatalogEntry,
+    input_json: Optional[Mapping[str, Any]] = None,
+) -> bool:
     """Return True when signature-based skip/replay is active for this catalog entry.
 
     Default: every catalog ACTION is eligible unless an explicit opt-out applies
-    (destructive sample ops, mtime probes, deferred sample-scoped store).
+    (destructive sample ops, mtime probes, operator-rejected sample-scoped store).
     """
-    return idempotency_opt_out_reason_for(entry) is None
+    return idempotency_opt_out_reason_for(entry, input_json) is None
 
 
 def list_action_catalog() -> List[ActionCatalogEntry]:

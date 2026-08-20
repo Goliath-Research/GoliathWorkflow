@@ -2,7 +2,7 @@
 name: Universal CAAS Idempotency
 overview: Deep analysis and phased plan to make content-addressed idempotency the default for every atomic DomainProgram ACTION on the worker, with FOREACH-aware short-circuit so distributed claim/execute loops stop paying for work whose content keys already hit.
 
-> **Status: IMPLEMENTED.** Phases 0–3 landed in-tree; Phase 4 sample-scoped CAAS is scaffolded behind `METHYL_SAMPLE_CAAS_ENABLED`. Operator guide: [`docs/usage/17-content-addressed-action-store.qmd`](../usage/17-content-addressed-action-store.md).
+> **Status: IMPLEMENTED.** Phases 0–4 landed in-tree. Sample-scoped CAAS under `/work/samples/{id}/.caas` is **default-on** for align/prep (reject with `sampleCaasEnabled: false` or `METHYL_SAMPLE_CAAS_ENABLED=0`). Operator guide: [`docs/usage/17-content-addressed-action-store.md`](../usage/17-content-addressed-action-store.md).
 
 azure_devops:
   type: Feature
@@ -23,7 +23,7 @@ todos:
     content: Bridge split-reuse / Kept-existing / strict-reuse into CAAS fingerprints
     status: completed
   - id: phase4-sample-caas
-    content: "Deferred: sample-scoped CAAS under /work/samples/{id}/.caas with destructive opt-outs"
+    content: "Sample-scoped CAAS under /work/samples/{id}/.caas (default-on; destructive/etag opt-outs)"
     status: completed
 ---
 
@@ -31,7 +31,7 @@ todos:
 
 ## Design principle
 
-**Default: every atomic ACTION is CAAS-eligible on the worker unless opted out.** Opt-outs are explicit (destructive, time-varying, deferred sample-scoped store). FOREACH gets a second layer: **iteration-bundle** keys so the control plane can avoid claiming work that would all skip.
+**Default: every atomic ACTION is CAAS-eligible on the worker unless opted out.** Opt-outs are explicit (destructive, time-varying, operator-rejected sample-scoped store, QNAP etag-only archive). FOREACH gets a second layer: **iteration-bundle** keys so the control plane can avoid claiming work that would all skip.
 
 ## Implementation map
 
@@ -41,7 +41,7 @@ todos:
 | 1 | Invert eligibility gate (opt-out); CAAS for remaining `validation.*` + `context.resolve_project` |
 | 2 | `.caas/foreach_bundle/` + local scheduler short-circuit; `wf.foreach_bundle_entry` + SQL skip hook |
 | 3 | Split CSV fingerprints in plan_iterations / model_mc signatures (`reuse_splits.fingerprint_*`) |
-| 4 | `methyl_domain.sample_content_store` under `/work/samples/{id}/.caas` (`METHYL_SAMPLE_CAAS_ENABLED`) |
+| 4 | `methyl_domain.sample_content_store` under `/work/samples/{id}/.caas` (default-on; `METHYL_SAMPLE_CAAS_ENABLED=0` rejects) |
 
 ## Non-goals / hard opt-outs
 

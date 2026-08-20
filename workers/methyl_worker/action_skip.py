@@ -904,7 +904,7 @@ def maybe_skip_action(
     entry: ActionCatalogEntry,
     input_json: Mapping[str, Any],
 ) -> Optional[ActionExecutionResult]:
-    if not idempotency_enabled_for(entry):
+    if not idempotency_enabled_for(entry, input_json):
         return None
     if _force_rerun_requested(input_json):
         return None
@@ -1012,7 +1012,7 @@ def record_action_execution(
     skipped: bool = False,
     skip_reason: Optional[str] = None,
 ) -> None:
-    if not idempotency_enabled_for(entry):
+    if not idempotency_enabled_for(entry, input_json):
         return
 
     output_dir = resolve_action_output_dir(entry, input_json)
