@@ -126,3 +126,54 @@ def test_docker_umask_wraps_pbrun() -> None:
     assert suffix[0] == "-c"
     assert "umask 000" in suffix[1]
     assert suffix[2:] == ["sh", "pbrun", "fq2bam_meth", "--gpusort"]
+
+
+def test_stale_append_retries_eacces_and_shares(tmp_path: Path, monkeypatch) -> None:
+    """ImportError fallback must share + retry, not a bare Path.open('a')."""
+    from types import SimpleNamespace
+
+    from methyl_worker.work_share_compat import stale_append_work_text
+
+    log_path = tmp_path / "align.linear.parabricks" / "sample.fq2bam_meth.log"
+    log_path.parent.mkdir(parents=True)
+    log_path.write_text("prior\n", encoding="utf-8")
+    log_path.chmod(0o600)
+
+    original = Path.open
+    state = {"n": 0}
+
+    def flaky(self, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "r")
+        if self.name.endswith(".fq2bam_meth.log") and "a" in str(mode):
+            state["n"] += 1
+            if state["n"] == 1:
+                raise PermissionError("EACCES")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", flaky)
+    stale = SimpleNamespace(
+        share_work_path=share_work_path,
+        share_work_tree=share_work_tree,
+        share_work_ancestors=None,
+        open_work=None,
+        append_work_text=None,
+    )
+    stale_append_work_text(log_path, "COMMAND: pbrun", work_share=stale)
+    assert state["n"] == 2
+    assert "COMMAND: pbrun" in log_path.read_text(encoding="utf-8")
+    assert log_path.stat().st_mode & 0o006 == 0o006
+
+
+def test_stale_append_uses_open_work_when_present(tmp_path: Path) -> None:
+    from methyl_worker.work_share import open_work
+    from methyl_worker.work_share_compat import stale_append_work_text
+
+    log_path = tmp_path / "sample_prep.log"
+    stale_append_work_text(
+        log_path,
+        "line",
+        work_share=__import__("methyl_worker.work_share", fromlist=["open_work"]),
+    )
+    assert "line" in log_path.read_text(encoding="utf-8")
+    assert log_path.stat().st_mode & 0o006 == 0o006
+    assert open_work is not None

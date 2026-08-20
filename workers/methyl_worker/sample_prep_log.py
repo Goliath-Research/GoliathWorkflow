@@ -10,12 +10,7 @@ from typing import Any, Dict, Optional
 try:
     from methyl_worker.work_share import append_work_text
 except ImportError:  # stale sister: work_share loaded before append_work_text existed
-    def append_work_text(path: Path, text: str, *, encoding: str = "utf-8") -> Path:
-        payload = text if text.endswith("\n") else text + "\n"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding=encoding) as fh:
-            fh.write(payload)
-        return path
+    from methyl_worker.work_share_compat import stale_append_work_text as append_work_text
 
 
 def _utc_now_iso() -> str:

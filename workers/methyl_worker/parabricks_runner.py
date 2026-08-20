@@ -27,14 +27,8 @@ from methyl_worker.work_share import (
 
 try:
     from methyl_worker.work_share import append_work_text
-except ImportError:  # stale sister process: work_share loaded before append_work_text existed
-    def append_work_text(path: Path | str, text: str, *, encoding: str = "utf-8") -> Path:
-        p = Path(path)
-        payload = text if text.endswith("\n") else text + "\n"
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a", encoding=encoding) as fh:
-            fh.write(payload)
-        return p
+except ImportError:  # stale sister: work_share loaded before append_work_text existed
+    from methyl_worker.work_share_compat import stale_append_work_text as append_work_text
 
 logger = logging.getLogger(__name__)
 
