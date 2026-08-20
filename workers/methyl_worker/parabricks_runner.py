@@ -20,11 +20,21 @@ from methyl_worker.fastq_pairs import (  # noqa: F401 — re-export for aligner 
     resolve_paired_fastqs,
 )
 from methyl_worker.work_share import (
-    append_work_text,
     docker_umask_prefix,
     docker_umask_suffix,
     share_work_tree,
 )
+
+try:
+    from methyl_worker.work_share import append_work_text
+except ImportError:  # stale sister process: work_share loaded before append_work_text existed
+    def append_work_text(path: Path | str, text: str, *, encoding: str = "utf-8") -> Path:
+        p = Path(path)
+        payload = text if text.endswith("\n") else text + "\n"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a", encoding=encoding) as fh:
+            fh.write(payload)
+        return p
 
 logger = logging.getLogger(__name__)
 
