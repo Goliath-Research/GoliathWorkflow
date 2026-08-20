@@ -120,12 +120,20 @@ def test_commit_wrong_output_dir_still_keeps_sample_bam(tmp_path: Path, monkeypa
 def test_second_commit_does_not_replace_prior_caas_blob_with_symlink(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """artifact_ref_for records resolve()d CAAS paths; later commit must copy, not rewrite."""
+    """artifact_ref_for records resolve()d CAAS paths; later commit must copy, not rewrite.
+
+    Align harvest records those resolved blobs while ``sampleDir`` is the output
+    root, so the blob sits *under* ``output_dir``. A sibling FASTQ forces the
+    flat (not tree) commit path, which used to copy then unlink the prior-key
+    file before the durable-blob skip could run.
+    """
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     sample_dir = tmp_path / "samples" / "S1"
     sample_dir.mkdir(parents=True)
     bam = sample_dir / "S1.bam"
     bam.write_bytes(b"BAM-V1")
+    # Shared sample dir: sibling product so _should_commit_directory is False.
+    (sample_dir / "S1.fastq.gz").write_bytes(b"FQ")
 
     first = _record(
         artifacts=[ArtifactRef(path=str(bam), bytes=6)],
@@ -157,6 +165,7 @@ def test_second_commit_does_not_replace_prior_caas_blob_with_symlink(
         output_dir=sample_dir,
     )
 
+    assert blob_a.exists(), "prior-key blob must not be unlinked during flat commit"
     assert blob_a.is_file() and not blob_a.is_symlink()
     assert blob_a.read_bytes() == b"BAM-V1"
     entry_a = caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "key-a")
@@ -172,6 +181,19 @@ def test_second_commit_does_not_replace_prior_caas_blob_with_symlink(
     assert linked is not None
     assert bam.resolve() == blob_a.resolve()
     assert (entry_a / "S1.bam").is_file() and not (entry_a / "S1.bam").is_symlink()
+
+
+def test_is_durable_caas_blob_does_not_require_regular_file(tmp_path: Path) -> None:
+    from methyl_domain.content_store import _is_durable_caas_blob
+
+    blob = tmp_path / "samples" / "S1" / ".caas" / "sample.parabricks_fq2bam" / "key-a" / "S1.bam"
+    product = tmp_path / "samples" / "S1" / "S1.bam"
+    assert not _is_durable_caas_blob(product)
+    blob.parent.mkdir(parents=True)
+    blob.write_bytes(b"BAM")
+    assert _is_durable_caas_blob(blob)
+    blob.unlink()
+    assert _is_durable_caas_blob(blob), "must stay durable after unlink so restore skip still runs"
 
 
 def test_resolve_project_root_from_mc_run_dir(tmp_path: Path) -> None:

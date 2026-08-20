@@ -123,19 +123,23 @@ def resolve_project_root(input_json: Mapping[str, Any]) -> Optional[Path]:
 
 
 def _is_durable_caas_blob(path: Path) -> bool:
-    """True when ``path`` is a real file stored under a ``.caas/`` content-key.
+    """True when ``path`` names a CAAS content-key blob (not a product symlink).
 
     Product paths (``sampleDir/S1.bam``, ``output_dir/summary.json``) are never
     this. ``artifact_ref_for`` records ``Path.resolve()``, so a later commit may
-    see the blob path instead of the product symlink. Rewriting that file as a
-    symlink into a new entry destroys skip-replay for the prior key.
+    see the blob path instead of the product symlink. Identity is the ``.caas``
+    path component, not ``is_file()``: ``_move_artifacts_into_entry`` used to
+    unlink a resolved blob that sat under ``output_dir`` (sample-scoped CAAS
+    lives at ``{sampleDir}/.caas/...``), after which requiring a regular file
+    let ``_ensure_symlink`` recreate the prior key as a pointer into the new
+    entry and break skip-replay.
     """
-    try:
-        if path.is_symlink() or not path.is_file():
-            return False
-    except OSError:
+    if ".caas" not in path.parts:
         return False
-    return ".caas" in path.parts
+    try:
+        return not path.is_symlink()
+    except OSError:
+        return True
 
 
 def _is_under(child: Path, parent: Path) -> bool:
@@ -323,6 +327,18 @@ def _caas_run_relative(path: Path) -> Optional[Path]:
     return Path(*parts[marker + 2 :])
 
 
+def _caas_blob_relative(path: Path) -> Optional[Path]:
+    """File path inside a content-key directory (after ``.caas/<action>/<key>/``)."""
+    parts = Path(path).parts
+    try:
+        marker = parts.index(".caas")
+    except ValueError:
+        return None
+    if len(parts) <= marker + 3:
+        return None
+    return Path(*parts[marker + 3 :])
+
+
 def _move_artifacts_into_entry(
     artifacts: Sequence[ArtifactRef],
     entry_dir: Path,
@@ -352,6 +368,10 @@ def _move_artifacts_into_entry(
             continue
         if not (src.is_file() or src.is_symlink()):
             continue
+        # Snapshot before copy/unlink: a resolved blob under output_dir is still
+        # a regular file here; after unlink ``is_file()`` is false and a later
+        # ``_is_durable_caas_blob`` check would miss it.
+        src_is_durable_blob = _is_durable_caas_blob(src)
         # Readable payload (follow leaf symlink only for content).
         try:
             src_payload = src.resolve() if src.is_symlink() else src.resolve()
@@ -361,7 +381,12 @@ def _move_artifacts_into_entry(
             continue
 
         rel: Optional[Path] = None
-        if out_root is not None:
+        if src_is_durable_blob:
+            # Do not store the blob at ``output_dir/.caas/<old-key>/...`` relative
+            # to the new entry — that nested dest makes relink's dest_link the
+            # prior-key file itself.
+            rel = _caas_blob_relative(src_payload)
+        if rel is None and out_root is not None:
             rel = _relative_to_root_nofollow(src, out_root)
         if rel is None:
             rel = _caas_run_relative(src_payload)
@@ -387,9 +412,14 @@ def _move_artifacts_into_entry(
             if src.is_symlink() or foreign_caas_blob:
                 shutil.copy2(str(src_payload), str(dest))
                 # Remove only the logical product path (usually a symlink under
-                # output_dir). Never delete the foreign CAAS blob we copied from.
+                # output_dir). Never delete a durable blob: sample-scoped CAAS
+                # lives at ``{sampleDir}/.caas/...``, so the blob is under
+                # output_dir and a naive relative-to-root unlink would destroy
+                # the prior content-key before the restore skip can run.
                 if src.is_symlink() or (
-                    out_root is not None and _relative_to_root_nofollow(src, out_root) is not None
+                    out_root is not None
+                    and _relative_to_root_nofollow(src, out_root) is not None
+                    and not src_is_durable_blob
                 ):
                     if src.exists() or src.is_symlink():
                         if not (src.is_dir() and not src.is_symlink()):
@@ -403,7 +433,7 @@ def _move_artifacts_into_entry(
         try:
             if (
                 _abspath_nofollow(src) != _abspath_nofollow(dest)
-                and not _is_durable_caas_blob(src)
+                and not src_is_durable_blob
             ):
                 _ensure_symlink(src, dest)
         except OSError:
@@ -517,7 +547,12 @@ def _relink_artifacts_from_entry(
             if canon_abs and _abspath_nofollow(dest_link) not in canon_abs:
                 dest_link = None
             if dest_link is not None:
-                _ensure_symlink(dest_link, stored)
+                if _is_durable_caas_blob(dest_link):
+                    # Harvest recorded a resolve()d blob; never rewrite that file
+                    # as a symlink into this entry.
+                    dest_link = None
+                else:
+                    _ensure_symlink(dest_link, stored)
         relinked.append(
             ArtifactRef(
                 path=str(stored.resolve()),
