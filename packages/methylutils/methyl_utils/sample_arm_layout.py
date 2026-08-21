@@ -291,6 +291,41 @@ def link_root_fastqs_into_dir(
     return link_paths_into_dir(fastqs, dest, method=method)
 
 
+def ensure_sample_dir_fastq_links(
+    sample_dir: Path | str,
+    *,
+    sample_id: str,
+    sample_root: Path | str | None = None,
+    sources: Sequence[Path | str] | None = None,
+    method: str = "hardlink",
+) -> List[Path]:
+    """Hardlink sample-root FASTQs into an arm ``sampleDir`` when they differ.
+
+    Live ``download_fastq`` already does this. CAAS skip restores blobs at
+    ``sampleRoot`` and must call this so align (which discovers pairs only under
+    ``sampleDir``) still sees files after ``delete_fastqs``.
+    """
+    dest = Path(sample_dir).expanduser()
+    dest.mkdir(parents=True, exist_ok=True)
+    dest = dest.resolve()
+    root = (
+        Path(sample_root).expanduser().resolve()
+        if sample_root
+        else Path(sample_root_from_sample_dir(dest, sample_id)).expanduser().resolve()
+    )
+    src_paths = (
+        [Path(item).expanduser() for item in sources]
+        if sources is not None
+        else discover_root_fastqs(root, sample_id)
+    )
+    src_files = [path for path in src_paths if path.is_file() and path.stat().st_size > 0]
+    if dest == root:
+        return src_files or discover_root_fastqs(dest, sample_id)
+    if src_files:
+        return link_paths_into_dir(src_files, dest, method=method)
+    return discover_root_fastqs(dest, sample_id)
+
+
 def link_root_fastqs_into_align_arm(
     sample_root: Path | str,
     arm: str,

@@ -779,6 +779,42 @@ def _hyperparam_set_id(input_json: Mapping[str, Any]) -> Optional[str]:
     return str(value) if value else None
 
 
+_DOWNLOAD_ACTIONS = frozenset({"sample.download_fastq", "sample.download_msdata"})
+
+
+def _ensure_download_fastq_arm_links(
+    entry: ActionCatalogEntry,
+    input_json: Mapping[str, Any],
+) -> bool:
+    """Re-link restored root FASTQs into arm sampleDir after skip/replay.
+
+    CAAS harvest records canonical paths at sampleRoot. Align discovers pairs
+    only under sampleDir. After delete_fastqs, skip must recreate the arm links
+    that the live download handler writes.
+    """
+    if entry.action_name not in _DOWNLOAD_ACTIONS:
+        return True
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    if not sample_dir or not sample_id:
+        return True
+    from methyl_utils.sample_arm_layout import ensure_sample_dir_fastq_links
+
+    linked = ensure_sample_dir_fastq_links(
+        str(sample_dir),
+        sample_id=str(sample_id),
+        sample_root=input_json.get("sampleRoot"),
+    )
+    if linked:
+        return True
+    logger.info(
+        "Not skipping %s: no FASTQs under sampleDir after restore (%s)",
+        entry.action_name,
+        sample_dir,
+    )
+    return False
+
+
 def _maybe_replay_from_caas(
     entry: ActionCatalogEntry,
     input_json: Mapping[str, Any],
@@ -820,6 +856,9 @@ def _maybe_replay_from_caas(
         output_dir=output_dir,
     )
     if linked is None:
+        return None
+
+    if not _ensure_download_fastq_arm_links(entry, input_json):
         return None
 
     if entry.action_name == "validation.plan_iterations":
@@ -990,6 +1029,9 @@ def maybe_skip_action(
                     return None
             except Exception:
                 logger.debug("legacy MC run scan failed for %s", output_dir, exc_info=True)
+
+    if not _ensure_download_fastq_arm_links(entry, input_json):
+        return None
 
     hyperparam_set_id = _hyperparam_set_id(input_json)
     if hyperparam_set_id and caas_enabled(input_json):

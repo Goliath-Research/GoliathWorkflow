@@ -354,7 +354,7 @@ def _handle_download_fastq(
     _capability: str, _action_name: str, input: DownloadFastqTaskInput
 ) -> DownloadFastqTaskOutput:
     from methyl_utils.sample_arm_layout import (
-        link_paths_into_dir,
+        ensure_sample_dir_fastq_links,
         sample_root_from_sample_dir,
     )
 
@@ -370,9 +370,13 @@ def _handle_download_fastq(
     fastq_files = download_from_source(
         input.fastqSource, root, resolved_config=input.resolvedConfig
     )
-    if sample_dir.resolve() != root.resolve():
-        link_paths_into_dir(fastq_files, sample_dir)
     sample_id = input.sampleId or root.name
+    ensure_sample_dir_fastq_links(
+        sample_dir,
+        sample_id=str(sample_id),
+        sample_root=root,
+        sources=fastq_files,
+    )
     return DownloadFastqTaskOutput(
         status="ok",
         sampleId=sample_id,

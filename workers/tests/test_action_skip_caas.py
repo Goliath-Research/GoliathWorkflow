@@ -341,3 +341,67 @@ def test_sample_caas_skip_restores_arm_leaf_products(tmp_path: Path, monkeypatch
     assert not (sample_root / "S1.bam").exists()
     assert blob_bam.is_file() and not blob_bam.is_symlink()
     assert not list(configs.rglob("*.bam"))
+
+
+def test_download_caas_skip_relinks_arm_after_delete_fastqs(tmp_path: Path, monkeypatch) -> None:
+    """Skip restores FASTQs at sampleRoot; align discovers pairs only under sampleDir."""
+    monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path / "samples"))
+
+    sample_root = tmp_path / "samples" / "S1"
+    arm = sample_root / "align.linear.parabricks"
+    arm.mkdir(parents=True)
+    fq1 = sample_root / "S1_1.fastq.gz"
+    fq2 = sample_root / "S1_2.fastq.gz"
+    fq1.write_bytes(b"R1")
+    fq2.write_bytes(b"R2")
+    os.link(fq1, arm / "S1_1.fastq.gz")
+    os.link(fq2, arm / "S1_2.fastq.gz")
+
+    configs = tmp_path / "projects" / "study" / "configs"
+    project = configs / "project.json"
+    _write_study_project(project, tmp_path)
+
+    entry = find_catalog_entry("sample.download_fastq")
+    assert entry is not None
+    input_json = {
+        "tool": "SampleDownloadFastq",
+        "sampleId": "S1",
+        "sampleDir": str(arm),
+        "sampleRoot": str(sample_root),
+        "fastqSource": {"type": "file", "basePath": str(tmp_path / "data"), "prefix": "S1/"},
+        "projectPath": str(project),
+        "caasEnabled": True,
+    }
+    from methyl_worker.task_models.sample_prep_models import DownloadFastqTaskOutput
+
+    input_model = validate_input(entry, strip_runtime_input(input_json))
+    output = DownloadFastqTaskOutput(
+        status="ok",
+        sampleId="S1",
+        fastqFiles=[str(fq1), str(fq2)],
+        n_files=2,
+    )
+    record_action_execution(
+        entry, input_json, input_model, execution_result_from_output(output)
+    )
+    blob1 = fq1.resolve()
+    blob2 = fq2.resolve()
+    assert (sample_root / ".caas") in blob1.parents
+    assert "align.linear.parabricks" not in blob1.parts
+
+    # delete_fastqs removes root products and arm hardlinks; CAAS blobs remain.
+    for path in (fq1, fq2, arm / "S1_1.fastq.gz", arm / "S1_2.fastq.gz"):
+        if path.exists() or path.is_symlink():
+            path.unlink()
+    assert not (arm / "S1_1.fastq.gz").exists()
+    assert blob1.is_file() and not blob1.is_symlink()
+
+    skipped = maybe_skip_action(entry, input_json)
+    assert skipped is not None
+    assert (arm / "S1_1.fastq.gz").is_file()
+    assert (arm / "S1_2.fastq.gz").is_file()
+    assert (arm / "S1_1.fastq.gz").read_bytes() == b"R1"
+    assert (arm / "S1_2.fastq.gz").read_bytes() == b"R2"
+    assert blob1.is_file() and blob2.is_file()

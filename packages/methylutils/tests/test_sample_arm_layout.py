@@ -9,6 +9,7 @@ from methyl_utils.sample_arm_layout import (
     align_arm_for_mode_and_config,
     bind_production_sample_arms,
     bind_sample_arm_dirs,
+    ensure_sample_dir_fastq_links,
     is_default_sample_dir,
     is_mode_leaf_dirname,
     link_root_fastqs_into_dir,
@@ -113,3 +114,21 @@ def test_link_root_fastqs_into_dir(tmp_path: Path) -> None:
     linked = link_root_fastqs_into_dir(root, arm, sample_id="S1")
     assert len(linked) == 2
     assert (arm / "S1_1.fastq.gz").read_bytes() == b"r1"
+
+
+def test_ensure_sample_dir_fastq_links_after_root_only_restore(tmp_path: Path) -> None:
+    """CAAS skip restores at sampleRoot; arm sampleDir must be relinked for align."""
+    root = tmp_path / "S1"
+    arm = root / "align.linear.parabricks"
+    arm.mkdir(parents=True)
+    (root / "S1_1.fastq.gz").write_bytes(b"r1")
+    (root / "S1_2.fastq.gz").write_bytes(b"r2")
+    linked = ensure_sample_dir_fastq_links(arm, sample_id="S1", sample_root=root)
+    assert len(linked) == 2
+    assert (arm / "S1_1.fastq.gz").read_bytes() == b"r1"
+    assert (arm / "S1_2.fastq.gz").read_bytes() == b"r2"
+    same = ensure_sample_dir_fastq_links(arm, sample_id="S1", sample_root=root)
+    assert len(same) == 2
+    empty_arm = tmp_path / "S2" / "align.linear.parabricks"
+    empty_arm.mkdir(parents=True)
+    assert ensure_sample_dir_fastq_links(empty_arm, sample_id="S2") == []
