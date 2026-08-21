@@ -483,27 +483,30 @@ def _cleanup_tmp(paths: ParabricksPaths) -> None:
 
 
 def _reset_tmp(paths: ParabricksPaths) -> None:
-    """Recreate ``tmp`` so a killed Clara run cannot leave an unwritable leftover.
+    """Empty leftover Align ``tmp`` and leave it other-writable for Docker.
 
-    ``pbrun`` fails immediately with ``Could not create temporary directory
-    /outputdir/tmp/...`` when NFS tmp from a reclaimed Align is still present.
+    ``pbrun`` / ``MojoFq2bamMeth`` create children under ``/outputdir/tmp``.
+    Align Docker uses ``--user 1000:1000`` (often not this host's ``ubuntu``
+    uid) and NFS ``root_squash`` maps Clara-as-root to ``nobody``. A fresh
+    umask-022 ``0755`` dir owned by the worker is not writable to either.
+    Keep an already other-writable leftover (umask ``000``) instead of
+    replacing it; always ``share_work_tree`` the directory that remains.
     """
     if paths.tmp_dir.exists():
         share_work_tree(paths.tmp_dir)
     if paths.tmp_dir.is_file():
         paths.tmp_dir.unlink()
     elif paths.tmp_dir.is_dir():
-        shutil.rmtree(paths.tmp_dir, ignore_errors=True)
-        if paths.tmp_dir.is_dir():
-            for child in list(paths.tmp_dir.iterdir()):
-                if child.is_dir():
-                    shutil.rmtree(child, ignore_errors=True)
-                else:
-                    try:
-                        child.unlink()
-                    except OSError:
-                        pass
+        for child in list(paths.tmp_dir.iterdir()):
+            if child.is_dir():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                try:
+                    child.unlink()
+                except OSError:
+                    pass
     paths.tmp_dir.mkdir(parents=True, exist_ok=True)
+    share_work_tree(paths.tmp_dir)
 
 
 def run_fq2bam_meth(

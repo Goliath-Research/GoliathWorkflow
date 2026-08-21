@@ -294,6 +294,11 @@ def test_idempotent_skip_when_bam_and_qc_tar_exist(tmp_path: Path) -> None:
     assert out["qcMetricsTar"] == str(sample_dir / "S5.qc-metrics.tar")
 
 
+def _assert_tmp_other_writable(path: Path) -> None:
+    assert path.is_dir()
+    assert path.stat().st_mode & 0o002, oct(path.stat().st_mode)
+
+
 def test_reset_tmp_clears_leftover_children(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S_tmp"
     sample_dir.mkdir()
@@ -306,9 +311,40 @@ def test_reset_tmp_clears_leftover_children(tmp_path: Path) -> None:
 
     runner._reset_tmp(paths)
 
-    assert paths.tmp_dir.is_dir()
     assert not leftover.exists()
     assert list(paths.tmp_dir.iterdir()) == []
+    _assert_tmp_other_writable(paths.tmp_dir)
+
+
+def test_reset_tmp_opens_fresh_dir_for_align_docker(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_fresh"
+    sample_dir.mkdir()
+    ref = tmp_path / "genome.fa"
+    ref.write_text(">ref\n")
+    paths = runner._resolve_paths(sample_dir, "S_fresh", ref)
+
+    runner._reset_tmp(paths)
+
+    _assert_tmp_other_writable(paths.tmp_dir)
+
+
+def test_reset_tmp_keeps_other_writable_leftover(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_keep"
+    sample_dir.mkdir()
+    ref = tmp_path / "genome.fa"
+    ref.write_text(">ref\n")
+    paths = runner._resolve_paths(sample_dir, "S_keep", ref)
+    paths.tmp_dir.mkdir()
+    paths.tmp_dir.chmod(0o777)
+    inode = paths.tmp_dir.stat().st_ino
+    leftover = paths.tmp_dir / "ALLU26WX"
+    leftover.mkdir()
+
+    runner._reset_tmp(paths)
+
+    assert paths.tmp_dir.stat().st_ino == inode
+    assert not leftover.exists()
+    _assert_tmp_other_writable(paths.tmp_dir)
 
 
 def test_package_qc_metrics_dir_to_tar(tmp_path: Path) -> None:
