@@ -1100,7 +1100,7 @@ def record_action_execution(
                 )
                 record = record.model_copy(update={"manifest_path": str(manifest_path)})
             except Exception:
-                logger.debug(
+                logger.warning(
                     "CAAS commit failed for %s",
                     entry.action_name,
                     exc_info=True,

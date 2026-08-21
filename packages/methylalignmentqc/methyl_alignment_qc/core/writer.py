@@ -4,6 +4,7 @@ Write per-sample QC JSON files for database storage.
 
 import json
 import math
+import os
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -123,17 +124,62 @@ def _load_parabricks_metrics_payload(
 
 
 def _find_qc_metrics_tar(sample_dir: Path, sample_name: str) -> Optional[Path]:
-    """Resolve canonical qc-metrics tar path for sample."""
+    """Resolve canonical qc-metrics tar path for sample.
+
+    Prefers ``{sample}.qc-metrics.tar`` at the product path, then a unique tar
+    in the sample dir, then a CAAS blob, then packs an unpacked ``.qc-metrics``
+    directory left behind after a harvest that skipped product relink.
+    """
     candidate = sample_dir / f"{sample_name}.qc-metrics.tar"
     if candidate.exists():
         return candidate
 
-    # Fallback for legacy naming variants (e.g., extra underscores in basename):
-    # use the single qc-metrics tar if unambiguous in this sample directory.
     tars = sorted(sample_dir.glob("*.qc-metrics.tar"))
     if len(tars) == 1:
         return tars[0]
+
+    caas_tars = sorted(
+        sample_dir.glob(f".caas/*/*/{sample_name}.qc-metrics.tar"),
+        key=lambda path: path.stat().st_mtime if path.is_file() else 0,
+        reverse=True,
+    )
+    for blob in caas_tars:
+        if blob.is_file() and not blob.is_symlink():
+            try:
+                if candidate.exists() or candidate.is_symlink():
+                    candidate.unlink()
+                rel = os.path.relpath(str(blob.resolve()), start=str(candidate.parent.resolve()))
+                candidate.symlink_to(rel)
+                if candidate.exists():
+                    return candidate
+            except OSError:
+                return blob
+
+    packed = _package_qc_metrics_dir(sample_dir, sample_name)
+    if packed is not None:
+        return packed
     return None
+
+
+def _package_qc_metrics_dir(sample_dir: Path, sample_name: str) -> Optional[Path]:
+    """Pack ``{sample}.qc-metrics/`` into the product tar when the tar is missing."""
+    metrics_dir = sample_dir / f"{sample_name}.qc-metrics"
+    tar_path = sample_dir / f"{sample_name}.qc-metrics.tar"
+    if tar_path.is_file():
+        return tar_path
+    if not metrics_dir.is_dir():
+        return None
+    yield_txt = metrics_dir / "quality_yield.txt"
+    if not yield_txt.is_file():
+        nested = list(metrics_dir.glob("**/quality_yield.txt"))
+        if not nested:
+            return None
+    try:
+        with tarfile.open(tar_path, "w") as tar:
+            tar.add(metrics_dir, arcname=metrics_dir.name)
+    except OSError:
+        return None
+    return tar_path if tar_path.is_file() else None
 
 
 def _extract_table_rows_from_tar(tar: tarfile.TarFile, suffix: str) -> List[Dict[str, str]]:

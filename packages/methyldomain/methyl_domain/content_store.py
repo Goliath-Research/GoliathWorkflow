@@ -29,6 +29,14 @@ T = TypeVar("T", bound=BaseModel)
 
 _ACTION_RESULTS_DIRNAME = ".action_results"
 
+# Dual NFS mounts of the same /work tree. Product paths recorded via Path.resolve()
+# on one worker may use a different prefix than output_dir on another.
+_DUAL_MOUNT_PREFIX_PAIRS = (
+    ("/lambda/nfs/Work", "/work"),
+    ("/lambda/nfs/work", "/work"),
+    ("/Work", "/work"),
+)
+
 
 def compute_artifacts_signature(artifacts: Sequence[ArtifactRef]) -> str:
     """Hash artifact metadata (path, size, mtime) for idempotency checks."""
@@ -437,7 +445,7 @@ def _move_artifacts_into_entry(
             ):
                 _ensure_symlink(src, dest)
         except OSError:
-            logger.debug("CAAS canonical relink failed for %s", src, exc_info=True)
+            logger.warning("CAAS canonical relink failed for %s", src, exc_info=True)
         updated.append(
             ArtifactRef(
                 path=str(dest.resolve()),
@@ -503,12 +511,115 @@ def _resolve_blob_in_entry(ref_path: Path, entry_dir: Path) -> Optional[Path]:
     return _blob_under_entry(entry_dir / path.name, entry_dir)
 
 
+def _path_forms(path: Path) -> Set[str]:
+    """Absolute path strings that name the same NFS location across dual mounts."""
+    forms: Set[str] = set()
+    raw = os.path.normpath(str(_abspath_nofollow(path)))
+    forms.add(raw)
+    try:
+        forms.add(os.path.normpath(str(path.expanduser().resolve())))
+    except OSError:
+        pass
+    extra: Set[str] = set()
+    for form in list(forms):
+        for alt, canon in _DUAL_MOUNT_PREFIX_PAIRS:
+            if form == alt or form.startswith(alt + "/"):
+                extra.add(canon + form[len(alt) :])
+            if form == canon or form.startswith(canon + "/"):
+                extra.add(alt + form[len(canon) :])
+    forms |= extra
+    return {f for f in forms if f}
+
+
+def _paths_equivalent(left: Path, right: Path) -> bool:
+    return bool(_path_forms(left) & _path_forms(right))
+
+
+def _task_output_paths_named(task_output: Optional[Mapping[str, Any]], name: str) -> List[Path]:
+    """Collect absolute task_output paths whose basename matches ``name``."""
+    found: List[Path] = []
+    if not task_output:
+        return found
+
+    def _walk(value: Any) -> None:
+        if isinstance(value, str) and value.startswith("/") and Path(value).name == name:
+            found.append(Path(value))
+            return
+        if isinstance(value, Mapping):
+            for item in value.values():
+                _walk(item)
+            return
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                _walk(item)
+
+    _walk(task_output)
+    return found
+
+
+def _product_link_destinations(
+    stored: Path,
+    rel: Path,
+    *,
+    output_dir: Optional[Path],
+    canonical_paths: Optional[Sequence[Path]],
+) -> List[Path]:
+    """Product paths that must be restored as symlinks to ``stored``.
+
+    ``canonical_paths`` are the pre-move locations (and dual-mount aliases). When
+    those are set, do **not** invent ``output_dir / rel`` unless it is the same
+    location — that is how a wrong study ``configs/`` output_dir used to steal
+    BAMs. Dual-mount prefixes (``/work`` vs ``/lambda/nfs/Work``) must still
+    restore the original product path; a strict abspath membership check used to
+    skip relink entirely and leave methyl_qc looking at an empty sample dir.
+    """
+    dest_from_out: Optional[Path] = None
+    if output_dir is not None:
+        dest_from_out = Path(output_dir) / rel
+
+    candidates: List[Path] = []
+    if canonical_paths:
+        flat_blob = rel.parent == Path(".")
+        for raw in canonical_paths:
+            canon = Path(raw)
+            if _is_durable_caas_blob(canon):
+                continue
+            if canon.name != stored.name:
+                continue
+            if dest_from_out is not None and _paths_equivalent(canon, dest_from_out):
+                candidates.append(canon)
+                continue
+            if flat_blob:
+                candidates.append(canon)
+                continue
+            if output_dir is not None:
+                nested = _relative_to_root_nofollow(canon, Path(output_dir))
+                if nested is not None and nested == rel:
+                    candidates.append(canon)
+        if dest_from_out is not None and not _is_durable_caas_blob(dest_from_out):
+            if any(_paths_equivalent(dest_from_out, c) for c in candidates):
+                candidates.append(dest_from_out)
+    elif dest_from_out is not None and not _is_durable_caas_blob(dest_from_out):
+        candidates.append(dest_from_out)
+
+    seen: Set[str] = set()
+    unique: List[Path] = []
+    for dest in candidates:
+        key = str(_abspath_nofollow(dest))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(dest)
+    return unique
+
+
 def _relink_artifacts_from_entry(
     artifacts: Sequence[ArtifactRef],
     entry_dir: Path,
     *,
     output_dir: Optional[Path] = None,
     canonical_paths: Optional[Sequence[Path]] = None,
+    task_output: Optional[Mapping[str, Any]] = None,
 ) -> List[ArtifactRef]:
     """Create symlinks at canonical artifact paths pointing into entry_dir.
 
@@ -520,12 +631,10 @@ def _relink_artifacts_from_entry(
     When ``canonical_paths`` is set (first commit, pre-move product locations),
     do not invent new paths under ``output_dir`` for artifacts that never lived
     there (e.g. BAM under sampleDir while output_dir wrongly resolved to study
-    configs/).
+    configs/). Dual-mount aliases of those canonical paths **are** restored.
     """
     entry_dir = entry_dir.resolve()
-    canon_abs: Set[Path] = set()
-    if canonical_paths:
-        canon_abs = {_abspath_nofollow(Path(p)) for p in canonical_paths}
+    extra_canon = [Path(p) for p in canonical_paths] if canonical_paths else []
     relinked: List[ArtifactRef] = []
     for ref in artifacts:
         stored = _resolve_blob_in_entry(Path(ref.path), entry_dir)
@@ -542,17 +651,22 @@ def _relink_artifacts_from_entry(
                 entry_dir,
             )
             continue
-        if output_dir is not None:
-            dest_link = Path(output_dir) / rel
-            if canon_abs and _abspath_nofollow(dest_link) not in canon_abs:
-                dest_link = None
-            if dest_link is not None:
-                if _is_durable_caas_blob(dest_link):
-                    # Harvest recorded a resolve()d blob; never rewrite that file
-                    # as a symlink into this entry.
-                    dest_link = None
-                else:
-                    _ensure_symlink(dest_link, stored)
+        dests = extra_canon + _task_output_paths_named(task_output, stored.name)
+        for dest_link in _product_link_destinations(
+            stored,
+            rel,
+            output_dir=output_dir,
+            canonical_paths=dests or None,
+        ):
+            try:
+                _ensure_symlink(dest_link, stored)
+            except OSError:
+                logger.warning(
+                    "CAAS product relink failed for %s -> %s",
+                    dest_link,
+                    stored,
+                    exc_info=True,
+                )
         relinked.append(
             ArtifactRef(
                 path=str(stored.resolve()),
@@ -619,7 +733,12 @@ def link_entry_into_place(
 
     entry_dir = caas_entry_dir(project_root, action_name, content_key)
     out_dir = Path(output_dir).expanduser().resolve() if output_dir else None
-    relinked = _relink_artifacts_from_entry(record.artifacts, entry_dir, output_dir=out_dir)
+    relinked = _relink_artifacts_from_entry(
+        record.artifacts,
+        entry_dir,
+        output_dir=out_dir,
+        task_output=record.task_output,
+    )
     if not relinked:
         return None
     updated = record.model_copy(update={"artifacts": relinked})
@@ -646,7 +765,12 @@ def commit_artifacts_to_store(
     existing = read_caas_entry(project_root, action_name, content_key)
     if existing is not None and verify_entry_artifacts(existing):
         out_dir = Path(output_dir).expanduser().resolve() if output_dir else None
-        relinked = _relink_artifacts_from_entry(existing.artifacts, entry_dir, output_dir=out_dir)
+        relinked = _relink_artifacts_from_entry(
+            existing.artifacts,
+            entry_dir,
+            output_dir=out_dir,
+            task_output=existing.task_output,
+        )
         reused = existing.model_copy(
             update={
                 "artifacts": relinked or existing.artifacts,
@@ -707,6 +831,7 @@ def commit_artifacts_to_store(
             entry_dir,
             output_dir=out_dir,
             canonical_paths=product_paths,
+            task_output=record.task_output,
         )
     else:
         stored_artifacts = _move_artifacts_into_entry(
@@ -719,6 +844,7 @@ def commit_artifacts_to_store(
             entry_dir,
             output_dir=out_dir,
             canonical_paths=product_paths,
+            task_output=record.task_output,
         )
 
     if not relinked and product_paths:

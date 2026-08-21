@@ -114,3 +114,80 @@ def resolve_sample_caas_root(input_json: Mapping[str, Any]) -> Optional[Path]:
 
 def opted_out_sample_actions() -> Set[str]:
     return set(SAMPLE_CAAS_OPT_OUT)
+
+
+_ALIGN_CAAS_ACTIONS = (
+    "sample.parabricks_fq2bam",
+    "sample.parabricks_giraffe",
+    "sample.methylgrapher_wgbs_align",
+)
+
+
+def restore_sample_align_products(sample_dir: Path | str, sample_id: str) -> list[Path]:
+    """Restore BAM / qc-metrics.tar product symlinks from sample-scoped CAAS.
+
+    After a harvest whose relink skipped dual-mount product paths, methyl_qc and
+    extract look at empty ``{sampleDir}/{id}.bam`` locations even though the
+    blobs remain under ``.caas/``. Call this before those actions.
+    """
+    from .action_result import caas_action_safe_name, caas_root
+    from .content_store import _ensure_symlink, link_entry_into_place
+
+    sample_path = Path(sample_dir)
+    restored: list[Path] = []
+    if not sample_path.is_dir() or not sample_id:
+        return restored
+
+    product_names = (
+        f"{sample_id}.bam",
+        f"{sample_id}.qc-metrics.tar",
+        f"{sample_id}.json",
+        f"{sample_id}.deduplicate_metrics.txt",
+    )
+    caas = caas_root(sample_path)
+    for action in _ALIGN_CAAS_ACTIONS:
+        action_dir = caas / caas_action_safe_name(action)
+        if not action_dir.is_dir():
+            continue
+        key_dirs = sorted(
+            (
+                path
+                for path in action_dir.iterdir()
+                if path.is_dir() and (path / "manifest.json").is_file()
+            ),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        for key_dir in key_dirs:
+            try:
+                link_entry_into_place(
+                    sample_path,
+                    action,
+                    key_dir.name,
+                    output_dir=sample_path,
+                )
+            except OSError:
+                pass
+            for name in product_names:
+                blob = key_dir / name
+                dest = sample_path / name
+                if not blob.is_file() or blob.is_symlink():
+                    continue
+                if dest.is_file() and not dest.is_symlink():
+                    continue
+                if dest.is_file():
+                    try:
+                        if dest.resolve() == blob.resolve():
+                            continue
+                    except OSError:
+                        pass
+                try:
+                    _ensure_symlink(dest, blob)
+                    restored.append(dest)
+                except OSError:
+                    continue
+            if (sample_path / f"{sample_id}.bam").is_file() or (
+                sample_path / f"{sample_id}.qc-metrics.tar"
+            ).is_file():
+                break
+    return restored

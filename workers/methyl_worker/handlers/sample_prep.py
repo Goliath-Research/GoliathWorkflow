@@ -72,6 +72,13 @@ def _handle_methyl_qc(
         sample_path, str(sample_id) if sample_id else None
     )
 
+    try:
+        from methyl_domain.sample_content_store import restore_sample_align_products
+
+        restore_sample_align_products(sample_path, resolved_sample_id)
+    except Exception:
+        logger.debug("CAAS product restore skipped for %s", resolved_sample_id, exc_info=True)
+
     project = input.project or input.projectPath
     from methyl_alignment_qc.core import process_samples_to_qc_jsons
     from methyl_alignment_qc.core.qc_write_context import QcWriteContext
@@ -518,6 +525,13 @@ def _handle_methylgrapher_wgbs_extract(
     sample_dir = input.sampleDir
     sample_id = input.sampleId
     project = input.project or input.projectPath
+    if sample_dir and sample_id:
+        try:
+            from methyl_domain.sample_content_store import restore_sample_align_products
+
+            restore_sample_align_products(sample_dir, str(sample_id))
+        except Exception:
+            logger.debug("CAAS product restore skipped for wgbs extract %s", sample_id, exc_info=True)
     raw = run_methylgrapher_wgbs_extract(
         sample_id=sample_id,
         sample_dir=sample_dir,
@@ -593,6 +607,14 @@ def _handle_methyl_extract(
     sample_dir = input.sampleDir
     sample_id = input.sampleId
     project = input.project or input.projectPath
+
+    if sample_dir and sample_id:
+        try:
+            from methyl_domain.sample_content_store import restore_sample_align_products
+
+            restore_sample_align_products(sample_dir, str(sample_id))
+        except Exception:
+            logger.debug("CAAS product restore skipped for extract %s", sample_id, exc_info=True)
 
     raw = run_methyl_extract(
         sample_id=sample_id,

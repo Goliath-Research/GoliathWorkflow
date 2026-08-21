@@ -658,3 +658,98 @@ def test_plan_iterations_commit_recovers_run_layout_from_caas_symlink_paths(
     assert (old_entry / "run_0002" / "project.json").is_file()
     assert not (old_entry / "run_0001" / "project.json").is_symlink()
     assert not (old_entry / "run_0002" / "project.json").is_symlink()
+
+
+def test_relink_restores_canonical_paths_when_output_dir_prefix_differs(tmp_path: Path) -> None:
+    """Regression: dest_link = output_dir/rel used to skip when not in canon_abs.
+
+    Align records ``/lambda/nfs/Work/samples/{id}/{id}.bam`` while output_dir may
+    be ``/work/samples/{id}``. Skipping dest_link left the product path empty.
+    """
+    from methyl_domain.content_store import _relink_artifacts_from_entry
+
+    sample_dir = tmp_path / "work" / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    entry = sample_dir / ".caas" / "sample_parabricks_fq2bam" / "key-1"
+    entry.mkdir(parents=True)
+    blob = entry / "S1.bam"
+    blob.write_bytes(b"BAMDATA")
+    tar_blob = entry / "S1.qc-metrics.tar"
+    tar_blob.write_bytes(b"TAR")
+
+    product_bam = sample_dir / "S1.bam"
+    product_tar = sample_dir / "S1.qc-metrics.tar"
+    alias = tmp_path / "lambda" / "nfs" / "Work" / "samples" / "S1"
+    alias.mkdir(parents=True)
+
+    _relink_artifacts_from_entry(
+        [
+            ArtifactRef(path=str(blob), bytes=7),
+            ArtifactRef(path=str(tar_blob), bytes=3),
+        ],
+        entry,
+        output_dir=alias,
+        canonical_paths=[product_bam, product_tar],
+        task_output={
+            "bamPath": str(product_bam),
+            "qcMetricsTar": str(product_tar),
+        },
+    )
+    assert product_bam.is_symlink()
+    assert product_bam.read_bytes() == b"BAMDATA"
+    assert product_tar.is_symlink()
+    assert product_tar.read_bytes() == b"TAR"
+    # Do not invent a BAM under the mismatched output_dir prefix.
+    assert not (alias / "S1.bam").exists()
+
+
+def test_paths_equivalent_dual_mount_prefixes() -> None:
+    from methyl_domain.content_store import _paths_equivalent
+
+    assert _paths_equivalent(
+        Path("/work/samples/S1/S1.bam"),
+        Path("/lambda/nfs/Work/samples/S1/S1.bam"),
+    )
+    assert not _paths_equivalent(
+        Path("/work/samples/S1/S1.bam"),
+        Path("/work/projects/study/configs/S1.bam"),
+    )
+
+
+def test_restore_sample_align_products_relinks_bam_and_tar(tmp_path: Path) -> None:
+    from methyl_domain.sample_content_store import restore_sample_align_products
+
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    key = sample_dir / ".caas" / "sample_parabricks_fq2bam" / "abc123"
+    key.mkdir(parents=True)
+    (key / "S1.bam").write_bytes(b"BAM")
+    (key / "S1.qc-metrics.tar").write_bytes(b"TAR")
+    (key / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.2",
+                "action_name": "sample.parabricks_fq2bam",
+                "capability": "parabricks.fq2bam",
+                "started_at_utc": "2026-08-21T00:00:00Z",
+                "finished_at_utc": "2026-08-21T00:00:00Z",
+                "duration_ms": 1,
+                "result_code": 0,
+                "exit_code": 0,
+                "artifacts": [
+                    {"path": str(key / "S1.bam"), "kind": "file", "bytes": 3},
+                    {"path": str(key / "S1.qc-metrics.tar"), "kind": "file", "bytes": 3},
+                ],
+                "task_output": {
+                    "bamPath": str(sample_dir / "S1.bam"),
+                    "qcMetricsTar": str(sample_dir / "S1.qc-metrics.tar"),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    restored = restore_sample_align_products(sample_dir, "S1")
+    assert (sample_dir / "S1.bam").is_file()
+    assert (sample_dir / "S1.bam").read_bytes() == b"BAM"
+    assert (sample_dir / "S1.qc-metrics.tar").read_bytes() == b"TAR"
+    assert restored

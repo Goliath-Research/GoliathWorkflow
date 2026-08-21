@@ -293,3 +293,51 @@ def test_process_samples_to_qc_jsons_mode_subdir_uses_sample_id_not_dirname(
     assert "properly_paired_rate" in details
     assert "BAM not found" not in str(details.get("properly_paired_rate", {}).get("message", ""))
     assert details["properly_paired_rate"]["pass"] is True
+
+
+def _quality_yield_table() -> str:
+    return (
+        "TOTAL_READS\tPF_READS\tTOTAL_BASES\tPF_BASES\tQ20_BASES\tPF_Q20_BASES\t"
+        "Q30_BASES\tPF_Q30_BASES\tQ20_EQUIVALENT_YIELD\tPF_Q20_EQUIVALENT_YIELD\n"
+        "1000\t950\t120000\t100000\t110000\t98000\t95000\t90000\t200000\t190000\n"
+    )
+
+
+def test_find_qc_metrics_tar_packs_unpacked_directory(tmp_path: Path) -> None:
+    from methyl_alignment_qc.core.writer import _find_qc_metrics_tar
+
+    sample_dir = tmp_path / "S1"
+    metrics = sample_dir / "S1.qc-metrics"
+    metrics.mkdir(parents=True)
+    (metrics / "quality_yield.txt").write_text(_quality_yield_table(), encoding="utf-8")
+    tar_path = _find_qc_metrics_tar(sample_dir, "S1")
+    assert tar_path is not None
+    assert tar_path.is_file()
+    assert tar_path.name == "S1.qc-metrics.tar"
+
+
+def test_find_qc_metrics_tar_relinks_caas_blob(tmp_path: Path) -> None:
+    import tarfile
+
+    from methyl_alignment_qc.core.writer import (
+        _find_qc_metrics_tar,
+        _try_load_parabricks_metrics_payload,
+    )
+
+    sample_dir = tmp_path / "S1"
+    blob_dir = sample_dir / ".caas" / "sample_parabricks_fq2bam" / "key-1"
+    blob_dir.mkdir(parents=True)
+    blob = blob_dir / "S1.qc-metrics.tar"
+    qy = tmp_path / "quality_yield.txt"
+    qy.write_text(_quality_yield_table(), encoding="utf-8")
+    with tarfile.open(blob, "w") as tar:
+        tar.add(qy, arcname="S1.qc-metrics/quality_yield.txt")
+
+    tar_path = _find_qc_metrics_tar(sample_dir, "S1")
+    assert tar_path is not None
+    assert tar_path.is_file()
+    loaded = _try_load_parabricks_metrics_payload(sample_dir, "S1")
+    assert loaded is not None
+    payload, source = loaded
+    assert payload.get("quality_yield") is not None
+    assert source.is_file()
