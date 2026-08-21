@@ -7,6 +7,7 @@ from pathlib import Path
 from methyl_utils.sample_arm_layout import (
     align_arm_for_context,
     align_arm_for_mode_and_config,
+    bind_production_sample_arms,
     bind_sample_arm_dirs,
     is_default_sample_dir,
     is_mode_leaf_dirname,
@@ -86,6 +87,21 @@ def test_bind_sample_arm_dirs_default_and_explicit(tmp_path: Path) -> None:
     }
     bind_sample_arm_dirs(ctx2)
     assert ctx2["samples"][0]["sampleDir"] == explicit
+
+
+def test_bind_production_sample_arms_skips_rnaseq(tmp_path: Path) -> None:
+    root = tmp_path / "samples" / "S1"
+    root.mkdir(parents=True)
+    ctx = {
+        "alignmentMode": "linear",
+        "samples": [{"sampleId": "S1", "sampleDir": str(root), "sampleRoot": str(root)}],
+        "program_path": str(
+            Path("/tmp") / "sample_prep_rnaseq.program.json"
+        ),
+    }
+    bind_production_sample_arms(ctx)
+    assert ctx["samples"][0]["sampleDir"] == str(root)
+    assert "align." not in ctx["samples"][0]["sampleDir"]
 
 
 def test_link_root_fastqs_into_dir(tmp_path: Path) -> None:

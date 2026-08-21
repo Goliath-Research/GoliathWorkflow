@@ -77,10 +77,10 @@ def test_normalize_contexts_cg_only() -> None:
     assert runner._normalize_contexts(["CG"]) == ("CG",)
 
 
-def test_incomplete_resolved_config_fills_extract_contexts_from_site(
+def test_incomplete_resolved_config_does_not_reread_site(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Stale baked resolvedConfig (FASTA only) must pick up site extract_contexts."""
+    """Worker isolation: baked resolvedConfig is the only tool-parameter source."""
     site = tmp_path / "site.json"
     site.write_text(
         json.dumps(
@@ -88,7 +88,7 @@ def test_incomplete_resolved_config_fills_extract_contexts_from_site(
                 "actionConfig": {
                     "methyl_extract": {
                         "extract_contexts": ["CG", "CHG", "CHH"],
-                        "min_mapq": 20,
+                        "threads": 99,
                     }
                 },
                 "reference_genome": {"fasta": str(tmp_path / "genome.fa")},
@@ -102,19 +102,18 @@ def test_incomplete_resolved_config_fills_extract_contexts_from_site(
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()
     (sample_dir / "S1.bam").write_bytes(b"BAM")
-    cfg = runner.resolve_methyl_extract_config(
-        project,
-        {
-            "sampleId": "S1",
-            "sampleDir": str(sample_dir),
-            "resolvedConfig": {
-                "reference_fasta": str(ref),
-                "genome_fasta": str(ref),
+    with pytest.raises(RuntimeError, match="extract_contexts must be set"):
+        runner.resolve_methyl_extract_config(
+            project,
+            {
+                "sampleId": "S1",
+                "sampleDir": str(sample_dir),
+                "resolvedConfig": {
+                    "reference_fasta": str(ref),
+                    "genome_fasta": str(ref),
+                },
             },
-        },
-    )
-    assert cfg.extract_contexts == ("CG", "CHG", "CHH")
-    assert cfg.min_mapq == 20
+        )
 
 
 def test_build_command_includes_chg_chh_flags(tmp_path: Path) -> None:

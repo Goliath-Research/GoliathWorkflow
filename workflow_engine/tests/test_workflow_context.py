@@ -17,6 +17,7 @@ from workflow_context import (  # noqa: E402
     build_resolved_config_scope_vars,
     compute_execution_scope_id,
     enrich_instance_context,
+    finalize_instance_context,
     list_unresolved_placeholders,
     resolved_config_scope_var_name,
     resolve_input_json_from_template,
@@ -335,3 +336,60 @@ def test_finalize_instance_context_bakes_execution_scope_id():
     ctx.update(build_resolved_config_scope_vars(ctx))
     ctx["executionScopeId"] = compute_execution_scope_id(ctx)
     assert len(ctx["executionScopeId"]) == 32
+
+
+def _patch_finalize_seams(monkeypatch, *, alignment_mode="linear", engine="mojo"):
+    we = Path(__file__).resolve().parents[1]
+    if str(we) not in sys.path:
+        sys.path.insert(0, str(we))
+    import cfg.sync_on_start as sync_on_start  # noqa: E402
+
+    monkeypatch.setattr(sync_on_start, "ensure_study_work_synced", lambda ctx: dict(ctx))
+    monkeypatch.setattr(
+        "workflow_context.enrich_instance_context",
+        lambda ctx: {
+            **ctx,
+            "alignmentMode": alignment_mode,
+            "actionConfig": {"parabricks": {"engine": engine}},
+        },
+    )
+    monkeypatch.setattr("methyl_utils.modality_gate.enforce_pack_pairing", lambda ctx: None)
+    monkeypatch.setattr(
+        "methyl_utils.modality_gate.enforce_study_primary_analyte", lambda ctx: None
+    )
+    monkeypatch.setattr("workflow_context.build_resolved_config_scope_vars", lambda ctx: {})
+
+
+def test_finalize_instance_context_binds_sample_arms(tmp_path: Path, monkeypatch) -> None:
+    _patch_finalize_seams(monkeypatch)
+    root = tmp_path / "samples" / "S1"
+    root.mkdir(parents=True)
+    out = finalize_instance_context(
+        {
+            "projectPath": str(tmp_path / "project.json"),
+            "samples": [
+                {"sampleId": "S1", "sampleDir": str(root), "sampleRoot": str(root)}
+            ],
+        }
+    )
+    assert out["samples"][0]["sampleDir"].endswith("align.linear.mojo")
+    assert Path(out["samples"][0]["sampleRoot"]).resolve() == root.resolve()
+
+
+def test_finalize_instance_context_skips_rnaseq_arm_bind(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_finalize_seams(monkeypatch)
+    root = tmp_path / "samples" / "S1"
+    root.mkdir(parents=True)
+    out = finalize_instance_context(
+        {
+            "projectPath": str(tmp_path / "project.json"),
+            "program_path": str(tmp_path / "sample_prep_rnaseq.program.json"),
+            "samples": [
+                {"sampleId": "S1", "sampleDir": str(root), "sampleRoot": str(root)}
+            ],
+        }
+    )
+    assert out["samples"][0]["sampleDir"] == str(root)
+    assert "align." not in out["samples"][0]["sampleDir"]

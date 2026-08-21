@@ -444,6 +444,10 @@ def finalize_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
 
     enforce_pack_pairing(out)
     enforce_study_primary_analyte(out)
+    from methyl_utils.sample_arm_layout import bind_production_sample_arms
+
+    # After enrich so site/profile engine knobs are visible. RNA/proteomics skip.
+    bind_production_sample_arms(out)
     out.update(build_resolved_config_scope_vars(out))
     scope_id = compute_execution_scope_id(out)
     out["executionScopeId"] = scope_id

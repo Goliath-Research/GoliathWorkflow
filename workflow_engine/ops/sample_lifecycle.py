@@ -19,13 +19,9 @@ def _bind_methylation_sample_arms(body: Dict[str, Any], context: Dict[str, Any])
     RNA / proteomics SamplePrep programs keep a flat sampleDir.
     """
     program = body.get("program_path") or str(_DEFAULT_SAMPLE_PREP_PROGRAM)
-    from methyl_utils.modality_gate import infer_program_family
-    from methyl_utils.sample_arm_layout import bind_sample_arm_dirs
+    from methyl_utils.sample_arm_layout import bind_production_sample_arms
 
-    family = infer_program_family(program)
-    if family in {"rnaseq", "proteomics"}:
-        return
-    bind_sample_arm_dirs(context)
+    bind_production_sample_arms(context, program=program)
 
 
 def start_sample_prep(
@@ -87,10 +83,15 @@ def start_sample_prep(
         "profilePath",
         "procedurePath",
         "siteConfigPath",
+        "program_path",
+        "program",
+        "programPath",
     ):
         if key in body and body[key] is not None:
             context[key] = body[key]
     # Bake site/profile actionConfig, alignment flags, and resolvedConfig__* scope vars.
+    # Arm leaf is bound inside finalize (and again below) so generic
+    # create_workflow_instance / local engine paths also isolate products.
     context = finalize_instance_context(context)
     # Arm leaf after finalize so site/profile engines are visible. Explicit
     # samples[].sampleDir that is already an arm/mode leaf is preserved.

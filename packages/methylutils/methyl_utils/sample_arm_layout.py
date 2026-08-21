@@ -340,6 +340,43 @@ def is_default_sample_dir(sample_dir: Path | str, sample_root: Path | str) -> bo
     return _paths_equal(sample_dir, sample_root)
 
 
+def bind_production_sample_arms(
+    context: MutableMapping[str, Any],
+    *,
+    program: Any = None,
+) -> MutableMapping[str, Any]:
+    """Bind methylation SamplePrep arms; skip RNA / proteomics process packs.
+
+    ``program`` is the DomainProgram path/name when the caller has it on the
+    start request (it may not yet be copied onto ``context``).
+    """
+    samples = context.get("samples")
+    if not isinstance(samples, list) or not samples:
+        return context
+    from methyl_utils.modality_gate import (
+        context_modality,
+        infer_profile_family,
+        infer_program_family,
+    )
+
+    prog = program
+    if prog is None:
+        prog = (
+            context.get("program_path")
+            or context.get("program")
+            or context.get("programPath")
+        )
+    profile = context.get("pipelineProfile") or context.get("profilePath")
+    family = (
+        infer_program_family(prog)
+        or infer_profile_family(profile)
+        or context_modality(context)
+    )
+    if family in {"rnaseq", "proteomics"}:
+        return context
+    return bind_sample_arm_dirs(context)
+
+
 def bind_sample_arm_dirs(context: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
     """Set per-sample ``sampleRoot`` and default ``sampleDir`` to the derived arm leaf.
 

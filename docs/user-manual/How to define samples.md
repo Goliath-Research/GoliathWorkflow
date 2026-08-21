@@ -104,7 +104,7 @@ flowchart LR
 | Phase | Config object | Typical content |
 |-------|---------------|-----------------|
 | **Ingress** (lab FASTQ) | Study/instance `fastqStorage` → per-sample `fastqSource` | S3/Azure/GCS/file + credentials + `prefix` |
-| **Processing** | `sampleDir` = `/work/samples/{sampleId}/` | FASTQ, BAM (transient), `*.h5`, QC JSON, logs |
+| **Processing** | `sampleRoot` = `/work/samples/{sampleId}/`; `sampleDir` = `{sampleRoot}/align.{mode}.{engine}/` | Shared FASTQs at `sampleRoot`; BAM / QC / H5 in the arm leaf |
 | **Archive** (long-term) | `sampleStorage` / `h5Storage` → `sampleDestination` | Upload QC ± FASTQ ± H5 after disposition |
 
 Workers never invent paths from env; they get typed JSON on the task.
@@ -134,6 +134,6 @@ At schedule time: `expand_storage_profile` / `expand_storage_endpoint` → today
 
 ### What lives under `/work/samples/{id}/`
 
-Processing workspace for that ID: staged FASTQs, alignment products, chromosome `*.h5`, extraction/QC JSON, prep log. Science workflows (centroid/detector/…) read those H5s via the study’s resolved sample dirs.
+Identity root (`sampleRoot`): staged FASTQs and `.caas/`. Alignment products (`{id}.bam`, QC tar/JSON, chromosome `*.h5`) live in the bound `sampleDir` arm leaf (`align.linear.parabricks/`, `align.pangenome_wgbs.mojo/`, …). Explicit `samples[].sampleDir` that already names an arm is preserved. See [sample-prep-tooling.md](../architecture/sample-prep-tooling.md). Science workflows (centroid/detector/…) read those H5s via the study’s resolved sample dirs.
 
 **Short version:** import samples into **portal**; enroll them into study arms in **cfg**; **start** syncs CSVs onto `/work` for workers; each ID has one **processing home** on shared storage; ingress/archive are **named cloud endpoints** with per-sample prefixes.

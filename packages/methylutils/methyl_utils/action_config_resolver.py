@@ -117,6 +117,24 @@ def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str,
             out["linear_ref_fasta"] = linear_fasta
         return out
 
+    # Same merge as WGBS: actionConfig.methyl_extract knobs must not drop
+    # reference_genome.fasta / pangenome linear_ref_fasta.
+    if action_key == "methyl_extract":
+        out = {}
+        ref = site.get("reference_genome") or {}
+        pangenome = site.get("pangenome_genome") or {}
+        linear_fasta = pangenome.get("linear_ref_fasta") or ref.get("fasta")
+        if linear_fasta:
+            out["reference_fasta"] = linear_fasta
+            out["genome_fasta"] = linear_fasta
+        legacy = site.get("methyl_extract")
+        if isinstance(legacy, dict):
+            out = deep_merge(out, dict(legacy))
+        site_me = ac.get("methyl_extract") if isinstance(ac, dict) else None
+        if isinstance(site_me, dict):
+            out = deep_merge(out, dict(site_me))
+        return out
+
     if isinstance(ac, dict) and action_key in ac and isinstance(ac[action_key], dict):
         return dict(ac[action_key])
 
@@ -130,9 +148,7 @@ def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str,
 
     if action_key == "alignment_qc" and linear_fasta:
         out["genome_fasta"] = linear_fasta
-    if action_key in ("methyl_extract", "alignment_qc") and linear_fasta:
-        out.setdefault("reference_fasta", linear_fasta)
-        out.setdefault("genome_fasta", linear_fasta)
+        out["reference_fasta"] = linear_fasta
     if action_key == "mapper":
         if ann.get("gtf"):
             out["gtf"] = ann["gtf"]
@@ -145,8 +161,6 @@ def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str,
             out.setdefault("network_refinement", {})["cache_path"] = nr
     if action_key == "parabricks" and site.get("parabricks"):
         out.update(dict(site["parabricks"]))
-    if action_key == "methyl_extract" and site.get("methyl_extract"):
-        out.update(dict(site["methyl_extract"]))
     rna_ref = site.get("rna_reference") or {}
     if isinstance(rna_ref, dict) and rna_ref:
         if action_key in ("rna_align", "rna_qc"):

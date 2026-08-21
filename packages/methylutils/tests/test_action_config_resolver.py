@@ -175,6 +175,47 @@ def test_site_slice_alignment_qc_and_methyl_extract_fasta():
     assert ext["genome_fasta"] == "/ref/genome.fa"
 
 
+def test_site_slice_methyl_extract_action_config_keeps_reference_fasta():
+    """actionConfig.methyl_extract knobs must not drop reference_genome.fasta."""
+    site = {
+        "reference_genome": {"fasta": "/ref/genome.fa"},
+        "actionConfig": {
+            "methyl_extract": {
+                "extract_contexts": ["CG", "CHG", "CHH"],
+                "threads": 10,
+            }
+        },
+    }
+    ext = site_slice_for_action(site, "methyl_extract")
+    assert ext["extract_contexts"] == ["CG", "CHG", "CHH"]
+    assert ext["threads"] == 10
+    assert ext["reference_fasta"] == "/ref/genome.fa"
+    assert ext["genome_fasta"] == "/ref/genome.fa"
+
+
+def test_resolve_action_config_methyl_extract_keeps_genome_with_profile_knobs():
+    site = {
+        "reference_genome": {"fasta": "/ref/genome.fa"},
+        "actionConfig": {"methyl_extract": {"extract_contexts": ["CG"]}},
+    }
+    profile = {
+        "methyl_extract": {
+            "extract_contexts": ["CG", "CHG", "CHH"],
+            "threads": 10,
+            "read_level": {"enabled": True, "tile_size": 4},
+        }
+    }
+    merged = resolve_action_config(
+        "methyl_extract",
+        site=site,
+        profile_action_config=profile,
+    )
+    assert merged["extract_contexts"] == ["CG", "CHG", "CHH"]
+    assert merged["threads"] == 10
+    assert merged["read_level"] == {"enabled": True, "tile_size": 4}
+    assert merged["reference_fasta"] == "/ref/genome.fa"
+
+
 def test_site_slice_pangenome_linear_fasta_preferred():
     site = {
         "reference_genome": {"fasta": "/ref/linear.fa"},
@@ -182,6 +223,9 @@ def test_site_slice_pangenome_linear_fasta_preferred():
     }
     aln = site_slice_for_action(site, "alignment_qc")
     assert aln["genome_fasta"] == "/ref/pangenome_linear.fa"
+    ext = site_slice_for_action(site, "methyl_extract")
+    assert ext["reference_fasta"] == "/ref/pangenome_linear.fa"
+    assert ext["genome_fasta"] == "/ref/pangenome_linear.fa"
 
 
 def test_site_slice_enricher_cache_path():

@@ -121,6 +121,8 @@ class LocalWorkflowEngine:
     ) -> RunResult:
         result = compile_domain_program_file(program_path, enrich_context=False)
         merged = {**result.context_json, **context_json}
+        merged.setdefault("program_path", str(program_path))
+        merged.setdefault("programPath", str(program_path))
         return self.run_spec(result.workflow, merged, enrich_context=enrich_context)
 
     @staticmethod

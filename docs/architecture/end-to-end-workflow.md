@@ -120,7 +120,7 @@ Reference trees under `/work/genomes/` are provisioned from myQNAPcloud (`epimet
 | Location | Config key | Role |
 |----------|------------|------|
 | FASTQ source | `fastqSource` on download task / study sample mapping | Read-only ingress (`file` / `s3` / `azure_blob`) |
-| Local scratch | `/work/samples/{id}/` | Align, QC, extract; BAM is **transient** |
+| Local scratch | `/work/samples/{id}/` | FASTQs at sample root; BAM/QC/H5 in `align.*` arm leaf (`sampleDir`); BAM is **transient** |
 | Result archive | `sampleDestination` (alias `sampleStorage` / deprecated `h5Destination`) | Durable egress after success **or** terminal failure |
 | Study outputs | `/work/projects/{study}/…` | MC, freeze, covariates, models |
 
