@@ -439,12 +439,17 @@ BEGIN
 
     IF @result_code < 0
     BEGIN
+        DECLARE @fail_msg NVARCHAR(1024) = LEFT(JSON_VALUE(@oj, N'$.error'), 1024);
+        IF @fail_msg IS NULL OR LTRIM(RTRIM(@fail_msg)) = N''
+            SET @fail_msg = N'action failed';
+
         UPDATE wf.node_execution
         SET status = N'FAILED',
             result_code = @result_code,
             output_json = @oj,
             ended_at_utc = SYSUTCDATETIME(),
-            engine_error_code = @result_code
+            engine_error_code = @result_code,
+            engine_error_message = @fail_msg
         WHERE id = @action_execution_id;
 
         DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
@@ -457,7 +462,9 @@ BEGIN
     SET status = N'SUCCEEDED',
         result_code = @result_code,
         output_json = @oj,
-        ended_at_utc = SYSUTCDATETIME()
+        ended_at_utc = SYSUTCDATETIME(),
+        engine_error_code = NULL,
+        engine_error_message = NULL
     WHERE id = @action_execution_id;
 
     DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;

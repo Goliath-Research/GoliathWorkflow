@@ -409,7 +409,8 @@ BEGIN
   IF p_result_code < 0 THEN
     UPDATE wf.node_execution
     SET status = 'FAILED', result_code = p_result_code, output_json = p_output_json,
-        ended_at_utc = (now() AT TIME ZONE 'utc'), engine_error_code = p_result_code
+        ended_at_utc = (now() AT TIME ZONE 'utc'), engine_error_code = p_result_code,
+        engine_error_message = LEFT(COALESCE(NULLIF(p_output_json->>'error', ''), 'action failed'), 1024)
     WHERE id = p_action_execution_id;
     DELETE FROM wf.task_lease WHERE node_execution_id = p_action_execution_id;
     UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
@@ -418,7 +419,8 @@ BEGIN
 
   UPDATE wf.node_execution
   SET status = 'SUCCEEDED', result_code = p_result_code, output_json = p_output_json,
-      ended_at_utc = (now() AT TIME ZONE 'utc')
+      ended_at_utc = (now() AT TIME ZONE 'utc'),
+      engine_error_code = NULL, engine_error_message = NULL
   WHERE id = p_action_execution_id;
   DELETE FROM wf.task_lease WHERE node_execution_id = p_action_execution_id;
 

@@ -110,12 +110,14 @@ def resolve_paired_fastqs(
 ) -> List[Path]:
     """Return paired-end FASTQs (one or more pairs) for a sample.
 
-    Clara ``fq2bam_meth --in-fq`` accepts any even number of FASTQs as sequential
-    R1/R2 pairs. Named ``_1``/``_2`` (and Illumina ``_R1``/``_R2``) grouping is
-    preferred when it yields complete pairs. Otherwise an even leftover count is
-    still valid. Trimmed ``{id}_1.trimmed.fastq.gz`` / ``_2`` at *sample_dir*
-    wins for Align (remediation). Trim must pass ``prefer_trimmed=False`` so it
-    never feeds those outputs back into fastp.
+    Clara ``fq2bam_meth --in-fq`` accepts sequential R1/R2 pairs. Named
+    ``_1``/``_2`` (and Illumina ``_R1``/``_R2``) grouping is preferred when it
+    yields complete pairs. Sequential fallback applies only to files with no
+    mate identity — incomplete named groups fail closed so two R1s (or an R1
+    plus an unrelated leftover) cannot be aligned as mates. Trimmed
+    ``{id}_1.trimmed.fastq.gz`` / ``_2`` at *sample_dir* wins for Align
+    (remediation). Trim must pass ``prefer_trimmed=False`` so it never feeds
+    those outputs back into fastp.
     """
     _restore_download_fastqs(sample_dir, sample_id)
     trimmed = list(canonical_trimmed_fastqs(sample_dir, sample_id))
@@ -156,13 +158,20 @@ def resolve_paired_fastqs(
             leftovers.extend(mates.values())
 
     if not pairs:
-        if len(considered) >= 2 and len(considered) % 2 == 0:
+        incomplete_named = [path for path in leftovers if _mate_group(path) is not None]
+        unparsed = [path for path in leftovers if _mate_group(path) is None]
+        if incomplete_named:
+            raise RuntimeError(
+                f"Incomplete FASTQ mate group(s) under {sample_dir}: "
+                + ", ".join(p.name for p in incomplete_named)
+            )
+        if len(unparsed) >= 2 and len(unparsed) % 2 == 0:
             logger.info(
-                "Using %s FASTQs under %s as sequential Clara --in-fq pairs",
-                len(considered),
+                "Using %s unparsed FASTQs under %s as sequential Clara --in-fq pairs",
+                len(unparsed),
                 sample_dir,
             )
-            return list(considered)
+            return list(unparsed)
         raise RuntimeError(
             f"Expected paired FASTQ files under {sample_dir}, found {len(considered)}"
             + (f": {', '.join(p.name for p in considered)}" if considered else "")

@@ -60,7 +60,7 @@ def test_resolve_paired_fastqs_wrong_count(tmp_path: Path) -> None:
 
 
 def test_resolve_paired_fastqs_even_unparsed_names(tmp_path: Path) -> None:
-    """Clara --in-fq accepts any even FASTQ count as sequential R1/R2 pairs."""
+    """Clara --in-fq accepts even unparsed FASTQs as sequential R1/R2 pairs."""
     sample_dir = tmp_path / "S_even"
     sample_dir.mkdir()
     (sample_dir / "flowcellA.fastq.gz").write_bytes(b"r1")
@@ -68,6 +68,26 @@ def test_resolve_paired_fastqs_even_unparsed_names(tmp_path: Path) -> None:
 
     fastqs = runner.resolve_paired_fastqs(sample_dir, "S_even")
     assert [p.name for p in fastqs] == ["flowcellA.fastq.gz", "flowcellB.fastq.gz"]
+
+
+def test_resolve_paired_fastqs_two_r1s_do_not_pair(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_two_r1"
+    sample_dir.mkdir()
+    (sample_dir / "laneA_1.fastq.gz").write_bytes(b"a")
+    (sample_dir / "laneB_1.fastq.gz").write_bytes(b"b")
+
+    with pytest.raises(RuntimeError, match="Incomplete FASTQ mate group"):
+        runner.resolve_paired_fastqs(sample_dir, "S_two_r1")
+
+
+def test_resolve_paired_fastqs_r1_plus_unparsed_does_not_pair(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_mix"
+    sample_dir.mkdir()
+    (sample_dir / "sample_R1.fastq.gz").write_bytes(b"r1")
+    (sample_dir / "orphan.fastq.gz").write_bytes(b"x")
+
+    with pytest.raises(RuntimeError, match="Incomplete FASTQ mate group"):
+        runner.resolve_paired_fastqs(sample_dir, "S_mix")
 
 
 def test_resolve_paired_fastqs_restores_from_download_caas(tmp_path: Path) -> None:
@@ -272,6 +292,23 @@ def test_idempotent_skip_when_bam_and_qc_tar_exist(tmp_path: Path) -> None:
     assert not docker_calls
     assert out["bamPath"] == str(sample_dir / "S5.bam")
     assert out["qcMetricsTar"] == str(sample_dir / "S5.qc-metrics.tar")
+
+
+def test_reset_tmp_clears_leftover_children(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_tmp"
+    sample_dir.mkdir()
+    ref = tmp_path / "genome.fa"
+    ref.write_text(">ref\n")
+    paths = runner._resolve_paths(sample_dir, "S_tmp", ref)
+    leftover = paths.tmp_dir / "ALLU26WX"
+    leftover.mkdir(parents=True)
+    (leftover / "stale").write_text("x")
+
+    runner._reset_tmp(paths)
+
+    assert paths.tmp_dir.is_dir()
+    assert not leftover.exists()
+    assert list(paths.tmp_dir.iterdir()) == []
 
 
 def test_package_qc_metrics_dir_to_tar(tmp_path: Path) -> None:

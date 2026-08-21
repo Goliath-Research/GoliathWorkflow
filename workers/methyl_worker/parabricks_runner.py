@@ -482,6 +482,30 @@ def _cleanup_tmp(paths: ParabricksPaths) -> None:
         shutil.rmtree(paths.tmp_dir, ignore_errors=True)
 
 
+def _reset_tmp(paths: ParabricksPaths) -> None:
+    """Recreate ``tmp`` so a killed Clara run cannot leave an unwritable leftover.
+
+    ``pbrun`` fails immediately with ``Could not create temporary directory
+    /outputdir/tmp/...`` when NFS tmp from a reclaimed Align is still present.
+    """
+    if paths.tmp_dir.exists():
+        share_work_tree(paths.tmp_dir)
+    if paths.tmp_dir.is_file():
+        paths.tmp_dir.unlink()
+    elif paths.tmp_dir.is_dir():
+        shutil.rmtree(paths.tmp_dir, ignore_errors=True)
+        if paths.tmp_dir.is_dir():
+            for child in list(paths.tmp_dir.iterdir()):
+                if child.is_dir():
+                    shutil.rmtree(child, ignore_errors=True)
+                else:
+                    try:
+                        child.unlink()
+                    except OSError:
+                        pass
+    paths.tmp_dir.mkdir(parents=True, exist_ok=True)
+
+
 def run_fq2bam_meth(
     *,
     sample_id: str,
@@ -527,7 +551,7 @@ def run_fq2bam_meth(
     fastqs = resolve_paired_fastqs(sample_path, sample_id)
     docker_cmd = _build_docker_command(cfg, paths, fastqs)
     paths.sample_dir.mkdir(parents=True, exist_ok=True)
-    paths.tmp_dir.mkdir(parents=True, exist_ok=True)
+    _reset_tmp(paths)
 
     label = "MojoFq2bamMeth" if cfg.engine == "mojo" else "Parabricks fq2bam_meth"
     logger.info("Running %s for %s (device=%s)", label, sample_id, cfg.align_device)

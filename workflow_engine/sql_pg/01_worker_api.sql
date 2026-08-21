@@ -166,7 +166,7 @@ BEGIN
     INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
     INNER JOIN wf.workflow_action AS wa ON wa.id = wn.workflow_action_id
     WHERE tl.worker_id = p_worker_id
-      AND tl.lease_expires_at_utc > v_now
+      AND ne.status = 'RUNNING'
       AND coalesce(wa.exclusive_worker, false)
   ) THEN
     RETURN QUERY SELECT
@@ -202,17 +202,19 @@ BEGIN
         OR wa.capability = p_capability
         OR wa.capability IS NULL
       )
-      -- exclusive_worker candidate requires an idle worker (no live leases).
+      -- exclusive_worker candidate requires an idle worker (no RUNNING leases,
+      -- including expired-but-not-yet-reclaimed ones after a restart).
       AND (
         NOT coalesce(wa.exclusive_worker, false)
         OR NOT EXISTS (
           SELECT 1
           FROM wf.task_lease AS tl_idle
+          INNER JOIN wf.node_execution AS ne_idle ON ne_idle.id = tl_idle.node_execution_id
           WHERE tl_idle.worker_id = p_worker_id
-            AND tl_idle.lease_expires_at_utc > v_now
+            AND ne_idle.status = 'RUNNING'
         )
       )
-      -- max_per_worker: cap concurrent leases of this action on the worker.
+      -- max_per_worker: cap concurrent RUNNING leases of this action.
       AND (
         wa.max_per_worker IS NULL
         OR (
@@ -221,7 +223,7 @@ BEGIN
           INNER JOIN wf.node_execution AS ne_cap ON ne_cap.id = tl_cap.node_execution_id
           INNER JOIN wf.workflow_node AS wn_cap ON wn_cap.id = ne_cap.workflow_node_id
           WHERE tl_cap.worker_id = p_worker_id
-            AND tl_cap.lease_expires_at_utc > v_now
+            AND ne_cap.status = 'RUNNING'
             AND wn_cap.workflow_action_id = wa.id
         ) < wa.max_per_worker
       )
@@ -261,7 +263,9 @@ BEGIN
   UPDATE wf.node_execution ne
   SET status = 'RUNNING',
       started_at_utc = v_now,
-      completed_by_worker_id = p_worker_id
+      completed_by_worker_id = p_worker_id,
+      engine_error_code = NULL,
+      engine_error_message = NULL
   FROM cte
   WHERE ne.id = cte.id
   RETURNING ne.id INTO v_picked;
