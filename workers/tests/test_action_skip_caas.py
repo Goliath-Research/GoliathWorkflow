@@ -225,3 +225,119 @@ def test_sample_caas_commit_keeps_bam_in_sample_dir(tmp_path: Path, monkeypatch)
     # FASTQ in the shared sampleDir must not be stolen into the align CAAS entry.
     assert fastq.is_file() and not fastq.is_symlink()
     assert not list(configs.rglob("*.bam"))
+
+
+def test_sample_caas_skip_restores_products_after_stripped_leaf(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """After harvest, skip-replay must restore BAM/tar at sampleDir from .caas blobs."""
+    monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path / "samples"))
+
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    bam = sample_dir / "S1.bam"
+    tar = sample_dir / "S1.qc-metrics.tar"
+    bam.write_bytes(b"BAMDATA")
+    tar.write_bytes(b"TAR")
+    (sample_dir / "S1_1.fastq.gz").write_bytes(b"FASTQ")
+
+    configs = tmp_path / "projects" / "study" / "configs"
+    project = configs / "project.json"
+    _write_study_project(project, tmp_path)
+
+    entry = find_catalog_entry("sample.parabricks_fq2bam")
+    assert entry is not None
+    input_json = {
+        "tool": "ParabricksFq2Bam",
+        "sampleId": "S1",
+        "sampleDir": str(sample_dir),
+        "projectPath": str(project),
+        "caasEnabled": True,
+    }
+    from methyl_worker.task_models.sample_prep_models import ParabricksTaskOutput
+
+    input_model = validate_input(entry, strip_runtime_input(input_json))
+    output = ParabricksTaskOutput(
+        status="ok",
+        sampleId="S1",
+        bamPath=str(bam),
+        qcMetricsTar=str(tar),
+    )
+    record_action_execution(
+        entry, input_json, input_model, execution_result_from_output(output)
+    )
+    blob_bam = bam.resolve()
+    blob_tar = tar.resolve()
+    assert ".caas" in blob_bam.parts
+    bam.unlink()
+    tar.unlink()
+
+    skipped = maybe_skip_action(entry, input_json)
+    assert skipped is not None
+    assert skipped.output.status == "skipped"
+    assert bam.is_symlink()
+    assert not os.path.isabs(os.readlink(bam))
+    assert bam.read_bytes() == b"BAMDATA"
+    assert tar.is_symlink()
+    assert tar.read_bytes() == b"TAR"
+    assert blob_bam.is_file() and not blob_bam.is_symlink()
+    assert blob_tar.is_file() and not blob_tar.is_symlink()
+
+
+def test_sample_caas_skip_restores_arm_leaf_products(tmp_path: Path, monkeypatch) -> None:
+    """CAAS at sample identity root; skip restores products on the arm sampleDir."""
+    monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path / "samples"))
+
+    sample_root = tmp_path / "samples" / "S1"
+    arm = sample_root / "align.linear.parabricks"
+    arm.mkdir(parents=True)
+    bam = arm / "S1.bam"
+    tar = arm / "S1.qc-metrics.tar"
+    bam.write_bytes(b"BAMDATA")
+    tar.write_bytes(b"TAR")
+    (arm / "S1_1.fastq.gz").write_bytes(b"FASTQ")
+
+    configs = tmp_path / "projects" / "study" / "configs"
+    project = configs / "project.json"
+    _write_study_project(project, tmp_path)
+
+    entry = find_catalog_entry("sample.parabricks_fq2bam")
+    assert entry is not None
+    input_json = {
+        "tool": "ParabricksFq2Bam",
+        "sampleId": "S1",
+        "sampleDir": str(arm),
+        "projectPath": str(project),
+        "caasEnabled": True,
+    }
+    from methyl_worker.task_models.sample_prep_models import ParabricksTaskOutput
+
+    input_model = validate_input(entry, strip_runtime_input(input_json))
+    output = ParabricksTaskOutput(
+        status="ok",
+        sampleId="S1",
+        bamPath=str(bam),
+        qcMetricsTar=str(tar),
+    )
+    record_action_execution(
+        entry, input_json, input_model, execution_result_from_output(output)
+    )
+    blob_bam = bam.resolve()
+    assert (sample_root / ".caas") in blob_bam.parents
+    assert "align.linear.parabricks" not in blob_bam.parts
+    bam.unlink()
+    tar.unlink()
+
+    skipped = maybe_skip_action(entry, input_json)
+    assert skipped is not None
+    assert bam.is_symlink()
+    assert bam.read_bytes() == b"BAMDATA"
+    assert tar.is_symlink()
+    assert tar.read_bytes() == b"TAR"
+    assert not (sample_root / "S1.bam").exists()
+    assert blob_bam.is_file() and not blob_bam.is_symlink()
+    assert not list(configs.rglob("*.bam"))

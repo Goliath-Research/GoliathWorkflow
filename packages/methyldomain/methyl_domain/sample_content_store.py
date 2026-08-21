@@ -4,6 +4,10 @@ Sample-prep and alignment actions write/read a per-sample store instead of the
 study ``{project_root}/.caas/``. That store exists to skip repeated GPU/IO work
 (FASTQ download, Parabricks/Mojo/methylGrapher align, QC, extract).
 
+The store is keyed by sample identity (``sampleRoot`` / ``{samples_base}/{id}``),
+not by an ``align.*`` arm leaf. Products (``{id}.bam``, ``{id}.qc-metrics.tar``)
+are restored next to the bound ``sampleDir``.
+
 CAAS is **on by default**. Operators may reject it with task
 ``sampleCaasEnabled: false`` / ``caasEnabled: false``, or
 ``METHYL_SAMPLE_CAAS_ENABLED=0`` (false/no/off). Destructive and control-flow
@@ -77,6 +81,26 @@ def sample_caas_enabled_for_action(
     return sample_caas_enabled(input_json)
 
 
+# Align/extract arm leaves and experiment mode dirs. Products live here;
+# sample identity (and ``.caas``) live on the parent sample root.
+_SAMPLE_ARM_PREFIXES = ("align.", "extract.")
+_SAMPLE_MODE_LEAVES = frozenset({"linear", "pangenome", "pangenome_wgbs"})
+
+
+def is_sample_arm_dirname(name: str) -> bool:
+    """True when ``name`` is an align/extract arm leaf or experiment mode dir."""
+    try:
+        from methyl_utils.sample_arm_layout import is_mode_leaf_dirname
+
+        return is_mode_leaf_dirname(name)
+    except ImportError:
+        if not name or name in {".", ".."}:
+            return False
+        if name.startswith(_SAMPLE_ARM_PREFIXES):
+            return True
+        return name in _SAMPLE_MODE_LEAVES
+
+
 def resolve_sample_id(input_json: Mapping[str, Any]) -> Optional[str]:
     for key in ("sampleId", "sample_id", "domainSample"):
         raw = input_json.get(key)
@@ -87,8 +111,11 @@ def resolve_sample_id(input_json: Mapping[str, Any]) -> Optional[str]:
             return text
     sample_dir = input_json.get("sampleDir") or input_json.get("outputDir")
     if sample_dir:
-        name = Path(str(sample_dir)).expanduser().name
-        if name and name not in {".", ".."}:
+        path = Path(str(sample_dir)).expanduser()
+        name = path.name
+        if is_sample_arm_dirname(name):
+            name = path.parent.name
+        if name and name not in {".", ".."} and not is_sample_arm_dirname(name):
             return name
     return None
 
@@ -105,7 +132,20 @@ def samples_base_dir(input_json: Optional[Mapping[str, Any]] = None) -> Path:
 
 
 def resolve_sample_caas_root(input_json: Mapping[str, Any]) -> Optional[Path]:
-    """Return ``{samples_base}/{sample_id}`` — store lives at ``.caas/`` under this root."""
+    """Return the sample identity root — store lives at ``.caas/`` under this path.
+
+    Prefer explicit ``sampleRoot`` (planner arm split). If ``sampleDir`` is an
+    arm/mode leaf, use its parent so CAAS stays at sample identity, not the arm
+    dirname. Otherwise ``{samples_base}/{sample_id}``.
+    """
+    explicit = input_json.get("sampleRoot")
+    if explicit:
+        return Path(str(explicit)).expanduser().resolve()
+    sample_dir_raw = input_json.get("sampleDir") or input_json.get("outputDir")
+    if sample_dir_raw:
+        sample_dir = Path(str(sample_dir_raw)).expanduser()
+        if is_sample_arm_dirname(sample_dir.name):
+            return sample_dir.parent.resolve()
     sample_id = resolve_sample_id(input_json)
     if not sample_id:
         return None
@@ -123,12 +163,35 @@ _ALIGN_CAAS_ACTIONS = (
 )
 
 
+def _caas_host_roots(sample_path: Path) -> list[Path]:
+    """Directories that may hold ``.caas`` for this bound sampleDir.
+
+    Flat layout stores CAAS beside products. Arm/mode leaves keep products in
+    ``sampleDir`` while the store is ``{sampleRoot}/.caas``.
+    """
+    roots: list[Path] = [sample_path]
+    if is_sample_arm_dirname(sample_path.name):
+        parent = sample_path.parent
+        if parent != sample_path:
+            roots.append(parent)
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        key = str(root)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(root)
+    return unique
+
+
 def restore_sample_align_products(sample_dir: Path | str, sample_id: str) -> list[Path]:
     """Restore BAM / qc-metrics.tar product symlinks from sample-scoped CAAS.
 
     After a harvest whose relink skipped dual-mount product paths, methyl_qc and
     extract look at empty ``{sampleDir}/{id}.bam`` locations even though the
-    blobs remain under ``.caas/``. Call this before those actions.
+    blobs remain under ``.caas/``. Call this before those actions. Products are
+    always restored next to the bound ``sampleDir`` (flat root or arm leaf).
     """
     from .action_result import caas_action_safe_name, caas_root
     from .content_store import _ensure_symlink, link_entry_into_place
@@ -144,50 +207,51 @@ def restore_sample_align_products(sample_dir: Path | str, sample_id: str) -> lis
         f"{sample_id}.json",
         f"{sample_id}.deduplicate_metrics.txt",
     )
-    caas = caas_root(sample_path)
-    for action in _ALIGN_CAAS_ACTIONS:
-        action_dir = caas / caas_action_safe_name(action)
-        if not action_dir.is_dir():
-            continue
-        key_dirs = sorted(
-            (
-                path
-                for path in action_dir.iterdir()
-                if path.is_dir() and (path / "manifest.json").is_file()
-            ),
-            key=lambda path: path.stat().st_mtime,
-            reverse=True,
-        )
-        for key_dir in key_dirs:
-            try:
-                link_entry_into_place(
-                    sample_path,
-                    action,
-                    key_dir.name,
-                    output_dir=sample_path,
-                )
-            except OSError:
-                pass
-            for name in product_names:
-                blob = key_dir / name
-                dest = sample_path / name
-                if not blob.is_file() or blob.is_symlink():
-                    continue
-                if dest.is_file() and not dest.is_symlink():
-                    continue
-                if dest.is_file():
-                    try:
-                        if dest.resolve() == blob.resolve():
-                            continue
-                    except OSError:
-                        pass
+    for host in _caas_host_roots(sample_path):
+        caas = caas_root(host)
+        for action in _ALIGN_CAAS_ACTIONS:
+            action_dir = caas / caas_action_safe_name(action)
+            if not action_dir.is_dir():
+                continue
+            key_dirs = sorted(
+                (
+                    path
+                    for path in action_dir.iterdir()
+                    if path.is_dir() and (path / "manifest.json").is_file()
+                ),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+            for key_dir in key_dirs:
                 try:
-                    _ensure_symlink(dest, blob)
-                    restored.append(dest)
+                    link_entry_into_place(
+                        host,
+                        action,
+                        key_dir.name,
+                        output_dir=sample_path,
+                    )
                 except OSError:
-                    continue
-            if (sample_path / f"{sample_id}.bam").is_file() or (
-                sample_path / f"{sample_id}.qc-metrics.tar"
-            ).is_file():
-                break
+                    pass
+                for name in product_names:
+                    blob = key_dir / name
+                    dest = sample_path / name
+                    if not blob.is_file() or blob.is_symlink():
+                        continue
+                    if dest.is_file() and not dest.is_symlink():
+                        continue
+                    if dest.is_file():
+                        try:
+                            if dest.resolve() == blob.resolve():
+                                continue
+                        except OSError:
+                            pass
+                    try:
+                        _ensure_symlink(dest, blob)
+                        restored.append(dest)
+                    except OSError:
+                        continue
+                if (sample_path / f"{sample_id}.bam").is_file() or (
+                    sample_path / f"{sample_id}.qc-metrics.tar"
+                ).is_file():
+                    return restored
     return restored

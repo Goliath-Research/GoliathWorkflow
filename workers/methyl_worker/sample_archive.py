@@ -180,14 +180,30 @@ def _upload_one(
     raise RuntimeError(f"Unsupported destination scheme {target.scheme!r}")
 
 
-def _collect_fastqs(sample_dir: Path) -> List[Path]:
+def _collect_fastqs(sample_dir: Path, sample_root: Optional[Path] = None) -> List[Path]:
     paths: List[Path] = []
-    for pattern in FASTQ_GLOBS:
-        paths.extend(sorted(sample_dir.glob(pattern)))
+    seen: set[str] = set()
+    bases: List[Path] = []
+    if sample_root is not None:
+        bases.append(Path(sample_root))
+    bases.append(Path(sample_dir))
+    for base in bases:
+        if not base.is_dir():
+            continue
+        key = str(base.resolve()) if base.exists() else str(base)
+        if key in seen:
+            continue
+        seen.add(key)
+        for pattern in FASTQ_GLOBS:
+            paths.extend(sorted(base.glob(pattern)))
     trimmed = [p for p in paths if ".trimmed." in p.name]
     if trimmed:
         return trimmed
-    return paths
+    # Prefer unique basenames; arm-leaf copies (hardlinks) after root originals.
+    by_name: dict[str, Path] = {}
+    for path in paths:
+        by_name.setdefault(path.name, path)
+    return list(by_name.values())
 
 
 def _resolve_alignment_qc_path(
@@ -223,6 +239,7 @@ def _artifact_entries(
     mode: str,
     alignment_qc_path: Optional[str | Path],
     project_path: Optional[str | Path],
+    sample_root: Optional[Path] = None,
 ) -> List[Tuple[Path, str]]:
     """Return (local_path, archive_relative_path) pairs."""
     entries: List[Tuple[Path, str]] = []
@@ -244,7 +261,7 @@ def _artifact_entries(
         entries.append((log_path, "qc/sample_prep_log.jsonl"))
 
     if mode == "full":
-        for fq in _collect_fastqs(sample_dir):
+        for fq in _collect_fastqs(sample_dir, sample_root=sample_root):
             entries.append((fq, f"fastq/{fq.name}"))
         for h5 in sorted(sample_dir.glob(f"*{H5_SUFFIX}")):
             entries.append((h5, f"h5/{h5.name}"))
@@ -285,6 +302,7 @@ def archive_sample(
     alignment_qc_path: Optional[str | Path] = None,
     project_path: Optional[str | Path] = None,
     resolved_config: Mapping[str, Any] | None = None,
+    sample_root: str | Path | None = None,
 ) -> dict[str, Any]:
     if mode not in {"full", "qc_only"}:
         raise RuntimeError(f"archive mode must be 'full' or 'qc_only', got {mode!r}")
@@ -294,6 +312,7 @@ def archive_sample(
     sample_path = Path(sample_dir)
     if not sample_path.is_dir():
         raise RuntimeError(f"sampleDir not found: {sample_path}")
+    root_path = Path(sample_root) if sample_root else None
 
     settings = _settings_from_resolved(resolved_config)
     target = _target_from_model(sample_destination)
@@ -309,6 +328,7 @@ def archive_sample(
         mode=mode,
         alignment_qc_path=alignment_qc_path,
         project_path=project_path,
+        sample_root=root_path,
     ):
         if not local.is_file():
             continue
@@ -429,6 +449,7 @@ def archive_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
         alignment_qc_path=input_json.get("alignmentQcPath") or input_json.get("qcPath"),
         project_path=input_json.get("projectPath") or input_json.get("project"),
         resolved_config=resolved if isinstance(resolved, Mapping) else None,
+        sample_root=input_json.get("sampleRoot"),
     )
 
 

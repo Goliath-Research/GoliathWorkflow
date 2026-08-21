@@ -89,8 +89,24 @@ def test_explicit_samples_with_s3_storage(tmp_path: Path) -> None:
     assert s1["fastqSource"]["prefix"] == "S1/"
     assert s1["fastqSource"]["bucket"] == "bucket"
     assert s1["sampleDir"].endswith("/S1")
+    assert s1["sampleRoot"].endswith("/S1")
     assert s1["sampleDestination"] is None
     assert s1["h5Destination"] is None
+
+
+def test_planner_keeps_explicit_arm_sample_dir(tmp_path: Path) -> None:
+    project_path = _write_project(tmp_path)
+    arm = tmp_path / "samples" / "S1" / "align.linear.mojo"
+    ctx = _plan(
+        tmp_path,
+        {
+            "projectPath": str(project_path),
+            "samples": [{"sampleId": "S1", "sampleDir": str(arm)}],
+            "fastqStorage": S3_STORAGE,
+        },
+    )
+    assert ctx["samples"][0]["sampleDir"].endswith("align.linear.mojo")
+    assert ctx["samples"][0]["sampleRoot"].endswith("/S1")
 
 
 def test_planner_leaves_delete_fastqs_unset_for_profile_resolution(tmp_path: Path) -> None:

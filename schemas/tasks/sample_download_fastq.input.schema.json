@@ -857,6 +857,19 @@
       "title": "Sampleid",
       "type": "string"
     },
+    "sampleRoot": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Sample identity root (/work/samples/{sampleId}) for FASTQ download and the sample-scoped CAAS store. Alignment products use sampleDir (arm leaf).",
+      "title": "Sampleroot"
+    },
     "tool": {
       "default": "SampleDownloadFastq",
       "title": "Tool",

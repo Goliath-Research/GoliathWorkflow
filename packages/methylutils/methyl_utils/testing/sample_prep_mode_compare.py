@@ -21,8 +21,9 @@ extract.methylextractor/
 extract.methyldackel/
 ```
 
-Reports under ``/work/samples/_comparisons/<stamp>/``. Mode subdirs and align.*
-trees are experiment scaffolding, not a new production / lab / QNAP convention.
+Reports under ``/work/samples/_comparisons/<stamp>/``. Production SamplePrep
+binds ``sampleDir`` to the same ``align.*`` leaves (see
+``methyl_utils.sample_arm_layout``).
 """
 
 from __future__ import annotations
@@ -33,6 +34,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from ..sample_arm_layout import (
+    ALIGN_ARM_TO_MODE as _ALIGN_ARM_TO_MODE,
+    COMPARE_ALIGN_ARMS,
+    COMPARE_EXTRACT_ARMS,
+    action_config_overlay_for_arm,
+    alignment_mode_for_arm,
+    discover_root_fastqs,
+    ensure_align_arm_dir,
+    link_root_fastqs_into_align_arm,
+    link_root_fastqs_into_dir,
+    sample_root_dir,
+)
 from ..test_data_registry import SamplePrepCanaryThresholds
 from .sample_prep_canary import (
     MODE_ALIGN_ACTION,
@@ -45,62 +58,6 @@ from .sample_prep_canary import (
 )
 
 COMPARE_MODES: Tuple[str, ...] = ("linear", "pangenome_wgbs")
-
-# Canonical before/after arms (mojo-align README + sample-prep-tooling.md).
-COMPARE_ALIGN_ARMS: Tuple[str, ...] = (
-    "align.linear.parabricks",
-    "align.linear.mojo",
-    "align.pangenome_wgbs.vg",
-    "align.pangenome_wgbs.mojo",
-)
-
-# Aliases accepted by arm helpers (mojo-align README uses align.pangenome.vg).
-_COMPARE_ALIGN_ARM_ALIASES: Dict[str, str] = {
-    "align.pangenome.vg": "align.pangenome_wgbs.vg",
-}
-
-COMPARE_EXTRACT_ARMS: Tuple[str, ...] = (
-    "extract.methylextractor",
-    "extract.methyldackel",
-)
-
-_ALIGN_ARM_TO_MODE: Dict[str, str] = {
-    "align.linear.parabricks": "linear",
-    "align.linear.mojo": "linear",
-    "align.pangenome_wgbs.vg": "pangenome_wgbs",
-    "align.pangenome.vg": "pangenome_wgbs",
-    "align.pangenome_wgbs.mojo": "pangenome_wgbs",
-}
-
-_ALIGN_ARM_ACTION_CONFIG: Dict[str, Dict[str, Any]] = {
-    "align.linear.parabricks": {
-        "parabricks": {"engine": "parabricks", "alignment_mode": "linear"},
-    },
-    "align.linear.mojo": {
-        "parabricks": {"engine": "mojo", "alignment_mode": "linear"},
-    },
-    "align.pangenome_wgbs.vg": {
-        "methylgrapher_wgbs": {
-            "alignment_mode": "pangenome_wgbs",
-            "align_engine": "cpu_vg",
-            "engine": "mojo",
-        },
-    },
-    "align.pangenome.vg": {
-        "methylgrapher_wgbs": {
-            "alignment_mode": "pangenome_wgbs",
-            "align_engine": "cpu_vg",
-            "engine": "mojo",
-        },
-    },
-    "align.pangenome_wgbs.mojo": {
-        "methylgrapher_wgbs": {
-            "alignment_mode": "pangenome_wgbs",
-            "align_engine": "gpu_giraffe",
-            "engine": "mojo",
-        },
-    },
-}
 
 _ALIGN_ACTION_NAMES = {
     "linear": {
@@ -115,39 +72,10 @@ _ALIGN_ACTION_NAMES = {
 }
 
 
-def sample_root_dir(samples_base: Path | str, sample_id: str) -> Path:
-    return Path(samples_base).expanduser().resolve() / sample_id
-
-
 def mode_sample_dir(sample_root: Path | str, mode: str) -> Path:
     if mode not in COMPARE_MODES:
         raise ValueError(f"unsupported compare mode: {mode}")
     return Path(sample_root).expanduser().resolve() / mode
-
-
-def discover_root_fastqs(sample_root: Path | str, sample_id: str) -> List[Path]:
-    """Return non-empty FASTQ files directly under the sample root (no /fastq child)."""
-    root = Path(sample_root).expanduser().resolve()
-    patterns = (
-        f"{sample_id}_1.fastq.gz",
-        f"{sample_id}_2.fastq.gz",
-        f"{sample_id}_R1.fastq.gz",
-        f"{sample_id}_R2.fastq.gz",
-        f"{sample_id}.R1.fastq.gz",
-        f"{sample_id}.R2.fastq.gz",
-    )
-    found: List[Path] = []
-    for name in patterns:
-        path = root / name
-        if path.is_file() and path.stat().st_size > 0:
-            found.append(path)
-    if found:
-        return sorted(set(found))
-    # Fall back to any paired-looking FASTQs at root (not in mode subdirs).
-    for path in sorted(root.glob("*.fastq.gz")) + sorted(root.glob("*.fq.gz")):
-        if path.is_file() and path.stat().st_size > 0 and path.parent == root:
-            found.append(path)
-    return found
 
 
 def ensure_mode_dir(sample_root: Path | str, mode: str) -> Path:
@@ -166,34 +94,16 @@ def link_root_fastqs_into_mode(
     """Hardlink (or symlink/copy) root FASTQs into the mode sampleDir."""
     root = Path(sample_root).expanduser().resolve()
     mode_dir = ensure_mode_dir(root, mode)
-    fastqs = discover_root_fastqs(root, sample_id)
-    if not fastqs:
+    try:
+        return link_root_fastqs_into_dir(
+            root, mode_dir, sample_id=sample_id, method=method
+        )
+    except FileNotFoundError as exc:
         raise FileNotFoundError(
             f"No non-empty root FASTQs under {root} for sample_id={sample_id}; "
             "download once to the sample root (lab/QNAP layout) or pass --reuse-local-fastq "
             "only when files already exist"
-        )
-    linked: List[Path] = []
-    for src in fastqs:
-        dest = mode_dir / src.name
-        if dest.exists() or dest.is_symlink():
-            if dest.is_file() and dest.stat().st_size > 0:
-                linked.append(dest)
-                continue
-            dest.unlink(missing_ok=True)
-        if method == "symlink":
-            os.symlink(src, dest)
-        elif method == "copy":
-            import shutil
-
-            shutil.copy2(src, dest)
-        else:
-            try:
-                os.link(src, dest)
-            except OSError:
-                os.symlink(src, dest)
-        linked.append(dest)
-    return linked
+        ) from exc
 
 
 def _iter_jsonl(path: Path) -> Iterable[Dict[str, Any]]:
@@ -623,62 +533,7 @@ def build_start_payload(
     return body
 
 
-def align_arm_dir(sample_root: Path | str, arm: str) -> Path:
-    """Return ``/work/samples/<id>/<align.*>`` for a canonical comparison arm."""
-    arm = _COMPARE_ALIGN_ARM_ALIASES.get(arm, arm)
-    if arm not in COMPARE_ALIGN_ARMS and arm not in COMPARE_EXTRACT_ARMS:
-        raise ValueError(
-            f"unsupported comparison arm: {arm}; "
-            f"expected one of {COMPARE_ALIGN_ARMS + COMPARE_EXTRACT_ARMS}"
-        )
-    return Path(sample_root).expanduser().resolve() / arm
-
-
-def ensure_align_arm_dir(sample_root: Path | str, arm: str) -> Path:
-    arm = _COMPARE_ALIGN_ARM_ALIASES.get(arm, arm)
-    d = align_arm_dir(sample_root, arm)
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def link_root_fastqs_into_align_arm(
-    sample_root: Path | str,
-    arm: str,
-    *,
-    sample_id: str,
-    method: str = "hardlink",
-) -> List[Path]:
-    """Hardlink (or symlink/copy) root FASTQs into an ``align.*`` sampleDir."""
-    if arm not in _ALIGN_ARM_TO_MODE:
-        raise ValueError(f"arm {arm} is not an align arm")
-    root = Path(sample_root).expanduser().resolve()
-    arm_dir = ensure_align_arm_dir(root, arm)
-    fastqs = discover_root_fastqs(root, sample_id)
-    if not fastqs:
-        raise FileNotFoundError(
-            f"No non-empty root FASTQs under {root} for sample_id={sample_id}"
-        )
-    linked: List[Path] = []
-    for src in fastqs:
-        dest = arm_dir / src.name
-        if dest.exists() or dest.is_symlink():
-            if dest.is_file() and dest.stat().st_size > 0:
-                linked.append(dest)
-                continue
-            dest.unlink(missing_ok=True)
-        if method == "symlink":
-            os.symlink(src, dest)
-        elif method == "copy":
-            import shutil
-
-            shutil.copy2(src, dest)
-        else:
-            try:
-                os.link(src, dest)
-            except OSError:
-                os.symlink(src, dest)
-        linked.append(dest)
-    return linked
+# Re-exported production helper (bakeoff wrappers stay import-stable).
 
 
 def ensure_comparison_arms(
@@ -701,23 +556,6 @@ def ensure_comparison_arms(
         if link_fastqs and arm in _ALIGN_ARM_TO_MODE:
             link_root_fastqs_into_align_arm(root, arm, sample_id=sample_id)
     return out
-
-
-def alignment_mode_for_arm(arm: str) -> str:
-    arm = _COMPARE_ALIGN_ARM_ALIASES.get(arm, arm)
-    try:
-        return _ALIGN_ARM_TO_MODE[arm]
-    except KeyError as exc:
-        raise ValueError(f"not an align arm: {arm}") from exc
-
-
-def action_config_overlay_for_arm(arm: str) -> Dict[str, Any]:
-    """Engine overlay for one comparison arm (merge into instance actionConfig)."""
-    arm = _COMPARE_ALIGN_ARM_ALIASES.get(arm, arm)
-    try:
-        return dict(_ALIGN_ARM_ACTION_CONFIG[arm])
-    except KeyError as exc:
-        raise ValueError(f"no actionConfig overlay for arm: {arm}") from exc
 
 
 def build_align_arm_start_payload(

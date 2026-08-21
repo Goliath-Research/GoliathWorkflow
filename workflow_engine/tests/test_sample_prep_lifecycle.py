@@ -79,8 +79,79 @@ def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path, mon
     assert payload["instance_id"] == 42
     assert payload["workflow_version_id"] == 7
     assert payload["n_samples"] == 1
-    assert created["context"]["samples"][0]["sampleId"] == "S1"
+    sample = created["context"]["samples"][0]
+    assert sample["sampleId"] == "S1"
+    assert sample["sampleRoot"].endswith("/S1")
+    assert sample["sampleDir"].endswith("align.linear.parabricks")
     assert started == [42]
+
+
+def test_start_sample_prep_keeps_explicit_arm_sample_dir(tmp_path: Path, monkeypatch) -> None:
+    project_path = _minimal_project(tmp_path)
+    created: dict = {}
+    monkeypatch.setattr(
+        "workflow_context.finalize_instance_context",
+        lambda ctx: {**ctx, "useWgbsPangenome": False, "executionScopeId": "test"},
+    )
+    ref = tmp_path / "genome.fa"
+    ref.write_text(">chr1\nACGT\n", encoding="utf-8")
+    explicit = str(tmp_path / "samples" / "S1" / "align.linear.mojo")
+    start_sample_prep(
+        MagicMock(),
+        {
+            "projectPath": str(project_path),
+            "workflow_version_id": 7,
+            "samples": [{"sampleId": "S1", "sampleDir": explicit}],
+            "referenceFasta": str(ref),
+            "fastqStorage": {
+                "type": "s3",
+                "bucket": "b",
+                "credentials": {"authMode": "instance_profile"},
+            },
+        },
+        create_workflow_definition=MagicMock(),
+        create_workflow_instance=lambda _db, _vid, context: created.update(context=context) or 1,
+        start_workflow_instance=lambda _dsn, _iid: None,
+    )
+    assert created["context"]["samples"][0]["sampleDir"] == explicit
+    assert created["context"]["samples"][0]["sampleRoot"].endswith("/S1")
+
+
+def test_start_sample_prep_skips_arm_bind_for_rnaseq(tmp_path: Path, monkeypatch) -> None:
+    project_path = _minimal_project(tmp_path)
+    created: dict = {}
+    monkeypatch.setattr(
+        "workflow_context.finalize_instance_context",
+        lambda ctx: {**ctx, "useWgbsPangenome": False, "executionScopeId": "test"},
+    )
+    ref = tmp_path / "genome.fa"
+    ref.write_text(">chr1\nACGT\n", encoding="utf-8")
+    program = (
+        Path(__file__).resolve().parents[1]
+        / "domain"
+        / "fixtures"
+        / "sample_prep_rnaseq.program.json"
+    )
+    start_sample_prep(
+        MagicMock(),
+        {
+            "projectPath": str(project_path),
+            "workflow_version_id": 7,
+            "program_path": str(program),
+            "samples": [{"sampleId": "S1"}],
+            "referenceFasta": str(ref),
+            "fastqStorage": {
+                "type": "s3",
+                "bucket": "b",
+                "credentials": {"authMode": "instance_profile"},
+            },
+        },
+        create_workflow_definition=MagicMock(),
+        create_workflow_instance=lambda _db, _vid, context: created.update(context=context) or 1,
+        start_workflow_instance=lambda _dsn, _iid: None,
+    )
+    assert created["context"]["samples"][0]["sampleDir"].endswith("/S1")
+    assert "align." not in created["context"]["samples"][0]["sampleDir"]
 
 
 def test_start_sample_prep_requires_project_path() -> None:

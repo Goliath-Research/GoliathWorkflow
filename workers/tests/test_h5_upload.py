@@ -55,6 +55,26 @@ def test_archive_sample_full_file_destination(tmp_path: Path) -> None:
     assert second["skippedCount"] >= 1
 
 
+def test_archive_sample_fastqs_from_sample_root(tmp_path: Path) -> None:
+    root = tmp_path / "S1"
+    arm = root / "align.linear.parabricks"
+    arm.mkdir(parents=True)
+    archive_root = tmp_path / "archive"
+    (root / "S1_1.fastq.gz").write_bytes(b"fq-root")
+    (arm / "1-CG.h5").write_bytes(b"h5-data")
+    dest = _dest({"type": "file", "basePath": str(archive_root), "prefix": "S1/"})
+    result = archive_sample(
+        sample_dir=arm,
+        sample_id="S1",
+        sample_destination=dest,
+        mode="full",
+        sample_root=root,
+    )
+    assert result["uploadedCount"] >= 2
+    assert (archive_root / "S1" / "fastq" / "S1_1.fastq.gz").read_bytes() == b"fq-root"
+    assert (archive_root / "S1" / "h5" / "1-CG.h5").read_bytes() == b"h5-data"
+
+
 def test_archive_sample_qc_only(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()

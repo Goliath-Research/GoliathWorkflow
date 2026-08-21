@@ -353,13 +353,26 @@ def _handle_mark_failed(
 def _handle_download_fastq(
     _capability: str, _action_name: str, input: DownloadFastqTaskInput
 ) -> DownloadFastqTaskOutput:
+    from methyl_utils.sample_arm_layout import (
+        link_paths_into_dir,
+        sample_root_from_sample_dir,
+    )
+
     from ..fastq_source import download_from_source
 
-    dest = Path(input.sampleDir)
-    fastq_files = download_from_source(
-        input.fastqSource, dest, resolved_config=input.resolvedConfig
+    sample_dir = Path(input.sampleDir)
+    root = (
+        Path(input.sampleRoot)
+        if input.sampleRoot
+        else sample_root_from_sample_dir(sample_dir, input.sampleId)
     )
-    sample_id = input.sampleId or dest.name
+    root.mkdir(parents=True, exist_ok=True)
+    fastq_files = download_from_source(
+        input.fastqSource, root, resolved_config=input.resolvedConfig
+    )
+    if sample_dir.resolve() != root.resolve():
+        link_paths_into_dir(fastq_files, sample_dir)
+    sample_id = input.sampleId or root.name
     return DownloadFastqTaskOutput(
         status="ok",
         sampleId=sample_id,
@@ -561,17 +574,31 @@ def _handle_methylgrapher_wgbs_extract(
 def _handle_delete_fastqs(
     _capability: str, _action_name: str, input: DeleteFastqsTaskInput
 ) -> DeleteTaskOutput:
-    sample_dir = input.sampleDir
+    from methyl_utils.sample_arm_layout import sample_root_from_sample_dir
+
+    sample_dir = Path(input.sampleDir)
     sample_id = input.sampleId
-    sample_path = Path(sample_dir)
+    root = (
+        Path(input.sampleRoot)
+        if input.sampleRoot
+        else sample_root_from_sample_dir(sample_dir, sample_id)
+    )
     removed = 0
-    for pattern in ("*.fastq.gz", "*.fq.gz", "*.fastq", "*.fq"):
-        for path in sample_path.glob(pattern):
-            path.unlink(missing_ok=True)
-            removed += 1
+    seen: set[str] = set()
+    for base in (root, sample_dir):
+        if not base.is_dir():
+            continue
+        key = str(base.resolve()) if base.exists() else str(base)
+        if key in seen:
+            continue
+        seen.add(key)
+        for pattern in ("*.fastq.gz", "*.fq.gz", "*.fastq", "*.fq"):
+            for path in base.glob(pattern):
+                path.unlink(missing_ok=True)
+                removed += 1
     return DeleteTaskOutput(
         status="ok",
-        sampleId=sample_id or sample_path.name,
+        sampleId=sample_id or root.name,
         deleted=True,
         n_files_removed=removed,
     )

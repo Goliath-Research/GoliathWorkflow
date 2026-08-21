@@ -135,14 +135,18 @@ Operators pre-pull the image on GPU nodes; the worker does not auto-pull. Use `s
 
 ### Storage contract (`/work/samples/{sampleId}/`)
 
+Production SamplePrep binds **`sampleRoot`** to `/work/samples/{sampleId}/` and **`sampleDir`** to `{sampleRoot}/align.{mode}.{engine}/` (see [sample-prep-tooling.md](../../docs/architecture/sample-prep-tooling.md)). FASTQs live at `sampleRoot`; alignment products live in the arm leaf:
+
 | Artifact | Path |
 |----------|------|
-| BAM | `{sampleId}.bam` |
-| QC metrics archive | `{sampleId}.qc-metrics.tar` (from `{sampleId}.qc-metrics/`) |
-| Duplicate metrics | `{sampleId}.deduplicate_metrics.txt` |
-| Alignment log | `{sampleId}.fq2bam_meth.log` |
+| FASTQ | `{sampleRoot}/{sampleId}_1.fastq.gz` (hardlinked into `sampleDir`) |
+| BAM | `{sampleDir}/{sampleId}.bam` |
+| QC metrics archive | `{sampleDir}/{sampleId}.qc-metrics.tar` |
+| Duplicate metrics | `{sampleDir}/{sampleId}.deduplicate_metrics.txt` |
+| Alignment log | `{sampleDir}/{sampleId}.fq2bam_meth.log` |
+| CAAS store | `{sampleRoot}/.caas/` |
 
-FASTQ inputs: prefer `{sampleId}_1.fastq.gz` + `{sampleId}_2.fastq.gz`; otherwise exactly two `**/*.fastq.gz` under `sampleDir`.
+FASTQ inputs: prefer `{sampleId}_1.fastq.gz` + `{sampleId}_2.fastq.gz` at `sampleRoot`; otherwise exactly two `**/*.fastq.gz` under `sampleDir`.
 
 ### input_json
 
@@ -150,7 +154,8 @@ FASTQ inputs: prefer `{sampleId}_1.fastq.gz` + `{sampleId}_2.fastq.gz`; otherwis
 {
   "tool": "ParabricksFq2Bam",
   "sampleId": "DPLST-051425-111148",
-  "sampleDir": "/work/samples/DPLST-051425-111148",
+  "sampleDir": "/work/samples/DPLST-051425-111148/align.linear.parabricks",
+  "sampleRoot": "/work/samples/DPLST-051425-111148",
   "referenceFasta": "/work/genomes/.../Homo_sapiens.GRCh38.dna.primary_assembly.fa",
   "referenceGtf": "/work/genomes/.../Homo_sapiens.GRCh38.114.gtf",
   "parabricksImage": null,

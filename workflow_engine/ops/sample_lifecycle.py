@@ -13,6 +13,21 @@ _DEFAULT_SAMPLE_PREP_PROGRAM = (
 )
 
 
+def _bind_methylation_sample_arms(body: Dict[str, Any], context: Dict[str, Any]) -> None:
+    """Rewrite identity-root sampleDir to the align.* leaf after finalize.
+
+    RNA / proteomics SamplePrep programs keep a flat sampleDir.
+    """
+    program = body.get("program_path") or str(_DEFAULT_SAMPLE_PREP_PROGRAM)
+    from methyl_utils.modality_gate import infer_program_family
+    from methyl_utils.sample_arm_layout import bind_sample_arm_dirs
+
+    family = infer_program_family(program)
+    if family in {"rnaseq", "proteomics"}:
+        return
+    bind_sample_arm_dirs(context)
+
+
 def start_sample_prep(
     db: Any,
     body: Dict[str, Any],
@@ -77,6 +92,9 @@ def start_sample_prep(
             context[key] = body[key]
     # Bake site/profile actionConfig, alignment flags, and resolvedConfig__* scope vars.
     context = finalize_instance_context(context)
+    # Arm leaf after finalize so site/profile engines are visible. Explicit
+    # samples[].sampleDir that is already an arm/mode leaf is preserved.
+    _bind_methylation_sample_arms(body, context)
     if body.get("disableArchive") is True:
         context.pop("sampleStorage", None)
         context.pop("h5Storage", None)

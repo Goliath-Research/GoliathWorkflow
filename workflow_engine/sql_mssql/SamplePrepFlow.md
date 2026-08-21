@@ -157,22 +157,25 @@ Examples:
 
 ## Storage contract
 
-Per sample under `/work/samples/{sample_id}/`:
+Per sample under `/work/samples/{sample_id}/`. FASTQs stay at the **sample root**; alignment/extract products live in the **arm leaf** (`sampleDir` = `{sampleRoot}/align.{mode}.{engine}/`). Switching engines must not overwrite another arm.
 
 ```text
-*.fastq.gz                          retained until archive_sample, then deleted
-{sample_id}.bam                     deleted after archive (pass or reject)
-{sample_id}.alignment.gaf           methylGrapher WGBS mode (retained)
-{sample_id}.alignment_metrics.json  methylGrapher align provenance (retained)
-{sample_id}.json                    Parabricks / align metrics (retained)
-*.qc-metrics.tar                    optional Parabricks tar (retained)
-{sample_id}.sample_prep_log.jsonl   append-only audit (retained)
-{sample_id}.extraction_manifest.json   MethylExtractor or methylGrapher export (retained)
-{sample_id}.extraction_qc.json      post-extract guardrails (retained)
-{chr}-{ctx}.json                    optional per-context QC sidecars (retained)
-{chr}-{ctx}.h5                      methylation matrices (retained; optional remote copy)
-bisulfite_conversion.json           optional alignment QC sidecar
+/work/samples/{sample_id}/
+  *.fastq.gz                          sampleRoot; retained until archive_sample, then deleted
+  .caas/                              sample-identity skip store
+  align.linear.parabricks/            example sampleDir (linear + Clara)
+    {sample_id}.bam                   deleted after archive (pass or reject)
+    {sample_id}.alignment.gaf         methylGrapher WGBS mode (retained)
+    {sample_id}.alignment_metrics.json  methylGrapher align provenance (retained)
+    {sample_id}.json                  Parabricks / align metrics (retained)
+    *.qc-metrics.tar                  optional Parabricks tar (retained)
+    {sample_id}.sample_prep_log.jsonl append-only audit (retained)
+    {sample_id}.extraction_manifest.json   MethylExtractor or methylGrapher export (retained)
+    {sample_id}.extraction_qc.json    post-extract guardrails (retained)
+    {chr}-{ctx}.h5                    methylation matrices (retained; optional remote copy)
 ```
+
+`delete_fastqs` targets `sampleRoot`. `delete_bam` and BAM/H5 archive target `sampleDir`. After a historical flat-root Clara run, `scripts/relocate_root_clara_products.py` moves root products into `align.linear.parabricks/` without deleting existing `align.*` trees.
 
 Alignment QC export path when project-scoped: `{output_base}/{project}/alignment_qc/{sampleId}.json`.
 

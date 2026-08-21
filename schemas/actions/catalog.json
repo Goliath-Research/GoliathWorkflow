@@ -640,6 +640,7 @@
       "context_vars": [
         "sampleId",
         "sampleDir",
+        "sampleRoot",
         "fastqSource"
       ],
       "control": {
@@ -1400,7 +1401,8 @@
       "category": "sample_prep",
       "context_vars": [
         "sampleId",
-        "sampleDir"
+        "sampleDir",
+        "sampleRoot"
       ],
       "control": {
         "can_continue": false,
@@ -1761,6 +1763,7 @@
       "context_vars": [
         "sampleId",
         "sampleDir",
+        "sampleRoot",
         "sampleDestination",
         "h5Destination",
         "projectPath",

@@ -13,5 +13,6 @@
   "resolvedConfig": null,
   "sampleDir": "/work/samples/S1",
   "sampleId": "S1",
+  "sampleRoot": null,
   "tool": "SampleDownloadFastq"
 }

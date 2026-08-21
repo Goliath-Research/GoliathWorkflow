@@ -325,6 +325,7 @@ def action_input_spec_for(action_name: str) -> Optional[ActionInputSpec]:
         "primaryAnalyte",
         # Full-archive SamplePrep has no reject reason; QC-fail nodes set it in `with`.
         "rejectReason",
+        "sampleRoot",
     }
     required = ["tool"]
     if entry.action_config_key:

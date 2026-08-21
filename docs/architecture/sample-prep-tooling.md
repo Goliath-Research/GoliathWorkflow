@@ -55,18 +55,27 @@ Clara stock `pangenome` giraffe (BAM) remains for non-BS HPRC graphs; it is **no
 
 ### Side-by-side sample layout
 
-Canonical dirs under `/work/samples/<sampleId>/` (coexist; MethylPipeline creates them for compare harnesses):
+Canonical dirs under `/work/samples/<sampleId>/`. **Every SamplePrep instance** binds `sampleDir` to the arm leaf for its `alignmentMode` + engine so switching methods cannot overwrite another arm's BAM/QC/H5. FASTQs stay at the sample root and are hardlinked into the leaf. Compare harnesses use the same directories.
 
 ```text
-align.linear.parabricks/
-align.linear.mojo/
-align.pangenome_wgbs.vg/      # cpu_vg (mojo-align also uses align.pangenome.vg)
-align.pangenome_wgbs.mojo/
-extract.methylextractor/      # optional staging; production often writes H5 into sampleDir
-extract.methyldackel/         # optional A/B only — not a SamplePrep action
+/work/samples/<sampleId>/
+  <sampleId>_1.fastq.gz          # shared FASTQs (sampleRoot)
+  <sampleId>_2.fastq.gz
+  align.linear.parabricks/       # sampleDir when linear + Clara
+  align.linear.mojo/
+  align.pangenome.parabricks/    # stock Clara giraffe (not WGBS)
+  align.pangenome_wgbs.vg/
+  align.pangenome_wgbs.mojo/
+  extract.methylextractor/       # optional staging; production often writes H5 into sampleDir
+  extract.methyldackel/          # optional A/B only — not a SamplePrep action
+  .caas/                         # sample-identity skip store (not per-arm)
 ```
 
-Reports: `/work/samples/_comparisons/<stamp>/comparison.md` (+ JSON). Helpers: `methyl_utils.testing.sample_prep_mode_compare` (align-arm APIs) and `scripts/compare_extract_methyldackel.sh`.
+`sampleRoot` = `/work/samples/<sampleId>/` (FASTQ download, CAAS, `delete_fastqs`). `sampleDir` = `{sampleRoot}/{arm}` (align, QC, extract, BAM/H5 archive). Explicit `samples[].sampleDir` that already names an arm or legacy mode leaf is preserved.
+
+Helpers: `methyl_utils.sample_arm_layout` (production bind) and `methyl_utils.testing.sample_prep_mode_compare` (bakeoff wrappers). Reports: `/work/samples/_comparisons/<stamp>/comparison.md` (+ JSON). Optional extract A/B: `scripts/compare_extract_methyldackel.sh`.
+
+After a historical flat-root Clara run, `scripts/relocate_root_clara_products.py` moves root `{id}.bam` / `{id}.qc-metrics.tar` into `align.linear.parabricks/` without deleting existing `align.*` trees.
 
 ### Comparison vs production procedure packs
 

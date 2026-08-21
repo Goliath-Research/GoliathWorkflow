@@ -936,6 +936,19 @@
       "title": "Sampleid",
       "type": "string"
     },
+    "sampleRoot": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Sample identity root for shared FASTQs. BAM/H5/QC archive from sampleDir.",
+      "title": "Sampleroot"
+    },
     "tool": {
       "default": "SampleArchive",
       "title": "Tool",

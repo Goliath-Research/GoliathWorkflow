@@ -138,9 +138,9 @@ def _is_durable_caas_blob(path: Path) -> bool:
     see the blob path instead of the product symlink. Identity is the ``.caas``
     path component, not ``is_file()``: ``_move_artifacts_into_entry`` used to
     unlink a resolved blob that sat under ``output_dir`` (sample-scoped CAAS
-    lives at ``{sampleDir}/.caas/...``), after which requiring a regular file
-    let ``_ensure_symlink`` recreate the prior key as a pointer into the new
-    entry and break skip-replay.
+    lives at ``{sampleRoot}/.caas/...``, which equals ``sampleDir`` in the flat
+    layout), after which requiring a regular file let ``_ensure_symlink``
+    recreate the prior key as a pointer into the new entry and break skip-replay.
     """
     if ".caas" not in path.parts:
         return False
@@ -178,6 +178,11 @@ def _should_commit_directory(output_dir: Path, artifacts: Sequence[ArtifactRef])
     """
     product_paths = _product_artifact_paths(artifacts)
     if not product_paths or not output_dir.is_dir():
+        return False
+    # Harvest that recorded resolve()d ``.caas`` blobs has nothing to tree-move
+    # from the product leaf. A tree commit would skip those blobs, leave the
+    # new entry empty, and skip relink — QC then sees a stripped sampleDir.
+    if all(_is_durable_caas_blob(p) for p in product_paths):
         return False
     for path in product_paths:
         if not _is_under(path, output_dir):
@@ -421,9 +426,9 @@ def _move_artifacts_into_entry(
                 shutil.copy2(str(src_payload), str(dest))
                 # Remove only the logical product path (usually a symlink under
                 # output_dir). Never delete a durable blob: sample-scoped CAAS
-                # lives at ``{sampleDir}/.caas/...``, so the blob is under
-                # output_dir and a naive relative-to-root unlink would destroy
-                # the prior content-key before the restore skip can run.
+                # lives at ``{sampleRoot}/.caas/...`` (flat: same as sampleDir),
+                # so a blob can sit under output_dir and a naive relative-to-root
+                # unlink would destroy the prior content-key.
                 if src.is_symlink() or (
                     out_root is not None
                     and _relative_to_root_nofollow(src, out_root) is not None
@@ -444,6 +449,10 @@ def _move_artifacts_into_entry(
                 and not src_is_durable_blob
             ):
                 _ensure_symlink(src, dest)
+            elif src_is_durable_blob and out_root is not None:
+                product = out_root / dest.name
+                if not _is_durable_caas_blob(product):
+                    _ensure_symlink(product, dest)
         except OSError:
             logger.warning("CAAS canonical relink failed for %s", src, exc_info=True)
         updated.append(
@@ -572,10 +581,19 @@ def _product_link_destinations(
     BAMs. Dual-mount prefixes (``/work`` vs ``/lambda/nfs/Work``) must still
     restore the original product path; a strict abspath membership check used to
     skip relink entirely and leave methyl_qc looking at an empty sample dir.
+
+    When every recorded canonical path is a durable ``.caas`` blob (harvest
+    recorded ``Path.resolve()``), fall back to ``output_dir / rel`` so skip and
+    re-commit restore ``{sampleDir}/{id}.bam`` (flat or arm leaf) instead of a
+    stripped leaf. Do not fall back when a distinct non-blob product path is
+    already known — that is the wrong ``configs/`` output_dir case.
     """
     dest_from_out: Optional[Path] = None
     if output_dir is not None:
         dest_from_out = Path(output_dir) / rel
+        if dest_from_out is not None and _is_durable_caas_blob(dest_from_out):
+            product = Path(output_dir) / stored.name
+            dest_from_out = None if _is_durable_caas_blob(product) else product
 
     candidates: List[Path] = []
     if canonical_paths:
@@ -598,6 +616,8 @@ def _product_link_destinations(
                     candidates.append(canon)
         if dest_from_out is not None and not _is_durable_caas_blob(dest_from_out):
             if any(_paths_equivalent(dest_from_out, c) for c in candidates):
+                candidates.append(dest_from_out)
+            elif not candidates:
                 candidates.append(dest_from_out)
     elif dest_from_out is not None and not _is_durable_caas_blob(dest_from_out):
         candidates.append(dest_from_out)
@@ -632,6 +652,9 @@ def _relink_artifacts_from_entry(
     do not invent new paths under ``output_dir`` for artifacts that never lived
     there (e.g. BAM under sampleDir while output_dir wrongly resolved to study
     configs/). Dual-mount aliases of those canonical paths **are** restored.
+    Durable ``.caas`` blob paths in ``canonical_paths`` / ``task_output`` are
+    skipped as link destinations; the bound ``output_dir / rel`` product is
+    still restored so QC sees ``{id}.bam`` / ``{id}.qc-metrics.tar``.
     """
     entry_dir = entry_dir.resolve()
     extra_canon = [Path(p) for p in canonical_paths] if canonical_paths else []

@@ -28,6 +28,8 @@ from methyl_domain.content_store import (
     verify_entry_artifacts,
 )
 from methyl_domain.sample_content_store import (
+    resolve_sample_caas_root,
+    resolve_sample_id,
     sample_caas_enabled,
     sample_caas_enabled_for_action,
 )
@@ -753,3 +755,388 @@ def test_restore_sample_align_products_relinks_bam_and_tar(tmp_path: Path) -> No
     assert (sample_dir / "S1.bam").read_bytes() == b"BAM"
     assert (sample_dir / "S1.qc-metrics.tar").read_bytes() == b"TAR"
     assert restored
+
+
+def _write_align_products(sample_dir: Path, sample_id: str = "S1") -> tuple[Path, Path, Path]:
+    bam = sample_dir / f"{sample_id}.bam"
+    tar = sample_dir / f"{sample_id}.qc-metrics.tar"
+    meta = sample_dir / f"{sample_id}.json"
+    bam.write_bytes(b"BAMDATA")
+    tar.write_bytes(b"TAR")
+    meta.write_text("{}", encoding="utf-8")
+    return bam, tar, meta
+
+
+def _align_record(
+    artifacts: list[ArtifactRef],
+    *,
+    task_output: dict | None = None,
+    input_sig: str = "align-sig",
+) -> ActionExecutionRecord:
+    rec = _record(artifacts=artifacts, input_sig=input_sig, output_sig=input_sig)
+    update: dict = {"action_name": "sample.parabricks_fq2bam"}
+    if task_output is not None:
+        update["task_output"] = task_output
+    return rec.model_copy(update=update)
+
+
+def _assert_relative_product_symlink(path: Path, payload: bytes) -> None:
+    assert path.is_symlink(), f"{path} should be a product symlink"
+    assert not os.path.isabs(os.readlink(path)), f"{path} should use a relative target"
+    assert path.read_bytes() == payload
+    assert ".caas" in path.resolve().parts
+
+
+def test_product_link_destinations_falls_back_when_canons_are_blobs(tmp_path: Path) -> None:
+    """Durable-blob canonical paths must still restore output_dir/{id}.bam."""
+    from methyl_domain.content_store import _product_link_destinations
+
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    blob = sample_dir / ".caas" / "sample_parabricks_fq2bam" / "key-a" / "S1.bam"
+    blob.parent.mkdir(parents=True)
+    blob.write_bytes(b"BAMDATA")
+    dests = _product_link_destinations(
+        blob,
+        Path("S1.bam"),
+        output_dir=sample_dir,
+        canonical_paths=[blob],
+    )
+    assert dests == [sample_dir / "S1.bam"]
+
+
+def test_harvest_blob_paths_restore_products_after_stripped_leaf(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Re-commit of resolve()d .caas blobs must restore products, not unlink blobs."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    bam, tar, meta = _write_align_products(sample_dir)
+    (sample_dir / "S1_1.fastq.gz").write_bytes(b"FQ")
+
+    first = _align_record(
+        [
+            ArtifactRef(path=str(bam), bytes=7),
+            ArtifactRef(path=str(tar), bytes=3),
+            ArtifactRef(path=str(meta), bytes=2),
+        ],
+        task_output={
+            "bamPath": str(bam),
+            "qcMetricsTar": str(tar),
+            "jsonPath": str(meta),
+        },
+        input_sig="align-a",
+    )
+    commit_artifacts_to_store(
+        sample_dir,
+        "sample.parabricks_fq2bam",
+        "key-a",
+        first,
+        output_dir=sample_dir,
+    )
+    blob_bam = bam.resolve()
+    blob_tar = tar.resolve()
+    blob_meta = meta.resolve()
+    assert blob_bam.is_file() and not blob_bam.is_symlink()
+
+    bam.unlink()
+    tar.unlink()
+    meta.unlink()
+    assert not bam.exists()
+
+    second = _align_record(
+        [
+            artifact_ref_for(blob_bam),
+            artifact_ref_for(blob_tar),
+            artifact_ref_for(blob_meta),
+        ],
+        task_output={
+            "bamPath": str(blob_bam),
+            "qcMetricsTar": str(blob_tar),
+            "jsonPath": str(blob_meta),
+        },
+        input_sig="align-b",
+    )
+    commit_artifacts_to_store(
+        sample_dir,
+        "sample.parabricks_fq2bam",
+        "key-b",
+        second,
+        output_dir=sample_dir,
+    )
+
+    _assert_relative_product_symlink(bam, b"BAMDATA")
+    _assert_relative_product_symlink(tar, b"TAR")
+    _assert_relative_product_symlink(meta, b"{}")
+    assert blob_bam.exists() and blob_bam.is_file() and not blob_bam.is_symlink()
+    assert blob_bam.read_bytes() == b"BAMDATA"
+
+
+def test_harvest_blob_paths_without_sibling_still_restores_products(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Blob-only harvest must not take the empty tree-commit path."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    bam, tar, meta = _write_align_products(sample_dir)
+
+    first = _align_record(
+        [
+            ArtifactRef(path=str(bam), bytes=7),
+            ArtifactRef(path=str(tar), bytes=3),
+            ArtifactRef(path=str(meta), bytes=2),
+        ],
+        input_sig="align-tree-a",
+    )
+    commit_artifacts_to_store(
+        sample_dir,
+        "sample.parabricks_fq2bam",
+        "key-tree-a",
+        first,
+        output_dir=sample_dir,
+    )
+    blob_bam = bam.resolve()
+    blob_tar = tar.resolve()
+    blob_meta = meta.resolve()
+    bam.unlink()
+    tar.unlink()
+    meta.unlink()
+
+    second = _align_record(
+        [
+            artifact_ref_for(blob_bam),
+            artifact_ref_for(blob_tar),
+            artifact_ref_for(blob_meta),
+        ],
+        task_output={
+            "bamPath": str(blob_bam),
+            "qcMetricsTar": str(blob_tar),
+        },
+        input_sig="align-tree-b",
+    )
+    commit_artifacts_to_store(
+        sample_dir,
+        "sample.parabricks_fq2bam",
+        "key-tree-b",
+        second,
+        output_dir=sample_dir,
+    )
+    _assert_relative_product_symlink(bam, b"BAMDATA")
+    _assert_relative_product_symlink(tar, b"TAR")
+    _assert_relative_product_symlink(meta, b"{}")
+    assert blob_bam.is_file() and not blob_bam.is_symlink()
+
+
+def test_skip_blob_paths_restore_products_at_sample_dir(tmp_path: Path, monkeypatch) -> None:
+    """Skip-replay with blob artifacts + blob task_output still restores sampleDir products."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    bam, tar, meta = _write_align_products(sample_dir)
+    (sample_dir / "S1_1.fastq.gz").write_bytes(b"FQ")
+
+    first = _align_record(
+        [
+            ArtifactRef(path=str(bam), bytes=7),
+            ArtifactRef(path=str(tar), bytes=3),
+            ArtifactRef(path=str(meta), bytes=2),
+        ],
+        task_output={
+            "bamPath": str(bam),
+            "qcMetricsTar": str(tar),
+            "jsonPath": str(meta),
+        },
+        input_sig="align-skip",
+    )
+    commit_artifacts_to_store(
+        sample_dir,
+        "sample.parabricks_fq2bam",
+        "key-skip",
+        first,
+        output_dir=sample_dir,
+    )
+    blob_bam = bam.resolve()
+    blob_tar = tar.resolve()
+    blob_meta = meta.resolve()
+    bam.unlink()
+    tar.unlink()
+    meta.unlink()
+
+    from methyl_domain.content_store import _relink_artifacts_from_entry
+
+    _relink_artifacts_from_entry(
+        [
+            ArtifactRef(path=str(blob_bam), bytes=7),
+            ArtifactRef(path=str(blob_tar), bytes=3),
+            ArtifactRef(path=str(blob_meta), bytes=2),
+        ],
+        caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "key-skip"),
+        output_dir=sample_dir,
+        canonical_paths=[blob_bam, blob_tar, blob_meta],
+        task_output={
+            "bamPath": str(blob_bam),
+            "qcMetricsTar": str(blob_tar),
+            "jsonPath": str(blob_meta),
+        },
+    )
+    _assert_relative_product_symlink(bam, b"BAMDATA")
+    _assert_relative_product_symlink(tar, b"TAR")
+    _assert_relative_product_symlink(meta, b"{}")
+    assert blob_bam.is_file() and not blob_bam.is_symlink()
+
+    bam.unlink()
+    tar.unlink()
+    meta.unlink()
+    linked = link_entry_into_place(
+        sample_dir,
+        "sample.parabricks_fq2bam",
+        "key-skip",
+        output_dir=sample_dir,
+    )
+    assert linked is not None
+    _assert_relative_product_symlink(bam, b"BAMDATA")
+    _assert_relative_product_symlink(tar, b"TAR")
+    _assert_relative_product_symlink(meta, b"{}")
+
+
+def test_harvest_skip_restore_products_at_arm_leaf_caas_at_sample_root(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """CAAS stays on sample identity; products restore on the bound arm sampleDir."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    sample_root = tmp_path / "samples" / "S1"
+    arm = sample_root / "align.linear.parabricks"
+    arm.mkdir(parents=True)
+    bam, tar, meta = _write_align_products(arm)
+    (arm / "S1_1.fastq.gz").write_bytes(b"FQ")
+
+    first = _align_record(
+        [
+            ArtifactRef(path=str(bam), bytes=7),
+            ArtifactRef(path=str(tar), bytes=3),
+            ArtifactRef(path=str(meta), bytes=2),
+        ],
+        task_output={
+            "bamPath": str(bam),
+            "qcMetricsTar": str(tar),
+            "jsonPath": str(meta),
+        },
+        input_sig="align-arm-a",
+    )
+    commit_artifacts_to_store(
+        sample_root,
+        "sample.parabricks_fq2bam",
+        "key-arm-a",
+        first,
+        output_dir=arm,
+    )
+    _assert_relative_product_symlink(bam, b"BAMDATA")
+    assert not (sample_root / "S1.bam").exists()
+    blob_bam = bam.resolve()
+    blob_tar = tar.resolve()
+    blob_meta = meta.resolve()
+    assert (sample_root / ".caas") in blob_bam.parents
+    assert "align.linear.parabricks" not in blob_bam.parts
+
+    bam.unlink()
+    tar.unlink()
+    meta.unlink()
+
+    second = _align_record(
+        [
+            artifact_ref_for(blob_bam),
+            artifact_ref_for(blob_tar),
+            artifact_ref_for(blob_meta),
+        ],
+        task_output={
+            "bamPath": str(blob_bam),
+            "qcMetricsTar": str(blob_tar),
+            "jsonPath": str(blob_meta),
+        },
+        input_sig="align-arm-b",
+    )
+    commit_artifacts_to_store(
+        sample_root,
+        "sample.parabricks_fq2bam",
+        "key-arm-b",
+        second,
+        output_dir=arm,
+    )
+    _assert_relative_product_symlink(bam, b"BAMDATA")
+    _assert_relative_product_symlink(tar, b"TAR")
+    _assert_relative_product_symlink(meta, b"{}")
+    assert not (sample_root / "S1.bam").exists()
+    assert blob_bam.is_file() and not blob_bam.is_symlink()
+
+    bam.unlink()
+    tar.unlink()
+    meta.unlink()
+    linked = link_entry_into_place(
+        sample_root,
+        "sample.parabricks_fq2bam",
+        "key-arm-a",
+        output_dir=arm,
+    )
+    assert linked is not None
+    _assert_relative_product_symlink(bam, b"BAMDATA")
+    assert not (sample_root / "S1.bam").exists()
+
+
+def test_restore_sample_align_products_from_parent_caas_into_arm(tmp_path: Path) -> None:
+    from methyl_domain.sample_content_store import restore_sample_align_products
+
+    sample_root = tmp_path / "samples" / "S1"
+    arm = sample_root / "align.linear.parabricks"
+    arm.mkdir(parents=True)
+    key = sample_root / ".caas" / "sample_parabricks_fq2bam" / "abc123"
+    key.mkdir(parents=True)
+    (key / "S1.bam").write_bytes(b"BAM")
+    (key / "S1.qc-metrics.tar").write_bytes(b"TAR")
+    (key / "S1.json").write_text("{}", encoding="utf-8")
+    (key / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.2",
+                "action_name": "sample.parabricks_fq2bam",
+                "capability": "parabricks.fq2bam",
+                "started_at_utc": "2026-08-21T00:00:00Z",
+                "finished_at_utc": "2026-08-21T00:00:00Z",
+                "duration_ms": 1,
+                "result_code": 0,
+                "exit_code": 0,
+                "artifacts": [
+                    {"path": str(key / "S1.bam"), "kind": "file", "bytes": 3},
+                    {"path": str(key / "S1.qc-metrics.tar"), "kind": "file", "bytes": 3},
+                    {"path": str(key / "S1.json"), "kind": "file", "bytes": 2},
+                ],
+                "task_output": {
+                    "bamPath": str(arm / "S1.bam"),
+                    "qcMetricsTar": str(arm / "S1.qc-metrics.tar"),
+                    "jsonPath": str(arm / "S1.json"),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    restored = restore_sample_align_products(arm, "S1")
+    assert restored
+    assert (arm / "S1.bam").read_bytes() == b"BAM"
+    assert (arm / "S1.qc-metrics.tar").read_bytes() == b"TAR"
+    assert (arm / "S1.json").read_bytes() == b"{}"
+    assert not (sample_root / "S1.bam").exists()
+
+
+def test_resolve_sample_caas_root_arm_leaf_and_sample_root(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path / "samples"))
+    sample_root = tmp_path / "samples" / "S1"
+    arm = sample_root / "align.linear.parabricks"
+    assert resolve_sample_caas_root({"sampleRoot": str(sample_root)}) == sample_root.resolve()
+    assert resolve_sample_caas_root({"sampleDir": str(arm)}) == sample_root.resolve()
+    assert resolve_sample_id({"sampleDir": str(arm)}) == "S1"
+    assert resolve_sample_caas_root({"sampleId": "S1"}) == sample_root.resolve()
+    assert resolve_sample_id({"sampleDir": str(sample_root)}) == "S1"
+

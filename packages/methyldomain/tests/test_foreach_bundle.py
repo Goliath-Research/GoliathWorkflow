@@ -143,3 +143,12 @@ def test_sample_root(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path))
     root = resolve_sample_caas_root({"sampleId": "S1"})
     assert root == tmp_path / "S1"
+
+
+def test_sample_caas_root_arm_leaf_uses_parent(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path))
+    arm = tmp_path / "S1" / "align.linear.parabricks"
+    assert resolve_sample_caas_root({"sampleDir": str(arm)}) == (tmp_path / "S1").resolve()
+    assert resolve_sample_caas_root(
+        {"sampleRoot": str(tmp_path / "S1"), "sampleDir": str(arm)}
+    ) == (tmp_path / "S1").resolve()

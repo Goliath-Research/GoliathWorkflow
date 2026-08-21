@@ -17,6 +17,13 @@ class DownloadFastqTaskInput(BaseModel):
     tool: str = "SampleDownloadFastq"
     sampleId: str
     sampleDir: str
+    sampleRoot: Optional[str] = Field(
+        default=None,
+        description=(
+            "Sample identity root (/work/samples/{sampleId}) for FASTQ download and "
+            "the sample-scoped CAAS store. Alignment products use sampleDir (arm leaf)."
+        ),
+    )
     fastqSource: FastqSourceLocation
     projectPath: Optional[str] = Field(
         default=None,
@@ -589,6 +596,13 @@ class DeleteFastqsTaskInput(BaseModel):
     tool: str = "SampleDeleteFastqs"
     sampleId: str
     sampleDir: str
+    sampleRoot: Optional[str] = Field(
+        default=None,
+        description=(
+            "Sample identity root holding shared FASTQs. Delete targets this directory "
+            "(not the align.* product leaf)."
+        ),
+    )
     projectPath: Optional[str] = Field(
         default=None,
         description="Study project path for provenance/logging only; not a config source.",
@@ -638,6 +652,12 @@ class ArchiveSampleTaskInput(BaseModel):
     tool: str = "SampleArchive"
     sampleId: str
     sampleDir: str
+    sampleRoot: Optional[str] = Field(
+        default=None,
+        description=(
+            "Sample identity root for shared FASTQs. BAM/H5/QC archive from sampleDir."
+        ),
+    )
     sampleDestination: SampleDestinationLocation | None = None
     h5Destination: SampleDestinationLocation | None = None
     mode: str = "full"

@@ -15,7 +15,8 @@
   "samples": [
     {
       "sampleId": "DPLST-051425-111148",
-      "sampleDir": "/work/samples/DPLST-051425-111148",
+      "sampleRoot": "/work/samples/DPLST-051425-111148",
+      "sampleDir": "/work/samples/DPLST-051425-111148/align.linear.parabricks",
       "fastqPrefix": "plasma/DPLST-051425-111148/",
       "fastqSource": {
         "type": "s3",
@@ -29,7 +30,8 @@
     },
     {
       "sampleId": "DPLST-051425-111149",
-      "sampleDir": "/work/samples/DPLST-051425-111149",
+      "sampleRoot": "/work/samples/DPLST-051425-111149",
+      "sampleDir": "/work/samples/DPLST-051425-111149/align.linear.parabricks",
       "fastqPrefix": "plasma/DPLST-051425-111149/",
       "fastqSource": {
         "type": "s3",

@@ -230,6 +230,61 @@ def test_resolve_sample_artifact_id_mode_subdir(tmp_path: Path):
     assert resolve_sample_artifact_id(flat) == "sampleA"
 
 
+def test_process_samples_to_qc_jsons_align_arm_uses_sample_id_not_dirname(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Production arm leaf .../<sampleId>/align.linear.parabricks is not sampleId."""
+    from methyl_alignment_qc.core.writer import process_samples_to_qc_jsons
+    from methyl_alignment_qc.models.config import AlignmentGuardrailsConfig
+
+    sample_id = "DPLST-051425-111148"
+    arm_dir = tmp_path / sample_id / "align.linear.parabricks"
+    arm_dir.mkdir(parents=True)
+    _write_text(arm_dir / f"{sample_id}.deduplicate_metrics.txt", _dedup_metrics_fixture())
+    (arm_dir / f"{sample_id}.json").write_text(
+        json.dumps(_parabricks_json_fixture(sample_id)), encoding="utf-8"
+    )
+    (arm_dir / f"{sample_id}.bam").write_bytes(b"\x1f\x8b" + b"\x00" * 64)
+
+    def _fake_flagstat(sample_dir, sid, force=False):
+        from methyl_alignment_qc.models.sample_qc import AlignmentFlagstat
+
+        assert sid == sample_id
+        return AlignmentFlagstat(
+            total_reads=100,
+            mapped_reads=95,
+            properly_paired_reads=92,
+            supplementary_reads=0,
+            secondary_reads=0,
+            duplicate_reads=0,
+            mapped_rate=0.95,
+            properly_paired_rate=0.92,
+            supplementary_rate=0.0,
+        )
+
+    monkeypatch.setattr("methyl_alignment_qc.core.writer.run_flagstat", _fake_flagstat)
+
+    output_dir = tmp_path / "out"
+    process_samples_to_qc_jsons(
+        [str(arm_dir)],
+        str(output_dir),
+        validate_schema=True,
+        alignment_mode="linear",
+        alignment_guardrails=AlignmentGuardrailsConfig(
+            enabled=True,
+            flagstat_enabled=True,
+            min_properly_paired_rate=0.90,
+        ),
+    )
+
+    out = output_dir / f"{sample_id}.json"
+    assert out.is_file()
+    assert not (output_dir / "align.linear.parabricks.json").exists()
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["sample_id"] == sample_id
+    assert payload["guardrails"]["metrics_family"] == "parabricks"
+
+
 def test_process_samples_to_qc_jsons_mode_subdir_uses_sample_id_not_dirname(
     tmp_path: Path, monkeypatch
 ) -> None:

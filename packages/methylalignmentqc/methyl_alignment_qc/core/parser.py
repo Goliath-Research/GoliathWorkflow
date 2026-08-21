@@ -5,9 +5,14 @@ Parser for Picard-style deduplication metrics (Parabricks/bwa-mem2 output).
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
-# Experiment-only mode trees used by linear vs pangenome_wgbs compare.
-# Artifacts inside remain named {sampleId}.*; the leaf dirname is not the sample id.
-_EXPERIMENT_MODE_DIRNAMES = frozenset({"linear", "pangenome", "pangenome_wgbs"})
+from methyl_utils.sample_arm_layout import (
+    ALIGN_ARM_DIRNAMES as _ALIGN_ARM_DIRNAMES,
+    LEGACY_MODE_DIRNAMES as _LEGACY_EXPERIMENT_MODE_DIRNAMES,
+    is_mode_leaf_dirname,
+)
+
+# Experiment-mode / arm directory names: the leaf dirname is not the sample id.
+_EXPERIMENT_MODE_DIRNAMES = _LEGACY_EXPERIMENT_MODE_DIRNAMES | _ALIGN_ARM_DIRNAMES
 
 
 def _infer_sample_id_from_artifacts(sample_dir: Path) -> Optional[str]:
@@ -29,6 +34,11 @@ def _infer_sample_id_from_artifacts(sample_dir: Path) -> Optional[str]:
     return None
 
 
+def _is_mode_or_arm_leaf(dirname: str) -> bool:
+    """True when ``dirname`` is a legacy mode tree or a production align.* arm."""
+    return is_mode_leaf_dirname(dirname)
+
+
 def resolve_sample_artifact_id(
     sample_dir: Path,
     sample_id: Optional[str] = None,
@@ -36,8 +46,10 @@ def resolve_sample_artifact_id(
     """Identity for ``{id}.bam`` / metrics / QC JSON basename.
 
     Prefer an explicit ``sample_id`` (worker task input). Otherwise infer from
-    uniquely named artifacts when ``sample_dir.name`` is an experiment mode
-    subdirectory (``linear`` / ``pangenome_wgbs`` / …). Fall back to the
+    uniquely named artifacts in ``sample_dir`` only (never sibling ``align.*``
+    trees). When ``sample_dir.name`` is an experiment-mode or production arm
+    leaf (``linear``, ``align.linear.parabricks``, …), fall back to the parent
+    directory name (``/work/samples/<sampleId>/<arm>/``). Otherwise use the
     directory basename (flat ``/work/samples/<sampleId>/`` layout).
     """
     explicit = (sample_id or "").strip()
@@ -46,7 +58,14 @@ def resolve_sample_artifact_id(
     sample_dir = Path(sample_dir)
     inferred = _infer_sample_id_from_artifacts(sample_dir)
     dirname = sample_dir.name
-    if inferred and (dirname in _EXPERIMENT_MODE_DIRNAMES or inferred != dirname):
+    if _is_mode_or_arm_leaf(dirname):
+        if inferred:
+            return inferred
+        parent_name = sample_dir.parent.name
+        if parent_name:
+            return parent_name
+        return dirname
+    if inferred and inferred != dirname:
         return inferred
     return dirname
 
@@ -157,8 +176,9 @@ def find_metrics_in_sample_dir(
     Find deduplication metrics file in a single sample directory.
 
     Looks for {sample_id}.deduplicate_metrics.txt (when sample_id given),
-    then {sample_dir.name}.deduplicate_metrics.txt, then *deduplicate_metrics.txt
-    / *duplication_metrics.txt under sample_dir.
+    then the artifact-resolved id (parent of an align.* / mode leaf), then
+    {sample_dir.name}.deduplicate_metrics.txt, then *deduplicate_metrics.txt
+    / *duplication_metrics.txt under sample_dir only (no sibling arms).
 
     Returns:
         Path to the metrics file, or None if not found.
@@ -166,8 +186,9 @@ def find_metrics_in_sample_dir(
     sample_dir = Path(sample_dir)
     if not sample_dir.is_dir():
         return None
-    # Prefer explicit sample id, then directory basename, then glob.
-    for name in (sample_id, sample_dir.name):
+    resolved = resolve_sample_artifact_id(sample_dir, sample_id)
+    # Prefer explicit/resolved sample id, then directory basename, then glob.
+    for name in (resolved, sample_dir.name):
         if not name:
             continue
         candidate = sample_dir / f"{name}.deduplicate_metrics.txt"
@@ -221,7 +242,7 @@ def parse_metrics_from_sample_paths(
     Returns:
         Dict mapping sample_id -> parsed metrics dict (skips samples with no metrics file).
         Keys prefer ``sample_id_by_path`` / artifact-resolved ids over directory basenames
-        (experiment mode trees use leaf names like ``linear``).
+        (mode trees and production arms use leaves like ``linear`` / ``align.linear.parabricks``).
     """
     result: Dict[str, Dict[str, Any]] = {}
     id_map = {str(Path(k)): str(v) for k, v in (sample_id_by_path or {}).items() if v}

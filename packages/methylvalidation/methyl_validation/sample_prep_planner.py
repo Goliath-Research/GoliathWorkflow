@@ -167,6 +167,7 @@ def _sample_entry(
     sample_storage: Optional[SampleStorageDefaults] = None,
     sample_prefix: Optional[str] = None,
     sample_destination_override: Any = None,
+    sample_root: Optional[str] = None,
 ) -> Dict[str, Any]:
     prefix, fastq_source = _materialize_fastq_source(
         storage,
@@ -177,6 +178,7 @@ def _sample_entry(
     entry: Dict[str, Any] = {
         "sampleId": sample_id,
         "sampleDir": sample_dir,
+        "sampleRoot": sample_root or str(Path(sample_dir).expanduser()),
         "fastqPrefix": prefix,
         "fastqSource": fastq_source,
     }
@@ -266,6 +268,7 @@ def _load_samples_from_csvs(
                 _sample_entry(
                     sample_id=sample_id,
                     sample_dir=str(base / sample_id),
+                    sample_root=str(base / sample_id),
                     storage=storage,
                     fastq_prefix=_default_prefix(storage, sample_id),
                     h5_storage=storage_defaults,
@@ -312,6 +315,7 @@ def _merge_explicit_samples(
             _sample_entry(
                 sample_id=sample_id,
                 sample_dir=str(Path(str(sample_dir)).resolve()),
+                sample_root=str(base / sample_id),
                 storage=storage,
                 fastq_prefix=item.get("fastqPrefix"),
                 fastq_source_override=item.get("fastqSource"),
@@ -413,6 +417,12 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
             "No samples resolved; provide samples[], sampleCsv/sampleCsvs, or useProjectSamples=true"
         )
 
+    samples_base_path = Path(samples_base).expanduser().resolve()
+    for item in samples:
+        sid = str(item.get("sampleId") or "").strip()
+        if sid:
+            item["sampleRoot"] = str(samples_base_path / sid)
+
     primary = (
         analyte_token(project.get_primary_analyte() or request.primaryAnalyte)
         or "buffy_coat"
@@ -424,6 +434,7 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
         "primaryAnalyte": primary,
         "isCfdna": is_cfdna,
         "fastqStorage": dump_storage_model(storage),
+        "samplesBaseDir": samples_base,
         "samples": samples,
     }
     # Only set when explicit: leave unset so seed_pipeline_scope_flags can apply
