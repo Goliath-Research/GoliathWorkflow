@@ -92,6 +92,16 @@ def _is_trimmed_fastq_name(path: Path) -> bool:
     return ".trimmed." in path.name.lower()
 
 
+def _restore_download_fastqs(sample_dir: Path, sample_id: str) -> None:
+    """Bring CAAS-harvested FASTQs back under sampleDir (Align skips ``.caas``)."""
+    try:
+        from methyl_domain.sample_content_store import restore_sample_fastq_products
+
+        restore_sample_fastq_products(sample_dir, sample_id)
+    except Exception:
+        logger.debug("CAAS FASTQ restore skipped for %s", sample_id, exc_info=True)
+
+
 def resolve_paired_fastqs(
     sample_dir: Path,
     sample_id: str,
@@ -100,11 +110,14 @@ def resolve_paired_fastqs(
 ) -> List[Path]:
     """Return paired-end FASTQs (one or more pairs) for a sample.
 
-    Aligners accept several R1/R2 pairs (multi-lane / multi-flowcell). An even
-    count of mate-paired files is valid. Trimmed ``{id}_1.trimmed.fastq.gz`` /
-    ``_2`` at *sample_dir* wins for Align (remediation). Trim must pass
-    ``prefer_trimmed=False`` so it never feeds those outputs back into fastp.
+    Clara ``fq2bam_meth --in-fq`` accepts any even number of FASTQs as sequential
+    R1/R2 pairs. Named ``_1``/``_2`` (and Illumina ``_R1``/``_R2``) grouping is
+    preferred when it yields complete pairs. Otherwise an even leftover count is
+    still valid. Trimmed ``{id}_1.trimmed.fastq.gz`` / ``_2`` at *sample_dir*
+    wins for Align (remediation). Trim must pass ``prefer_trimmed=False`` so it
+    never feeds those outputs back into fastp.
     """
+    _restore_download_fastqs(sample_dir, sample_id)
     trimmed = list(canonical_trimmed_fastqs(sample_dir, sample_id))
     if prefer_trimmed and all(p.is_file() for p in trimmed):
         return trimmed
@@ -113,11 +126,13 @@ def resolve_paired_fastqs(
     all_fastqs = _collect_fastqs(sample_dir)
     groups: Dict[Tuple[str, str, str, str], Dict[str, Path]] = {}
     leftovers: List[Path] = []
+    considered: List[Path] = []
     for path in all_fastqs:
         if (not prefer_trimmed) and (
             path.resolve() in skip or _is_trimmed_fastq_name(path)
         ):
             continue
+        considered.append(path)
         parsed = _mate_group(path)
         if parsed is None:
             leftovers.append(path)
@@ -141,9 +156,16 @@ def resolve_paired_fastqs(
             leftovers.extend(mates.values())
 
     if not pairs:
+        if len(considered) >= 2 and len(considered) % 2 == 0:
+            logger.info(
+                "Using %s FASTQs under %s as sequential Clara --in-fq pairs",
+                len(considered),
+                sample_dir,
+            )
+            return list(considered)
         raise RuntimeError(
-            f"Expected paired FASTQ files under {sample_dir}, found {len(all_fastqs)}"
-            + (f": {', '.join(p.name for p in all_fastqs)}" if all_fastqs else "")
+            f"Expected paired FASTQ files under {sample_dir}, found {len(considered)}"
+            + (f": {', '.join(p.name for p in considered)}" if considered else "")
         )
     if leftovers:
         logger.warning(

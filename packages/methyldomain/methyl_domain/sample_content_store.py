@@ -255,3 +255,115 @@ def restore_sample_align_products(sample_dir: Path | str, sample_id: str) -> lis
                 ).is_file():
                     return restored
     return restored
+
+
+_FASTQ_SUFFIXES = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
+_DOWNLOAD_CAAS_ACTION = "sample.download_fastq"
+
+
+def _is_fastq_name(path: Path) -> bool:
+    name = path.name.lower()
+    return any(name.endswith(suffix) for suffix in _FASTQ_SUFFIXES)
+
+
+def restore_sample_fastq_products(sample_dir: Path | str, sample_id: str) -> list[Path]:
+    """Restore download FASTQ product symlinks from sample-scoped CAAS.
+
+    Align discovers pairs under ``sampleDir`` and skips ``.caas``. After harvest
+    moves blobs into the content-key directory, product paths can be empty even
+    though an even number of FASTQs remain in the store. Clara ``--in-fq`` only
+    needs that even count visible outside ``.caas``.
+    """
+    from .action_result import caas_action_safe_name, caas_root
+    from .content_store import (
+        _ensure_symlink,
+        _is_durable_caas_blob,
+        link_entry_into_place,
+        read_caas_entry,
+    )
+
+    sample_path = Path(sample_dir)
+    restored: list[Path] = []
+    if not sample_path.is_dir() or not sample_id:
+        return restored
+
+    def _link_dest(dest: Path, blob: Path) -> None:
+        if _is_durable_caas_blob(dest):
+            return
+        if dest.is_file() and not dest.is_symlink():
+            try:
+                if dest.stat().st_size > 0:
+                    restored.append(dest)
+                    return
+            except OSError:
+                pass
+        try:
+            _ensure_symlink(dest, blob)
+            restored.append(dest)
+        except OSError:
+            pass
+
+    for host in _caas_host_roots(sample_path):
+        caas = caas_root(host)
+        action_dir = caas / caas_action_safe_name(_DOWNLOAD_CAAS_ACTION)
+        if not action_dir.is_dir():
+            continue
+        key_dirs = sorted(
+            (
+                path
+                for path in action_dir.iterdir()
+                if path.is_dir() and (path / "manifest.json").is_file()
+            ),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        for key_dir in key_dirs:
+            try:
+                link_entry_into_place(
+                    host,
+                    _DOWNLOAD_CAAS_ACTION,
+                    key_dir.name,
+                    output_dir=sample_path,
+                )
+            except OSError:
+                pass
+            record = read_caas_entry(host, _DOWNLOAD_CAAS_ACTION, key_dir.name)
+            output_paths: list[Path] = []
+            if record is not None:
+                task_output = record.task_output or {}
+                raw_files = task_output.get("fastqFiles") or []
+                if isinstance(raw_files, list):
+                    output_paths = [Path(str(item)) for item in raw_files if item]
+            blobs = [
+                path
+                for path in key_dir.rglob("*")
+                if path.is_file()
+                and not path.is_symlink()
+                and _is_fastq_name(path)
+            ]
+            for blob in blobs:
+                try:
+                    rel = blob.relative_to(key_dir)
+                except ValueError:
+                    rel = Path(blob.name)
+                dests = [sample_path / blob.name]
+                if rel.parent != Path("."):
+                    dests.append(sample_path / rel)
+                for dest in output_paths:
+                    if dest.name == blob.name and ".caas" not in dest.parts:
+                        dests.append(dest)
+                seen: set[str] = set()
+                for dest in dests:
+                    key = str(dest)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    _link_dest(dest, blob)
+            visible = [
+                path
+                for path in restored
+                if path.is_file() and ".caas" not in path.parts
+            ]
+            if len(visible) >= 2 and len(visible) % 2 == 0:
+                return restored
+    return restored

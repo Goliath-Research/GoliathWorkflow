@@ -59,6 +59,37 @@ def test_resolve_paired_fastqs_wrong_count(tmp_path: Path) -> None:
         runner.resolve_paired_fastqs(sample_dir, "S3")
 
 
+def test_resolve_paired_fastqs_even_unparsed_names(tmp_path: Path) -> None:
+    """Clara --in-fq accepts any even FASTQ count as sequential R1/R2 pairs."""
+    sample_dir = tmp_path / "S_even"
+    sample_dir.mkdir()
+    (sample_dir / "flowcellA.fastq.gz").write_bytes(b"r1")
+    (sample_dir / "flowcellB.fastq.gz").write_bytes(b"r2")
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_even")
+    assert [p.name for p in fastqs] == ["flowcellA.fastq.gz", "flowcellB.fastq.gz"]
+
+
+def test_resolve_paired_fastqs_restores_from_download_caas(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S_caas"
+    sample_dir.mkdir()
+    key = sample_dir / ".caas" / "sample_download_fastq" / "abc123"
+    key.mkdir(parents=True)
+    (key / "S_caas_1.fastq.gz").write_bytes(b"r1")
+    (key / "S_caas_2.fastq.gz").write_bytes(b"r2")
+    (key / "manifest.json").write_text(
+        '{"schema_version":"1.2","action_name":"sample.download_fastq",'
+        '"result_code":0,"artifacts":[],"task_output":{"fastqFiles":[]}}',
+        encoding="utf-8",
+    )
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_caas")
+    assert len(fastqs) == 2
+    assert all(p.is_file() for p in fastqs)
+    assert {p.name for p in fastqs} == {"S_caas_1.fastq.gz", "S_caas_2.fastq.gz"}
+    assert all(".caas" not in p.parts for p in fastqs)
+
+
 def test_resolve_paired_fastqs_multiple_lane_pairs(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S_lanes"
     lane_a = sample_dir / "AN000_flowcellA"

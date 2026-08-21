@@ -798,6 +798,14 @@ def _ensure_download_fastq_arm_links(
     sample_id = input_json.get("sampleId")
     if not sample_dir or not sample_id:
         return True
+    try:
+        from methyl_domain.sample_content_store import restore_sample_fastq_products
+
+        restore_sample_fastq_products(str(sample_dir), str(sample_id))
+    except Exception:
+        logger.debug(
+            "CAAS FASTQ restore skipped for %s", sample_dir, exc_info=True
+        )
     from methyl_utils.sample_arm_layout import ensure_sample_dir_fastq_links
 
     linked = ensure_sample_dir_fastq_links(

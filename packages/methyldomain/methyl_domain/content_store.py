@@ -152,10 +152,15 @@ def _is_durable_caas_blob(path: Path) -> bool:
 
 def _is_under(child: Path, parent: Path) -> bool:
     try:
-        child.resolve().relative_to(parent.resolve())
+        child_res = child.resolve()
+        parent_res = parent.resolve()
+    except OSError:
+        return False
+    try:
+        child_res.relative_to(parent_res)
         return True
     except ValueError:
-        return False
+        return _relative_to_root_nofollow(child_res, parent_res) is not None
 
 
 def _product_artifact_paths(artifacts: Sequence[ArtifactRef]) -> List[Path]:
@@ -275,7 +280,18 @@ def _ensure_symlink(link_path: Path, target: Path) -> None:
                     return
             except OSError:
                 pass
-        raise
+        # NFS ``os.replace`` of a symlink onto a missing dest can fail after
+        # mkdir; fall back to unlink + symlink.
+        try:
+            if link_path.exists() or link_path.is_symlink():
+                if link_path.is_dir() and not link_path.is_symlink():
+                    shutil.rmtree(link_path)
+                else:
+                    link_path.unlink()
+            link_path.symlink_to(desired)
+            return
+        except OSError:
+            raise
 
 
 def _move_tree_into_entry(
@@ -319,13 +335,25 @@ def _abspath_nofollow(path: Path) -> Path:
 
 
 def _relative_to_root_nofollow(path: Path, root: Path) -> Optional[Path]:
-    """Return ``path`` relative to ``root`` without following a leaf symlink."""
+    """Return ``path`` relative to ``root`` without following a leaf symlink.
+
+    Dual-mount aliases (``/work`` vs ``/lambda/nfs/Work``) must compare as the
+    same tree so nested FASTQ harvest keeps ``AN000…/sample_1.fastq.gz`` instead
+    of flattening to basename.
+    """
     path_abs = _abspath_nofollow(path)
     root_abs = _abspath_nofollow(root)
     try:
         return path_abs.relative_to(root_abs)
     except ValueError:
-        return None
+        pass
+    for form_path in _path_forms(path_abs):
+        for form_root in _path_forms(root_abs):
+            try:
+                return Path(form_path).relative_to(Path(form_root))
+            except ValueError:
+                continue
+    return None
 
 
 def _caas_run_relative(path: Path) -> Optional[Path]:
@@ -618,6 +646,15 @@ def _product_link_destinations(
             if any(_paths_equivalent(dest_from_out, c) for c in candidates):
                 candidates.append(dest_from_out)
             elif not candidates:
+                candidates.append(dest_from_out)
+            elif output_dir is not None and any(
+                (not _is_durable_caas_blob(c))
+                and _relative_to_root_nofollow(c, Path(output_dir)) is not None
+                for c in candidates
+            ):
+                # Nested product paths (AN000… FASTQs) plus a flat CAAS blob:
+                # also restore ``sampleDir/{basename}`` so Align sees an even
+                # pair at the bound sampleDir without requiring the nested dirs.
                 candidates.append(dest_from_out)
     elif dest_from_out is not None and not _is_durable_caas_blob(dest_from_out):
         candidates.append(dest_from_out)

@@ -805,6 +805,50 @@ def test_product_link_destinations_falls_back_when_canons_are_blobs(tmp_path: Pa
     assert dests == [sample_dir / "S1.bam"]
 
 
+def test_product_link_destinations_flat_blob_also_restores_sample_dir_basename(
+    tmp_path: Path,
+) -> None:
+    """Nested AN000 product paths must not skip sampleDir/{basename} restore."""
+    from methyl_domain.content_store import _product_link_destinations
+
+    sample_dir = tmp_path / "samples" / "S1"
+    lane = sample_dir / "AN000_flowcellA"
+    lane.mkdir(parents=True)
+    blob = sample_dir / ".caas" / "sample_download_fastq" / "key-a" / "S1_1.fastq.gz"
+    blob.parent.mkdir(parents=True)
+    blob.write_bytes(b"FQ")
+    dests = _product_link_destinations(
+        blob,
+        Path("S1_1.fastq.gz"),
+        output_dir=sample_dir,
+        canonical_paths=[lane / "S1_1.fastq.gz"],
+    )
+    assert lane / "S1_1.fastq.gz" in dests
+    assert sample_dir / "S1_1.fastq.gz" in dests
+
+
+def test_restore_sample_fastq_products_relinks_even_pair(tmp_path: Path) -> None:
+    from methyl_domain.sample_content_store import restore_sample_fastq_products
+
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    key = sample_dir / ".caas" / "sample_download_fastq" / "abc123"
+    key.mkdir(parents=True)
+    (key / "S1_1.fastq.gz").write_bytes(b"R1")
+    (key / "S1_2.fastq.gz").write_bytes(b"R2")
+    (key / "manifest.json").write_text(
+        '{"schema_version":"1.2","action_name":"sample.download_fastq",'
+        '"result_code":0,"artifacts":[],"task_output":{'
+        '"fastqFiles":[]}}',
+        encoding="utf-8",
+    )
+    restored = restore_sample_fastq_products(sample_dir, "S1")
+    assert restored
+    assert (sample_dir / "S1_1.fastq.gz").read_bytes() == b"R1"
+    assert (sample_dir / "S1_2.fastq.gz").read_bytes() == b"R2"
+    assert (sample_dir / "S1_1.fastq.gz").is_symlink()
+
+
 def test_harvest_blob_paths_restore_products_after_stripped_leaf(
     tmp_path: Path, monkeypatch
 ) -> None:
