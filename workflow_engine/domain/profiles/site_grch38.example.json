@@ -27,6 +27,13 @@
       "engine": "parabricks",
       "align_device": "auto",
       "bwa_threads": 16
+    },
+    "methyl_extract": {
+      "extract_contexts": ["CG", "CHG", "CHH"],
+      "min_mapq": 20,
+      "min_phred": 20,
+      "split": true,
+      "output_format": "hdf5"
     }
   },
   "reference_selection": {

@@ -87,6 +87,26 @@ def _normalize_contexts(raw: Any) -> tuple[str, ...]:
     return tuple(ordered)
 
 
+def _fill_missing_methyl_extract_from_site(step_cfg: Mapping[str, Any]) -> Dict[str, Any]:
+    """Fill knobs absent from a stale/partial baked resolvedConfig from the site slice.
+
+    Instance 67 baked ``resolvedConfig__methyl_extract`` as FASTA paths only into
+    ``wf.scope_variable`` while context_json kept the full profile merge. Workers
+    must not invent extract_contexts in code; site ``actionConfig.methyl_extract``
+    is the deployment layer for that key.
+    """
+    out = dict(step_cfg)
+    if out.get("extract_contexts") is not None:
+        return out
+    from methyl_utils.action_config_resolver import load_site_manifest, site_slice_for_action
+
+    site_fill = site_slice_for_action(load_site_manifest(), "methyl_extract")
+    for key, val in site_fill.items():
+        if out.get(key) is None and val is not None:
+            out[key] = val
+    return out
+
+
 def _pick(
     input_json: Mapping[str, Any],
     step_cfg: Mapping[str, Any],
@@ -249,6 +269,7 @@ def resolve_methyl_extract_config(
         resolve_from_task_input("methyl_extract", input_json, regulatory=regulatory)
     )
     alignment_cfg = resolve_from_task_input("alignment_qc", input_json, regulatory=regulatory)
+    step_cfg = _fill_missing_methyl_extract_from_site(step_cfg)
 
     reference_raw = step_cfg.get("reference_fasta") or alignment_cfg.get("genome_fasta")
     if not reference_raw:

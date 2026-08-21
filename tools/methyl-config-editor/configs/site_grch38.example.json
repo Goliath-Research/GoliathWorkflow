@@ -56,6 +56,13 @@
       "align_device": "auto",
       "bwa_threads": 16
     },
+    "methyl_extract": {
+      "extract_contexts": ["CG", "CHG", "CHH"],
+      "min_mapq": 20,
+      "min_phred": 20,
+      "split": true,
+      "output_format": "hdf5"
+    },
     "alignment_qc": {
       "cycle_screening": {
         "remediate_without_cycles": true,
