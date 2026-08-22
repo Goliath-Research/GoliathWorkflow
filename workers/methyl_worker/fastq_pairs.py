@@ -86,14 +86,25 @@ def _inode_key(path: Path) -> Tuple[int, int] | None:
     return (stat.st_dev, stat.st_ino)
 
 
-def _symlink_target_under_sample(path: Path, sample_dir: Path) -> bool:
-    """False for absolute links that Clara cannot open under ``/workdir``."""
+def _symlink_usable_under_workdir(path: Path, sample_dir: Path) -> bool:
+    """True when Clara can open ``path`` after ``sample_dir`` is mounted at ``/workdir``.
+
+    Clara follows the *stored* symlink target, not the host ``resolve()``. An
+    absolute link whose dest is still under *sample_dir* is readable here and
+    can win inode-dedup, but is unreadable in the container.
+    """
     if not path.is_symlink():
         return True
     try:
-        dest = path.resolve()
+        stored = path.readlink()
+    except OSError:
+        return False
+    if stored.is_absolute():
+        return False
+    dest = (path.parent / stored).resolve()
+    try:
         dest.relative_to(sample_dir.resolve())
-    except (OSError, ValueError):
+    except ValueError:
         return False
     return dest.is_file()
 
@@ -109,9 +120,10 @@ def _collect_fastqs(sample_dir: Path) -> List[Path]:
             continue
         if any(_is_aligner_leaf_dirname(part) for part in rel_parts):
             continue
-        if not _symlink_target_under_sample(path, sample_dir):
+        if not _symlink_usable_under_workdir(path, sample_dir):
             logger.warning(
-                "Skipping FASTQ symlink %s; target is outside %s (Clara /workdir cannot follow it)",
+                "Skipping FASTQ symlink %s; stored target is not a relative "
+                "path under %s (Clara /workdir cannot follow it)",
                 path.relative_to(sample_dir),
                 sample_dir,
             )
@@ -120,7 +132,8 @@ def _collect_fastqs(sample_dir: Path) -> List[Path]:
     found: List[Path] = []
     seen_paths: set[Path] = set()
     seen_inodes: set[Tuple[int, int]] = set()
-    for path in sorted(candidates):
+    # Regular files before symlinks so a leftover link cannot win inode-dedup.
+    for path in sorted(candidates, key=lambda p: (p.is_symlink(), str(p))):
         resolved = path.resolve()
         if resolved in seen_paths:
             continue

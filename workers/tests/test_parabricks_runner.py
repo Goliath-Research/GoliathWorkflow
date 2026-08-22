@@ -75,6 +75,48 @@ def test_resolve_paired_fastqs_skips_absolute_out_of_tree_symlink(
     ]
 
 
+def test_resolve_paired_fastqs_skips_absolute_in_tree_symlink(
+    tmp_path: Path,
+) -> None:
+    """Host resolve() stays under sampleDir; Clara still follows the absolute string."""
+    sample_dir = tmp_path / "S_intree"
+    lane = sample_dir / "AN000_fcA"
+    lane.mkdir(parents=True)
+    r1 = lane / "S_intree_1.fastq.gz"
+    r2 = lane / "S_intree_2.fastq.gz"
+    r1.write_bytes(b"a1")
+    r2.write_bytes(b"a2")
+    # Names sort before AN000 so the old resolve()+inode path would keep only these.
+    (sample_dir / "0_S_intree_1.fastq.gz").symlink_to(r1.resolve())
+    (sample_dir / "0_S_intree_2.fastq.gz").symlink_to(r2.resolve())
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_intree")
+    assert [p.relative_to(sample_dir).as_posix() for p in fastqs] == [
+        "AN000_fcA/S_intree_1.fastq.gz",
+        "AN000_fcA/S_intree_2.fastq.gz",
+    ]
+    assert all(not p.is_symlink() for p in fastqs)
+
+
+def test_resolve_paired_fastqs_keeps_relative_in_tree_symlink(
+    tmp_path: Path,
+) -> None:
+    """CAAS-style relative links under sampleDir map to /workdir/... inside Clara."""
+    sample_dir = tmp_path / "S_rel"
+    blob = sample_dir / ".caas" / "download"
+    blob.mkdir(parents=True)
+    (blob / "S_rel_1.fastq.gz").write_bytes(b"r1")
+    (blob / "S_rel_2.fastq.gz").write_bytes(b"r2")
+    (sample_dir / "S_rel_1.fastq.gz").symlink_to(Path(".caas/download/S_rel_1.fastq.gz"))
+    (sample_dir / "S_rel_2.fastq.gz").symlink_to(Path(".caas/download/S_rel_2.fastq.gz"))
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_rel")
+    assert [p.relative_to(sample_dir).as_posix() for p in fastqs] == [
+        "S_rel_1.fastq.gz",
+        "S_rel_2.fastq.gz",
+    ]
+
+
 def test_resolve_paired_fastqs_dedups_root_hardlinks(tmp_path: Path) -> None:
     """Root hardlinks of lane FASTQs must not become a second Clara --in-fq pair."""
     sample_dir = tmp_path / "S_hl"
