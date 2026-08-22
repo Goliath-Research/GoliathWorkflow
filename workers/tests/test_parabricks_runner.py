@@ -50,6 +50,24 @@ def test_resolve_paired_fastqs_recursive_glob(tmp_path: Path) -> None:
     assert len(fastqs) == 2
 
 
+def test_resolve_paired_fastqs_ignores_align_arm_copies(tmp_path: Path) -> None:
+    """Root sampleDir must not feed Clara extra pairs from aligner leaves."""
+    sample_dir = tmp_path / "S_arm"
+    sample_dir.mkdir()
+    (sample_dir / "S_arm_1.fastq.gz").write_bytes(b"r1")
+    (sample_dir / "S_arm_2.fastq.gz").write_bytes(b"r2")
+    arm = sample_dir / "align.linear.parabricks"
+    arm.mkdir()
+    (arm / "S_arm_1.fastq.gz").write_bytes(b"a1")
+    (arm / "S_arm_2.fastq.gz").write_bytes(b"a2")
+    (arm / "S_arm_1.trimmed.fastq.gz").write_bytes(b"t1")
+    (arm / "S_arm_2.trimmed.fastq.gz").write_bytes(b"t2")
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_arm")
+    assert [p.name for p in fastqs] == ["S_arm_1.fastq.gz", "S_arm_2.fastq.gz"]
+    assert all(p.parent == sample_dir for p in fastqs)
+
+
 def test_resolve_paired_fastqs_wrong_count(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S3"
     sample_dir.mkdir()

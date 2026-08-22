@@ -24,6 +24,22 @@ _FASTQ_BARE_R_RE = re.compile(
     r"^R(?P<mate>[12])(?:_(?P<segment>[0-9]{3}))?$", re.IGNORECASE
 )
 _SKIP_FASTQ_DIR_NAMES = frozenset({"tmp", ".caas"})
+_ALIGNER_MODE_LEAVES = frozenset({"linear", "pangenome", "pangenome_wgbs"})
+_ALIGNER_ARM_PREFIXES = ("align.", "extract.")
+
+
+def _is_aligner_leaf_dirname(name: str) -> bool:
+    """Skip FASTQ copies under aligner/mode leaves when sampleDir is the sample root."""
+    try:
+        from methyl_domain.sample_content_store import is_sample_arm_dirname
+
+        return is_sample_arm_dirname(name)
+    except ImportError:
+        if not name or name in {".", ".."}:
+            return False
+        if name.startswith(_ALIGNER_ARM_PREFIXES):
+            return True
+        return name in _ALIGNER_MODE_LEAVES
 
 
 def _matches_fastq(path: Path) -> bool:
@@ -68,8 +84,11 @@ def _collect_fastqs(sample_dir: Path) -> List[Path]:
     for path in sample_dir.rglob("*"):
         if not path.is_file() or not _matches_fastq(path):
             continue
-        rel_dirs = {part.lower() for part in path.relative_to(sample_dir).parts[:-1]}
+        rel_parts = path.relative_to(sample_dir).parts[:-1]
+        rel_dirs = {part.lower() for part in rel_parts}
         if rel_dirs & _SKIP_FASTQ_DIR_NAMES:
+            continue
+        if any(_is_aligner_leaf_dirname(part) for part in rel_parts):
             continue
         resolved = path.resolve()
         if resolved in seen:
