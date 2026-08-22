@@ -92,6 +92,12 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @workflow_instance_id AND status = N'RUNNING'
+    )
+        RETURN;
+
     DECLARE @node_type VARCHAR(32);
     DECLARE @version_id BIGINT;
     DECLARE @node_key NVARCHAR(128);

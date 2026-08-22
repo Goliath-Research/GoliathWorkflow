@@ -95,7 +95,7 @@ Operators remote-control workers **without SSH**. See
 | **Fleet** | Resume claiming / Drain / Stop worker | `wf.worker.desired_state` via `portal.sp_set_worker_desired_state` | **Shipped** |
 | **In-flight** | Abort or cooperative-pause the current task | Catalog `can_pause` / `can_continue` / `can_stop` | **Shipped** (most: stoppable, not pausable) |
 | **Task retry** | Set a **FAILED** node back to **READY** | `portal.sp_retry_failed_node` | **Shipped** (this IA) |
-| **Run** | Cancel / fail the **instance** (drain queued work) | `portal.sp_cancel_instance` / `sp_fail_instance` | **Shipped** |
+| **Run** | Cancel / fail the **instance** (drain queued work; no later-stage continue) | `portal.sp_cancel_instance` / `sp_fail_instance` | **Shipped** |
 | **Run pause** | Cooperative pause / resume of the instance | Requires catalog `can_pause` on in-flight work | **Deferred** |
 
 | UI label | Backend | Notes |
@@ -106,8 +106,8 @@ Operators remote-control workers **without SSH**. See
 | **Retry this action** | `FAILED` → `READY` | Same baked `input_json`; bump `attempt_no` |
 | **Stop this task** | `portal.sp_stop_node` → heartbeat `command=STOP` / **4099** | Distinct from fleet Stop and from Retry |
 | **Fail this queued action** | `portal.sp_fail_node` (`READY`/`PENDING` → `FAILED`, 4098) | FOREACH siblings keep running |
-| **Cancel this run** | `portal.sp_cancel_instance` | Queued nodes `CANCELLED`; optional in-flight stop |
-| **Fail this run** | `portal.sp_fail_instance` | Same drain; instance `FAILED` |
+| **Cancel this run** | `portal.sp_cancel_instance` | Queued nodes `CANCELLED`; optional in-flight stop; engine will not activate later stages after in-flight success |
+| **Fail this run** | `portal.sp_fail_instance` | Same drain; instance `FAILED`; same continue guard |
 
 Affinity keys are **opaque** — show them; never hard-code SamplePrep stickiness
 in UI logic ([worker-affinity-dispatch](../plans/worker-affinity-dispatch.plan.md)).
@@ -228,8 +228,8 @@ when `can_stop=false`.
 | **Start new instance** | Science/config/URI was wrong | Start wizard | Reclaim / Retry |
 | **Stop this task** | In-flight, `can_stop` | `sp_stop_node` (heartbeat `STOP` / 4099) | Fleet Stop |
 | **Fail this queued action** | Node `READY`/`PENDING` | `sp_fail_node` | Retry; instance fail |
-| **Cancel this run** | Drain queued work | `sp_cancel_instance` | Fleet Drain |
-| **Fail this run** | Drain queued work; instance `FAILED` | `sp_fail_instance` | Task Retry |
+| **Cancel this run** | Drain queued work; do not schedule later stages | `sp_cancel_instance` | Fleet Drain |
+| **Fail this run** | Drain queued work; instance `FAILED`; do not schedule later stages | `sp_fail_instance` | Task Retry |
 
 In-graph QC remediation (trim → realign) is **program control flow**, not Retry.
 
@@ -442,7 +442,7 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_retry_failed_node` | Retry (`FAILED` → `READY`) |
 | `portal.sp_fail_node` | Operator fail queued task (`READY`/`PENDING`) |
 | `portal.sp_stop_node` | Request in-flight stop (`can_stop`) |
-| `portal.sp_cancel_instance` / `sp_fail_instance` | Drain queued work; cancel or fail the run |
+| `portal.sp_cancel_instance` / `sp_fail_instance` | Drain queued work; cancel or fail the run; engine will not activate later stages |
 | `portal.sp_reclaim_expired_leases` | Ops reclaim |
 | `portal.sp_list/get_workflow_actions` | Action catalog |
 | `portal.sp_list/get_data_types` | DataType Registry |

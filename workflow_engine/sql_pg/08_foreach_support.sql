@@ -243,6 +243,13 @@ BEGIN
   INTO v_inst, v_ctl
   FROM wf.node_execution ne WHERE ne.id = p_foreach_execution_id;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   SELECT ls.id, ls.current_iteration, ls.repeat_target_count
   INTO v_ls, v_cur, v_max
   FROM wf.loop_state ls
@@ -253,7 +260,7 @@ BEGIN
   IF v_ls IS NULL THEN
     UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10009,
       ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_foreach_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -274,7 +281,7 @@ BEGIN
   IF v_body IS NULL THEN
     UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10010,
       ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_foreach_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -293,6 +300,13 @@ BEGIN
   SELECT ne.workflow_instance_id INTO v_inst
   FROM wf.node_execution ne WHERE ne.id = p_foreach_execution_id;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   SELECT ls.repeat_target_count INTO v_max
   FROM wf.loop_state ls
   WHERE ls.scope_node_execution_id = p_foreach_execution_id
@@ -301,7 +315,7 @@ BEGIN
   IF v_max IS NULL THEN
     UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10009,
       ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_foreach_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -322,7 +336,7 @@ BEGIN
   ) THEN
     UPDATE wf.node_execution SET status = 'FAILED', ended_at_utc = (now() AT TIME ZONE 'utc')
     WHERE id = p_foreach_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -356,13 +370,22 @@ $$;
 CREATE OR REPLACE PROCEDURE wf.wf_engine_continue_parent(IN p_parent_node_execution_id bigint)
 LANGUAGE plpgsql
 AS $$
-DECLARE v_ptype text;
+DECLARE
+  v_ptype text;
+  v_inst bigint;
 BEGIN
-  SELECT wn.node_type
-  INTO v_ptype
+  SELECT wn.node_type, ne.workflow_instance_id
+  INTO v_ptype, v_inst
   FROM wf.node_execution ne
   INNER JOIN wf.workflow_node wn ON wn.id = ne.workflow_node_id
   WHERE ne.id = p_parent_node_execution_id;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
 
   IF v_ptype = 'SEQUENCE' THEN
     CALL wf.wf_sequence_continue(p_parent_node_execution_id);
@@ -404,7 +427,7 @@ BEGIN
         engine_error_message = LEFT(COALESCE(NULLIF(p_output_json->>'error', ''), 'action failed'), 1024)
     WHERE id = p_action_execution_id;
     DELETE FROM wf.task_lease WHERE node_execution_id = p_action_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -417,8 +440,15 @@ BEGIN
 
   CALL wf.wf_apply_output_bindings(p_action_execution_id, p_result_code, p_output_json);
 
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   IF v_parent IS NULL THEN
-    UPDATE wf.workflow_instance SET status = 'COMPLETED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'COMPLETED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -484,6 +514,13 @@ DECLARE
   v_fi int;
   rec record;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = p_workflow_instance_id AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   SELECT wn.node_type INTO v_node_type
   FROM wf.workflow_node wn WHERE wn.id = p_workflow_node_id;
   IF v_node_type IS NULL THEN RETURN; END IF;
@@ -529,7 +566,7 @@ BEGIN
       UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = v_fc, engine_error_message = v_fm,
         ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_ne_id;
       UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc')
-      WHERE id = p_workflow_instance_id;
+      WHERE id = p_workflow_instance_id AND status = 'RUNNING';
       RETURN;
     END IF;
     UPDATE wf.node_execution SET input_json = v_fj WHERE id = v_ne_id;
@@ -599,7 +636,7 @@ BEGIN
     IF v_child IS NULL THEN
       UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10003,
         engine_error_message = 'Missing IF branch.', ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_pex;
-      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id;
+      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id AND status = 'RUNNING';
       RETURN;
     END IF;
     CALL wf.wf_engine_activate(p_workflow_instance_id, v_child, v_pex, p_iteration_no, NULL, NULL);
@@ -626,7 +663,7 @@ BEGIN
     IF v_child IS NULL THEN
       UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10004,
         engine_error_message = 'Missing SWITCH case.', ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_pex;
-      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id;
+      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id AND status = 'RUNNING';
       RETURN;
     END IF;
     CALL wf.wf_engine_activate(p_workflow_instance_id, v_child, v_pex, p_iteration_no, NULL, NULL);
@@ -642,7 +679,7 @@ BEGIN
     WHERE e.parent_node_id = p_workflow_node_id AND e.branch_kind = 'BODY' ORDER BY e.child_order ASC LIMIT 1;
     IF v_body IS NULL THEN
       UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10005, ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_pex;
-      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id;
+      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id AND status = 'RUNNING';
       RETURN;
     END IF;
     CALL wf.wf_engine_activate(p_workflow_instance_id, v_body, v_pex, 1, NULL, NULL);
@@ -654,7 +691,7 @@ BEGIN
     WHERE e.parent_node_id = p_workflow_node_id AND e.branch_kind = 'BODY' ORDER BY e.child_order ASC LIMIT 1;
     IF v_body IS NULL THEN
       UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10006, ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_pex;
-      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id;
+      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id AND status = 'RUNNING';
       RETURN;
     END IF;
     SELECT wn.condition_ref_node_key, wn.condition_var INTO v_cref, v_cvar
@@ -682,7 +719,7 @@ BEGIN
     IF v_fcoll IS NULL OR btrim(v_fcoll) = '' THEN
       UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10011,
         engine_error_message = 'FOREACH missing collection variable.', ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_pex;
-      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id;
+      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id AND status = 'RUNNING';
       RETURN;
     END IF;
 
@@ -692,7 +729,7 @@ BEGIN
     IF v_flen IS NULL THEN
       UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10011,
         engine_error_message = 'FOREACH collection is not a JSON array.', ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_pex;
-      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id;
+      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id AND status = 'RUNNING';
       RETURN;
     END IF;
 
@@ -709,7 +746,7 @@ BEGIN
     IF v_body IS NULL THEN
       UPDATE wf.node_execution SET status = 'FAILED', engine_error_code = 10010,
         engine_error_message = 'FOREACH missing BODY child.', ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_pex;
-      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id;
+      UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_workflow_instance_id AND status = 'RUNNING';
       RETURN;
     END IF;
 

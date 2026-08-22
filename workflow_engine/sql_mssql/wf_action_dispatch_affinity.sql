@@ -152,6 +152,14 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
+    -- Cancel/fail drains READY/PENDING, but in-flight success must not
+    -- insert the next SEQUENCE/FOREACH child (align after cancelled download).
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @workflow_instance_id AND status = N'RUNNING'
+    )
+        RETURN;
+
     DECLARE @node_type VARCHAR(32);
     DECLARE @version_id BIGINT;
     DECLARE @node_key NVARCHAR(128);

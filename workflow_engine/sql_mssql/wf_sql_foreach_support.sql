@@ -9,6 +9,7 @@
   - wf.wf_foreach_continue / wf.wf_foreach_parallel_continue
   - wf.wf_foreach_route_continue (sequential/parallel dispatch; called by base engine procs)
   - wf.wf_engine_continue_parent (FOREACH routing)
+  - wf.wf_sequence_continue (refuses to enqueue after operator cancel/fail)
   - wf.wf_engine_on_action_complete (FOREACH parent on direct BODY action)
   - wf.wf_engine_activate (FOREACH activation + BODY item bind hook)
   - wf.wf_resolve_token (var.name[n], ctx.item, ctx.index)
@@ -257,6 +258,12 @@ BEGIN
     SELECT @inst = workflow_instance_id, @ctl = workflow_node_id
     FROM wf.node_execution WHERE id = @foreach_execution_id;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
+
     SELECT TOP (1)
         @ls = id,
         @cur = current_iteration,
@@ -267,7 +274,7 @@ BEGIN
     IF @ls IS NULL
     BEGIN
         UPDATE wf.node_execution SET status = N'FAILED', engine_error_code = 10009, ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
-        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 
@@ -290,7 +297,7 @@ BEGIN
     IF @body IS NULL
     BEGIN
         UPDATE wf.node_execution SET status = N'FAILED', engine_error_code = 10010, ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
-        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 
@@ -316,6 +323,12 @@ BEGIN
 
     SELECT @inst = workflow_instance_id FROM wf.node_execution WHERE id = @foreach_execution_id;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
+
     SELECT TOP (1) @max = repeat_target_count
     FROM wf.loop_state
     WHERE scope_node_execution_id = @foreach_execution_id;
@@ -323,7 +336,7 @@ BEGIN
     IF @max IS NULL
     BEGIN
         UPDATE wf.node_execution SET status = N'FAILED', engine_error_code = 10009, ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
-        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 
@@ -345,7 +358,7 @@ BEGIN
     )
     BEGIN
         UPDATE wf.node_execution SET status = N'FAILED', ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
-        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 
@@ -388,11 +401,18 @@ BEGIN
 
     DECLARE @pnode BIGINT;
     DECLARE @ptype VARCHAR(32);
+    DECLARE @inst BIGINT;
 
-    SELECT @pnode = ne.workflow_node_id, @ptype = wn.node_type
+    SELECT @pnode = ne.workflow_node_id, @ptype = wn.node_type, @inst = ne.workflow_instance_id
     FROM wf.node_execution AS ne
     INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
     WHERE ne.id = @parent_node_execution_id;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
 
     IF @ptype = N'SEQUENCE'
         EXEC wf.wf_sequence_continue @sequence_execution_id = @parent_node_execution_id;
@@ -414,6 +434,71 @@ BEGIN
 
     ELSE IF @ptype = N'FOREACH'
         EXEC wf.wf_foreach_route_continue @foreach_execution_id = @parent_node_execution_id;
+END;
+GO
+
+/* Redeployed here so incremental Azure apply ships the terminal-instance guard.
+   Base MethylPipeline.sql predates operator cancel and would otherwise keep
+   activating the next SEQUENCE child after an in-flight success. */
+CREATE OR ALTER PROCEDURE wf.wf_sequence_continue
+    @sequence_execution_id BIGINT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @inst BIGINT;
+    DECLARE @seq_node BIGINT;
+    SELECT @inst = workflow_instance_id, @seq_node = workflow_node_id
+    FROM wf.node_execution WHERE id = @sequence_execution_id;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
+
+    DECLARE @last_child_ne BIGINT;
+    SELECT TOP (1) @last_child_ne = ne.id
+    FROM wf.node_execution AS ne
+    WHERE ne.parent_node_execution_id = @sequence_execution_id AND ne.status IN (N'SUCCEEDED', N'FAILED', N'SKIPPED')
+    ORDER BY ne.ended_at_utc DESC, ne.id DESC;
+
+    DECLARE @last_status VARCHAR(32);
+    DECLARE @last_child_wn BIGINT;
+    SELECT @last_child_wn = workflow_node_id, @last_status = status FROM wf.node_execution WHERE id = @last_child_ne;
+
+    IF @last_status = N'FAILED'
+    BEGIN
+        UPDATE wf.node_execution SET status = N'FAILED', ended_at_utc = SYSUTCDATETIME() WHERE id = @sequence_execution_id;
+        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst AND status = N'RUNNING';
+        RETURN;
+    END
+
+    DECLARE @next_order INT;
+    SELECT @next_order = e.child_order + 1
+    FROM wf.workflow_edge AS e
+    WHERE e.parent_node_id = @seq_node AND e.child_node_id = @last_child_wn;
+
+    DECLARE @next_child BIGINT;
+    SELECT TOP (1) @next_child = child_node_id
+    FROM wf.workflow_edge
+    WHERE parent_node_id = @seq_node AND child_order = @next_order;
+
+    IF @next_child IS NULL
+    BEGIN
+        UPDATE wf.node_execution SET status = N'SUCCEEDED', ended_at_utc = SYSUTCDATETIME() WHERE id = @sequence_execution_id;
+        EXEC wf.wf_engine_on_composite_complete @node_execution_id = @sequence_execution_id;
+        RETURN;
+    END;
+
+    DECLARE @iter INT = (SELECT iteration_no FROM wf.node_execution WHERE id = @sequence_execution_id);
+    EXEC wf.wf_engine_activate
+        @workflow_instance_id = @inst,
+        @workflow_node_id = @next_child,
+        @parent_node_execution_id = @sequence_execution_id,
+        @iteration_no = @iter,
+        @sequence_index = @next_order,
+        @parallel_index = NULL;
 END;
 GO
 
@@ -475,9 +560,17 @@ BEGIN
         @result_code = @result_code,
         @output_json = @oj;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
+
     IF @parent IS NULL
     BEGIN
-        UPDATE wf.workflow_instance SET status = N'COMPLETED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance
+        SET status = N'COMPLETED', completed_at_utc = SYSUTCDATETIME()
+        WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 
@@ -702,6 +795,12 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @workflow_instance_id AND status = N'RUNNING'
+    )
+        RETURN;
 
     DECLARE @node_type VARCHAR(32);
     DECLARE @version_id BIGINT;

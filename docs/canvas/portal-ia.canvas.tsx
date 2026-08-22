@@ -235,7 +235,7 @@ export default function PortalIaCanvas() {
                 <Pill tone="deleted" size="sm">
                   Cancel/fail run
                 </Pill>
-                <Text>Drain queue: sp_cancel_instance / sp_fail_instance</Text>
+                <Text>Drain queue + stop later-stage continue: sp_cancel_instance / sp_fail_instance</Text>
               </Row>
               <Text tone="secondary" size="small">
                 No status dropdown. No forceRerun on FAILED (no CAAS success to skip).

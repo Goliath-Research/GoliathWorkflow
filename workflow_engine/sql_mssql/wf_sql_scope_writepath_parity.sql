@@ -325,9 +325,17 @@ BEGIN
         @result_code = @result_code,
         @output_json = @oj;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
+
     IF @parent IS NULL
     BEGIN
-        UPDATE wf.workflow_instance SET status = N'COMPLETED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance
+        SET status = N'COMPLETED', completed_at_utc = SYSUTCDATETIME()
+        WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 
@@ -377,6 +385,12 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @workflow_instance_id AND status = N'RUNNING'
+    )
+        RETURN;
 
     DECLARE @node_type VARCHAR(32);
     DECLARE @version_id BIGINT;

@@ -218,6 +218,13 @@ BEGIN
   SELECT ne.workflow_instance_id, ne.workflow_node_id INTO v_inst, v_seq_node
   FROM wf.node_execution ne WHERE ne.id = p_sequence_execution_id;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   SELECT ne.id, ne.workflow_node_id, ne.status
   INTO v_last_child_ne, v_last_child_wn, v_last_status
   FROM wf.node_execution ne
@@ -228,7 +235,7 @@ BEGIN
 
   IF v_last_status = 'FAILED' THEN
     UPDATE wf.node_execution SET status = 'FAILED', ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_sequence_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -264,6 +271,13 @@ BEGIN
   SELECT ne.workflow_instance_id, ne.workflow_node_id INTO v_inst, v_pnode
   FROM wf.node_execution ne WHERE ne.id = p_parallel_execution_id;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   SELECT count(*) INTO v_total FROM wf.workflow_edge e WHERE e.parent_node_id = v_pnode;
   SELECT count(*) INTO v_finished
   FROM wf.node_execution ne
@@ -277,7 +291,7 @@ BEGIN
     WHERE ne.parent_node_execution_id = p_parallel_execution_id AND ne.status = 'FAILED'
   ) THEN
     UPDATE wf.node_execution SET status = 'FAILED', ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_parallel_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -364,12 +378,21 @@ $$;
 CREATE OR REPLACE PROCEDURE wf.wf_engine_continue_parent(IN p_parent_node_execution_id bigint)
 LANGUAGE plpgsql
 AS $$
-DECLARE v_ptype text;
+DECLARE
+  v_ptype text;
+  v_inst bigint;
 BEGIN
-  SELECT wn.node_type INTO v_ptype
+  SELECT wn.node_type, ne.workflow_instance_id INTO v_ptype, v_inst
   FROM wf.node_execution ne
   INNER JOIN wf.workflow_node wn ON wn.id = ne.workflow_node_id
   WHERE ne.id = p_parent_node_execution_id;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
 
   IF v_ptype = 'SEQUENCE' THEN
     CALL wf.wf_sequence_continue(p_parent_node_execution_id);
@@ -413,7 +436,7 @@ BEGIN
         engine_error_message = LEFT(COALESCE(NULLIF(p_output_json->>'error', ''), 'action failed'), 1024)
     WHERE id = p_action_execution_id;
     DELETE FROM wf.task_lease WHERE node_execution_id = p_action_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -424,8 +447,15 @@ BEGIN
   WHERE id = p_action_execution_id;
   DELETE FROM wf.task_lease WHERE node_execution_id = p_action_execution_id;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   IF v_parent IS NULL THEN
-    UPDATE wf.workflow_instance SET status = 'COMPLETED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'COMPLETED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -481,6 +511,13 @@ DECLARE
   v_wcond int;
   rec record;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = p_workflow_instance_id AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   SELECT wn.node_type, wn.node_key INTO v_node_type, v_node_key
   FROM wf.workflow_node wn WHERE wn.id = p_workflow_node_id;
   IF v_node_type IS NULL THEN RETURN; END IF;

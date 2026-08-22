@@ -707,6 +707,12 @@ BEGIN
     DECLARE @seq_node BIGINT;
     SELECT @inst = workflow_instance_id, @seq_node = workflow_node_id FROM wf.node_execution WHERE id = @sequence_execution_id;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
+
     DECLARE @last_child_ne BIGINT;
     SELECT TOP (1) @last_child_ne = ne.id
     FROM wf.node_execution AS ne
@@ -720,7 +726,7 @@ BEGIN
     IF @last_status = N'FAILED'
     BEGIN
         UPDATE wf.node_execution SET status = N'FAILED', ended_at_utc = SYSUTCDATETIME() WHERE id = @sequence_execution_id;
-        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 
@@ -769,6 +775,12 @@ BEGIN
     DECLARE @pnode BIGINT;
     SELECT @inst = workflow_instance_id, @pnode = workflow_node_id FROM wf.node_execution WHERE id = @parallel_execution_id;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
+
     DECLARE @total INT = (SELECT COUNT(*) FROM wf.workflow_edge WHERE parent_node_id = @pnode);
 
     DECLARE @finished INT = (
@@ -786,7 +798,7 @@ BEGIN
     )
     BEGIN
         UPDATE wf.node_execution SET status = N'FAILED', ended_at_utc = SYSUTCDATETIME() WHERE id = @parallel_execution_id;
-        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 
@@ -1355,6 +1367,12 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @workflow_instance_id AND status = N'RUNNING'
+    )
+        RETURN;
+
     DECLARE @node_type VARCHAR(32);
     DECLARE @version_id BIGINT;
     DECLARE @node_key NVARCHAR(128);
@@ -1904,9 +1922,17 @@ BEGIN
         @result_code = @result_code,
         @output_json = @oj;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
+
     IF @parent IS NULL
     BEGIN
-        UPDATE wf.workflow_instance SET status = N'COMPLETED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance
+        SET status = N'COMPLETED', completed_at_utc = SYSUTCDATETIME()
+        WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 

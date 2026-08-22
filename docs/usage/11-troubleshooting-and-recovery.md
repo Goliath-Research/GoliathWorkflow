@@ -97,7 +97,7 @@ Prefer DomainProgram reruns for new studies.
 
 - Keep original run directories and DB instance rows for traceability
 - Prefer **Retry** (`FAILED` → `READY`) when inputs are unchanged after an external fix; prefer a new `workflow_instance` when knobs or URIs changed. Do not expose a free-form `node_execution` status editor
-- **Fail this queued action** (`portal.sp_fail_node`) is only for `READY`/`PENDING`. **Stop this task** (`portal.sp_stop_node`) is only for `RUNNING` when catalog `can_stop`. **Cancel / fail this run** drains queued work; it is not fleet Drain (`portal.sp_set_worker_desired_state`)
+- **Fail this queued action** (`portal.sp_fail_node`) is only for `READY`/`PENDING`. **Stop this task** (`portal.sp_stop_node`) is only for `RUNNING` when catalog `can_stop`. **Cancel / fail this run** drains queued work and marks the instance terminal; in-flight success does not SEQUENCE/FOREACH-continue into later stages (align after a cancelled download). It is not fleet Drain (`portal.sp_set_worker_desired_state`)
 - Document `resolvedConfig` overrides in operator notes
 
 ## See also

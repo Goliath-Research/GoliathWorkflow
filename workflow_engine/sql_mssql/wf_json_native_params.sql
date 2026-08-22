@@ -52,6 +52,7 @@ BEGIN
         DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
 
         -- Node failed; leave instance RUNNING so sibling FOREACH tasks remain claimable.
+        -- Do not overwrite operator CANCELLED/FAILED.
         RETURN;
     END
 
@@ -72,9 +73,19 @@ BEGIN
         @result_code = @result_code,
         @output_json = @oj;
 
+    -- Operator cancel/fail already marked the instance terminal. Keep this
+    -- in-flight result, but do not SEQUENCE/FOREACH-continue into align/extract.
+    IF NOT EXISTS (
+        SELECT 1 FROM wf.workflow_instance
+        WHERE id = @inst AND status = N'RUNNING'
+    )
+        RETURN;
+
     IF @parent IS NULL
     BEGIN
-        UPDATE wf.workflow_instance SET status = N'COMPLETED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
+        UPDATE wf.workflow_instance
+        SET status = N'COMPLETED', completed_at_utc = SYSUTCDATETIME()
+        WHERE id = @inst AND status = N'RUNNING';
         RETURN;
     END
 

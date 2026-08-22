@@ -632,6 +632,8 @@ BEGIN
 END;
 $$;
 
+-- Drain READY/PENDING and mark the instance CANCELLED. Engine activate/continue
+-- refuse new work unless workflow_instance.status is still RUNNING.
 CREATE OR REPLACE FUNCTION portal.sp_cancel_instance(
   p_workflow_instance_id bigint,
   p_error_message text DEFAULT NULL,
@@ -713,6 +715,9 @@ BEGIN
   RETURN QUERY SELECT p_workflow_instance_id, 'CANCELLED'::text, v_queued;
 END;
 $$;
+
+-- Same drain as cancel, instance FAILED. Engine continue/activate still require
+-- status = RUNNING, so in-flight success cannot enqueue later stages.
 
 CREATE OR REPLACE FUNCTION portal.sp_fail_instance(
   p_workflow_instance_id bigint,

@@ -165,7 +165,7 @@ BEGIN
         ended_at_utc = (now() AT TIME ZONE 'utc'), engine_error_code = p_result_code
     WHERE id = p_action_execution_id;
     DELETE FROM wf.task_lease WHERE node_execution_id = p_action_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -177,8 +177,15 @@ BEGIN
 
   CALL wf.wf_apply_output_bindings(p_action_execution_id, p_result_code, p_output_json);
 
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   IF v_parent IS NULL THEN
-    UPDATE wf.workflow_instance SET status = 'COMPLETED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst;
+    UPDATE wf.workflow_instance SET status = 'COMPLETED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
     RETURN;
   END IF;
 
@@ -288,6 +295,13 @@ DECLARE
   v_scope bigint;
   rec record;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM wf.workflow_instance wi
+    WHERE wi.id = p_workflow_instance_id AND wi.status = 'RUNNING'
+  ) THEN
+    RETURN;
+  END IF;
+
   SELECT wn.node_type INTO v_node_type
   FROM wf.workflow_node wn WHERE wn.id = p_workflow_node_id;
   IF v_node_type IS NULL THEN RETURN; END IF;

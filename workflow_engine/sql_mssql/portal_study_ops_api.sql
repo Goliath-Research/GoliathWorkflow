@@ -584,6 +584,9 @@ BEGIN
 END
 GO
 
+-- Drain READY/PENDING and mark the instance CANCELLED. In-flight success is
+-- recorded, but wf_engine_activate / sequence/foreach continue refuse new work
+-- unless workflow_instance.status is still RUNNING.
 CREATE OR ALTER PROCEDURE portal.sp_cancel_instance
     @workflow_instance_id bigint,
     @error_message nvarchar(1024) = NULL,
@@ -670,6 +673,8 @@ BEGIN
 END
 GO
 
+-- Same drain as cancel, instance FAILED (4098). Engine continue/activate still
+-- require status = RUNNING, so in-flight success cannot enqueue later stages.
 CREATE OR ALTER PROCEDURE portal.sp_fail_instance
     @workflow_instance_id bigint,
     @error_message nvarchar(1024) = NULL,
