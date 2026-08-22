@@ -92,7 +92,6 @@ SCRIPTS=(
   portal_clinical_schema.sql
   contract_schema.sql
   onboarding_schema.sql
-  e_portal_schema.sql
   legacy_cross_schema_fks.sql
   cfg_schema.sql
   cfg_registry_tables.sql
@@ -109,13 +108,12 @@ SCRIPTS=(
   cfg_hyperparameter_search.sql
   # Modern portal API parity (sp_get_site, sp_get_study, sp_list_workflow_defs, …)
   portal_modern_api_parity.sql
-  # Legacy clinical / RBAC / Meta / Contract / Onboarding / e_portal API parity
+  # Legacy clinical / RBAC / Meta / Contract / Onboarding API parity
   portal_clinical_api_parity.sql
   rbac_api_parity.sql
   meta_api_parity.sql
   contract_api_parity.sql
   onboarding_api_parity.sql
-  e_portal_api_parity.sql
   portal_study_pipeline_api.sql
   portal_ops_recovery_api.sql
   portal_rbac_api.sql

@@ -23,11 +23,15 @@
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- Minimal role view used by NavTree helpers (Azure has richer definition).
-CREATE OR REPLACE VIEW "e_portal"."viewUserAllRoles" AS
-SELECT ur."UserId" AS "UserId", ur."RoleId" AS "RoleId"
-FROM "e_portal"."UserRoles" ur;
+-- No e_portal schema — portal.UserRoles is the leftover uniGUI mapping table.
+CREATE TABLE IF NOT EXISTS portal."UserRoles" (
+  "UserId" bigint NOT NULL,
+  "RoleId" integer NOT NULL,
+  CONSTRAINT "PK_portal_UserRoles" PRIMARY KEY ("UserId", "RoleId")
+);
 CREATE OR REPLACE VIEW portal."viewUserAllRoles" AS
-SELECT * FROM "e_portal"."viewUserAllRoles";
+SELECT ur."UserId" AS "UserId", ur."RoleId" AS "RoleId"
+FROM portal."UserRoles" ur;
 
 CREATE OR REPLACE FUNCTION "RBAC".spgetuseridbyemail(
   p_email text

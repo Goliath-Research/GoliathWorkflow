@@ -503,8 +503,9 @@ Admin
 ```
 
 Session/nav stays `RBAC.spGetUserNavTree` + `usp_session_is_authorized` at login.
-**CRUD** for these screens is **`portal.sp_*`**. Deprecate `e_portal.spAddUserRole`
-for new screens; keep twins until uniGUI cutover.
+**CRUD** for these screens is **`portal.sp_*`**. There is no `e_portal`
+schema. Do not call leftover `portal.spAddUserRole` from new screens — use
+`portal.sp_grant_user_role` / `sp_revoke_user_role`.
 
 ### Contracts — customers limited to process packs
 
@@ -648,8 +649,9 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 ### Legacy clinical nav
 
 Older `portal.spGetSamples*`, `spNavTree*`, `spGetCollectionItems` may still back
-clinical trees. Prefer study-arm APIs for new Study UX. `e_portal.*` remains for
-live uniGUI until cutover.
+clinical trees. Prefer study-arm APIs for new Study UX. The `e_portal` schema
+does not exist; former `e_portal.*` helpers that remain are `portal.*`
+(`spGetUserNavTree`, `spAddUserRole`) and are not the Admin contract.
 
 ### Remaining gaps
 

@@ -3,7 +3,7 @@
 Live object inventory: Azure SQL vs PostgreSQL for controlled schemas.
 
 Compares tables, views, routines, and cross-schema FKs for:
-  wf, cfg, portal, RBAC, Meta, Contract, Onboarding, e_portal
+  wf, cfg, portal, RBAC, Meta, Contract, Onboarding
 
 Usage:
   source .venv/bin/activate
@@ -43,7 +43,6 @@ CONTROLLED_SCHEMAS = (
     "Meta",
     "Contract",
     "Onboarding",
-    "e_portal",
 )
 # Diagram / SSMS junk — never part of the twin.
 SKIP_ROUTINE_PREFIXES = (
@@ -353,7 +352,7 @@ def diff_inventories(
 def _merge_case_variants(bucket: Dict[str, List[str]], schema: str) -> List[str]:
     """Union table/routine names across PascalCase and lowercase schema keys.
 
-    For already-lowercase schemas (wf, cfg, portal, e_portal), ``schema`` and
+    For already-lowercase schemas (wf, cfg, portal), ``schema`` and
     ``schema.lower()`` are the same dict key — do not concatenate the list twice.
     """
     primary = list(bucket.get(schema, []))

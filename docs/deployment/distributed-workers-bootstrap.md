@@ -9,7 +9,7 @@ For the full production platform (gateway + Arc enroll), see [production-platfor
 | Backend | Role | Data state |
 |---------|------|------------|
 | **Azure SQL** | Production / portal (until cutover) | Populated — actions, workflow defs, instances, workers, clinical portal |
-| **PostgreSQL (`epimethyl`)** | Schema twin / gateway dev / CI | Full `wf` + `cfg` + clinical `portal` / `RBAC` / `Meta` / `Contract` / `Onboarding` / `e_portal` DDL + procs; **reference/runtime data often empty** |
+| **PostgreSQL (`epimethyl`)** | Schema twin / gateway dev / CI | Full `wf` + `cfg` + clinical `portal` / `RBAC` / `Meta` / `Contract` / `Onboarding` DDL + procs; **reference/runtime data often empty**. There is no `e_portal` schema. |
 
 Canonical PostgreSQL database is **`epimethyl`**. The leftover Azure PG database named **`postgres`** is a stale older wf-only deploy — do not treat it as the twin.
 

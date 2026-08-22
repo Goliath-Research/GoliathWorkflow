@@ -2,7 +2,8 @@
 
 Captured: `2026-08-16T18:44:10.730125+00:00`
 
-Controlled schemas: `wf`, `cfg`, `portal`, `RBAC`, `Meta`, `Contract`, `Onboarding`, `e_portal`.
+Controlled schemas: `wf`, `cfg`, `portal`, `RBAC`, `Meta`, `Contract`, `Onboarding`.
+The `e_portal` schema was dropped (Azure SQL already gone; PostgreSQL `epimethyl` dropped 2026-08-22).
 
 ## Azure SQL (`MethylPipeline`)
 
@@ -13,7 +14,6 @@ Controlled schemas: `wf`, `cfg`, `portal`, `RBAC`, `Meta`, `Contract`, `Onboardi
 - `Meta`: 9 tables, 17 routines
 - `Contract`: 6 tables, 4 routines
 - `Onboarding`: 4 tables, 1 routines
-- `e_portal`: 17 tables, 18 routines
 
 ## PostgreSQL (`epimethyl`)
 
@@ -24,7 +24,6 @@ Controlled schemas: `wf`, `cfg`, `portal`, `RBAC`, `Meta`, `Contract`, `Onboardi
 - `Meta`: 9 tables, 17 routines
 - `Contract`: 6 tables, 4 routines
 - `Onboarding`: 4 tables, 1 routines
-- `e_portal`: 17 tables, 17 routines
 
 > Note: the Azure PG database named `postgres` is a stale older wf-only deploy. Canonical parity target is **`epimethyl`**.
 
@@ -40,7 +39,6 @@ _none_
 
 ### `routines_mssql_only` (32)
 
-- `e_portal.spinsertfromnavtree`
 - `portal.fngetdiseasejsonschema`
 - `portal.sp_set_worker_desired_state`
 - `portal.spcollectiondelete`

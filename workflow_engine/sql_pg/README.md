@@ -31,7 +31,7 @@ Deploy **in order**:
 
 `deploy_azure.sh` also applies the full `cfg_*` stack (schema, registry tables, relationships, repo/portal APIs) before the portal/genome seeds above. Fresh installs get wide `site_reference_asset.asset_role` values (including `houseman_seed_basis` / `hitimed_hierarchy_basis`) from [`cfg_wf_relationships.sql`](cfg_wf_relationships.sql).
 
-**Existing DB upgrade only** (not in `deploy_azure.sh`): [`migrations/20260721_site_reference_asset_deconv_roles.sql`](migrations/20260721_site_reference_asset_deconv_roles.sql) widens the CHECK. MSSQL twin: [`../sql_mssql/migrations/`](../sql_mssql/migrations/).
+**Existing DB upgrade only** (not in `deploy_azure.sh`): [`migrations/20260721_site_reference_asset_deconv_roles.sql`](migrations/20260721_site_reference_asset_deconv_roles.sql) widens the CHECK; [`migrations/20260822_drop_e_portal.sql`](migrations/20260822_drop_e_portal.sql) drops leftover `e_portal` (already applied on `epimethyl`). MSSQL twin: [`../sql_mssql/migrations/`](../sql_mssql/migrations/).
 
 Genome inventory ops: [`docs/deployment/reference-inventory-qnap.md`](../../docs/deployment/reference-inventory-qnap.md). Note: [`scripts/populate_postgres_reference_data.py`](../../scripts/populate_postgres_reference_data.py) seeds the **action catalog** (and optional workflow defs), **not** `cfg.reference_asset` / genomes.
 

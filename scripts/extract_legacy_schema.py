@@ -9,12 +9,11 @@ Writes under workflow_engine/sql_mssql/:
   portal_clinical_schema.sql, portal_clinical_api.sql
   contract_schema.sql, contract_api.sql
   onboarding_schema.sql, onboarding_api.sql
-  e_portal_schema.sql, e_portal_api.sql
 
 Usage:
   source .venv/bin/activate
   python scripts/extract_legacy_schema.py
-  # also script live extras (e_portal tables, DiseaseFieldContract, …):
+  # also script live extras (DiseaseFieldContract, …):
   python scripts/extract_legacy_schema.py --from-live
 """
 
@@ -31,7 +30,7 @@ REPO = Path(__file__).resolve().parents[1]
 MONOLITH = REPO / "workflow_engine" / "sql_mssql" / "MethylPipeline.sql"
 OUT_DIR = REPO / "workflow_engine" / "sql_mssql"
 
-SCHEMA_ORDER = ("Meta", "RBAC", "portal", "Contract", "Onboarding", "e_portal")
+SCHEMA_ORDER = ("Meta", "RBAC", "portal", "Contract", "Onboarding")
 
 # Tables already owned by incremental parity scripts — skip from clinical extract.
 PORTAL_SKIP_TABLES = {"resource_profile", "sample_field_contract"}
@@ -336,7 +335,6 @@ def write_outputs(
         "portal": ("portal_clinical_schema.sql", "portal_clinical_api.sql"),
         "Contract": ("contract_schema.sql", "contract_api.sql"),
         "Onboarding": ("onboarding_schema.sql", "onboarding_api.sql"),
-        "e_portal": ("e_portal_schema.sql", "e_portal_api.sql"),
     }
     header = (
         "-- Auto-extracted by scripts/extract_legacy_schema.py from MethylPipeline.sql\n"
@@ -353,9 +351,7 @@ def write_outputs(
     }
     for schema, (schema_file, api_file) in mapping.items():
         ddl_parts = buckets[schema]["schema_ddl"]
-        if schema == "e_portal" and live_extras and "e_portal" in live_extras:
-            schema_body = header + live_extras["e_portal"]
-        elif schema == "portal" and live_extras and "portal" in live_extras:
+        if schema == "portal" and live_extras and "portal" in live_extras:
             # Keep monolith clinical DDL; append only extra live tables.
             extra_only = []
             for block in live_extras["portal"].split("GO\n"):
@@ -379,7 +375,7 @@ def main() -> int:
     parser.add_argument(
         "--from-live",
         action="store_true",
-        help="Also script table DDL from live Azure SQL (needed for e_portal tables).",
+        help="Also script table DDL from live Azure SQL (DiseaseFieldContract and other extras).",
     )
     args = parser.parse_args()
     if not MONOLITH.is_file():
@@ -388,7 +384,7 @@ def main() -> int:
     buckets = extract_from_monolith()
     live: Optional[Dict[str, str]] = None
     if args.from_live:
-        live = script_live_tables(["e_portal", "portal"])
+        live = script_live_tables(["portal"])
     write_outputs(buckets, live)
     return 0
 
