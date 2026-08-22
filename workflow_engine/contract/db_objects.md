@@ -114,14 +114,27 @@ Deploy [`../sql/portal_workflow_api.sql`](../sql/portal_workflow_api.sql) (Azure
 | `portal.sp_get_action_schema` | Schema-driven parameter forms |
 | `portal.sp_list_workflow_definitions` | List defs (filter `source` = `portal` or `system`) |
 | `portal.sp_create_workflow_graph` | Create portal-owned workflow graph; validates actions exist |
-| `portal.sp_create_and_start_instance` | Create instance + `sp_start_workflow_instance`; optional `scope_id` pack check |
+| `portal.sp_create_and_start_instance` | Create instance + `sp_start_workflow_instance`; optional `scope_id` pack check + `study_row_id` link |
+| `portal.sp_link_study_instance` | Attach a run to `cfg.study` |
+| `portal.sp_get/set_study_storage` | Persist published FASTQ/archive endpoints on the study |
+| `portal.sp_get/set_study_action_config_overlay` | Next-run `actionConfig` overlay (no mid-run rebake) |
+| `portal.sp_get_workflow_instance_header` | Instance header (study, profile, counts) |
+| `portal.sp_get_instance_config` | Redacted context + `resolvedConfig` snapshot |
+| `portal.sp_get_instance_sample_progress` | Sample × stage matrix |
 | `portal.sp_get_instance_tasks` | Monitor node executions (`engine_error_*`, lease, source URI) |
 | `portal.sp_list_study_instances` | Instances linked to a study |
 | `portal.sp_get_study_pipeline_progress` | Stage rollup for Study Overview |
 | `portal.sp_get_node_execution_detail` | Failed/stuck task detail |
 | `portal.sp_retry_failed_node` | Operator `FAILED` → `READY` |
+| `portal.sp_fail_node` / `sp_stop_node` | Operator fail queued / stop in-flight |
+| `portal.sp_cancel_instance` / `sp_fail_instance` | Drain queued work; cancel or fail the run |
 | `portal.sp_list/upsert_user`, `sp_grant_user_role` | Admin RBAC façade |
+| `portal.sp_list/create/decide_bypass_scope_approval` | Bypass-scope approvals |
+| `portal.sp_revoke_user_session` | End a session |
 | `portal.sp_list/upsert_contract`, `sp_set_contract_process_packs` | Contract + process-pack entitlements |
+| `portal.sp_set_contract_scopes` / `limits` / `role_policies` | Contract admin writes |
+| `portal.sp_promote_hyperparam_winner` | Winner → study overlay (never a published profile) |
+| `portal.sp_list_data_type_fields` | DataType Registry fields |
 
 Portal principals must not execute `wf.wf_repo_upsert_workflow_action` or admin delete procs. Catalog seed and system pipeline deploy use **direct-DB scripts** (`seed_action_catalog.py`, `deploy_workflow_definitions.sh`, `workflow_engine/ops`) from CI/release automation.
 

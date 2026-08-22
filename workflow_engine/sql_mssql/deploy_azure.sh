@@ -137,6 +137,7 @@ SCRIPTS=(
   portal_ops_recovery_api.sql
   portal_rbac_api.sql
   portal_contract_api.sql
+  portal_study_ops_api.sql
 )
 
 echo "Target: server=$SERVER database=$DATABASE user=$USER"

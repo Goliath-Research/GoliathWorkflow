@@ -12,7 +12,8 @@ workers→gateway; HPO grids). **Fleet control:** [Constrained worker ops](const
 [Portal staged study lifecycle](../../workflow_engine/docs/portal_study_lifecycle.md).
 **Retry / leases:** [Workflow idempotency](workflow-idempotency-retry-lease.md),
 [Usage ch.11](../usage/11-troubleshooting-and-recovery.md).
-**Plan:** [portal-pipeline-ia](../plans/portal-pipeline-ia.plan.md).
+**Plan:** [portal-pipeline-ia](../plans/portal-pipeline-ia.plan.md),
+[portal-ui-sql-actions](../plans/portal-ui-sql-actions.plan.md).
 
 ## Guiding contracts
 
@@ -94,7 +95,8 @@ Operators remote-control workers **without SSH**. See
 | **Fleet** | Resume claiming / Drain / Stop worker | `wf.worker.desired_state` via `portal.sp_set_worker_desired_state` | **Shipped** |
 | **In-flight** | Abort or cooperative-pause the current task | Catalog `can_pause` / `can_continue` / `can_stop` | **Shipped** (most: stoppable, not pausable) |
 | **Task retry** | Set a **FAILED** node back to **READY** | `portal.sp_retry_failed_node` | **Shipped** (this IA) |
-| **Run** | Pause / resume / cancel the **instance** | Instance status API (not fleet Drain, not Retry) | **Gap** |
+| **Run** | Cancel / fail the **instance** (drain queued work) | `portal.sp_cancel_instance` / `sp_fail_instance` | **Shipped** |
+| **Run pause** | Cooperative pause / resume of the instance | Requires catalog `can_pause` on in-flight work | **Deferred** |
 
 | UI label | Backend | Notes |
 |----------|---------|-------|
@@ -102,7 +104,10 @@ Operators remote-control workers **without SSH**. See
 | **Drain** | `DRAINING` | Finish current work; no new claims |
 | **Stop worker** | `STOPPING` | Abort in-flight only if `can_stop` |
 | **Retry this action** | `FAILED` → `READY` | Same baked `input_json`; bump `attempt_no` |
-| **Stop this task** | `fail_task` / **4099** `WORKER_STOPPED` | Distinct from fleet Stop and from Retry |
+| **Stop this task** | `portal.sp_stop_node` → heartbeat `command=STOP` / **4099** | Distinct from fleet Stop and from Retry |
+| **Fail this queued action** | `portal.sp_fail_node` (`READY`/`PENDING` → `FAILED`, 4098) | FOREACH siblings keep running |
+| **Cancel this run** | `portal.sp_cancel_instance` | Queued nodes `CANCELLED`; optional in-flight stop |
+| **Fail this run** | `portal.sp_fail_instance` | Same drain; instance `FAILED` |
 
 Affinity keys are **opaque** — show them; never hard-code SamplePrep stickiness
 in UI logic ([worker-affinity-dispatch](../plans/worker-affinity-dispatch.plan.md)).
@@ -141,11 +146,12 @@ Two DomainPrograms in sequence, then optional prediction
 | Study overview | Bound procedure/profile/analyte, `projectPath`, **stage rollup** | `sp_get_study_process_defaults`, `sp_get_study_pipeline_progress` |
 | Study process defaults | Persist default profile / procedure / analyte / researchMode | `sp_set/get_study_process_defaults`; pickers: `sp_list_*_catalog` **filtered by contract** when `@scope_id` is set |
 | Cohort (samples & arms) | Enrollment, study arms, membership | `sp_list_samples_for_study_enrollment`, `sp_set_sample_analyte`, `sp_list/set_study_group(s)`, `sp_set_study_group_members`, `sp_materialize_study_lists` |
-| Storage | Select **published redacted** `fastqSource` + `sampleDestination` | `sp_list_storage_endpoints` (redacted); authoring stays on Platform |
+| Storage | Select **published redacted** `fastqSource` + `sampleDestination` | `sp_list_storage_endpoints` (redacted); persist with `sp_get/set_study_storage`; authoring stays on Platform |
+| Guardrails (next run) | Study-lead `actionConfig` overlay (`alignment_qc` / `extraction_qc`) | `sp_get/set_study_action_config_overlay` — **not** a mid-run rebake |
 | Project manifests | Cohort paths under `/work/projects/<study>/` | `sp_project_list/get/save`; **no** `actionConfig` knobs |
 | Runs | Instances for this study | `sp_list_study_instances` |
-| **Instance detail** | Gantt, tasks, errors, **recovery verbs** | `sp_get_instance_tasks`, `sp_get_node_execution_detail`, `sp_retry_failed_node`, `sp_reclaim_expired_leases`, `sp_get_workflow_instance` |
-| **Start next stage** | Published version → packs → start | Catalog procs + `sp_list_workflow_definitions` + `sp_create_and_start_instance` (`@scope_id`) |
+| **Instance detail** | Gantt, tasks, errors, **recovery verbs** | `sp_get_workflow_instance_header`, `sp_get_instance_tasks`, `sp_get_instance_sample_progress`, `sp_get_instance_config`, `sp_get_node_execution_detail`, `sp_retry_failed_node`, `sp_reclaim_expired_leases`, `sp_stop_node`, `sp_fail_node`, `sp_cancel_instance`, `sp_fail_instance` |
+| **Start next stage** | Published version → packs → start | Catalog procs + `sp_list_workflow_definitions` + `sp_create_and_start_instance` (`@scope_id`, `@study_row_id`) |
 
 **Storage:** operators **select** published endpoints. Lab/infra **author** them
 under Platform. Do not put credentials on the study screen.
@@ -201,12 +207,14 @@ First-class operator UX. The engine does **not** auto-requeue `FAILED` nodes
 4. **Controls (RBAC) — split clearly:**
    - **Retry this action** (`FAILED` → `READY`) — study operator
    - **Leases:** reclaim expired
-   - **Stop this task** only when catalog `can_stop` (in-flight)
+   - **Stop this task** only when catalog `can_stop` (in-flight) — `sp_stop_node`
+   - **Fail this queued action** — `sp_fail_node` (`READY`/`PENDING` only)
+   - **Cancel / fail this run** — `sp_cancel_instance` / `sp_fail_instance`
    - **Related workers:** deep-link to fleet console (Drain/Stop live there)
 5. **Task detail:** `result_code`, `engine_error_code` / `engine_error_message`
-   (incl. `4099`), truncated `output_json`, **source URI(s)** for download
+   (incl. `4098` `OPERATOR_FAILED`, `4099` `WORKER_STOPPED`), truncated `output_json`, **source URI(s)** for download
    actions, pointer to `/work` `.action_results` (portal does not SSH)
-6. **Config snapshot:** still a gap (`resolvedConfig` read API)
+6. **Config snapshot:** `sp_get_instance_config` (redacted `context_json` + `resolvedConfig__*` slices). Read-only; change knobs via study overlay + new instance.
 
 Enable **Stop this task** only when `can_stop` is true. Disable (with reason)
 when `can_stop=false`.
@@ -218,7 +226,10 @@ when `can_stop=false`.
 | **Reclaim expired leases** | Node `RUNNING`, lease expired (worker crash) | `sp_reclaim_expired_leases` | Fleet Drain/Stop |
 | **Retry this action** (set **READY**) | Node `FAILED`; same `input_json` still correct after an **external** fix | `sp_retry_failed_node` | New instance; editing baked JSON |
 | **Start new instance** | Science/config/URI was wrong | Start wizard | Reclaim / Retry |
-| **Stop this task** | In-flight, `can_stop` | `fail_task` / 4099 | Instance cancel (gap) |
+| **Stop this task** | In-flight, `can_stop` | `sp_stop_node` (heartbeat `STOP` / 4099) | Fleet Stop |
+| **Fail this queued action** | Node `READY`/`PENDING` | `sp_fail_node` | Retry; instance fail |
+| **Cancel this run** | Drain queued work | `sp_cancel_instance` | Fleet Drain |
+| **Fail this run** | Drain queued work; instance `FAILED` | `sp_fail_instance` | Task Retry |
 
 In-graph QC remediation (trim → realign) is **program control flow**, not Retry.
 
@@ -416,8 +427,12 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 |-----------|--------|
 | `portal.sp_list_workflow_definitions` | Start wizard / Workflows list (`@scope_id` optional) |
 | `portal.sp_create_workflow_graph` | Publish compiled graph (author) |
-| `portal.sp_create_and_start_instance` | Start run; optional `@scope_id` pack check |
-| `portal.sp_get_workflow_instance` | Instance header |
+| `portal.sp_create_and_start_instance` | Start run; optional `@scope_id` pack check + `@study_row_id` link |
+| `portal.sp_link_study_instance` | Attach an existing run (e.g. instance 67) to a cfg study |
+| `portal.sp_get_workflow_instance` | Thin id/status (compat) |
+| `portal.sp_get_workflow_instance_header` | Instance header (study, profile, counts) |
+| `portal.sp_get_instance_config` | Config tab (redacted context + `resolvedConfig`) |
+| `portal.sp_get_instance_sample_progress` | Sample × stage matrix |
 | `portal.sp_list_ops_instances` | Home / Ops board |
 | `portal.sp_list_recent_instances` | Monitor picker (not study-filtered) |
 | `portal.sp_list_study_instances` | Study → Runs |
@@ -425,9 +440,13 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_get_instance_tasks` | Task table / Gantt (`engine_error_*`, affinity, lease, source URI) |
 | `portal.sp_get_node_execution_detail` | Task detail |
 | `portal.sp_retry_failed_node` | Retry (`FAILED` → `READY`) |
+| `portal.sp_fail_node` | Operator fail queued task (`READY`/`PENDING`) |
+| `portal.sp_stop_node` | Request in-flight stop (`can_stop`) |
+| `portal.sp_cancel_instance` / `sp_fail_instance` | Drain queued work; cancel or fail the run |
 | `portal.sp_reclaim_expired_leases` | Ops reclaim |
 | `portal.sp_list/get_workflow_actions` | Action catalog |
 | `portal.sp_list/get_data_types` | DataType Registry |
+| `portal.sp_list_data_type_fields` | DataType Registry fields |
 | `portal.sp_get_action_schema` | Legacy compat only |
 
 ### Cfg / study / storage / catalogs
@@ -439,6 +458,8 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_materialize_study_lists` | Materialize CSVs to `/work` |
 | `portal.sp_list_samples_for_study_enrollment` | Enrollment picker |
 | `portal.sp_set_sample_analyte` | Bind sample → `cfg.analyte` |
+| `portal.sp_get/set_study_storage` | Persist published `fastqSource` + `sampleDestination` on the study |
+| `portal.sp_get/set_study_action_config_overlay` | Next-run guardrail / `actionConfig` overlay |
 | `portal.sp_list/get/upsert/publish_storage_endpoint` | Storage admin |
 | `portal.sp_list/get/upsert/publish_credential` | Credential admin |
 | `portal.sp_list/get_pipeline_profile` | Platform process-pack browse |
@@ -471,6 +492,7 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_get/list_hyperparam_search(es)` | Monitor |
 | `portal.sp_score_hyperparam_trial` | Score |
 | `portal.sp_set_hyperparam_search_status` | Pause / complete |
+| `portal.sp_promote_hyperparam_winner` | Copy winning overrides onto the **study overlay** (never a published profile) |
 
 ### Admin RBAC (`portal_rbac_api`)
 
@@ -483,6 +505,8 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_list/get_scopes` | Scopes |
 | `portal.sp_list_user_groups`, `sp_set_user_group_members`, `sp_set_user_group_roles` | User groups |
 | `portal.sp_list_user_sessions` | Sessions (read) |
+| `portal.sp_revoke_user_session` | End a session |
+| `portal.sp_list/create/decide_bypass_scope_approval` | Bypass-scope approvals |
 | `portal.sp_list/grant/deny_role_nav_nodes` | Nav grants |
 | `portal.sp_list/create/revoke_invitation`, `sp_create_invitation_batch` | Onboarding |
 
@@ -492,7 +516,7 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 |-----------|--------|
 | `portal.sp_list/get/upsert_contract` | Contract header |
 | `portal.sp_list/set_contract_process_packs` | Entitled modalities |
-| `portal.sp_list_contract_scopes`, `sp_list_contract_limits`, `sp_list_contract_role_policies` | Admin panels |
+| `portal.sp_list/set_contract_scopes`, `sp_list/set_contract_limits`, `sp_list/set_contract_role_policies` | Admin panels |
 | `portal.sp_list_contract_usage` | Quota counters (read) |
 | `portal.sp_contract_entitled_modalities` | Catalog filter helper |
 | `Contract.spContractValidateWorkflowExecution` | Called from `sp_create_and_start_instance` (not directly from UI) |
@@ -505,8 +529,7 @@ live uniGUI until cutover.
 
 ### Remaining gaps
 
-- Pause / resume / cancel **instance** (run lifecycle; **not** fleet Drain, **not** Retry)
-- Instance `context_json` / baked `resolvedConfig` read API for Config tab
+- Cooperative **instance pause / resume** (`can_pause` is false for almost all actions; use Cancel + drain)
 - Assay-procedure SKUs inside a pack; billing/invoicing
 - Auto-start Instance 2 when SamplePrep finishes (gated Start next stage only)
 
@@ -521,7 +544,7 @@ live uniGUI until cutover.
 2. Admin RBAC façade.
 3. Contracts + entitled process-pack catalogs.
 4. Wire already-shipped ops/fleet procs into chrome.
-5. Instance pause/cancel + config snapshot.
+5. Wire cancel/fail/stop + config snapshot + study overlay (shipped SQL; EpiPortal screens in the other repo).
 
 ## Design principles
 
@@ -530,7 +553,7 @@ live uniGUI until cutover.
 3. **Publish before run** — only published versions/procedures/profiles in Start.
 4. One primary object per screen; deep-link Study → Run → Task.
 5. Contract-filter catalogs; hide unentitled packs.
-6. Config snapshot shows **where** a knob was set (when the read API exists).
+6. Config snapshot (`sp_get_instance_config`) is read-only; change knobs on the study overlay and start a new run.
 7. **Fleet ≠ science knobs ≠ instance lifecycle ≠ task retry.**
 8. Enable Stop from catalog **`can_stop`**, not role guesswork.
 9. **Affinity is opaque** — show the key.
@@ -547,5 +570,6 @@ live uniGUI until cutover.
 - [Workflow idempotency, retry, and leases](workflow-idempotency-retry-lease.md)
 - [Usage ch.11 — Troubleshooting](../usage/11-troubleshooting-and-recovery.md)
 - [Portal pipeline IA plan](../plans/portal-pipeline-ia.plan.md)
+- [Portal UI SQL actions plan](../plans/portal-ui-sql-actions.plan.md)
 - [Portal IA canvas](../canvas/README.md#portal-ia)
 - [Deployment — portal resource profile](../deployment/portal_resource_profile.md)

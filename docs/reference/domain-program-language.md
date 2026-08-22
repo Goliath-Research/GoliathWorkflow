@@ -201,7 +201,7 @@ By default, `execute_task()` **skips** an action when a prior successful manifes
 
 ### Content-addressed action store (CAAS)
 
-CAAS is **on by default**. Successful idempotent study actions commit product artifacts to `{project_root}/.caas/{action_safe}/{content_key}/` and replace canonical paths with symlinks into that store. Alignment and other sample-scoped prep actions use `/work/samples/{sample_id}/.caas/` so a later instance with the same inputs does not re-run GPU/IO work. A second workflow instance with the same cumulative `content_key` reuses the entry without recomputing. Opt out with `"caasEnabled": false` or `METHYL_CAAS_ENABLED=0`. Reject sample-scoped CAAS only with `"sampleCaasEnabled": false` or `METHYL_SAMPLE_CAAS_ENABLED=0`. `sample.archive_sample` is etag-only (QNAP); it is not CAAS replay.
+CAAS is **on by default**. Successful idempotent **study** actions commit product artifacts to `{project_root}/.caas/{action_safe}/{content_key}/` and replace canonical paths with symlinks into that store. Alignment and other sample-scoped prep actions write a **ledger only** under `/work/samples/{sample_id}/.caas/` — FASTQs stay at the sample root and BAM/QC stay in `sampleDir` (do not relocate multi-GB files on NFS). A second workflow instance with the same cumulative `content_key` reuses the entry without recomputing. Opt out with `"caasEnabled": false` or `METHYL_CAAS_ENABLED=0`. Reject sample-scoped CAAS only with `"sampleCaasEnabled": false` or `METHYL_SAMPLE_CAAS_ENABLED=0`. `sample.archive_sample` is etag-only (QNAP); it is not CAAS replay.
 
 | Field | Location | Purpose |
 |-------|----------|---------|

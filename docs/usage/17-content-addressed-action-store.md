@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Version idempotent workflow action results by **hyperparameter and input signature** on shared storage. When two workflow instances reach the same action with identical cumulative inputs, they **reuse one physical copy** instead of overwriting canonical paths.
+Version idempotent workflow action results by **hyperparameter and input signature** on shared storage. Study actions reuse one physical copy under `.caas/`. Sample-scoped align/prep actions keep FASTQ/BAM/tar at their canonical paths and record a ledger manifest only — do not relocate multi-GB files on NFS.
 
 CAAS complements (does not replace) per-output-dir manifests at `{output_dir}/.action_results/`.
 
@@ -15,7 +15,7 @@ CAAS is **enabled by default** for every project and workflow run. No environmen
 - **Per instance / task:** `"caasEnabled": false` in instance context or task input. Sample-scoped align/prep can also be rejected with `"sampleCaasEnabled": false`.
 - **Worker / site opt-out:** `METHYL_CAAS_ENABLED=0` (also accepts `false`, `no`, `off`). Sample-scoped store: `METHYL_SAMPLE_CAAS_ENABLED=0`.
 
-Disable only for debugging when you need to inspect plain files without symlinks.
+`METHYL_SAMPLE_CAAS_ENABLED=0` turns off the sample ledger (and the old harvest-move path on workers that have not picked up in-place commits). Study CAAS is unchanged.
 
 ## Content key
 
@@ -48,9 +48,9 @@ Directory fingerprints used inside signatures prefer **content digests** (size +
 | `{project_root}/.caas/foreach_bundle/{content_key}/` | FOREACH iteration-bundle short-circuit record |
 | `{project_root}/.caas/instances/{hyperparamSetId}.json` | Instance ledger: `{action}:{run_key}` → `content_key` |
 | `{output_dir}/.action_results/{action}.{run_key}.json` | Canonical skip/replay manifest (may reference CAAS paths) |
-| `/work/samples/{sample_id}/.caas/` | Sample-scoped store for align/prep (default-on; reject with `sampleCaasEnabled: false` or `METHYL_SAMPLE_CAAS_ENABLED=0`) |
+| `/work/samples/{sample_id}/.caas/` | Sample-scoped **ledger** for align/prep (`manifest.json` only). FASTQs stay at `/work/samples/{id}/`; BAM/QC stay in `sampleDir` (aligner leaf when bound). Reject with `sampleCaasEnabled: false` or `METHYL_SAMPLE_CAAS_ENABLED=0`. |
 
-Canonical output paths (e.g. under `run_0001/detections/...`) become **symlinks** into `.caas/` after a successful commit.
+Study canonical output paths (e.g. under `run_0001/detections/...`) become **symlinks** into `.caas/` after a successful commit. Sample FASTQ/BAM/tar are **not** moved.
 
 ## Hyperparameter set identity
 
@@ -100,8 +100,8 @@ python scripts/audit_caas_skip_rate.py /work/projects/<study>/<project_name> --j
 ## Skip, reuse, and force re-run
 
 1. Worker computes `content_key` from catalog revision + validated input.
-2. If a valid CAAS entry exists, canonical paths are relinked and the action is skipped (`skipped: true` in `action_run_log.jsonl`).
-3. On fresh execution, product artifacts are committed to `.caas/` and canonical paths are symlinked.
+2. If a valid CAAS entry exists, study products are relinked (sample products are already at `sampleDir`) and the action is skipped (`skipped: true` in `action_run_log.jsonl`).
+3. On fresh execution, study product artifacts are committed to `.caas/` and canonical paths are symlinked. Sample-scoped commits write `manifest.json` only.
 
 Force a fresh entry (ignore skip):
 

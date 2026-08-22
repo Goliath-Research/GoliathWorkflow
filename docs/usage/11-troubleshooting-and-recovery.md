@@ -58,7 +58,7 @@ flowchart TB
 | Node `RUNNING`, stale lease | Worker crash/restart; claim only serves `READY` | Auto: claim path + `methyl-reclaim-leases.timer`. Manual: Azure SQL `EXEC portal.sp_reclaim_expired_leases …` / PostgreSQL `SELECT * FROM portal.sp_reclaim_expired_leases(…)` / CLI `methyl-reclaim-leases` ([lease doc](../architecture/workflow-idempotency-retry-lease.md)) |
 | `401` on claim/submit | Token mismatch | Re-issue token via `register_worker.sh`; sync `/etc/methyl/worker-token` |
 | Gateway unreachable | systemd down or wrong `WORKER_API_BASE` | `install_gateway_systemd.sh`, curl health |
-| Instance `FAILED` | Negative `result_code` from action | Inspect Task detail (`portal.sp_get_node_execution_detail`: `engine_error_*`, `source_uri`). If the baked URI/knobs are still correct, **Retry** (`portal.sp_retry_failed_node`: `FAILED` → `READY`). If `actionConfig` / procedure / sample list was wrong, start a **new instance** |
+| Instance `FAILED` | Negative `result_code` from action | Inspect Task detail (`portal.sp_get_node_execution_detail`: `engine_error_*`, `source_uri`). If the baked URI/knobs are still correct, **Retry** (`portal.sp_retry_failed_node`: `FAILED` → `READY`). If `actionConfig` / procedure / sample list was wrong, start a **new instance**. To abort remaining work, **Cancel / Fail this run** (`portal.sp_cancel_instance` / `sp_fail_instance`) — not fleet Drain |
 | Missing FASTQ at source | Object not at the baked `fastqSource` URI | Portal does **not** upload. Place the file on the same source path shown in Task detail, then Retry. Do not treat this as a config change |
 | Smoke fails immediately | DB env, missing `workflow_versions.json`, no worker | `bootstrap_distributed_workers.sh --verify`; deploy workflows; start worker |
 
@@ -97,6 +97,7 @@ Prefer DomainProgram reruns for new studies.
 
 - Keep original run directories and DB instance rows for traceability
 - Prefer **Retry** (`FAILED` → `READY`) when inputs are unchanged after an external fix; prefer a new `workflow_instance` when knobs or URIs changed. Do not expose a free-form `node_execution` status editor
+- **Fail this queued action** (`portal.sp_fail_node`) is only for `READY`/`PENDING`. **Stop this task** (`portal.sp_stop_node`) is only for `RUNNING` when catalog `can_stop`. **Cancel / fail this run** drains queued work; it is not fleet Drain (`portal.sp_set_worker_desired_state`)
 - Document `resolvedConfig` overrides in operator notes
 
 ## See also

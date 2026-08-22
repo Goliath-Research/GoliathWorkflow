@@ -90,7 +90,7 @@ def test_sample_caas_enabled_defaults_on(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_commit_wrong_output_dir_still_keeps_sample_bam(tmp_path: Path, monkeypatch) -> None:
-    """Even if output_dir is study configs/, BAM must remain at sampleDir as a CAAS symlink."""
+    """Sample CAAS is a ledger: BAM stays a regular file at sampleDir, never moves to configs/."""
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     sample_dir = tmp_path / "samples" / "S1"
     sample_dir.mkdir(parents=True)
@@ -98,43 +98,36 @@ def test_commit_wrong_output_dir_still_keeps_sample_bam(tmp_path: Path, monkeypa
     bam.write_bytes(b"BAMDATA")
     configs = tmp_path / "projects" / "study" / "configs"
     configs.mkdir(parents=True)
-    caas_root = sample_dir
 
     record = _record(
         artifacts=[ArtifactRef(path=str(bam), bytes=7)],
         input_sig="align-sig",
         output_sig="align-out",
     )
-    commit_artifacts_to_store(
-        caas_root,
+    committed = commit_artifacts_to_store(
+        sample_dir,
         "sample.parabricks_fq2bam",
         "align-key",
         record,
         output_dir=configs,
     )
-    assert bam.exists()
-    assert bam.is_symlink()
-    assert bam.read_bytes() == b"BAMDATA"
-    assert ".caas" in bam.resolve().parts
+    _assert_in_place_product(bam, b"BAMDATA")
     assert not list(configs.rglob("*.bam"))
+    entry = caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "align-key")
+    assert (entry / "manifest.json").is_file()
+    assert not (entry / "S1.bam").exists()
+    assert committed.artifacts[0].path == str(bam)
 
 
-def test_second_commit_does_not_replace_prior_caas_blob_with_symlink(
+def test_second_commit_does_not_relocate_sample_bam(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """artifact_ref_for records resolve()d CAAS paths; later commit must copy, not rewrite.
-
-    Align harvest records those resolved blobs while ``sampleDir`` is the output
-    root, so the blob sits *under* ``output_dir``. A sibling FASTQ forces the
-    flat (not tree) commit path, which used to copy then unlink the prior-key
-    file before the durable-blob skip could run.
-    """
+    """A later sample commit must not move or copy the in-place BAM."""
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     sample_dir = tmp_path / "samples" / "S1"
     sample_dir.mkdir(parents=True)
     bam = sample_dir / "S1.bam"
     bam.write_bytes(b"BAM-V1")
-    # Shared sample dir: sibling product so _should_commit_directory is False.
     (sample_dir / "S1.fastq.gz").write_bytes(b"FQ")
 
     first = _record(
@@ -149,13 +142,10 @@ def test_second_commit_does_not_replace_prior_caas_blob_with_symlink(
         first,
         output_dir=sample_dir,
     )
-    blob_a = bam.resolve()
-    assert ".caas" in blob_a.parts
-    assert blob_a.is_file() and not blob_a.is_symlink()
-    assert blob_a.read_bytes() == b"BAM-V1"
+    _assert_in_place_product(bam, b"BAM-V1")
 
     second = _record(
-        artifacts=[artifact_ref_for(blob_a)],
+        artifacts=[artifact_ref_for(bam)],
         input_sig="align-b",
         output_sig="align-b",
     )
@@ -167,10 +157,7 @@ def test_second_commit_does_not_replace_prior_caas_blob_with_symlink(
         output_dir=sample_dir,
     )
 
-    assert blob_a.exists(), "prior-key blob must not be unlinked during flat commit"
-    assert blob_a.is_file() and not blob_a.is_symlink()
-    assert blob_a.read_bytes() == b"BAM-V1"
-    entry_a = caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "key-a")
+    _assert_in_place_product(bam, b"BAM-V1")
     rec_a = read_caas_entry(sample_dir, "sample.parabricks_fq2bam", "key-a")
     assert rec_a is not None
     assert verify_entry_artifacts(rec_a)
@@ -181,8 +168,8 @@ def test_second_commit_does_not_replace_prior_caas_blob_with_symlink(
         output_dir=sample_dir,
     )
     assert linked is not None
-    assert bam.resolve() == blob_a.resolve()
-    assert (entry_a / "S1.bam").is_file() and not (entry_a / "S1.bam").is_symlink()
+    _assert_in_place_product(bam, b"BAM-V1")
+    assert not (caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "key-a") / "S1.bam").exists()
 
 
 def test_is_durable_caas_blob_does_not_require_regular_file(tmp_path: Path) -> None:
@@ -787,6 +774,12 @@ def _assert_relative_product_symlink(path: Path, payload: bytes) -> None:
     assert ".caas" in path.resolve().parts
 
 
+def _assert_in_place_product(path: Path, payload: bytes) -> None:
+    assert path.is_file() and not path.is_symlink(), f"{path} must stay a regular product file"
+    assert path.read_bytes() == payload
+    assert ".caas" not in path.parts
+
+
 def test_product_link_destinations_falls_back_when_canons_are_blobs(tmp_path: Path) -> None:
     """Durable-blob canonical paths must still restore output_dir/{id}.bam."""
     from methyl_domain.content_store import _product_link_destinations
@@ -849,10 +842,10 @@ def test_restore_sample_fastq_products_relinks_even_pair(tmp_path: Path) -> None
     assert (sample_dir / "S1_1.fastq.gz").is_symlink()
 
 
-def test_harvest_blob_paths_restore_products_after_stripped_leaf(
+def test_sample_commit_leaves_align_products_in_place(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """Re-commit of resolve()d .caas blobs must restore products, not unlink blobs."""
+    """New sample CAAS commits must not move BAM/tar/json into .caas."""
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     sample_dir = tmp_path / "samples" / "S1"
     sample_dir.mkdir(parents=True)
@@ -879,15 +872,29 @@ def test_harvest_blob_paths_restore_products_after_stripped_leaf(
         first,
         output_dir=sample_dir,
     )
-    blob_bam = bam.resolve()
-    blob_tar = tar.resolve()
-    blob_meta = meta.resolve()
-    assert blob_bam.is_file() and not blob_bam.is_symlink()
+    _assert_in_place_product(bam, b"BAMDATA")
+    _assert_in_place_product(tar, b"TAR")
+    _assert_in_place_product(meta, b"{}")
+    entry = caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "key-a")
+    assert (entry / "manifest.json").is_file()
+    assert not (entry / "S1.bam").exists()
 
-    bam.unlink()
-    tar.unlink()
-    meta.unlink()
-    assert not bam.exists()
+
+def test_legacy_blob_recommit_still_restores_stripped_sample_dir(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Re-commit of already-harvested .caas blobs still restores product links."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    sample_dir = tmp_path / "samples" / "S1"
+    sample_dir.mkdir(parents=True)
+    entry = caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "key-legacy")
+    entry.mkdir(parents=True)
+    blob_bam = entry / "S1.bam"
+    blob_tar = entry / "S1.qc-metrics.tar"
+    blob_meta = entry / "S1.json"
+    blob_bam.write_bytes(b"BAMDATA")
+    blob_tar.write_bytes(b"TAR")
+    blob_meta.write_text("{}", encoding="utf-8")
 
     second = _align_record(
         [
@@ -905,22 +912,24 @@ def test_harvest_blob_paths_restore_products_after_stripped_leaf(
     commit_artifacts_to_store(
         sample_dir,
         "sample.parabricks_fq2bam",
-        "key-b",
+        "key-legacy",
         second,
         output_dir=sample_dir,
     )
 
+    bam = sample_dir / "S1.bam"
+    tar = sample_dir / "S1.qc-metrics.tar"
+    meta = sample_dir / "S1.json"
     _assert_relative_product_symlink(bam, b"BAMDATA")
     _assert_relative_product_symlink(tar, b"TAR")
     _assert_relative_product_symlink(meta, b"{}")
     assert blob_bam.exists() and blob_bam.is_file() and not blob_bam.is_symlink()
-    assert blob_bam.read_bytes() == b"BAMDATA"
 
 
-def test_harvest_blob_paths_without_sibling_still_restores_products(
+def test_sample_commit_without_sibling_still_leaves_products(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """Blob-only harvest must not take the empty tree-commit path."""
+    """Even when sampleDir is exclusively align products, do not tree-move it."""
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     sample_dir = tmp_path / "samples" / "S1"
     sample_dir.mkdir(parents=True)
@@ -941,40 +950,16 @@ def test_harvest_blob_paths_without_sibling_still_restores_products(
         first,
         output_dir=sample_dir,
     )
-    blob_bam = bam.resolve()
-    blob_tar = tar.resolve()
-    blob_meta = meta.resolve()
-    bam.unlink()
-    tar.unlink()
-    meta.unlink()
-
-    second = _align_record(
-        [
-            artifact_ref_for(blob_bam),
-            artifact_ref_for(blob_tar),
-            artifact_ref_for(blob_meta),
-        ],
-        task_output={
-            "bamPath": str(blob_bam),
-            "qcMetricsTar": str(blob_tar),
-        },
-        input_sig="align-tree-b",
-    )
-    commit_artifacts_to_store(
-        sample_dir,
-        "sample.parabricks_fq2bam",
-        "key-tree-b",
-        second,
-        output_dir=sample_dir,
-    )
-    _assert_relative_product_symlink(bam, b"BAMDATA")
-    _assert_relative_product_symlink(tar, b"TAR")
-    _assert_relative_product_symlink(meta, b"{}")
-    assert blob_bam.is_file() and not blob_bam.is_symlink()
+    _assert_in_place_product(bam, b"BAMDATA")
+    _assert_in_place_product(tar, b"TAR")
+    _assert_in_place_product(meta, b"{}")
+    assert not (
+        caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "key-tree-a") / "S1.bam"
+    ).exists()
 
 
-def test_skip_blob_paths_restore_products_at_sample_dir(tmp_path: Path, monkeypatch) -> None:
-    """Skip-replay with blob artifacts + blob task_output still restores sampleDir products."""
+def test_skip_in_place_sample_entry_keeps_products(tmp_path: Path, monkeypatch) -> None:
+    """Skip-replay of an in-place sample entry leaves FASTQ/BAM at sampleDir."""
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     sample_dir = tmp_path / "samples" / "S1"
     sample_dir.mkdir(parents=True)
@@ -1001,38 +986,6 @@ def test_skip_blob_paths_restore_products_at_sample_dir(tmp_path: Path, monkeypa
         first,
         output_dir=sample_dir,
     )
-    blob_bam = bam.resolve()
-    blob_tar = tar.resolve()
-    blob_meta = meta.resolve()
-    bam.unlink()
-    tar.unlink()
-    meta.unlink()
-
-    from methyl_domain.content_store import _relink_artifacts_from_entry
-
-    _relink_artifacts_from_entry(
-        [
-            ArtifactRef(path=str(blob_bam), bytes=7),
-            ArtifactRef(path=str(blob_tar), bytes=3),
-            ArtifactRef(path=str(blob_meta), bytes=2),
-        ],
-        caas_entry_dir(sample_dir, "sample.parabricks_fq2bam", "key-skip"),
-        output_dir=sample_dir,
-        canonical_paths=[blob_bam, blob_tar, blob_meta],
-        task_output={
-            "bamPath": str(blob_bam),
-            "qcMetricsTar": str(blob_tar),
-            "jsonPath": str(blob_meta),
-        },
-    )
-    _assert_relative_product_symlink(bam, b"BAMDATA")
-    _assert_relative_product_symlink(tar, b"TAR")
-    _assert_relative_product_symlink(meta, b"{}")
-    assert blob_bam.is_file() and not blob_bam.is_symlink()
-
-    bam.unlink()
-    tar.unlink()
-    meta.unlink()
     linked = link_entry_into_place(
         sample_dir,
         "sample.parabricks_fq2bam",
@@ -1040,15 +993,15 @@ def test_skip_blob_paths_restore_products_at_sample_dir(tmp_path: Path, monkeypa
         output_dir=sample_dir,
     )
     assert linked is not None
-    _assert_relative_product_symlink(bam, b"BAMDATA")
-    _assert_relative_product_symlink(tar, b"TAR")
-    _assert_relative_product_symlink(meta, b"{}")
+    _assert_in_place_product(bam, b"BAMDATA")
+    _assert_in_place_product(tar, b"TAR")
+    _assert_in_place_product(meta, b"{}")
 
 
-def test_harvest_skip_restore_products_at_arm_leaf_caas_at_sample_root(
+def test_sample_commit_keeps_arm_leaf_products_off_sample_root(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """CAAS stays on sample identity; products restore on the bound arm sampleDir."""
+    """CAAS ledger stays on sample identity; BAM/tar stay in the aligner leaf."""
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     sample_root = tmp_path / "samples" / "S1"
     arm = sample_root / "align.linear.parabricks"
@@ -1076,47 +1029,13 @@ def test_harvest_skip_restore_products_at_arm_leaf_caas_at_sample_root(
         first,
         output_dir=arm,
     )
-    _assert_relative_product_symlink(bam, b"BAMDATA")
+    _assert_in_place_product(bam, b"BAMDATA")
+    _assert_in_place_product(tar, b"TAR")
     assert not (sample_root / "S1.bam").exists()
-    blob_bam = bam.resolve()
-    blob_tar = tar.resolve()
-    blob_meta = meta.resolve()
-    assert (sample_root / ".caas") in blob_bam.parents
-    assert "align.linear.parabricks" not in blob_bam.parts
+    entry = caas_entry_dir(sample_root, "sample.parabricks_fq2bam", "key-arm-a")
+    assert (entry / "manifest.json").is_file()
+    assert not (entry / "S1.bam").exists()
 
-    bam.unlink()
-    tar.unlink()
-    meta.unlink()
-
-    second = _align_record(
-        [
-            artifact_ref_for(blob_bam),
-            artifact_ref_for(blob_tar),
-            artifact_ref_for(blob_meta),
-        ],
-        task_output={
-            "bamPath": str(blob_bam),
-            "qcMetricsTar": str(blob_tar),
-            "jsonPath": str(blob_meta),
-        },
-        input_sig="align-arm-b",
-    )
-    commit_artifacts_to_store(
-        sample_root,
-        "sample.parabricks_fq2bam",
-        "key-arm-b",
-        second,
-        output_dir=arm,
-    )
-    _assert_relative_product_symlink(bam, b"BAMDATA")
-    _assert_relative_product_symlink(tar, b"TAR")
-    _assert_relative_product_symlink(meta, b"{}")
-    assert not (sample_root / "S1.bam").exists()
-    assert blob_bam.is_file() and not blob_bam.is_symlink()
-
-    bam.unlink()
-    tar.unlink()
-    meta.unlink()
     linked = link_entry_into_place(
         sample_root,
         "sample.parabricks_fq2bam",
@@ -1124,7 +1043,7 @@ def test_harvest_skip_restore_products_at_arm_leaf_caas_at_sample_root(
         output_dir=arm,
     )
     assert linked is not None
-    _assert_relative_product_symlink(bam, b"BAMDATA")
+    _assert_in_place_product(bam, b"BAMDATA")
     assert not (sample_root / "S1.bam").exists()
 
 

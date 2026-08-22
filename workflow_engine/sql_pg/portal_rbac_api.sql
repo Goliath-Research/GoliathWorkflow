@@ -543,3 +543,129 @@ BEGIN
   RETURN QUERY SELECT v_n;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION portal.sp_list_bypass_scope_approvals(
+  p_user_id int DEFAULT NULL,
+  p_status text DEFAULT NULL
+)
+RETURNS TABLE (
+  approval_id bigint,
+  user_id int,
+  user_email text,
+  role_id int,
+  role_name text,
+  requested_by_user_id int,
+  decided_by_user_id int,
+  status text,
+  reason text,
+  ticket_ref text,
+  created_at_utc timestamptz,
+  approved_at_utc timestamptz,
+  expires_at_utc timestamptz
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    a."ApprovalID",
+    a."UserID",
+    u.email::text,
+    a."RoleID",
+    r."Name"::text,
+    a."RequestedByUserID",
+    a."ApprovedByUserID",
+    a."Status"::text,
+    a."Reason"::text,
+    a."TicketRef"::text,
+    a."CreatedAtUtc",
+    a."ApprovedAtUtc",
+    a."ExpiresAtUtc"
+  FROM "RBAC"."BypassScopeApprovals" a
+  INNER JOIN "RBAC"."Users" u ON u."ID" = a."UserID"
+  INNER JOIN "RBAC"."Roles" r ON r."ID" = a."RoleID"
+  WHERE (p_user_id IS NULL OR a."UserID" = p_user_id)
+    AND (p_status IS NULL OR a."Status" = p_status)
+  ORDER BY a."CreatedAtUtc" DESC;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_create_bypass_scope_approval(
+  p_user_id int,
+  p_role_id int,
+  p_requested_by_user_id int,
+  p_reason text,
+  p_ticket_ref text DEFAULT NULL,
+  p_expires_at_utc timestamptz DEFAULT NULL
+)
+RETURNS TABLE (approval_id bigint)
+LANGUAGE plpgsql
+AS $$
+DECLARE v_id bigint;
+BEGIN
+  IF p_user_id IS NULL OR p_role_id IS NULL OR p_requested_by_user_id IS NULL THEN
+    RAISE EXCEPTION 'user_id, role_id, and requested_by_user_id are required';
+  END IF;
+  IF p_reason IS NULL OR btrim(p_reason) = '' THEN
+    RAISE EXCEPTION 'reason is required';
+  END IF;
+
+  INSERT INTO "RBAC"."BypassScopeApprovals" (
+    "UserID", "RoleID", "RequestedByUserID", "Status", "Reason", "TicketRef", "ExpiresAtUtc"
+  ) VALUES (
+    p_user_id, p_role_id, p_requested_by_user_id, 'PENDING',
+    p_reason, p_ticket_ref, p_expires_at_utc
+  )
+  RETURNING "ApprovalID" INTO v_id;
+
+  RETURN QUERY SELECT v_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_decide_bypass_scope_approval(
+  p_approval_id bigint,
+  p_decision text,
+  p_decided_by_user_id int
+)
+RETURNS TABLE (approval_id bigint, status text)
+LANGUAGE plpgsql
+AS $$
+DECLARE v_d text := upper(btrim(p_decision));
+BEGIN
+  IF v_d NOT IN ('APPROVED', 'REJECTED', 'REVOKED') THEN
+    RAISE EXCEPTION 'decision must be APPROVED, REJECTED, or REVOKED';
+  END IF;
+  IF p_decided_by_user_id IS NULL THEN
+    RAISE EXCEPTION 'decided_by_user_id is required';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM "RBAC"."BypassScopeApprovals" a WHERE a."ApprovalID" = p_approval_id
+  ) THEN
+    RAISE EXCEPTION 'approval_id not found';
+  END IF;
+
+  UPDATE "RBAC"."BypassScopeApprovals"
+  SET "Status" = v_d,
+      "ApprovedByUserID" = p_decided_by_user_id,
+      "ApprovedAtUtc" = now() AT TIME ZONE 'utc'
+  WHERE "ApprovalID" = p_approval_id;
+
+  RETURN QUERY
+  SELECT a."ApprovalID", a."Status"::text
+  FROM "RBAC"."BypassScopeApprovals" a
+  WHERE a."ApprovalID" = p_approval_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_revoke_user_session(p_session_id int)
+RETURNS TABLE (rows_deleted bigint)
+LANGUAGE plpgsql
+AS $$
+DECLARE v_n bigint;
+BEGIN
+  IF p_session_id IS NULL OR p_session_id <= 0 THEN
+    RAISE EXCEPTION 'session_id is required';
+  END IF;
+  DELETE FROM "RBAC"."Sessions" WHERE "ID" = p_session_id;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RETURN QUERY SELECT v_n;
+END;
+$$;

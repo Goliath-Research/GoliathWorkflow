@@ -329,6 +329,100 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER PROCEDURE portal.sp_set_contract_scopes
+    @contract_id int,
+    @scopes_json nvarchar(max)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM Contract.Contracts WHERE ContractID = @contract_id)
+        THROW 50010, N'contract_id not found.', 1;
+    IF @scopes_json IS NULL OR ISJSON(@scopes_json) <> 1
+        THROW 50021, N'scopes_json must be a JSON array.', 1;
+
+    BEGIN TRAN;
+    DELETE FROM Contract.ContractScopes WHERE ContractID = @contract_id;
+
+    INSERT INTO Contract.ContractScopes (ContractID, ScopeID, Status, EffectiveFromUtc, EffectiveToUtc)
+    SELECT
+        @contract_id,
+        TRY_CAST(JSON_VALUE(j.[value], '$.scope_id') AS int),
+        COALESCE(NULLIF(JSON_VALUE(j.[value], '$.status'), N''), N'ACTIVE'),
+        COALESCE(TRY_CAST(JSON_VALUE(j.[value], '$.effective_from_utc') AS datetime2(3)), SYSUTCDATETIME()),
+        TRY_CAST(JSON_VALUE(j.[value], '$.effective_to_utc') AS datetime2(3))
+    FROM OPENJSON(@scopes_json) j
+    WHERE TRY_CAST(JSON_VALUE(j.[value], '$.scope_id') AS int) IS NOT NULL;
+
+    COMMIT;
+    EXEC portal.sp_list_contract_scopes @contract_id = @contract_id;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_set_contract_limits
+    @contract_id int,
+    @limits_json nvarchar(max)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM Contract.Contracts WHERE ContractID = @contract_id)
+        THROW 50010, N'contract_id not found.', 1;
+    IF @limits_json IS NULL OR ISJSON(@limits_json) <> 1
+        THROW 50021, N'limits_json must be a JSON array.', 1;
+
+    BEGIN TRAN;
+    DELETE FROM Contract.ContractLimits WHERE ContractID = @contract_id;
+
+    INSERT INTO Contract.ContractLimits (ContractID, ScopeID, MaxActiveUsers, MaxStorageGB, MaxRunsPerMonth)
+    SELECT
+        @contract_id,
+        TRY_CAST(JSON_VALUE(j.[value], '$.scope_id') AS int),
+        TRY_CAST(JSON_VALUE(j.[value], '$.max_active_users') AS int),
+        TRY_CAST(JSON_VALUE(j.[value], '$.max_storage_gb') AS decimal(18, 2)),
+        TRY_CAST(JSON_VALUE(j.[value], '$.max_runs_per_month') AS int)
+    FROM OPENJSON(@limits_json) j;
+
+    COMMIT;
+    EXEC portal.sp_list_contract_limits @contract_id = @contract_id;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_set_contract_role_policies
+    @contract_id int,
+    @policies_json nvarchar(max)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM Contract.Contracts WHERE ContractID = @contract_id)
+        THROW 50010, N'contract_id not found.', 1;
+    IF @policies_json IS NULL OR ISJSON(@policies_json) <> 1
+        THROW 50021, N'policies_json must be a JSON array.', 1;
+
+    BEGIN TRAN;
+    DELETE FROM Contract.ContractRolePolicies WHERE ContractID = @contract_id;
+
+    INSERT INTO Contract.ContractRolePolicies (
+        ContractID, RoleID, GrantTypeAllowed, MaxUsersForRole, RequiresApproval
+    )
+    SELECT
+        @contract_id,
+        TRY_CAST(JSON_VALUE(j.[value], '$.role_id') AS int),
+        COALESCE(NULLIF(JSON_VALUE(j.[value], '$.grant_type_allowed'), N''), N'SCOPED'),
+        TRY_CAST(JSON_VALUE(j.[value], '$.max_users_for_role') AS int),
+        CASE WHEN JSON_VALUE(j.[value], '$.requires_approval') IN (N'true', N'1') THEN 1 ELSE 0 END
+    FROM OPENJSON(@policies_json) j
+    WHERE TRY_CAST(JSON_VALUE(j.[value], '$.role_id') AS int) IS NOT NULL;
+
+    COMMIT;
+    EXEC portal.sp_list_contract_role_policies @contract_id = @contract_id;
+END
+GO
+
 CREATE OR ALTER PROCEDURE portal.sp_list_contract_usage
     @contract_id int
 AS

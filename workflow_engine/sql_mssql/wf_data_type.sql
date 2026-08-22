@@ -403,6 +403,45 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER PROCEDURE wf.wf_repo_list_data_type_fields
+    @name nvarchar(256),
+    @version nvarchar(64) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @type_id bigint = (
+        SELECT TOP (1) id FROM wf.data_type
+        WHERE name = @name
+          AND (@version IS NULL OR version = @version)
+        ORDER BY id DESC
+    );
+
+    SELECT
+        f.id,
+        f.field_name,
+        f.field_type_id,
+        ft.name AS field_type_name,
+        ft.kind AS field_type_kind,
+        f.required,
+        f.ordinal
+    FROM wf.data_type_field f
+    INNER JOIN wf.data_type ft ON ft.id = f.field_type_id
+    WHERE f.data_type_id = @type_id
+    ORDER BY f.ordinal, f.field_name;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_list_data_type_fields
+    @name nvarchar(256),
+    @version nvarchar(64) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC wf.wf_repo_list_data_type_fields @name = @name, @version = @version;
+END
+GO
+
 CREATE OR ALTER PROCEDURE portal.sp_list_workflow_actions
 AS
 BEGIN

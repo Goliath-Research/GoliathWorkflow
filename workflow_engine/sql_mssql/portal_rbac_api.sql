@@ -444,3 +444,106 @@ BEGIN
     SELECT @@ROWCOUNT AS rows_updated;
 END
 GO
+
+CREATE OR ALTER PROCEDURE portal.sp_list_bypass_scope_approvals
+    @user_id int = NULL,
+    @status varchar(16) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        a.ApprovalID AS approval_id,
+        a.UserID AS user_id,
+        u.email AS user_email,
+        a.RoleID AS role_id,
+        r.Name AS role_name,
+        a.RequestedByUserID AS requested_by_user_id,
+        a.ApprovedByUserID AS decided_by_user_id,
+        a.Status,
+        a.Reason,
+        a.TicketRef,
+        a.CreatedAtUtc,
+        a.ApprovedAtUtc,
+        a.ExpiresAtUtc
+    FROM RBAC.BypassScopeApprovals a
+    INNER JOIN RBAC.Users u ON u.ID = a.UserID
+    INNER JOIN RBAC.Roles r ON r.ID = a.RoleID
+    WHERE (@user_id IS NULL OR a.UserID = @user_id)
+      AND (@status IS NULL OR a.Status = @status)
+    ORDER BY a.CreatedAtUtc DESC;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_create_bypass_scope_approval
+    @user_id int,
+    @role_id int,
+    @requested_by_user_id int,
+    @reason varchar(500),
+    @ticket_ref varchar(128) = NULL,
+    @expires_at_utc datetime2(3) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @user_id IS NULL OR @role_id IS NULL OR @requested_by_user_id IS NULL
+        THROW 50001, N'user_id, role_id, and requested_by_user_id are required.', 1;
+    IF @reason IS NULL OR LTRIM(RTRIM(@reason)) = N''
+        THROW 50001, N'reason is required.', 1;
+    IF NOT EXISTS (SELECT 1 FROM RBAC.Users WHERE ID = @user_id)
+        THROW 50010, N'user_id not found.', 1;
+    IF NOT EXISTS (SELECT 1 FROM RBAC.Roles WHERE ID = @role_id)
+        THROW 50010, N'role_id not found.', 1;
+
+    INSERT INTO RBAC.BypassScopeApprovals (
+        UserID, RoleID, RequestedByUserID, Status, Reason, TicketRef, ExpiresAtUtc
+    )
+    VALUES (
+        @user_id, @role_id, @requested_by_user_id, N'PENDING',
+        @reason, @ticket_ref, @expires_at_utc
+    );
+
+    SELECT CAST(SCOPE_IDENTITY() AS bigint) AS approval_id;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_decide_bypass_scope_approval
+    @approval_id bigint,
+    @decision varchar(16),
+    @decided_by_user_id int
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @d varchar(16) = UPPER(LTRIM(RTRIM(@decision)));
+    IF @d NOT IN (N'APPROVED', N'REJECTED', N'REVOKED')
+        THROW 50021, N'decision must be APPROVED, REJECTED, or REVOKED.', 1;
+    IF @decided_by_user_id IS NULL
+        THROW 50001, N'decided_by_user_id is required.', 1;
+    IF NOT EXISTS (SELECT 1 FROM RBAC.BypassScopeApprovals WHERE ApprovalID = @approval_id)
+        THROW 50010, N'approval_id not found.', 1;
+
+    UPDATE RBAC.BypassScopeApprovals
+    SET Status = @d,
+        ApprovedByUserID = @decided_by_user_id,
+        ApprovedAtUtc = SYSUTCDATETIME()
+    WHERE ApprovalID = @approval_id;
+
+    SELECT ApprovalID AS approval_id, Status
+    FROM RBAC.BypassScopeApprovals
+    WHERE ApprovalID = @approval_id;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_revoke_user_session
+    @session_id int
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @session_id IS NULL OR @session_id <= 0
+        THROW 50001, N'session_id is required.', 1;
+
+    DELETE FROM RBAC.Sessions WHERE ID = @session_id;
+    SELECT @@ROWCOUNT AS rows_deleted;
+END
+GO

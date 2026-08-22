@@ -381,6 +381,129 @@ AS $$
   ORDER BY r."Name";
 $$;
 
+CREATE OR REPLACE FUNCTION portal.sp_set_contract_scopes(
+  p_contract_id int,
+  p_scopes_json jsonb
+)
+RETURNS TABLE (
+  contract_id int,
+  scope_id int,
+  scope_name text,
+  scope_type text,
+  status text,
+  activated_at_utc timestamptz,
+  effective_from_utc timestamptz,
+  effective_to_utc timestamptz
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "Contract"."Contracts" c WHERE c."ContractID" = p_contract_id) THEN
+    RAISE EXCEPTION 'contract_id not found';
+  END IF;
+  IF p_scopes_json IS NULL OR jsonb_typeof(p_scopes_json) <> 'array' THEN
+    RAISE EXCEPTION 'scopes_json must be a JSON array';
+  END IF;
+
+  DELETE FROM "Contract"."ContractScopes" WHERE "ContractID" = p_contract_id;
+
+  INSERT INTO "Contract"."ContractScopes" (
+    "ContractID", "ScopeID", "Status", "EffectiveFromUtc", "EffectiveToUtc"
+  )
+  SELECT
+    p_contract_id,
+    (j->>'scope_id')::int,
+    COALESCE(NULLIF(j->>'status', ''), 'ACTIVE'),
+    COALESCE((j->>'effective_from_utc')::timestamptz, now() AT TIME ZONE 'utc'),
+    NULLIF(j->>'effective_to_utc', '')::timestamptz
+  FROM jsonb_array_elements(p_scopes_json) j
+  WHERE (j->>'scope_id') IS NOT NULL;
+
+  RETURN QUERY SELECT * FROM portal.sp_list_contract_scopes(p_contract_id);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_set_contract_limits(
+  p_contract_id int,
+  p_limits_json jsonb
+)
+RETURNS TABLE (
+  contract_limit_id bigint,
+  contract_id int,
+  scope_id int,
+  max_active_users int,
+  max_storage_gb numeric,
+  max_runs_per_month int,
+  created_at_utc timestamptz
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "Contract"."Contracts" c WHERE c."ContractID" = p_contract_id) THEN
+    RAISE EXCEPTION 'contract_id not found';
+  END IF;
+  IF p_limits_json IS NULL OR jsonb_typeof(p_limits_json) <> 'array' THEN
+    RAISE EXCEPTION 'limits_json must be a JSON array';
+  END IF;
+
+  DELETE FROM "Contract"."ContractLimits" WHERE "ContractID" = p_contract_id;
+
+  INSERT INTO "Contract"."ContractLimits" (
+    "ContractID", "ScopeID", "MaxActiveUsers", "MaxStorageGB", "MaxRunsPerMonth"
+  )
+  SELECT
+    p_contract_id,
+    NULLIF(j->>'scope_id', '')::int,
+    NULLIF(j->>'max_active_users', '')::int,
+    NULLIF(j->>'max_storage_gb', '')::numeric,
+    NULLIF(j->>'max_runs_per_month', '')::int
+  FROM jsonb_array_elements(p_limits_json) j;
+
+  RETURN QUERY SELECT * FROM portal.sp_list_contract_limits(p_contract_id);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_set_contract_role_policies(
+  p_contract_id int,
+  p_policies_json jsonb
+)
+RETURNS TABLE (
+  contract_id int,
+  role_id int,
+  role_name text,
+  grant_type_allowed text,
+  max_users_for_role int,
+  requires_approval boolean,
+  created_at_utc timestamptz
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "Contract"."Contracts" c WHERE c."ContractID" = p_contract_id) THEN
+    RAISE EXCEPTION 'contract_id not found';
+  END IF;
+  IF p_policies_json IS NULL OR jsonb_typeof(p_policies_json) <> 'array' THEN
+    RAISE EXCEPTION 'policies_json must be a JSON array';
+  END IF;
+
+  DELETE FROM "Contract"."ContractRolePolicies" WHERE "ContractID" = p_contract_id;
+
+  INSERT INTO "Contract"."ContractRolePolicies" (
+    "ContractID", "RoleID", "GrantTypeAllowed", "MaxUsersForRole", "RequiresApproval"
+  )
+  SELECT
+    p_contract_id,
+    (j->>'role_id')::int,
+    COALESCE(NULLIF(j->>'grant_type_allowed', ''), 'SCOPED'),
+    NULLIF(j->>'max_users_for_role', '')::int,
+    COALESCE((j->>'requires_approval')::boolean, false)
+  FROM jsonb_array_elements(p_policies_json) j
+  WHERE (j->>'role_id') IS NOT NULL;
+
+  RETURN QUERY SELECT * FROM portal.sp_list_contract_role_policies(p_contract_id);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION portal.sp_list_contract_usage(p_contract_id int)
 RETURNS TABLE (
   contract_id int,

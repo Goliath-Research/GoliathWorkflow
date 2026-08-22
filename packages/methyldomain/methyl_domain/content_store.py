@@ -799,10 +799,66 @@ def link_entry_into_place(
         output_dir=out_dir,
         task_output=record.task_output,
     )
-    if not relinked:
-        return None
-    updated = record.model_copy(update={"artifacts": relinked})
-    return updated
+    if relinked:
+        return record.model_copy(update={"artifacts": relinked})
+    # In-place sample ledger: artifacts already live at sampleDir / arm leaf.
+    if _sample_action_keeps_products_in_place(action_name):
+        return record
+    return None
+
+
+def _sample_action_keeps_products_in_place(action_name: str) -> bool:
+    """FASTQ/BAM/tar stay at sampleDir; sample CAAS is a ledger, not a payload store."""
+    from .sample_content_store import is_sample_scoped_action
+
+    return is_sample_scoped_action(action_name)
+
+
+def _commit_sample_products_in_place(
+    project_root: Path,
+    action_name: str,
+    content_key: str,
+    record: ActionExecutionRecord,
+    *,
+    output_dir: Optional[Path],
+) -> ActionExecutionRecord:
+    """Write the sample CAAS manifest without relocating multi-GB products.
+
+    New commits leave FASTQs and aligner outputs at their canonical paths.
+    A re-commit whose artifacts are already durable ``.caas`` blobs (legacy
+    harvest) still restores product symlinks so QC/align can see them.
+    """
+    entry_dir = caas_entry_dir(project_root, action_name, content_key)
+    manifest_path = caas_entry_manifest_path(project_root, action_name, content_key)
+    entry_dir.mkdir(parents=True, exist_ok=True)
+    product_paths = _product_artifact_paths(record.artifacts)
+    blob_only = bool(product_paths) and all(
+        _is_durable_caas_blob(path) for path in product_paths
+    )
+    artifacts: List[ArtifactRef]
+    if blob_only:
+        relinked = _relink_artifacts_from_entry(
+            record.artifacts,
+            entry_dir,
+            output_dir=output_dir,
+            canonical_paths=product_paths,
+            task_output=record.task_output,
+        )
+        artifacts = relinked or list(record.artifacts)
+    else:
+        artifacts = list(record.artifacts)
+    output_signature = compute_artifacts_signature(artifacts)
+    committed = record.model_copy(
+        update={
+            "schema_version": "1.2",
+            "content_key": content_key,
+            "artifacts": artifacts,
+            "output_signature": output_signature,
+            "manifest_path": str(manifest_path),
+        }
+    )
+    atomic_write_action_result(manifest_path, committed)
+    return committed
 
 
 def commit_artifacts_to_store(
@@ -813,8 +869,11 @@ def commit_artifacts_to_store(
     *,
     output_dir: Optional[Path | str] = None,
 ) -> ActionExecutionRecord:
-    """
-    Move product artifacts into CAAS and relink canonical paths as symlinks.
+    """Commit an action result to CAAS.
+
+    Study actions move product artifacts into the content-key directory and
+    relink canonical paths as symlinks. Sample-scoped align/prep actions write
+    a ledger manifest only — FASTQ/BAM/tar stay at ``sampleDir``.
 
     If another worker already committed the same content_key, reuse that entry.
     """
@@ -825,6 +884,32 @@ def commit_artifacts_to_store(
     existing = read_caas_entry(project_root, action_name, content_key)
     if existing is not None and verify_entry_artifacts(existing):
         out_dir = Path(output_dir).expanduser().resolve() if output_dir else None
+        if _sample_action_keeps_products_in_place(action_name):
+            existing_paths = _product_artifact_paths(existing.artifacts)
+            if existing_paths and all(
+                _is_durable_caas_blob(path) for path in existing_paths
+            ):
+                relinked = _relink_artifacts_from_entry(
+                    existing.artifacts,
+                    entry_dir,
+                    output_dir=out_dir,
+                    task_output=existing.task_output,
+                )
+                return existing.model_copy(
+                    update={
+                        "artifacts": relinked or existing.artifacts,
+                        "content_key": content_key,
+                        "hyperparam_set_id": record.hyperparam_set_id
+                        or existing.hyperparam_set_id,
+                    }
+                )
+            return existing.model_copy(
+                update={
+                    "content_key": content_key,
+                    "hyperparam_set_id": record.hyperparam_set_id
+                    or existing.hyperparam_set_id,
+                }
+            )
         relinked = _relink_artifacts_from_entry(
             existing.artifacts,
             entry_dir,
@@ -865,8 +950,17 @@ def commit_artifacts_to_store(
         else:
             return reused
 
-    entry_dir.mkdir(parents=True, exist_ok=True)
     out_dir = Path(output_dir).expanduser().resolve() if output_dir else None
+    if _sample_action_keeps_products_in_place(action_name):
+        return _commit_sample_products_in_place(
+            project_root,
+            action_name,
+            content_key,
+            record,
+            output_dir=out_dir,
+        )
+
+    entry_dir.mkdir(parents=True, exist_ok=True)
     product_paths = _product_artifact_paths(record.artifacts)
 
     if out_dir is not None and _should_commit_directory(out_dir, record.artifacts):

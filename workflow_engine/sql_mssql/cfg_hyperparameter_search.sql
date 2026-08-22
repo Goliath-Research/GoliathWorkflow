@@ -174,6 +174,55 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE portal.sp_promote_hyperparam_winner
+    @search_id BIGINT,
+    @trial_index INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @study_row_id BIGINT;
+    DECLARE @overrides nvarchar(max);
+
+    SELECT @study_row_id = r.study_row_id
+    FROM cfg.hyperparameter_search_run r
+    WHERE r.id = @search_id;
+
+    IF @study_row_id IS NULL
+        THROW 50010, N'search_id not found or has no study_row_id (cannot write a published profile).', 1;
+
+    SELECT @overrides = CAST(t.overrides_json AS nvarchar(max))
+    FROM cfg.hyperparameter_trial t
+    WHERE t.search_id = @search_id AND t.trial_index = @trial_index;
+
+    IF @overrides IS NULL
+        THROW 50010, N'trial not found.', 1;
+    IF ISJSON(@overrides) <> 1 OR LEFT(LTRIM(@overrides), 1) <> N'{'
+        THROW 50021, N'trial overrides_json must be a JSON object.', 1;
+
+    EXEC portal.sp_set_study_action_config_overlay
+        @study_row_id = @study_row_id,
+        @action_config_overlay = @overrides;
+
+    UPDATE cfg.hyperparameter_trial
+    SET result_json = CAST(
+            JSON_MODIFY(
+                COALESCE(CAST(result_json AS nvarchar(max)), N'{}'),
+                '$.promoted',
+                CAST(1 AS bit)
+            ) AS json
+        ),
+        updated_at_utc = SYSUTCDATETIME()
+    WHERE search_id = @search_id AND trial_index = @trial_index;
+
+    SELECT
+        @search_id AS search_id,
+        @trial_index AS trial_index,
+        @study_row_id AS study_row_id,
+        CAST(@overrides AS nvarchar(max)) AS action_config_overlay;
+END
+GO
+
 CREATE OR ALTER PROCEDURE portal.sp_get_hyperparam_search
     @search_id BIGINT
 AS

@@ -120,6 +120,7 @@ SCRIPTS=(
   portal_ops_recovery_api.sql
   portal_rbac_api.sql
   portal_contract_api.sql
+  portal_study_ops_api.sql
 )
 
 echo "Target: host=$PGHOST db=$PGDATABASE user=$PGUSER sslmode=$PGSSLMODE"

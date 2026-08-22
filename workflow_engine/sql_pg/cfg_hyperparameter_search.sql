@@ -220,3 +220,49 @@ AS $$
   WHERE r.id = p_search_id
   ORDER BY t.trial_index;
 $$;
+
+CREATE OR REPLACE FUNCTION portal.sp_promote_hyperparam_winner(
+  p_search_id bigint,
+  p_trial_index int
+)
+RETURNS TABLE (
+  search_id bigint,
+  trial_index int,
+  study_row_id bigint,
+  action_config_overlay jsonb
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_study bigint;
+  v_overrides jsonb;
+BEGIN
+  SELECT r.study_row_id INTO v_study
+  FROM cfg.hyperparameter_search_run r
+  WHERE r.id = p_search_id;
+
+  IF v_study IS NULL THEN
+    RAISE EXCEPTION 'search_id not found or has no study_row_id (cannot write a published profile)';
+  END IF;
+
+  SELECT t.overrides_json INTO v_overrides
+  FROM cfg.hyperparameter_trial t
+  WHERE t.search_id = p_search_id AND t.trial_index = p_trial_index;
+
+  IF v_overrides IS NULL THEN
+    RAISE EXCEPTION 'trial not found';
+  END IF;
+  IF jsonb_typeof(v_overrides) <> 'object' THEN
+    RAISE EXCEPTION 'trial overrides_json must be a JSON object';
+  END IF;
+
+  PERFORM 1 FROM portal.sp_set_study_action_config_overlay(v_study, v_overrides);
+
+  UPDATE cfg.hyperparameter_trial
+  SET result_json = COALESCE(result_json, '{}'::jsonb) || jsonb_build_object('promoted', true),
+      updated_at_utc = now() AT TIME ZONE 'utc'
+  WHERE search_id = p_search_id AND trial_index = p_trial_index;
+
+  RETURN QUERY SELECT p_search_id, p_trial_index, v_study, v_overrides;
+END;
+$$;

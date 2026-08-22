@@ -186,9 +186,12 @@ export default function PortalIaCanvas() {
               rows={[
                 ["Overview", "sp_get_study_pipeline_progress"],
                 ["Cohort / arms", "sp_set_study_group_members"],
-                ["Storage pick", "published endpoints only"],
+                ["Storage pick", "sp_get/set_study_storage"],
+                ["Guardrails (next run)", "sp_get/set_study_action_config_overlay"],
                 ["Runs", "sp_list_study_instances"],
-                ["Instance", "sp_get_instance_tasks"],
+                ["Instance", "sp_get_workflow_instance_header + tasks"],
+                ["Sample matrix", "sp_get_instance_sample_progress"],
+                ["Config snapshot", "sp_get_instance_config"],
                 ["Task detail", "sp_get_node_execution_detail"],
                 ["Retry", "sp_retry_failed_node"],
                 ["Start next", "catalogs + sp_create_and_start_instance"],
@@ -220,11 +223,23 @@ export default function PortalIaCanvas() {
                 <Pill tone="deleted" size="sm">
                   Stop task
                 </Pill>
-                <Text>In-flight when catalog can_stop</Text>
+                <Text>RUNNING + can_stop → sp_stop_node</Text>
+              </Row>
+              <Row gap={8}>
+                <Pill tone="deleted" size="sm">
+                  Fail queued
+                </Pill>
+                <Text>READY/PENDING → sp_fail_node (4098)</Text>
+              </Row>
+              <Row gap={8}>
+                <Pill tone="deleted" size="sm">
+                  Cancel/fail run
+                </Pill>
+                <Text>Drain queue: sp_cancel_instance / sp_fail_instance</Text>
               </Row>
               <Text tone="secondary" size="small">
                 No status dropdown. No forceRerun on FAILED (no CAAS success to skip).
-                Instance pause/cancel remains a later gap.
+                Instance pause stays deferred (can_pause is almost always false).
               </Text>
             </Stack>
           </CardBody>
@@ -304,19 +319,19 @@ export default function PortalIaCanvas() {
             "portal_study_pipeline_api.sql",
           ],
           [
-            "Monitor / retry",
-            "sp_get_instance_tasks (engine_error, lease, source_uri), sp_get_node_execution_detail, sp_retry_failed_node",
-            "portal_ops_recovery_api.sql",
+            "Monitor / retry / cancel",
+            "header, sample progress, config snapshot, retry, fail/stop node, cancel/fail instance",
+            "portal_ops_recovery_api.sql + portal_study_ops_api.sql",
           ],
           [
             "RBAC admin",
-            "users, grants, groups, scopes, sessions, Role2Node, invitations",
+            "users, grants, groups, scopes, sessions, Role2Node, invitations, BypassScope, session revoke",
             "portal_rbac_api.sql",
           ],
           [
             "Contract packs",
-            "ContractProcessPackEntitlements, catalog @scope_id, sp_create_and_start_instance check",
-            "portal_contract_api.sql",
+            "process packs + set scopes/limits/role policies; Start study_row_id link",
+            "portal_contract_api.sql + portal_study_ops_api.sql",
           ],
         ]}
       />
