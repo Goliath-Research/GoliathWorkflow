@@ -22,8 +22,10 @@ workers→gateway; HPO grids). **Fleet control:** [Constrained worker ops](const
 ## Guiding contracts
 
 1. A **workflow run** is a `wf.workflow_instance` of a **published**
-   `wf.workflow_version` (compiled from a DomainProgram). Operators start
-   instances; authors publish definitions.
+   `wf.workflow_version` (compiled from a DomainProgram). **Study operators
+   and study leads never modify a workflow.** They start instances of a
+   published version, set study overlays, and recover runs. **Program
+   author** (or **platform admin**) drafts, saves, and publishes the graph.
 2. Organize the UI around the **operator pipeline**, **system-administrator
    cluster/deployment**, and **admin RBAC/contracts** — not around schema
    names. Hide nav the role cannot use (no disabled tease).
@@ -90,7 +92,7 @@ Three different “groups” must not share a UI label:
 |-----|------------------|---------|
 | **Home / Ops board** | Operator / system administrator | Running/failed instances, lease alerts, fleet strip — `sp_list_ops_instances`, `sp_list_worker_health`, `sp_list_stale_leases` |
 | **Studies** | Operator / study lead | **Pipeline workspace** (primary operator home) |
-| **Workflows** | Author / admin | Definitions, versions, graph; cross-study instance list |
+| **Workflows** | **Program author** / platform admin | Definitions, versions, **graph edit / publish** — hidden from operator and study lead |
 | **Platform** | Lab / **system administrator** | Site, packs, storage **authoring**, **cluster deployment** (`/work` + endpoints), fleet console |
 | **Hyperparameters** | Study lead / operator | Grids, trials, scores (also linked from Study) |
 | **Admin** | Platform admin | **RBAC** + **Contracts** (customers, entitled process packs) |
@@ -245,8 +247,11 @@ overlaps a package config schema key (identity allowlist excluded).
    `pipelineProcedure`, `researchMode`, `projectPath`. Prefer
    `cfg.study_instance_link`.
 
-Do **not** open DomainProgram IR editing on this path. Do **not** list deprecated
-`mc_*` aliases or `visibility=hidden` packs. Hide unentitled packs (no disabled tease).
+Do **not** open DomainProgram IR editing on this path — that is **Workflows**
+authoring, not Study. Binding a published procedure/profile or a next-run
+`actionConfig` overlay is **not** modifying the graph. Do **not** list
+deprecated `mc_*` aliases or `visibility=hidden` packs. Hide unentitled packs
+(no disabled tease).
 
 ### Process-pack catalog rules
 
@@ -344,12 +349,31 @@ reopens the instance to `RUNNING` when that node was blocking.
 
 ## Workflows (definition vs instance)
 
+**Who may change a workflow** (the graph / DomainProgram / published version):
+
+| Role | See published catalog | Edit draft / save graph / activate version |
+|------|-----------------------|--------------------------------------------|
+| Study operator | Only inside **Start next stage** (picker) | **No** |
+| Study lead | Same picker + study process defaults | **No** |
+| Program author | Yes | **Yes** — this is their floor |
+| Platform admin | Yes | **Yes** |
+| System administrator | No (not their floor) | **No** |
+
+Hide the **Workflows** nav from operator and study lead (no disabled tease).
+Do not call `sp_upsert_domain_program`, `sp_save_workflow_graph`,
+`sp_create_workflow_graph`, or `sp_activate_workflow_version` from a Study
+session.
+
+Binding `pipelineProfile` / `pipelineProcedure` on the study, or a next-run
+`actionConfig` overlay, is **not** a workflow edit. Those choose or overlay a
+**published** pack; they do not rewrite `spec_json`.
+
 ```
-Workflows
+Workflows          (program author / platform admin only)
   ├─ Definitions
   │    └─ {workflow_def}
-  │         ├─ Versions (immutable)
-  │         ├─ Graph (DomainProgram / compiled)
+  │         ├─ Versions (immutable once published)
+  │         ├─ Graph (DomainProgram draft → compile → activate)
   │         └─ Instances of this version
   └─ All instances (global ops filter)
 ```
@@ -361,12 +385,12 @@ Workflows
 | `wf.workflow_version` | Immutable `spec_json` | Version |
 | `wf.workflow_instance` | One execution + `context_json` | Run / Instance |
 
-| Screen | Procs |
-|--------|-------|
-| Definition list | `sp_list_workflow_definitions` (optional `@scope_id`) |
-| Version / graph | `sp_list/get/upsert_domain_program`, `sp_create_workflow_graph`, `sp_get/save_workflow_graph`, `sp_activate_workflow_version` |
-| Action browser | `sp_list/get_workflow_actions`; types via `sp_list/get_data_types` |
-| Global instances | `sp_list_ops_instances`, `sp_list_recent_instances` |
+| Screen | Procs | Who |
+|--------|-------|-----|
+| Definition list (read) | `sp_list_workflow_definitions` | Start wizard (operator/lead); Workflows (author) |
+| Version / graph **write** | `sp_list/get/upsert_domain_program`, `sp_create_workflow_graph`, `sp_get/save_workflow_graph`, `sp_activate_workflow_version` | **Program author / platform admin only** |
+| Action browser | `sp_list/get_workflow_actions`; types via `sp_list/get_data_types` | Author / platform |
+| Global instances | `sp_list_ops_instances`, `sp_list_recent_instances` | Ops / author |
 
 ---
 
@@ -528,12 +552,12 @@ packs. `PlanCode` / `BillingCycle` are metadata — no billing UI.
 
 | Role | Home | Can | Cannot |
 |------|------|-----|--------|
-| **Study operator** | Studies → Runs | Enroll samples, start instances, view tasks, **Retry** / reclaim, view published packs | Site, secrets, DomainProgram publish, fleet Drain/Stop, cluster **Deployment**, Users, Contracts |
-| **Study lead** | Studies | Operator + bind procedure/profile, validation lifecycle / HPO | Platform publish; fleet; Admin |
-| **Lab admin** | Platform → Storage (ingress) | Lab ingress endpoints + credentials | Archive/shared/site; fleet Stop unless also system administrator |
-| **System administrator** (infra) | Platform → Clusters & workers | Cluster upsert + mounts, enrollment, fleet Drain/Stop/Resume, archive/shared/site storage, **deployment map** | Clinical PHI edits; study science knobs; Users / Contracts |
-| **Program author** | Workflows → Definitions | Edit/publish DomainProgram drafts | Start production studies without study role |
-| **Platform admin** | All | Roles, Contracts, invitations, enrollment revoke, global reclaim, fleet bulk | — |
+| **Study operator** | Studies → Runs | Enroll samples, start **published** instances, view tasks, **Retry** / reclaim, view entitled packs | Edit/save/activate a workflow graph; DomainProgram publish; site; secrets; fleet Drain/Stop; cluster **Deployment**; Users; Contracts |
+| **Study lead** | Studies | Operator + bind **published** procedure/profile, next-run overlay, validation lifecycle / HPO | **Same graph writes as operator** — no draft, save, compile, or activate; Platform publish; fleet; Admin |
+| **Lab admin** | Platform → Storage (ingress) | Lab ingress endpoints + credentials | Archive/shared/site; fleet Stop unless also system administrator; workflow graph writes |
+| **System administrator** (infra) | Platform → Clusters & workers | Cluster upsert + mounts, enrollment, fleet Drain/Stop/Resume, archive/shared/site storage, **deployment map** | Clinical PHI edits; study science knobs; Users / Contracts; workflow graph writes |
+| **Program author** | Workflows → Definitions | Edit drafts, save graph, compile, **publish / activate** versions | Start production studies without a study role |
+| **Platform admin** | All | Roles, Contracts, invitations, enrollment revoke, global reclaim, fleet bulk, **workflow publish** | — |
 
 Day-2 operators use **portal UI only** (company identity / MFA) — not SQL tools,
 not gateway admin HTTP ([component-boundaries](component-boundaries.md)).
@@ -681,6 +705,7 @@ does not exist; former `e_portal.*` helpers that remain are `portal.*`
    workflow-baked `input_json` identity with `resolvedConfig` science knobs
    (QC guardrails are the latter).
 3. **Publish before run** — only published versions/procedures/profiles in Start.
+    Study operator / study lead never open graph edit.
 4. One primary object per screen; deep-link Study → Run → Task.
 5. Contract-filter catalogs; hide unentitled packs.
 6. Config snapshot (`sp_get_instance_config`) is read-only; change knobs on the study overlay and start a new run.

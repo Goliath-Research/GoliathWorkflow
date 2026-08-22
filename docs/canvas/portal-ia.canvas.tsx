@@ -162,7 +162,7 @@ export default function PortalIaCanvas() {
         rows={[
           ["Home / Ops", "Operator / infra", "Instances, stale leases, fleet strip"],
           ["Studies", "Operator / study lead", "Pipeline workspace + Runs monitor"],
-          ["Workflows", "Author", "Definitions / versions / graph"],
+          ["Workflows", "Program author / platform admin", "Graph edit + publish — hidden from operator/lead"],
           ["Platform", "Lab / system admin", "Site, packs, storage, cluster deployment, fleet"],
           ["Hyperparameters", "Study lead", "Grids and trials"],
           ["Admin", "Platform admin", "RBAC + Contracts (process packs)"],
