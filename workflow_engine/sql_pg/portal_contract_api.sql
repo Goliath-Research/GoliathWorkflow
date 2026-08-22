@@ -408,12 +408,13 @@ BEGIN
   DELETE FROM "Contract"."ContractScopes" WHERE "ContractID" = p_contract_id;
 
   INSERT INTO "Contract"."ContractScopes" (
-    "ContractID", "ScopeID", "Status", "EffectiveFromUtc", "EffectiveToUtc"
+    "ContractID", "ScopeID", "Status", "ActivatedAtUtc", "EffectiveFromUtc", "EffectiveToUtc"
   )
   SELECT
     p_contract_id,
     (j->>'scope_id')::int,
     COALESCE(NULLIF(j->>'status', ''), 'ACTIVE'),
+    COALESCE((j->>'activated_at_utc')::timestamptz, now() AT TIME ZONE 'utc'),
     COALESCE((j->>'effective_from_utc')::timestamptz, now() AT TIME ZONE 'utc'),
     NULLIF(j->>'effective_to_utc', '')::timestamptz
   FROM jsonb_array_elements(p_scopes_json) j

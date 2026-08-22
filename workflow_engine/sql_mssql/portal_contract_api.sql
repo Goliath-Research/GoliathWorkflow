@@ -345,11 +345,12 @@ BEGIN
     BEGIN TRAN;
     DELETE FROM Contract.ContractScopes WHERE ContractID = @contract_id;
 
-    INSERT INTO Contract.ContractScopes (ContractID, ScopeID, Status, EffectiveFromUtc, EffectiveToUtc)
+    INSERT INTO Contract.ContractScopes (ContractID, ScopeID, Status, ActivatedAtUtc, EffectiveFromUtc, EffectiveToUtc)
     SELECT
         @contract_id,
         TRY_CAST(JSON_VALUE(j.[value], '$.scope_id') AS int),
         COALESCE(NULLIF(JSON_VALUE(j.[value], '$.status'), N''), N'ACTIVE'),
+        COALESCE(TRY_CAST(JSON_VALUE(j.[value], '$.activated_at_utc') AS datetime2(3)), SYSUTCDATETIME()),
         COALESCE(TRY_CAST(JSON_VALUE(j.[value], '$.effective_from_utc') AS datetime2(3)), SYSUTCDATETIME()),
         TRY_CAST(JSON_VALUE(j.[value], '$.effective_to_utc') AS datetime2(3))
     FROM OPENJSON(@scopes_json) j

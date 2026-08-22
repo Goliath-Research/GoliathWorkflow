@@ -364,13 +364,13 @@ BEGIN
         JSON_VALUE(CAST(i.context_json AS nvarchar(max)), '$.primaryAnalyte') AS primary_analyte,
         (
             SELECT COUNT(*)
-            FROM OPENJSON(i.context_json, '$.samples')
+            FROM OPENJSON(CAST(i.context_json AS nvarchar(max)), '$.samples')
         ) AS sample_count,
-        SUM(CASE WHEN ne.status = N'FAILED' THEN 1 ELSE 0 END) AS failed_count,
-        SUM(CASE WHEN ne.status = N'RUNNING' THEN 1 ELSE 0 END) AS running_count,
-        SUM(CASE WHEN ne.status IN (N'READY', N'PENDING') THEN 1 ELSE 0 END) AS queued_count,
-        SUM(CASE WHEN ne.status = N'SUCCEEDED' THEN 1 ELSE 0 END) AS succeeded_count,
-        COUNT(ne.id) AS task_count
+        ISNULL(agg.failed_count, 0) AS failed_count,
+        ISNULL(agg.running_count, 0) AS running_count,
+        ISNULL(agg.queued_count, 0) AS queued_count,
+        ISNULL(agg.succeeded_count, 0) AS succeeded_count,
+        ISNULL(agg.task_count, 0) AS task_count
     FROM wf.workflow_instance i
     INNER JOIN wf.workflow_version v ON v.id = i.workflow_version_id
     INNER JOIN wf.workflow_def d ON d.id = v.workflow_def_id
@@ -378,13 +378,19 @@ BEGIN
     LEFT JOIN cfg.study st ON st.id = l.study_row_id
     LEFT JOIN cfg.pipeline_profile pp ON pp.id = l.pipeline_profile_id
     LEFT JOIN cfg.assay_procedure ap ON ap.id = l.assay_procedure_id
-    LEFT JOIN wf.node_execution ne ON ne.workflow_instance_id = i.id
-    WHERE i.id = @workflow_instance_id
-    GROUP BY
-        i.id, i.status, i.workflow_version_id, d.id, d.name,
-        v.version_major, v.version_minor, i.started_at_utc, i.completed_at_utc,
-        i.context_json, l.study_row_id, st.name, l.pipeline_profile_id, pp.name,
-        l.assay_procedure_id, ap.name;
+    LEFT JOIN (
+        SELECT
+            ne.workflow_instance_id,
+            SUM(CASE WHEN ne.status = N'FAILED' THEN 1 ELSE 0 END) AS failed_count,
+            SUM(CASE WHEN ne.status = N'RUNNING' THEN 1 ELSE 0 END) AS running_count,
+            SUM(CASE WHEN ne.status IN (N'READY', N'PENDING') THEN 1 ELSE 0 END) AS queued_count,
+            SUM(CASE WHEN ne.status = N'SUCCEEDED' THEN 1 ELSE 0 END) AS succeeded_count,
+            COUNT(*) AS task_count
+        FROM wf.node_execution ne
+        WHERE ne.workflow_instance_id = @workflow_instance_id
+        GROUP BY ne.workflow_instance_id
+    ) agg ON agg.workflow_instance_id = i.id
+    WHERE i.id = @workflow_instance_id;
 END
 GO
 
