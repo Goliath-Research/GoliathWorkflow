@@ -179,8 +179,22 @@ def test_stability_signature_includes_discovery_fingerprint(tmp_path: Path) -> N
     assert sig1 != sig2
 
 
+def _assert_in_place_product(path: Path, payload: bytes) -> None:
+    assert path.is_file() and not path.is_symlink(), f"{path} must stay a regular product file"
+    assert path.read_bytes() == payload
+    assert ".caas" not in path.parts
+
+
+def _assert_sample_ledger_only(sample_root: Path, *product_globs: str) -> None:
+    caas = sample_root / ".caas"
+    assert caas.is_dir()
+    assert list(caas.rglob("manifest.json"))
+    for pattern in product_globs:
+        assert not list(caas.rglob(pattern)), f"{pattern} must not be harvested into {caas}"
+
+
 def test_sample_caas_commit_keeps_bam_in_sample_dir(tmp_path: Path, monkeypatch) -> None:
-    """Parabricks CAAS must leave the BAM at sampleDir, not under study configs/."""
+    """Parabricks CAAS is a ledger: BAM stays at sampleDir, not under .caas or configs/."""
     monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path / "samples"))
@@ -217,20 +231,16 @@ def test_sample_caas_commit_keeps_bam_in_sample_dir(tmp_path: Path, monkeypatch)
         entry, input_json, input_model, execution_result_from_output(output)
     )
 
-    assert bam.exists()
-    assert bam.resolve().is_file()
-    assert bam.read_bytes() == b"BAMDATA"
-    assert ".caas" in bam.resolve().parts
-    assert sample_dir.resolve() in bam.resolve().parents or bam.resolve().parent == sample_dir.resolve()
+    _assert_in_place_product(bam, b"BAMDATA")
+    assert bam.resolve().parent == sample_dir.resolve()
     # FASTQ in the shared sampleDir must not be stolen into the align CAAS entry.
-    assert fastq.is_file() and not fastq.is_symlink()
+    _assert_in_place_product(fastq, b"FASTQ")
+    _assert_sample_ledger_only(sample_dir, "*.bam", "*.fastq.gz")
     assert not list(configs.rglob("*.bam"))
 
 
-def test_sample_caas_skip_restores_products_after_stripped_leaf(
-    tmp_path: Path, monkeypatch
-) -> None:
-    """After harvest, skip-replay must restore BAM/tar at sampleDir from .caas blobs."""
+def test_sample_caas_skip_keeps_in_place_products(tmp_path: Path, monkeypatch) -> None:
+    """Skip-replay of an in-place sample ledger leaves BAM/tar at sampleDir."""
     monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path / "samples"))
@@ -268,26 +278,24 @@ def test_sample_caas_skip_restores_products_after_stripped_leaf(
     record_action_execution(
         entry, input_json, input_model, execution_result_from_output(output)
     )
-    blob_bam = bam.resolve()
-    blob_tar = tar.resolve()
-    assert ".caas" in blob_bam.parts
-    bam.unlink()
-    tar.unlink()
+    _assert_in_place_product(bam, b"BAMDATA")
+    _assert_in_place_product(tar, b"TAR")
+    _assert_sample_ledger_only(sample_dir, "*.bam", "*.tar")
 
     skipped = maybe_skip_action(entry, input_json)
     assert skipped is not None
     assert skipped.output.status == "skipped"
-    assert bam.is_symlink()
-    assert not os.path.isabs(os.readlink(bam))
-    assert bam.read_bytes() == b"BAMDATA"
-    assert tar.is_symlink()
-    assert tar.read_bytes() == b"TAR"
-    assert blob_bam.is_file() and not blob_bam.is_symlink()
-    assert blob_tar.is_file() and not blob_tar.is_symlink()
+    _assert_in_place_product(bam, b"BAMDATA")
+    _assert_in_place_product(tar, b"TAR")
+
+    # Ledger-only CAAS cannot recreate multi-GB products after they are removed.
+    bam.unlink()
+    tar.unlink()
+    assert maybe_skip_action(entry, input_json) is None
 
 
-def test_sample_caas_skip_restores_arm_leaf_products(tmp_path: Path, monkeypatch) -> None:
-    """CAAS at sample identity root; skip restores products on the arm sampleDir."""
+def test_sample_caas_skip_keeps_arm_leaf_products(tmp_path: Path, monkeypatch) -> None:
+    """CAAS ledger stays on sample identity; BAM/tar stay on the arm sampleDir."""
     monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path / "samples"))
@@ -326,25 +334,22 @@ def test_sample_caas_skip_restores_arm_leaf_products(tmp_path: Path, monkeypatch
     record_action_execution(
         entry, input_json, input_model, execution_result_from_output(output)
     )
-    blob_bam = bam.resolve()
-    assert (sample_root / ".caas") in blob_bam.parents
-    assert "align.linear.parabricks" not in blob_bam.parts
-    bam.unlink()
-    tar.unlink()
+    _assert_in_place_product(bam, b"BAMDATA")
+    _assert_in_place_product(tar, b"TAR")
+    _assert_sample_ledger_only(sample_root, "*.bam", "*.tar")
+    assert not (sample_root / "S1.bam").exists()
+    assert not list(configs.rglob("*.bam"))
 
     skipped = maybe_skip_action(entry, input_json)
     assert skipped is not None
-    assert bam.is_symlink()
-    assert bam.read_bytes() == b"BAMDATA"
-    assert tar.is_symlink()
-    assert tar.read_bytes() == b"TAR"
+    assert skipped.output.status == "skipped"
+    _assert_in_place_product(bam, b"BAMDATA")
+    _assert_in_place_product(tar, b"TAR")
     assert not (sample_root / "S1.bam").exists()
-    assert blob_bam.is_file() and not blob_bam.is_symlink()
-    assert not list(configs.rglob("*.bam"))
 
 
-def test_download_caas_skip_relinks_arm_after_delete_fastqs(tmp_path: Path, monkeypatch) -> None:
-    """Skip restores FASTQs at sampleRoot; align discovers pairs only under sampleDir."""
+def test_download_caas_skip_relinks_arm_from_root_fastqs(tmp_path: Path, monkeypatch) -> None:
+    """Skip keeps FASTQs at sampleRoot and recreates arm links for align discovery."""
     monkeypatch.delenv("METHYL_SAMPLE_CAAS_ENABLED", raising=False)
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     monkeypatch.setenv("METHYL_SAMPLES_BASE", str(tmp_path / "samples"))
@@ -386,22 +391,30 @@ def test_download_caas_skip_relinks_arm_after_delete_fastqs(tmp_path: Path, monk
     record_action_execution(
         entry, input_json, input_model, execution_result_from_output(output)
     )
-    blob1 = fq1.resolve()
-    blob2 = fq2.resolve()
-    assert (sample_root / ".caas") in blob1.parents
-    assert "align.linear.parabricks" not in blob1.parts
+    _assert_in_place_product(fq1, b"R1")
+    _assert_in_place_product(fq2, b"R2")
+    _assert_sample_ledger_only(sample_root, "*.fastq.gz")
+    assert "align.linear.parabricks" not in fq1.resolve().parts
 
-    # delete_fastqs removes root products and arm hardlinks; CAAS blobs remain.
-    for path in (fq1, fq2, arm / "S1_1.fastq.gz", arm / "S1_2.fastq.gz"):
+    # Align discovers pairs only under sampleDir. After the arm links are
+    # removed, skip must recreate them from the in-place root FASTQs.
+    for path in (arm / "S1_1.fastq.gz", arm / "S1_2.fastq.gz"):
         if path.exists() or path.is_symlink():
             path.unlink()
     assert not (arm / "S1_1.fastq.gz").exists()
-    assert blob1.is_file() and not blob1.is_symlink()
 
     skipped = maybe_skip_action(entry, input_json)
     assert skipped is not None
+    assert skipped.output.status == "skipped"
     assert (arm / "S1_1.fastq.gz").is_file()
     assert (arm / "S1_2.fastq.gz").is_file()
     assert (arm / "S1_1.fastq.gz").read_bytes() == b"R1"
     assert (arm / "S1_2.fastq.gz").read_bytes() == b"R2"
-    assert blob1.is_file() and blob2.is_file()
+    _assert_in_place_product(fq1, b"R1")
+    _assert_in_place_product(fq2, b"R2")
+
+    # delete_fastqs removes root products too; ledger-only CAAS cannot restore them.
+    for path in (fq1, fq2, arm / "S1_1.fastq.gz", arm / "S1_2.fastq.gz"):
+        if path.exists() or path.is_symlink():
+            path.unlink()
+    assert maybe_skip_action(entry, input_json) is None
