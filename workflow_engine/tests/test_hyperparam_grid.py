@@ -30,6 +30,25 @@ def test_apply_overlay_does_not_mutate_base() -> None:
     assert base == {"validation": {"stability_dmp_freq": 0.5}}
 
 
+def test_promote_keeps_sibling_guardrails() -> None:
+    """SQL promote must match this merge; wholesale replace would drop gene_selection."""
+    existing = {
+        "validation": {
+            "stability_dmp_freq": 0.6,
+            "stability_gene_featurecuts_max_dmps": 1000,
+        },
+        "gene_selection": {"max_dmps": 1000},
+    }
+    merged = hg.apply_overlay(existing, {"validation.stability_dmp_freq": 0.75})
+    assert merged == {
+        "validation": {
+            "stability_dmp_freq": 0.75,
+            "stability_gene_featurecuts_max_dmps": 1000,
+        },
+        "gene_selection": {"max_dmps": 1000},
+    }
+
+
 def test_apply_overlay_null_deletes_key() -> None:
     base = {"validation": {"stability_gene_featurecuts_max_dmps": 1000, "n_iterations": 50}}
     merged = hg.apply_overlay(base, {"validation.stability_gene_featurecuts_max_dmps": None})

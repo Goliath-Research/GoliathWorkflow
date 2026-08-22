@@ -174,6 +174,98 @@ BEGIN
 END;
 GO
 
+/* Apply dotted trial overrides onto an existing nested actionConfig.
+   Same semantics as workflow_engine.ops.hyperparam_grid.apply_overlay:
+   key "validation.stability_dmp_freq" sets actionConfig.validation.stability_dmp_freq;
+   JSON null deletes that leaf. Does not replace sibling guardrails. */
+CREATE OR ALTER FUNCTION portal.fn_apply_dotted_action_config(
+    @base nvarchar(max),
+    @overrides nvarchar(max)
+)
+RETURNS nvarchar(max)
+AS
+BEGIN
+    DECLARE @cur nvarchar(max) = @base;
+    IF @cur IS NULL OR ISJSON(@cur) <> 1 OR LEFT(LTRIM(@cur), 1) <> N'{'
+        SET @cur = N'{}';
+    IF @overrides IS NULL OR ISJSON(@overrides) <> 1 OR LEFT(LTRIM(@overrides), 1) <> N'{'
+        RETURN @cur;
+
+    DECLARE @okey nvarchar(400);
+    DECLARE @oval nvarchar(max);
+    DECLARE @otype int;
+    DECLARE @rest nvarchar(400);
+    DECLARE @path nvarchar(1000);
+    DECLARE @part nvarchar(128);
+    DECLARE @dot int;
+
+    DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+        SELECT [key], [value], [type] FROM OPENJSON(@overrides);
+
+    OPEN c;
+    FETCH NEXT FROM c INTO @okey, @oval, @otype;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SET @rest = @okey;
+        SET @path = N'$';
+
+        WHILE LEN(@rest) > 0
+        BEGIN
+            SET @dot = CHARINDEX(N'.', @rest);
+            IF @dot = 0
+            BEGIN
+                SET @part = @rest;
+                SET @rest = N'';
+            END
+            ELSE
+            BEGIN
+                SET @part = LEFT(@rest, @dot - 1);
+                SET @rest = SUBSTRING(@rest, @dot + 1, 400);
+            END
+
+            IF @part IS NULL OR @part = N''
+                CONTINUE;
+
+            SET @path = @path + N'.' + QUOTENAME(@part, N'"');
+
+            IF LEN(@rest) > 0 AND JSON_QUERY(@cur, @path) IS NULL
+                SET @cur = JSON_MODIFY(@cur, @path, JSON_QUERY(N'{}'));
+        END
+
+        IF @path = N'$'
+        BEGIN
+            FETCH NEXT FROM c INTO @okey, @oval, @otype;
+            CONTINUE;
+        END
+
+        IF @otype = 0
+            SET @cur = JSON_MODIFY(@cur, @path, NULL);
+        ELSE IF @otype = 1
+            SET @cur = JSON_MODIFY(@cur, @path, @oval);
+        ELSE IF @otype IN (2, 3)
+        BEGIN
+            /* JSON_MODIFY(float) emits scientific notation; stash a marker then
+               splice the original number/bool token so 0.75 stays 0.75. */
+            SET @cur = JSON_MODIFY(@cur, @path, N'__mp_json_token__');
+            SET @cur = REPLACE(@cur, N'"__mp_json_token__"', @oval);
+        END
+        ELSE IF @otype IN (4, 5)
+            SET @cur = JSON_MODIFY(
+                @cur,
+                @path,
+                JSON_QUERY(@overrides, CONCAT(N'$.', QUOTENAME(@okey, N'"')))
+            );
+
+        FETCH NEXT FROM c INTO @okey, @oval, @otype;
+    END
+
+    CLOSE c;
+    DEALLOCATE c;
+    RETURN @cur;
+END
+GO
+
 CREATE OR ALTER PROCEDURE portal.sp_promote_hyperparam_winner
     @search_id BIGINT,
     @trial_index INT
@@ -183,6 +275,8 @@ BEGIN
 
     DECLARE @study_row_id BIGINT;
     DECLARE @overrides nvarchar(max);
+    DECLARE @existing nvarchar(max);
+    DECLARE @merged nvarchar(max);
 
     SELECT @study_row_id = r.study_row_id
     FROM cfg.hyperparameter_search_run r
@@ -200,9 +294,18 @@ BEGIN
     IF ISJSON(@overrides) <> 1 OR LEFT(LTRIM(@overrides), 1) <> N'{'
         THROW 50021, N'trial overrides_json must be a JSON object.', 1;
 
+    SELECT @existing = CAST(
+        COALESCE(JSON_QUERY(CAST(document_json AS nvarchar(max)), '$.actionConfig'), N'{}')
+        AS nvarchar(max)
+    )
+    FROM cfg.study
+    WHERE id = @study_row_id;
+
+    SET @merged = portal.fn_apply_dotted_action_config(@existing, @overrides);
+
     EXEC portal.sp_set_study_action_config_overlay
         @study_row_id = @study_row_id,
-        @action_config_overlay = @overrides;
+        @action_config_overlay = @merged;
 
     UPDATE cfg.hyperparameter_trial
     SET result_json = CAST(
@@ -219,7 +322,7 @@ BEGIN
         @search_id AS search_id,
         @trial_index AS trial_index,
         @study_row_id AS study_row_id,
-        CAST(@overrides AS nvarchar(max)) AS action_config_overlay;
+        CAST(@merged AS nvarchar(max)) AS action_config_overlay;
 END
 GO
 

@@ -492,7 +492,7 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_get/list_hyperparam_search(es)` | Monitor |
 | `portal.sp_score_hyperparam_trial` | Score |
 | `portal.sp_set_hyperparam_search_status` | Pause / complete |
-| `portal.sp_promote_hyperparam_winner` | Copy winning overrides onto the **study overlay** (never a published profile) |
+| `portal.sp_promote_hyperparam_winner` | Deep-merge winning **dotted** overrides onto the existing **study overlay** (never a published profile; does not wipe sibling guardrails) |
 
 ### Admin RBAC (`portal_rbac_api`)
 

@@ -133,7 +133,8 @@ Deploy [`../sql/portal_workflow_api.sql`](../sql/portal_workflow_api.sql) (Azure
 | `portal.sp_revoke_user_session` | End a session |
 | `portal.sp_list/upsert_contract`, `sp_set_contract_process_packs` | Contract + process-pack entitlements |
 | `portal.sp_set_contract_scopes` / `limits` / `role_policies` | Contract admin writes |
-| `portal.sp_promote_hyperparam_winner` | Winner → study overlay (never a published profile) |
+| `portal.fn_apply_dotted_action_config` | Merge dotted trial overrides into nested `actionConfig` |
+| `portal.sp_promote_hyperparam_winner` | Winner → study overlay (dotted merge; never a published profile) |
 | `portal.sp_list_data_type_fields` | DataType Registry fields |
 
 Portal principals must not execute `wf.wf_repo_upsert_workflow_action` or admin delete procs. Catalog seed and system pipeline deploy use **direct-DB scripts** (`seed_action_catalog.py`, `deploy_workflow_definitions.sh`, `workflow_engine/ops`) from CI/release automation.

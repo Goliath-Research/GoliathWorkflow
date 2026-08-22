@@ -221,6 +221,61 @@ AS $$
   ORDER BY t.trial_index;
 $$;
 
+-- Apply dotted trial overrides onto an existing nested actionConfig.
+-- Same semantics as workflow_engine.ops.hyperparam_grid.apply_overlay.
+CREATE OR REPLACE FUNCTION portal.fn_apply_dotted_action_config(
+  p_base jsonb,
+  p_overrides jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v jsonb := COALESCE(p_base, '{}'::jsonb);
+  r record;
+  segs text[];
+  prefix text[];
+  i int;
+BEGIN
+  IF jsonb_typeof(v) <> 'object' THEN
+    v := '{}'::jsonb;
+  END IF;
+  IF p_overrides IS NULL OR jsonb_typeof(p_overrides) <> 'object' THEN
+    RETURN v;
+  END IF;
+
+  FOR r IN SELECT key, value FROM jsonb_each(p_overrides)
+  LOOP
+    segs := ARRAY(
+      SELECT btrim(x)
+      FROM unnest(string_to_array(r.key, '.')) AS x
+      WHERE btrim(x) <> ''
+    );
+    IF cardinality(segs) IS NULL OR cardinality(segs) = 0 THEN
+      CONTINUE;
+    END IF;
+
+    IF r.value = 'null'::jsonb THEN
+      v := v #- segs;
+      CONTINUE;
+    END IF;
+
+    prefix := ARRAY[]::text[];
+    FOR i IN 1..(cardinality(segs) - 1) LOOP
+      prefix := prefix || segs[i];
+      IF jsonb_typeof(v #> prefix) IS DISTINCT FROM 'object' THEN
+        v := jsonb_set(v, prefix, '{}'::jsonb, true);
+      END IF;
+    END LOOP;
+
+    v := jsonb_set(v, segs, r.value, true);
+  END LOOP;
+
+  RETURN v;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION portal.sp_promote_hyperparam_winner(
   p_search_id bigint,
   p_trial_index int
@@ -236,6 +291,8 @@ AS $$
 DECLARE
   v_study bigint;
   v_overrides jsonb;
+  v_existing jsonb;
+  v_merged jsonb;
 BEGIN
   SELECT r.study_row_id INTO v_study
   FROM cfg.hyperparameter_search_run r
@@ -256,13 +313,20 @@ BEGIN
     RAISE EXCEPTION 'trial overrides_json must be a JSON object';
   END IF;
 
-  PERFORM 1 FROM portal.sp_set_study_action_config_overlay(v_study, v_overrides);
+  SELECT COALESCE(s.document_json->'actionConfig', '{}'::jsonb)
+  INTO v_existing
+  FROM cfg.study s
+  WHERE s.id = v_study;
+
+  v_merged := portal.fn_apply_dotted_action_config(v_existing, v_overrides);
+
+  PERFORM 1 FROM portal.sp_set_study_action_config_overlay(v_study, v_merged);
 
   UPDATE cfg.hyperparameter_trial
   SET result_json = COALESCE(result_json, '{}'::jsonb) || jsonb_build_object('promoted', true),
       updated_at_utc = now() AT TIME ZONE 'utc'
   WHERE search_id = p_search_id AND trial_index = p_trial_index;
 
-  RETURN QUERY SELECT p_search_id, p_trial_index, v_study, v_overrides;
+  RETURN QUERY SELECT p_search_id, p_trial_index, v_study, v_merged;
 END;
 $$;

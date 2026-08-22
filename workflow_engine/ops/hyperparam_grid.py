@@ -431,7 +431,9 @@ def winner_overlay(db: Any, search_id: int) -> Optional[Dict[str, Any]]:
     """Return the actionConfig overlay of the best feasible trial (operator-gated export).
 
     This never mutates a published profile: it only surfaces the recommended overlay
-    for an operator to promote via methyl-cfg / portal cfg ops.
+    for an operator to promote via ``portal.sp_promote_hyperparam_winner``, which
+    applies these dotted keys onto the existing study ``actionConfig`` (same as
+    ``apply_overlay``) rather than replacing the overlay wholesale.
     """
     rows = db.get_hyperparam_search(search_id)
     best: Optional[Dict[str, Any]] = None

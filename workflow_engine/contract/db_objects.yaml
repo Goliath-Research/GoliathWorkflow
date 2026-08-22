@@ -375,10 +375,14 @@ objects:
     - name: portal.sp_set_contract_role_policies
       kind: procedure
       required: true
+    - name: portal.fn_apply_dotted_action_config
+      kind: function
+      required: true
+      notes: Merge dotted trial overrides (validation.stability_dmp_freq) into nested actionConfig; JSON null deletes the leaf
     - name: portal.sp_promote_hyperparam_winner
       kind: procedure
       required: true
-      notes: Copies winning trial overrides onto the study actionConfig overlay; never writes a published profile
+      notes: Deep-merges winning dotted trial overrides onto the existing study actionConfig overlay; never writes a published profile
     - name: portal.sp_list_data_type_fields
       kind: procedure
       required: true

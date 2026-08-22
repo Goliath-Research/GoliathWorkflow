@@ -193,6 +193,9 @@ BEGIN
 END
 GO
 
+-- Replace study document_json.actionConfig with the supplied nested object.
+-- HPO promote must merge dotted trial overrides first (fn_apply_dotted_action_config);
+-- do not pass trial overrides_json here or sibling guardrails are wiped.
 CREATE OR ALTER PROCEDURE portal.sp_set_study_action_config_overlay
     @study_row_id bigint,
     @action_config_overlay nvarchar(max)

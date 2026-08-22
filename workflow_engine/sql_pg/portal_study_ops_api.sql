@@ -218,6 +218,8 @@ AS $$
   WHERE s.id = p_study_row_id;
 $$;
 
+-- Replace study document_json.actionConfig with the supplied nested object.
+-- HPO promote must merge dotted trial overrides first (fn_apply_dotted_action_config).
 CREATE OR REPLACE FUNCTION portal.sp_set_study_action_config_overlay(
   p_study_row_id bigint,
   p_action_config_overlay jsonb

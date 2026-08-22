@@ -18,7 +18,7 @@ After a baseline workflow-run (or legacy `methyl-validation` path) is understood
     1. Pick analyte + **`pipelineProcedure`** (see [ch.24](24-methylation-application-packs.md)).
     2. Run a baseline with that procedure + `samd_research`.
     3. Sweep Tier-A knobs with `scenario-start` / `hyperparam-grid-start` (or legacy `methyl-hyperparam-search`) on the **same** procedure base.
-    4. Operator-gated promote the winning overlay; freeze / model-MC with covariates **after** stability search.
+    4. Operator-gated promote the winning overlay (`portal.sp_promote_hyperparam_winner` deep-merges dotted trial keys such as `validation.stability_dmp_freq` into the existing study `actionConfig`; it does not replace the whole overlay); freeze / model-MC with covariates **after** stability search.
 
     Do **not** put `pipelineProcedure`, aligner, or library protocol in grid axes. Changing procedure is a different study setup, not a trial. Typical axes for gene-FeatureCuts procedures (`buffy_wgbs_*_gene_fc`, `cfdna_wgbs_plasma`): `validation.stability_gene_featurecuts_max_dmps` / `_max_genes`, `stability_target_balanced_accuracy` / `gene_featurecuts_target_ba`, `stability_gene_freq`, `n_iterations` (budget).
 
