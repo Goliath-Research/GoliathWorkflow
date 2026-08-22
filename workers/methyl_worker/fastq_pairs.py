@@ -23,7 +23,7 @@ _FASTQ_MATE_RE = re.compile(
 _FASTQ_BARE_R_RE = re.compile(
     r"^R(?P<mate>[12])(?:_(?P<segment>[0-9]{3}))?$", re.IGNORECASE
 )
-_SKIP_FASTQ_DIR_NAMES = frozenset({"tmp", ".caas"})
+_SKIP_FASTQ_DIR_NAMES = frozenset({"tmp", ".caas", ".unused_merged"})
 _ALIGNER_MODE_LEAVES = frozenset({"linear", "pangenome", "pangenome_wgbs"})
 _ALIGNER_ARM_PREFIXES = ("align.", "extract.")
 
