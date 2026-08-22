@@ -4,7 +4,7 @@ Operator-facing UI for the full pipeline (cohort → sample prep → study lifec
 prediction), plus **Platform** (system administrator: clusters, workers,
 deployment) and **Admin** (RBAC) / **Contracts** (process-pack entitlements).
 EpiPortal (`portal.epimethyl.com`) is the day-2 control plane; this repo owns
-**SQL contracts** (`portal.sp_*`) and domain identity — not the Delphi/uniGUI app.
+**SQL contracts** (`portal.sp_`*) and domain identity — not the Delphi/uniGUI app.
 
 **Companion:** [Portal remote control](portal-remote-control.md) (UI→DB vs
 workers→gateway; HPO grids). **Fleet control:** [Constrained worker ops](constrained-worker-ops-actions.md).
@@ -22,23 +22,23 @@ workers→gateway; HPO grids). **Fleet control:** [Constrained worker ops](const
 ## Guiding contracts
 
 1. A **workflow run** is a `wf.workflow_instance` of a **published**
-   `wf.workflow_version` (compiled from a DomainProgram). **Study operators
+  `wf.workflow_version` (compiled from a DomainProgram). **Study operators
    and study leads never modify a workflow.** They start instances of a
    published version, set study overlays, and recover runs. **Program
    author** (or **platform admin**) drafts, saves, and publishes the graph.
 2. Organize the UI around the **operator pipeline**, **system-administrator
-   cluster/deployment**, and **admin RBAC/contracts** — not around schema
+  cluster/deployment**, and **admin RBAC/contracts** — not around schema
    names. Hide nav the role cannot use (no disabled tease).
 3. **Project manifests** (`project_*.json`) hold cohorts and paths — never tool
-   knobs. Tunables are schema-driven overlays (site / profile / procedure /
+  knobs. Tunables are schema-driven overlays (site / profile / procedure /
    instance) → baked `resolvedConfig` on tasks. Do not treat QC guardrail
    defaults as DomainProgram / `input_json` bindings — see
    [Task input: workflow bindings vs science knobs](#task-input-workflow-bindings-vs-science-knobs).
-4. Portal talks **`portal.sp_*` only** (Azure SQL today; PG twin). Workers talk
-   **gateway only**. Never reverse those paths. Do not call `RBAC.*` / `Contract.*`
+4. Portal talks `portal.sp_*` **only** (Azure SQL today; PG twin). Workers talk
+  **gateway only**. Never reverse those paths. Do not call `RBAC.`* / `Contract.*`
    write procs from new screens — wrap them as `portal.sp_*`.
 5. **Fleet control ≠ instance lifecycle ≠ science knobs ≠ task retry ≠
-   cluster deployment.** Drain/Stop worker, pause/cancel run, `actionConfig`,
+  cluster deployment.** Drain/Stop worker, pause/cancel run, `actionConfig`,
    `FAILED`→`READY`, and the declared `/work` + published-archive map are
    five different surfaces. The **system administrator** owns clusters,
    workers, **and** that deployment map — not study science.
@@ -68,65 +68,85 @@ flowchart TB
   Contracts --> Pred
 ```
 
+
+
+
+
 ## Schema swimlanes (not nav)
 
-| Schema | Owns | Operator meaning |
-|--------|------|------------------|
-| **portal** | Sample identity (`Samples`, `LabSamples`, import, `AlignmentQC`) | Who/what the specimen is |
-| **cfg** | Study arms, storage endpoints, process packs, `study_instance_link` | Which samples, from where, which procedure, which run |
-| **wf** | Published graphs + `workflow_instance` / `node_execution` | Execution |
-| **RBAC** (+ Meta, Onboarding) | Users, roles, scoped grants, sessions, invitations | Who may see/do each floor |
-| **Contract** | Customer terms, scopes, pack entitlements, quotas | Which process packs a tenant may run |
+
+| Schema                        | Owns                                                                | Operator meaning                                      |
+| ----------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
+| **portal**                    | Sample identity (`Samples`, `LabSamples`, import, `AlignmentQC`)    | Who/what the specimen is                              |
+| **cfg**                       | Study arms, storage endpoints, process packs, `study_instance_link` | Which samples, from where, which procedure, which run |
+| **wf**                        | Published graphs + `workflow_instance` / `node_execution`           | Execution                                             |
+| **RBAC** (+ Meta, Onboarding) | Users, roles, scoped grants, sessions, invitations                  | Who may see/do each floor                             |
+| **Contract**                  | Customer terms, scopes, pack entitlements, quotas                   | Which process packs a tenant may run                  |
+
 
 Three different “groups” must not share a UI label:
 
-| Table | UI label |
-|-------|----------|
-| `cfg.study_group` | **Study arms** (control / disease) |
-| `portal.Groups` | **Customer cohorts** (legacy clinical nav) |
-| `RBAC.Groups` | **User groups** (role inheritance) |
+
+| Table             | UI label                                   |
+| ----------------- | ------------------------------------------ |
+| `cfg.study_group` | **Study arms** (control / disease)         |
+| `portal.Groups`   | **Customer cohorts** (legacy clinical nav) |
+| `RBAC.Groups`     | **User groups** (role inheritance)         |
+
+
+
 
 ## Top-level navigation (≤6)
 
-| Nav | Default audience | Purpose |
-|-----|------------------|---------|
-| **Home / Ops board** | Operator / system administrator | Running/failed instances, lease alerts, fleet strip — `sp_list_ops_instances`, `sp_list_worker_health`, `sp_list_stale_leases` |
-| **Studies** | Operator / study lead | **Pipeline workspace** (primary operator home) |
-| **Workflows** | **Program author** / platform admin | Definitions, versions, **graph edit / publish** — hidden from operator and study lead |
-| **Platform** | Lab / **system administrator** | Site, packs, storage **authoring**, **cluster deployment** (`/work` + endpoints), fleet console |
-| **Hyperparameters** | Study lead / operator | Grids, trials, scores (also linked from Study) |
-| **Admin** | Platform admin | **RBAC** + **Contracts** (customers, entitled process packs) |
+
+| Nav                  | Default audience                    | Purpose                                                                                                                        |
+| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Home / Ops board** | Operator / system administrator     | Running/failed instances, lease alerts, fleet strip — `sp_list_ops_instances`, `sp_list_worker_health`, `sp_list_stale_leases` |
+| **Studies**          | Operator / study lead               | **Pipeline workspace** (primary operator home)                                                                                 |
+| **Workflows**        | **Program author** / platform admin | Definitions, versions, **graph edit / publish** — hidden from operator and study lead                                          |
+| **Platform**         | Lab / **system administrator**      | Site, packs, storage **authoring**, **cluster deployment** (`/work` + endpoints), fleet console                                |
+| **Hyperparameters**  | Study lead / operator               | Grids, trials, scores (also linked from Study)                                                                                 |
+| **Admin**            | Platform admin                      | **RBAC** + **Contracts** (customers, entitled process packs)                                                                   |
+
 
 ---
+
+
 
 ## Control model (fleet vs in-flight vs run vs retry)
 
 Operators remote-control workers **without SSH**. See
 [constrained-worker-ops-actions.md](constrained-worker-ops-actions.md).
 
-| Layer | Operator verb | Mechanism | Status |
-|-------|---------------|-----------|--------|
-| **Fleet** | Resume claiming / Drain / Stop worker | `wf.worker.desired_state` via `portal.sp_set_worker_desired_state` | **Shipped** |
-| **In-flight** | Abort or cooperative-pause the current task | Catalog `can_pause` / `can_continue` / `can_stop` | **Shipped** (most: stoppable, not pausable) |
-| **Task retry** | Set a **FAILED** node back to **READY** | `portal.sp_retry_failed_node` | **Shipped** (this IA) |
-| **Run** | Cancel / fail the **instance** (drain queued work; no later-stage continue) | `portal.sp_cancel_instance` / `sp_fail_instance` | **Shipped** |
-| **Run pause** | Cooperative pause / resume of the instance | Requires catalog `can_pause` on in-flight work | **Deferred** |
 
-| UI label | Backend | Notes |
-|----------|---------|-------|
-| **Resume claiming** | `desired_state=ACTIVE` | Fleet layer |
-| **Drain** | `DRAINING` | Finish current work; no new claims |
-| **Stop worker** | `STOPPING` | Abort in-flight only if `can_stop` |
-| **Retry this action** | `FAILED` → `READY` | Same baked `input_json`; bump `attempt_no` |
-| **Stop this task** | `portal.sp_stop_node` → heartbeat `command=STOP` / **4099** | Distinct from fleet Stop and from Retry |
-| **Fail this queued action** | `portal.sp_fail_node` (`READY`/`PENDING` → `FAILED`, 4098) | FOREACH siblings keep running |
-| **Cancel this run** | `portal.sp_cancel_instance` | Queued nodes `CANCELLED`; optional in-flight stop; engine will not activate later stages after in-flight success |
-| **Fail this run** | `portal.sp_fail_instance` | Same drain; instance `FAILED`; same continue guard |
+| Layer          | Operator verb                                                               | Mechanism                                                          | Status                                      |
+| -------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------- |
+| **Fleet**      | Resume claiming / Drain / Stop worker                                       | `wf.worker.desired_state` via `portal.sp_set_worker_desired_state` | **Shipped**                                 |
+| **In-flight**  | Abort or cooperative-pause the current task                                 | Catalog `can_pause` / `can_continue` / `can_stop`                  | **Shipped** (most: stoppable, not pausable) |
+| **Task retry** | Set a **FAILED** node back to **READY**                                     | `portal.sp_retry_failed_node`                                      | **Shipped** (this IA)                       |
+| **Run**        | Cancel / fail the **instance** (drain queued work; no later-stage continue) | `portal.sp_cancel_instance` / `sp_fail_instance`                   | **Shipped**                                 |
+| **Run pause**  | Cooperative pause / resume of the instance                                  | Requires catalog `can_pause` on in-flight work                     | **Deferred**                                |
+
+
+
+| UI label                    | Backend                                                     | Notes                                                                                                            |
+| --------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Resume claiming**         | `desired_state=ACTIVE`                                      | Fleet layer                                                                                                      |
+| **Drain**                   | `DRAINING`                                                  | Finish current work; no new claims                                                                               |
+| **Stop worker**             | `STOPPING`                                                  | Abort in-flight only if `can_stop`                                                                               |
+| **Retry this action**       | `FAILED` → `READY`                                          | Same baked `input_json`; bump `attempt_no`                                                                       |
+| **Stop this task**          | `portal.sp_stop_node` → heartbeat `command=STOP` / **4099** | Distinct from fleet Stop and from Retry                                                                          |
+| **Fail this queued action** | `portal.sp_fail_node` (`READY`/`PENDING` → `FAILED`, 4098)  | FOREACH siblings keep running                                                                                    |
+| **Cancel this run**         | `portal.sp_cancel_instance`                                 | Queued nodes `CANCELLED`; optional in-flight stop; engine will not activate later stages after in-flight success |
+| **Fail this run**           | `portal.sp_fail_instance`                                   | Same drain; instance `FAILED`; same continue guard                                                               |
+
 
 Affinity keys are **opaque** — show them; never hard-code SamplePrep stickiness
 in UI logic ([worker-affinity-dispatch](../plans/worker-affinity-dispatch.plan.md)).
 
 ---
+
+
 
 ## Studies — operator pipeline
 
@@ -146,26 +166,30 @@ Two DomainPrograms in sequence, then optional prediction
 ([portal_study_lifecycle.md](../../workflow_engine/docs/portal_study_lifecycle.md)):
 
 1. **SamplePrepPipeline** — download (`fastqSource`) → align → QC → extract →
-   **archive** (`sampleDestination`, `full` / `qc_only`; BAM never uploaded).
+  **archive** (`sampleDestination`, `full` / `qc_only`; BAM never uploaded).
 2. **StudyValidationLifecycle** — MC → stability → freeze → mapper/enricher →
-   model MC → selection → hold-out.
+  model MC → selection → hold-out.
 3. **Blind prediction** — standalone `pipeline.predictor`; **not** a validation
-   accuracy claim ([ch.09](../usage/09-stage-blind-prediction.md)).
+  accuracy claim ([ch.09](../usage/09-stage-blind-prediction.md)).
+
+
 
 ### Screens
 
-| Screen | Purpose | Primary `portal.sp_*` |
-|--------|---------|------------------------|
-| Study list | Published cfg studies | `sp_list_studies`, `sp_get_study`, `sp_upsert_study` |
-| Study overview | Bound procedure/profile/analyte, `projectPath`, **stage rollup** | `sp_get_study_process_defaults`, `sp_get_study_pipeline_progress` |
-| Study process defaults | Persist default profile / procedure / analyte / researchMode | `sp_set/get_study_process_defaults`; pickers: `sp_list_*_catalog` **filtered by contract** when `@scope_id` is set |
-| Cohort (samples & arms) | Enrollment, study arms, membership | `sp_list_samples_for_study_enrollment`, `sp_set_sample_analyte`, `sp_list/set_study_group(s)`, `sp_set_study_group_members`, `sp_materialize_study_lists` |
-| Storage | Select **published redacted** `fastqSource` + `sampleDestination` | `sp_list_storage_endpoints` (redacted); persist with `sp_get/set_study_storage`; authoring stays on Platform |
-| Guardrails (next run) | Study-lead `actionConfig` overlay (`alignment_qc` / `extraction_qc`) | `sp_get/set_study_action_config_overlay` — **not** a mid-run rebake; not workflow `input_json` keys |
-| Project manifests | Cohort paths under `/work/projects/<study>/` | `sp_project_list/get/save`; **no** `actionConfig` knobs |
-| Runs | Instances for this study | `sp_list_study_instances` |
-| **Instance detail** | Gantt, tasks, errors, **recovery verbs** | `sp_get_workflow_instance_header`, `sp_get_instance_tasks`, `sp_get_instance_sample_progress`, `sp_get_instance_config`, `sp_get_node_execution_detail`, `sp_retry_failed_node`, `sp_reclaim_expired_leases`, `sp_stop_node`, `sp_fail_node`, `sp_cancel_instance`, `sp_fail_instance` |
-| **Start next stage** | Published version → packs → start | Catalog procs + `sp_list_workflow_definitions` + `sp_create_and_start_instance` (`@scope_id`, `@study_row_id`) |
+
+| Screen                  | Purpose                                                              | Primary `portal.sp_*`                                                                                                                                                                                                                                                                  |
+| ----------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Study list              | Published cfg studies                                                | `sp_list_studies`, `sp_get_study`, `sp_upsert_study`                                                                                                                                                                                                                                   |
+| Study overview          | Bound procedure/profile/analyte, `projectPath`, **stage rollup**     | `sp_get_study_process_defaults`, `sp_get_study_pipeline_progress`                                                                                                                                                                                                                      |
+| Study process defaults  | Persist default profile / procedure / analyte / researchMode         | `sp_set/get_study_process_defaults`; pickers: `sp_list_*_catalog` **filtered by contract** when `@scope_id` is set                                                                                                                                                                     |
+| Cohort (samples & arms) | Enrollment, study arms, membership                                   | `sp_list_samples_for_study_enrollment`, `sp_set_sample_analyte`, `sp_list/set_study_group(s)`, `sp_set_study_group_members`, `sp_materialize_study_lists`                                                                                                                              |
+| Storage                 | Select **published redacted** `fastqSource` + `sampleDestination`    | `sp_list_storage_endpoints` (redacted); persist with `sp_get/set_study_storage`; authoring stays on Platform                                                                                                                                                                           |
+| Guardrails (next run)   | Study-lead `actionConfig` overlay (`alignment_qc` / `extraction_qc`) | `sp_get/set_study_action_config_overlay` — **not** a mid-run rebake; not workflow `input_json` keys                                                                                                                                                                                    |
+| Project manifests       | Cohort paths under `/work/projects/<study>/`                         | `sp_project_list/get/save`; **no** `actionConfig` knobs                                                                                                                                                                                                                                |
+| Runs                    | Instances for this study                                             | `sp_list_study_instances`                                                                                                                                                                                                                                                              |
+| **Instance detail**     | Gantt, tasks, errors, **recovery verbs**                             | `sp_get_workflow_instance_header`, `sp_get_instance_tasks`, `sp_get_instance_sample_progress`, `sp_get_instance_config`, `sp_get_node_execution_detail`, `sp_retry_failed_node`, `sp_reclaim_expired_leases`, `sp_stop_node`, `sp_fail_node`, `sp_cancel_instance`, `sp_fail_instance` |
+| **Start next stage**    | Published version → packs → start                                    | Catalog procs + `sp_list_workflow_definitions` + `sp_create_and_start_instance` (`@scope_id`, `@study_row_id`)                                                                                                                                                                         |
+
 
 **Storage:** operators **select** published endpoints. Lab admins author
 ingress; **system administrators** author archive/shared/site and see the
@@ -189,13 +213,15 @@ workflow injects the whole slice as one envelope:
 `"resolvedConfig": "${var.resolvedConfig__alignment_qc}"`. Changing them is a
 **new instance**, not Retry.
 
-| Question | Workflow-baked | Guardrail / tool defaults |
-|----------|----------------|---------------------------|
-| Who names the key? | Catalog `context_vars` + program `with` | Catalog `action_config_key` (e.g. `alignment_qc`) |
-| Schema | `schemas/tasks/*.input.schema.json` | `schemas/config/alignment_qc.schema.json` (etc.) |
-| Operator edits | Study manifest / storage / sample list | Site, profile, procedure, or **Guardrails (next run)** |
-| Shape on the task | Top-level `sampleId`, `sampleDir`, … | Nested `resolvedConfig.core_guardrails.*` |
-| Can **Retry** change it? | No — same baked payload | No — overlay + **Start new instance** |
+
+| Question                 | Workflow-baked                          | Guardrail / tool defaults                              |
+| ------------------------ | --------------------------------------- | ------------------------------------------------------ |
+| Who names the key?       | Catalog `context_vars` + program `with` | Catalog `action_config_key` (e.g. `alignment_qc`)      |
+| Schema                   | `schemas/tasks/*.input.schema.json`     | `schemas/config/alignment_qc.schema.json` (etc.)       |
+| Operator edits           | Study manifest / storage / sample list  | Site, profile, procedure, or **Guardrails (next run)** |
+| Shape on the task        | Top-level `sampleId`, `sampleDir`, …    | Nested `resolvedConfig.core_guardrails.*`              |
+| Can **Retry** change it? | No — same baked payload                 | No — overlay + **Start new instance**                  |
+
 
 Example claimed `sample.methyl_qc` task:
 
@@ -217,11 +243,13 @@ Example claimed `sample.methyl_qc` task:
 
 **Portal surfaces (keep them distinct):**
 
-| Screen | Shows | Proc |
-|--------|-------|------|
-| **Task detail** | Workflow-baked identity (URI, sample, trim) | `sp_get_node_execution_detail` |
-| **Config snapshot** | What *this run* baked under `resolvedConfig__*` | `sp_get_instance_config` (read-only) |
+
+| Screen                    | Shows                                              | Proc                                     |
+| ------------------------- | -------------------------------------------------- | ---------------------------------------- |
+| **Task detail**           | Workflow-baked identity (URI, sample, trim)        | `sp_get_node_execution_detail`           |
+| **Config snapshot**       | What *this run* baked under `resolvedConfig__`*    | `sp_get_instance_config` (read-only)     |
 | **Guardrails (next run)** | Study overlay for `alignment_qc` / `extraction_qc` | `sp_get/set_study_action_config_overlay` |
+
 
 Many profiles ship `"alignment_qc": {}`. Instance bake then stores an empty
 slice, and `methylalignmentqc` fills the published WGBS window from
@@ -236,15 +264,15 @@ overlaps a package config schema key (identity allowlist excluded).
 ### Start-run wizard (must-have UX)
 
 1. Select **published** workflow definition + version (stage-aware: SamplePrep
-   first; after prep completes, offer StudyValidationLifecycle; after freeze+model,
+  first; after prep completes, offer StudyValidationLifecycle; after freeze+model,
    offer hold-out / optional prediction).
 2. Select **analyte** + **assay procedure** + **pipeline profile** (and research
-   mode if any), **intersected with the session scope’s entitled process packs**.
+  mode if any), **intersected with the session scope’s entitled process packs**.
    Prefill from `sp_get_study_process_defaults`. If the study’s
    `primary_modality` is not entitled, do **not** offer Start.
 3. Confirm **project manifest** / sample subset / `executionScopeId` if needed.
 4. Create instance with `context_json` carrying `pipelineProfile`,
-   `pipelineProcedure`, `researchMode`, `projectPath`. Prefer
+  `pipelineProcedure`, `researchMode`, `projectPath`. Prefer
    `cfg.study_instance_link`.
 
 Do **not** open DomainProgram IR editing on this path — that is **Workflows**
@@ -255,16 +283,20 @@ deprecated `mc_*` aliases or `visibility=hidden` packs. Hide unentitled packs
 
 ### Process-pack catalog rules
 
-| Surface | Data | Who sees retired/unentitled |
-|---------|------|-----------------------------|
-| Start wizard / Study defaults | `sp_list_*_catalog` (+ `@scope_id`) | Never |
-| Platform → Process packs | `sp_list_pipeline_profiles` / procedures / analytes | Retired: yes (admin). Unentitled: N/A (platform browse) |
 
-A **process pack** is an omics modality (`methylation` \| `rnaseq` \| `proteomics`),
+| Surface                       | Data                                                | Who sees retired/unentitled                             |
+| ----------------------------- | --------------------------------------------------- | ------------------------------------------------------- |
+| Start wizard / Study defaults | `sp_list_*_catalog` (+ `@scope_id`)                 | Never                                                   |
+| Platform → Process packs      | `sp_list_pipeline_profiles` / procedures / analytes | Retired: yes (admin). Unentitled: N/A (platform browse) |
+
+
+A **process pack** is an omics modality (`methylation`  `rnaseq`  `proteomics`),
 not an assay procedure and not a disease application pack
 ([assay-procedure-packs](../plans/assay-procedure-packs.plan.md)).
 
 ---
+
+
 
 ## Study / workflow monitoring, failure, and recovery
 
@@ -272,45 +304,51 @@ First-class operator UX. The engine does **not** auto-requeue `FAILED` nodes
 ([idempotency doc](workflow-idempotency-retry-lease.md)). Lease expiry requeues
 **stuck RUNNING** only.
 
-| Screen | What they see |
-|--------|----------------|
-| Home / Ops | Running/failed instances, stale leases, fleet strip |
-| Study Overview | Stage rollup (download / align / QC / extract / archive / MC / stability / freeze / model / validation / prediction) with fail counts |
-| Study → Runs → **Instance** | Gantt + task table; click a failed row |
-| **Task / action detail** | Why it failed + which recovery verb applies |
+
+| Screen                      | What they see                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Home / Ops                  | Running/failed instances, stale leases, fleet strip                                                                                   |
+| Study Overview              | Stage rollup (download / align / QC / extract / archive / MC / stability / freeze / model / validation / prediction) with fail counts |
+| Study → Runs → **Instance** | Gantt + task table; click a failed row                                                                                                |
+| **Task / action detail**    | Why it failed + which recovery verb applies                                                                                           |
+
+
+
 
 ### Instance detail layout
 
 1. **Header:** study · definition@version · status · procedure/profile · times
 2. **Progress:** stage rollup + Gantt of `node_execution`
-3. **Tasks:** action × status × affinity key × lease worker × lease age × `engine_error_*`
+3. **Tasks:** action × status × affinity key × lease worker × lease age × `engine_error_`*
 4. **Controls (RBAC) — split clearly:**
-   - **Retry this action** (`FAILED` → `READY`) — study operator
-   - **Leases:** reclaim expired
-   - **Stop this task** only when catalog `can_stop` (in-flight) — `sp_stop_node`
-   - **Fail this queued action** — `sp_fail_node` (`READY`/`PENDING` only)
-   - **Cancel / fail this run** — `sp_cancel_instance` / `sp_fail_instance`
-   - **Related workers:** deep-link to fleet console (Drain/Stop) and the
-     cluster **Deployment** map (mounts / published endpoints)
+  - **Retry this action** (`FAILED` → `READY`) — study operator
+  - **Leases:** reclaim expired
+  - **Stop this task** only when catalog `can_stop` (in-flight) — `sp_stop_node`
+  - **Fail this queued action** — `sp_fail_node` (`READY`/`PENDING` only)
+  - **Cancel / fail this run** — `sp_cancel_instance` / `sp_fail_instance`
+  - **Related workers:** deep-link to fleet console (Drain/Stop) and the
+  cluster **Deployment** map (mounts / published endpoints)
 5. **Task detail:** `result_code`, `engine_error_code` / `engine_error_message`
-   (incl. `4098` `OPERATOR_FAILED`, `4099` `WORKER_STOPPED`), truncated `output_json`, **source URI(s)** for download
+  (incl. `4098` `OPERATOR_FAILED`, `4099` `WORKER_STOPPED`), truncated `output_json`, **source URI(s)** for download
    actions, pointer to `/work` `.action_results` (portal does not SSH)
-6. **Config snapshot:** `sp_get_instance_config` (redacted `context_json` + `resolvedConfig__*` slices). Read-only; change knobs via study overlay + new instance. This is the baked **science** envelope, not the workflow identity fields on `input_json` ([bindings vs knobs](#task-input-workflow-bindings-vs-science-knobs)).
+6. **Config snapshot:** `sp_get_instance_config` (redacted `context_json` + `resolvedConfig__`* slices). Read-only; change knobs via study overlay + new instance. This is the baked **science** envelope, not the workflow identity fields on `input_json` ([bindings vs knobs](#task-input-workflow-bindings-vs-science-knobs)).
 
 Enable **Stop this task** only when `can_stop` is true. Disable (with reason)
 when `can_stop=false`.
 
 ### Recovery verbs (keep them distinct)
 
-| UI verb | When | Backend | Do not confuse with |
-|---------|------|---------|---------------------|
-| **Reclaim expired leases** | Node `RUNNING`, lease expired (worker crash) | `sp_reclaim_expired_leases` | Fleet Drain/Stop |
-| **Retry this action** (set **READY**) | Node `FAILED`; same `input_json` still correct after an **external** fix | `sp_retry_failed_node` | New instance; editing baked JSON |
-| **Start new instance** | Science/config/URI was wrong | Start wizard | Reclaim / Retry |
-| **Stop this task** | In-flight, `can_stop` | `sp_stop_node` (heartbeat `STOP` / 4099) | Fleet Stop |
-| **Fail this queued action** | Node `READY`/`PENDING` | `sp_fail_node` | Retry; instance fail |
-| **Cancel this run** | Drain queued work; do not schedule later stages | `sp_cancel_instance` | Fleet Drain |
-| **Fail this run** | Drain queued work; instance `FAILED`; do not schedule later stages | `sp_fail_instance` | Task Retry |
+
+| UI verb                               | When                                                                     | Backend                                  | Do not confuse with              |
+| ------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------- | -------------------------------- |
+| **Reclaim expired leases**            | Node `RUNNING`, lease expired (worker crash)                             | `sp_reclaim_expired_leases`              | Fleet Drain/Stop                 |
+| **Retry this action** (set **READY**) | Node `FAILED`; same `input_json` still correct after an **external** fix | `sp_retry_failed_node`                   | New instance; editing baked JSON |
+| **Start new instance**                | Science/config/URI was wrong                                             | Start wizard                             | Reclaim / Retry                  |
+| **Stop this task**                    | In-flight, `can_stop`                                                    | `sp_stop_node` (heartbeat `STOP` / 4099) | Fleet Stop                       |
+| **Fail this queued action**           | Node `READY`/`PENDING`                                                   | `sp_fail_node`                           | Retry; instance fail             |
+| **Cancel this run**                   | Drain queued work; do not schedule later stages                          | `sp_cancel_instance`                     | Fleet Drain                      |
+| **Fail this run**                     | Drain queued work; instance `FAILED`; do not schedule later stages       | `sp_fail_instance`                       | Task Retry                       |
+
 
 In-graph QC remediation (trim → realign) is **program control flow**, not Retry.
 
@@ -341,23 +379,29 @@ flowchart TB
   inspect -->|"QC_fail_in_graph"| qcBranch[Program_IF_already_handles]
 ```
 
+
+
 One sample `fail_task` does **not** fail the whole instance (FOREACH siblings
 keep running). Graph-level failures do mark `workflow_instance` `FAILED`; Retry
 reopens the instance to `RUNNING` when that node was blocking.
 
 ---
 
+
+
 ## Workflows (definition vs instance)
 
 **Who may change a workflow** (the graph / DomainProgram / published version):
 
-| Role | See published catalog | Edit draft / save graph / activate version |
-|------|-----------------------|--------------------------------------------|
-| Study operator | Only inside **Start next stage** (picker) | **No** |
-| Study lead | Same picker + study process defaults | **No** |
-| Program author | Yes | **Yes** — this is their floor |
-| Platform admin | Yes | **Yes** |
-| System administrator | No (not their floor) | **No** |
+
+| Role                 | See published catalog                     | Edit draft / save graph / activate version |
+| -------------------- | ----------------------------------------- | ------------------------------------------ |
+| Study operator       | Only inside **Start next stage** (picker) | **No**                                     |
+| Study lead           | Same picker + study process defaults      | **No**                                     |
+| Program author       | Yes                                       | **Yes** — this is their floor              |
+| Platform admin       | Yes                                       | **Yes**                                    |
+| System administrator | No (not their floor)                      | **No**                                     |
+
 
 Hide the **Workflows** nav from operator and study lead (no disabled tease).
 Do not call `sp_upsert_domain_program`, `sp_save_workflow_graph`,
@@ -378,21 +422,27 @@ Workflows          (program author / platform admin only)
   └─ All instances (global ops filter)
 ```
 
-| Concept | Layer | UI label |
-|---------|-------|----------|
-| DomainProgram | Authoring IR | Program draft |
-| `wf.workflow_def` | Named published identity | Definition |
-| `wf.workflow_version` | Immutable `spec_json` | Version |
+
+| Concept                | Layer                          | UI label       |
+| ---------------------- | ------------------------------ | -------------- |
+| DomainProgram          | Authoring IR                   | Program draft  |
+| `wf.workflow_def`      | Named published identity       | Definition     |
+| `wf.workflow_version`  | Immutable `spec_json`          | Version        |
 | `wf.workflow_instance` | One execution + `context_json` | Run / Instance |
 
-| Screen | Procs | Who |
-|--------|-------|-----|
-| Definition list (read) | `sp_list_workflow_definitions` | Start wizard (operator/lead); Workflows (author) |
-| Version / graph **write** | `sp_list/get/upsert_domain_program`, `sp_create_workflow_graph`, `sp_get/save_workflow_graph`, `sp_activate_workflow_version` | **Program author / platform admin only** |
-| Action browser | `sp_list/get_workflow_actions`; types via `sp_list/get_data_types` | Author / platform |
-| Global instances | `sp_list_ops_instances`, `sp_list_recent_instances` | Ops / author |
+
+
+| Screen                    | Procs                                                                                                                         | Who                                              |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Definition list (read)    | `sp_list_workflow_definitions`                                                                                                | Start wizard (operator/lead); Workflows (author) |
+| Version / graph **write** | `sp_list/get/upsert_domain_program`, `sp_create_workflow_graph`, `sp_get/save_workflow_graph`, `sp_activate_workflow_version` | **Program author / platform admin only**         |
+| Action browser            | `sp_list/get_workflow_actions`; types via `sp_list/get_data_types`                                                            | Author / platform                                |
+| Global instances          | `sp_list_ops_instances`, `sp_list_recent_instances`                                                                           | Ops / author                                     |
+
 
 ---
+
+
 
 ## Platform (admin)
 
@@ -400,11 +450,13 @@ Workflows          (program author / platform admin only)
 **clusters**, **workers**, and **deployment** — the declared share those
 workers mount and the published endpoints that feed and archive samples.
 
-| Concern | Screen | Not the same as |
-|---------|--------|-----------------|
-| **Clusters** | `wf.cluster` rows (`cluster_key`, CIDRs, Arc, mounts) | A study or a DomainProgram |
-| **Workers** | Fleet console (`desired_state`, leases, enroll) | Cancel / fail a run; task Retry |
+
+| Concern        | Screen                                                     | Not the same as                      |
+| -------------- | ---------------------------------------------------------- | ------------------------------------ |
+| **Clusters**   | `wf.cluster` rows (`cluster_key`, CIDRs, Arc, mounts)      | A study or a DomainProgram           |
+| **Workers**    | Fleet console (`desired_state`, leases, enroll)            | Cancel / fail a run; task Retry      |
 | **Deployment** | `/work` roots + bound published endpoints for that cluster | Operator **Storage** pick on a study |
+
 
 ```
 Platform
@@ -425,23 +477,25 @@ Platform
        └─ Enrollment        public IP + external key before gateway enroll
 ```
 
-| Screen | Procs / notes |
-|--------|---------------|
-| Site | `sp_list/get/upsert/publish_site`, `sp_list_site_reference_assets` |
-| Storage endpoints | `sp_list/get/upsert/publish_storage_endpoint` |
-| Credentials | `sp_list/get/upsert/publish_credential` (never to `/work`) |
-| Pipeline profiles | `sp_list/get_pipeline_profile` — admin browse |
-| Assay procedures | `sp_list/get_assay_procedure` |
-| Analytes | `sp_list/get_analyte` |
-| Clusters | `sp_upsert/list_cluster` — `shared_storage_uri`, `worker_mount_path` |
-| **Deployment** | Compose `sp_list_clusters` + `sp_list/get_site` + `sp_list_storage_endpoints` (redacted) + `sp_list_site_reference_assets` — **no new path grammar** |
-| Fleet console | `sp_list_worker_health`, `sp_set_worker_desired_state` |
-| Enrollment | `sp_upsert/list/revoke_worker_enrollment` |
-| Domain programs | `sp_list/get/upsert/publish_domain_program` |
-| Action catalog | `sp_list/get_workflow_actions` |
-| DataType Registry | `sp_list/get_data_types`, `sp_list_data_type_fields` |
-| Sample field contracts | `sp_list/get_sample_field_contract` — **only** JSON Schema column in DB |
-| Reference assets | `sp_list/get_reference_asset` |
+
+| Screen                 | Procs / notes                                                                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Site                   | `sp_list/get/upsert/publish_site`, `sp_list_site_reference_assets`                                                                                   |
+| Storage endpoints      | `sp_list/get/upsert/publish_storage_endpoint`                                                                                                        |
+| Credentials            | `sp_list/get/upsert/publish_credential` (never to `/work`)                                                                                           |
+| Pipeline profiles      | `sp_list/get_pipeline_profile` — admin browse                                                                                                        |
+| Assay procedures       | `sp_list/get_assay_procedure`                                                                                                                        |
+| Analytes               | `sp_list/get_analyte`                                                                                                                                |
+| Clusters               | `sp_upsert/list_cluster` — `shared_storage_uri`, `worker_mount_path`                                                                                 |
+| **Deployment**         | Compose `sp_list_clusters` + `sp_list/get_site` + `sp_list_storage_endpoints` (redacted) + `sp_list_site_reference_assets` — **no new path grammar** |
+| Fleet console          | `sp_list_worker_health`, `sp_set_worker_desired_state`                                                                                               |
+| Enrollment             | `sp_upsert/list/revoke_worker_enrollment`                                                                                                            |
+| Domain programs        | `sp_list/get/upsert/publish_domain_program`                                                                                                          |
+| Action catalog         | `sp_list/get_workflow_actions`                                                                                                                       |
+| DataType Registry      | `sp_list/get_data_types`, `sp_list_data_type_fields`                                                                                                 |
+| Sample field contracts | `sp_list/get_sample_field_contract` — **only** JSON Schema column in DB                                                                              |
+| Reference assets       | `sp_list/get_reference_asset`                                                                                                                        |
+
 
 Storage RBAC: **lab admin** → `lab_ingress`; **system administrator** (infra)
 → archive / shared / site + cluster deployment; operators → published
@@ -449,7 +503,7 @@ redacted endpoints only.
 
 ### Deployment map (system administrator)
 
-Workers on a cluster share one filesystem. Convention: mount at **`/work`**,
+Workers on a cluster share one filesystem. Convention: mount at `/work`,
 recorded on `wf.cluster.worker_mount_path` / `shared_storage_uri`.
 `portal.sp_upsert_cluster` defaults those fields to `/work/epimethyl` — that
 is the **promoted release** tree, not the sample scratch and not the QNAP
@@ -462,15 +516,17 @@ fact** on a published archive endpoint (`epimethyl-archive`), shown here
 next to the cluster mount. Operators still only **select** that published
 redacted endpoint on Study → Storage.
 
-| Role | Path / URI | Who authors | Who uses |
-|------|------------|-------------|----------|
-| Cluster share | `/work` (`worker_mount_path`) | System administrator (cluster row) | Every worker on the cluster |
-| Release / runtime | `/work/epimethyl/current` | Promote pipeline | Workers (no git) |
-| Sample scratch | `/work/samples/{sample_id}/` | `init_work_layout.sh` | Baked `sampleDir` / `samples_base_path` |
-| Study outputs | `/work/projects/<study>/` | Layout + study upsert | Operator `projectPath` |
-| Genomes / site | `/work/genomes/`, `/work/site/` | Provision + site publish | Site pins |
-| Lab FASTQ ingress | published `fastqSource` | Lab admin | Study operator (select) |
-| Durable sample / H5 archive | published `sampleDestination` (company example: `s3://epimethyl/samples/` on `epimethyl-archive`) | System administrator | Study operator (select) |
+
+| Role                        | Path / URI                                                                                        | Who authors                        | Who uses                                |
+| --------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------- |
+| Cluster share               | `/work` (`worker_mount_path`)                                                                     | System administrator (cluster row) | Every worker on the cluster             |
+| Release / runtime           | `/work/epimethyl/current`                                                                         | Promote pipeline                   | Workers (no git)                        |
+| Sample scratch              | `/work/samples/{sample_id}/`                                                                      | `init_work_layout.sh`              | Baked `sampleDir` / `samples_base_path` |
+| Study outputs               | `/work/projects/<study>/`                                                                         | Layout + study upsert              | Operator `projectPath`                  |
+| Genomes / site              | `/work/genomes/`, `/work/site/`                                                                   | Provision + site publish           | Site pins                               |
+| Lab FASTQ ingress           | published `fastqSource`                                                                           | Lab admin                          | Study operator (select)                 |
+| Durable sample / H5 archive | published `sampleDestination` (company example: `s3://epimethyl/samples/` on `epimethyl-archive`) | System administrator               | Study operator (select)                 |
+
 
 `/work/epimethyl` ≠ `/work/samples` ≠ the archive prefix. Do not hard-code
 any of those strings into Study UI logic. The portal does not SSH; this
@@ -485,6 +541,8 @@ quick Drain / Stop / Resume (system administrator). Deep-link the cluster
 name to **Deployment** (mounts / endpoints), not only to Drain/Stop.
 
 ---
+
+
 
 ## Hyperparameters
 
@@ -503,6 +561,8 @@ Winners are **never** auto-written into a published profile.
 Details: [portal-remote-control.md](portal-remote-control.md).
 
 ---
+
+
 
 ## Admin — RBAC and Contracts
 
@@ -527,7 +587,7 @@ Admin
 ```
 
 Session/nav stays `RBAC.spGetUserNavTree` + `usp_session_is_authorized` at login.
-**CRUD** for these screens is **`portal.sp_*`**. There is no `e_portal`
+**CRUD** for these screens is `portal.sp_`*. There is no `e_portal`
 schema. Do not call leftover `portal.spAddUserRole` from new screens — use
 `portal.sp_grant_user_role` / `sp_revoke_user_role`.
 
@@ -537,32 +597,40 @@ Commercial grain is **process pack** (`regulatory.primary_modality`), not raw
 `wf.workflow_def` ids. `Contract.ContractWorkflowEntitlements` remain for
 **quota** on derived SamplePrep / lifecycle graphs.
 
-| Today (legacy) | Operator product |
-|----------------|------------------|
-| Entitlement on `WorkflowDefID` | Licensed for `methylation` / `rnaseq` / `proteomics` |
-| Catalog lists every operator pack | Pickers show **only entitled** packs |
-| `spContractValidateWorkflowExecution` | Also `PROCESS_PACK_NOT_ENTITLED` at start |
+
+| Today (legacy)                        | Operator product                                     |
+| ------------------------------------- | ---------------------------------------------------- |
+| Entitlement on `WorkflowDefID`        | Licensed for `methylation` / `rnaseq` / `proteomics` |
+| Catalog lists every operator pack     | Pickers show **only entitled** packs                 |
+| `spContractValidateWorkflowExecution` | Also `PROCESS_PACK_NOT_ENTITLED` at start            |
+
 
 v1 does **not** SKU individual assay procedures (buffy vs EM-Seq) or application
 packs. `PlanCode` / `BillingCycle` are metadata — no billing UI.
 
 ---
 
+
+
 ## RBAC matrix
 
-| Role | Home | Can | Cannot |
-|------|------|-----|--------|
-| **Study operator** | Studies → Runs | Enroll samples, start **published** instances, view tasks, **Retry** / reclaim, view entitled packs | Edit/save/activate a workflow graph; DomainProgram publish; site; secrets; fleet Drain/Stop; cluster **Deployment**; Users; Contracts |
-| **Study lead** | Studies | Operator + bind **published** procedure/profile, next-run overlay, validation lifecycle / HPO | **Same graph writes as operator** — no draft, save, compile, or activate; Platform publish; fleet; Admin |
-| **Lab admin** | Platform → Storage (ingress) | Lab ingress endpoints + credentials | Archive/shared/site; fleet Stop unless also system administrator; workflow graph writes |
-| **System administrator** (infra) | Platform → Clusters & workers | Cluster upsert + mounts, enrollment, fleet Drain/Stop/Resume, archive/shared/site storage, **deployment map** | Clinical PHI edits; study science knobs; Users / Contracts; workflow graph writes |
-| **Program author** | Workflows → Definitions | Edit drafts, save graph, compile, **publish / activate** versions | Start production studies without a study role |
-| **Platform admin** | All | Roles, Contracts, invitations, enrollment revoke, global reclaim, fleet bulk, **workflow publish** | — |
+
+| Role                             | Home                          | Can                                                                                                           | Cannot                                                                                                                                |
+| -------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Study operator**               | Studies → Runs                | Enroll samples, start **published** instances, view tasks, **Retry** / reclaim, view entitled packs           | Edit/save/activate a workflow graph; DomainProgram publish; site; secrets; fleet Drain/Stop; cluster **Deployment**; Users; Contracts |
+| **Study lead**                   | Studies                       | Operator + bind **published** procedure/profile, next-run overlay, validation lifecycle / HPO                 | **Same graph writes as operator** — no draft, save, compile, or activate; Platform publish; fleet; Admin                              |
+| **Lab admin**                    | Platform → Storage (ingress)  | Lab ingress endpoints + credentials                                                                           | Archive/shared/site; fleet Stop unless also system administrator; workflow graph writes                                               |
+| **System administrator** (infra) | Platform → Clusters & workers | Cluster upsert + mounts, enrollment, fleet Drain/Stop/Resume, archive/shared/site storage, **deployment map** | Clinical PHI edits; study science knobs; Users / Contracts; workflow graph writes                                                     |
+| **Program author**               | Workflows → Definitions       | Edit drafts, save graph, compile, **publish / activate** versions                                             | Start production studies without a study role                                                                                         |
+| **Platform admin**               | All                           | Roles, Contracts, invitations, enrollment revoke, global reclaim, fleet bulk, **workflow publish**            | —                                                                                                                                     |
+
 
 Day-2 operators use **portal UI only** (company identity / MFA) — not SQL tools,
 not gateway admin HTTP ([component-boundaries](component-boundaries.md)).
 
 ---
+
+
 
 ## Screen → procedure inventory
 
@@ -570,107 +638,131 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 
 ### Workflow, monitor, recovery
 
-| Procedure | UI use |
-|-----------|--------|
-| `portal.sp_list_workflow_definitions` | Start wizard / Workflows list (`@scope_id` optional) |
-| `portal.sp_create_workflow_graph` | Publish compiled graph (author) |
-| `portal.sp_create_and_start_instance` | Start run; optional `@scope_id` pack check + `@study_row_id` link |
-| `portal.sp_link_study_instance` | Attach an existing run (e.g. instance 67) to a cfg study |
-| `portal.sp_get_workflow_instance` | Thin id/status (compat) |
-| `portal.sp_get_workflow_instance_header` | Instance header (study, profile, counts) |
-| `portal.sp_get_instance_config` | Config tab (redacted context + `resolvedConfig`) |
-| `portal.sp_get_instance_sample_progress` | Sample × stage matrix |
-| `portal.sp_list_ops_instances` | Home / Ops board |
-| `portal.sp_list_recent_instances` | Monitor picker (not study-filtered) |
-| `portal.sp_list_study_instances` | Study → Runs |
-| `portal.sp_get_study_pipeline_progress` | Study Overview stage rollup |
-| `portal.sp_get_instance_tasks` | Task table / Gantt (`engine_error_*`, affinity, lease, source URI) |
-| `portal.sp_get_node_execution_detail` | Task detail |
-| `portal.sp_retry_failed_node` | Retry (`FAILED` → `READY`) |
-| `portal.sp_fail_node` | Operator fail queued task (`READY`/`PENDING`) |
-| `portal.sp_stop_node` | Request in-flight stop (`can_stop`) |
+
+| Procedure                                        | UI use                                                                           |
+| ------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `portal.sp_list_workflow_definitions`            | Start wizard / Workflows list (`@scope_id` optional)                             |
+| `portal.sp_create_workflow_graph`                | Publish compiled graph (author)                                                  |
+| `portal.sp_create_and_start_instance`            | Start run; optional `@scope_id` pack check + `@study_row_id` link                |
+| `portal.sp_link_study_instance`                  | Attach an existing run (e.g. instance 67) to a cfg study                         |
+| `portal.sp_get_workflow_instance`                | Thin id/status (compat)                                                          |
+| `portal.sp_get_workflow_instance_header`         | Instance header (study, profile, counts)                                         |
+| `portal.sp_get_instance_config`                  | Config tab (redacted context + `resolvedConfig`)                                 |
+| `portal.sp_get_instance_sample_progress`         | Sample × stage matrix                                                            |
+| `portal.sp_list_ops_instances`                   | Home / Ops board                                                                 |
+| `portal.sp_list_recent_instances`                | Monitor picker (not study-filtered)                                              |
+| `portal.sp_list_study_instances`                 | Study → Runs                                                                     |
+| `portal.sp_get_study_pipeline_progress`          | Study Overview stage rollup                                                      |
+| `portal.sp_get_instance_tasks`                   | Task table / Gantt (`engine_error_*`, affinity, lease, source URI)               |
+| `portal.sp_get_node_execution_detail`            | Task detail                                                                      |
+| `portal.sp_retry_failed_node`                    | Retry (`FAILED` → `READY`)                                                       |
+| `portal.sp_fail_node`                            | Operator fail queued task (`READY`/`PENDING`)                                    |
+| `portal.sp_stop_node`                            | Request in-flight stop (`can_stop`)                                              |
 | `portal.sp_cancel_instance` / `sp_fail_instance` | Drain queued work; cancel or fail the run; engine will not activate later stages |
-| `portal.sp_reclaim_expired_leases` | Ops reclaim |
-| `portal.sp_list/get_workflow_actions` | Action catalog |
-| `portal.sp_list/get_data_types` | DataType Registry |
-| `portal.sp_list_data_type_fields` | DataType Registry fields |
-| `portal.sp_get_action_schema` | Legacy compat only |
+| `portal.sp_reclaim_expired_leases`               | Ops reclaim                                                                      |
+| `portal.sp_list/get_workflow_actions`            | Action catalog                                                                   |
+| `portal.sp_list/get_data_types`                  | DataType Registry                                                                |
+| `portal.sp_list_data_type_fields`                | DataType Registry fields                                                         |
+| `portal.sp_get_action_schema`                    | Legacy compat only                                                               |
+
+
+
 
 ### Cfg / study / storage / catalogs
 
-| Procedure | UI use |
-|-----------|--------|
-| `portal.sp_list/get/upsert/publish_domain_program` | Program authoring |
-| `portal.sp_list/set_study_group(s)`, `sp_set_study_group_members` | Study arms |
-| `portal.sp_materialize_study_lists` | Materialize CSVs to `/work` |
-| `portal.sp_list_samples_for_study_enrollment` | Enrollment picker |
-| `portal.sp_set_sample_analyte` | Bind sample → `cfg.analyte` |
-| `portal.sp_get/set_study_storage` | Persist published `fastqSource` + `sampleDestination` on the study |
-| `portal.sp_get/set_study_action_config_overlay` | Next-run guardrail / `actionConfig` overlay |
-| `portal.sp_list/get/upsert/publish_storage_endpoint` | Storage admin |
-| `portal.sp_list/get/upsert/publish_credential` | Credential admin |
-| `portal.sp_list/get_pipeline_profile` | Platform process-pack browse |
-| `portal.sp_list_pipeline_profile_catalog` | Start wizard (`@scope_id`) |
-| `portal.sp_list/get_assay_procedure` | Platform procedure browse |
-| `portal.sp_list_assay_procedure_catalog` | Start wizard (`@analyte`, `@scope_id`) |
-| `portal.sp_list/get_analyte` | Platform analyte browse |
-| `portal.sp_list_analyte_catalog` | Start wizard (`@scope_id`) |
-| `portal.sp_get/set_study_process_defaults` | Study defaults |
-| `portal.sp_list/get/upsert/publish_site` | Platform → Site |
-| `portal.sp_list_studies`, `sp_get/upsert_study` | Study list |
-| `portal.sp_project_list/get/save`, `sp_project_resolve_archive` | Manifest / archive |
+
+| Procedure                                                         | UI use                                                             |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `portal.sp_list/get/upsert/publish_domain_program`                | Program authoring                                                  |
+| `portal.sp_list/set_study_group(s)`, `sp_set_study_group_members` | Study arms                                                         |
+| `portal.sp_materialize_study_lists`                               | Materialize CSVs to `/work`                                        |
+| `portal.sp_list_samples_for_study_enrollment`                     | Enrollment picker                                                  |
+| `portal.sp_set_sample_analyte`                                    | Bind sample → `cfg.analyte`                                        |
+| `portal.sp_get/set_study_storage`                                 | Persist published `fastqSource` + `sampleDestination` on the study |
+| `portal.sp_get/set_study_action_config_overlay`                   | Next-run guardrail / `actionConfig` overlay                        |
+| `portal.sp_list/get/upsert/publish_storage_endpoint`              | Storage admin                                                      |
+| `portal.sp_list/get/upsert/publish_credential`                    | Credential admin                                                   |
+| `portal.sp_list/get_pipeline_profile`                             | Platform process-pack browse                                       |
+| `portal.sp_list_pipeline_profile_catalog`                         | Start wizard (`@scope_id`)                                         |
+| `portal.sp_list/get_assay_procedure`                              | Platform procedure browse                                          |
+| `portal.sp_list_assay_procedure_catalog`                          | Start wizard (`@analyte`, `@scope_id`)                             |
+| `portal.sp_list/get_analyte`                                      | Platform analyte browse                                            |
+| `portal.sp_list_analyte_catalog`                                  | Start wizard (`@scope_id`)                                         |
+| `portal.sp_get/set_study_process_defaults`                        | Study defaults                                                     |
+| `portal.sp_list/get/upsert/publish_site`                          | Platform → Site                                                    |
+| `portal.sp_list_studies`, `sp_get/upsert_study`                   | Study list                                                         |
+| `portal.sp_project_list/get/save`, `sp_project_resolve_archive`   | Manifest / archive                                                 |
+
+
+
 
 ### Workers / fleet / deployment
 
-| Procedure | UI use |
-|-----------|--------|
-| `portal.sp_upsert/list_cluster` | Clusters — include `shared_storage_uri`, `worker_mount_path` |
-| `portal.sp_list/get_site`, `sp_list_site_reference_assets` | Deployment map (pins + provisioned genomes) |
-| `portal.sp_list_storage_endpoints` | Deployment map (redacted published ingress / archive) |
-| `portal.sp_upsert/list/revoke_worker_enrollment` | Enrollment |
-| `portal.sp_list_worker_health` | Fleet console (desired_state, heartbeat, leases) |
-| `portal.sp_set_worker_desired_state` | Drain / Stop / Resume |
-| `portal.sp_list_stale_leases` | Ops board |
+
+| Procedure                                                  | UI use                                                       |
+| ---------------------------------------------------------- | ------------------------------------------------------------ |
+| `portal.sp_upsert/list_cluster`                            | Clusters — include `shared_storage_uri`, `worker_mount_path` |
+| `portal.sp_list/get_site`, `sp_list_site_reference_assets` | Deployment map (pins + provisioned genomes)                  |
+| `portal.sp_list_storage_endpoints`                         | Deployment map (redacted published ingress / archive)        |
+| `portal.sp_upsert/list/revoke_worker_enrollment`           | Enrollment                                                   |
+| `portal.sp_list_worker_health`                             | Fleet console (desired_state, heartbeat, leases)             |
+| `portal.sp_set_worker_desired_state`                       | Drain / Stop / Resume                                        |
+| `portal.sp_list_stale_leases`                              | Ops board                                                    |
+
+
+
 
 ### Hyperparameters
 
-| Procedure | UI use |
-|-----------|--------|
-| `portal.sp_start_hyperparam_grid` | Start search |
-| `portal.sp_add_hyperparam_trial` | Trial ↔ instance |
-| `portal.sp_get/list_hyperparam_search(es)` | Monitor |
-| `portal.sp_score_hyperparam_trial` | Score |
-| `portal.sp_set_hyperparam_search_status` | Pause / complete |
-| `portal.sp_promote_hyperparam_winner` | Deep-merge winning **dotted** overrides onto the existing **study overlay** (never a published profile; does not wipe sibling guardrails) |
+
+| Procedure                                  | UI use                                                                                                                                    |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `portal.sp_start_hyperparam_grid`          | Start search                                                                                                                              |
+| `portal.sp_add_hyperparam_trial`           | Trial ↔ instance                                                                                                                          |
+| `portal.sp_get/list_hyperparam_search(es)` | Monitor                                                                                                                                   |
+| `portal.sp_score_hyperparam_trial`         | Score                                                                                                                                     |
+| `portal.sp_set_hyperparam_search_status`   | Pause / complete                                                                                                                          |
+| `portal.sp_promote_hyperparam_winner`      | Deep-merge winning **dotted** overrides onto the existing **study overlay** (never a published profile; does not wipe sibling guardrails) |
+
+
+
 
 ### Admin RBAC (`portal_rbac_api`)
 
-| Procedure | UI use |
-|-----------|--------|
-| `portal.sp_list/get/upsert_user` | Users |
-| `portal.sp_list_user_identities` | ExternalIdentities (read) |
-| `portal.sp_list_roles`, `sp_list_permissions` | Roles |
-| `portal.sp_grant/revoke_user_role`, `sp_list_user_role_grants` | Scoped / GLOBAL grants |
-| `portal.sp_list/get_scopes` | Scopes |
-| `portal.sp_list_user_groups`, `sp_set_user_group_members`, `sp_set_user_group_roles` | User groups |
-| `portal.sp_list_user_sessions` | Sessions (read) |
-| `portal.sp_revoke_user_session` | End a session |
-| `portal.sp_list/create/decide_bypass_scope_approval` | Bypass-scope approvals |
-| `portal.sp_list/grant/deny_role_nav_nodes` | Nav grants |
-| `portal.sp_list/create/revoke_invitation`, `sp_create_invitation_batch` | Onboarding |
+
+| Procedure                                                                            | UI use                    |
+| ------------------------------------------------------------------------------------ | ------------------------- |
+| `portal.sp_list/get/upsert_user`                                                     | Users                     |
+| `portal.sp_list_user_identities`                                                     | ExternalIdentities (read) |
+| `portal.sp_list_roles`, `sp_list_permissions`                                        | Roles                     |
+| `portal.sp_grant/revoke_user_role`, `sp_list_user_role_grants`                       | Scoped / GLOBAL grants    |
+| `portal.sp_list/get_scopes`                                                          | Scopes                    |
+| `portal.sp_list_user_groups`, `sp_set_user_group_members`, `sp_set_user_group_roles` | User groups               |
+| `portal.sp_list_user_sessions`                                                       | Sessions (read)           |
+| `portal.sp_revoke_user_session`                                                      | End a session             |
+| `portal.sp_list/create/decide_bypass_scope_approval`                                 | Bypass-scope approvals    |
+| `portal.sp_list/grant/deny_role_nav_nodes`                                           | Nav grants                |
+| `portal.sp_list/create/revoke_invitation`, `sp_create_invitation_batch`              | Onboarding                |
+
+
+
 
 ### Contracts (`portal_contract_api`)
 
-| Procedure | UI use |
-|-----------|--------|
-| `portal.sp_list/get/upsert_contract` | Contract header |
-| `portal.sp_list/set_contract_process_packs` | Entitled modalities |
-| `portal.sp_list/set_contract_scopes`, `sp_list/set_contract_limits`, `sp_list/set_contract_role_policies` | Admin panels |
-| `portal.sp_list_contract_usage` | Quota counters (read) |
-| `portal.sp_contract_entitled_modalities` | Catalog filter helper |
-| `Contract.spContractValidateWorkflowExecution` | Called from `sp_create_and_start_instance` (not directly from UI) |
 
-### Legacy clinical nav
+| Procedure                                                                                                 | UI use                                                            |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `portal.sp_list/get/upsert_contract`                                                                      | Contract header                                                   |
+| `portal.sp_list/set_contract_process_packs`                                                               | Entitled modalities                                               |
+| `portal.sp_list/set_contract_scopes`, `sp_list/set_contract_limits`, `sp_list/set_contract_role_policies` | Admin panels                                                      |
+| `portal.sp_list_contract_usage`                                                                           | Quota counters (read)                                             |
+| `portal.sp_contract_entitled_modalities`                                                                  | Catalog filter helper                                             |
+| `Contract.spContractValidateWorkflowExecution`                                                            | Called from `sp_create_and_start_instance` (not directly from UI) |
+
+
+
+
+### Legacy clinical navguar
 
 Older `portal.spGetSamples*`, `spNavTree*`, `spGetCollectionItems` may still back
 clinical trees. Prefer study-arm APIs for new Study UX. The `e_portal` schema
@@ -689,31 +781,37 @@ does not exist; former `e_portal.*` helpers that remain are `portal.*`
 
 ---
 
+
+
 ## EpiPortal build priority
 
 1. Study pipeline workspace + **monitor / failure / retry** (incl. missing-FASTQ → READY).
 2. Admin RBAC façade.
 3. Contracts + entitled process-pack catalogs.
 4. Wire already-shipped ops/fleet procs into chrome, plus the system-administrator
-   **Deployment** map (cluster mounts + published endpoints).
+  **Deployment** map (cluster mounts + published endpoints).
 5. Wire cancel/fail/stop + config snapshot + study overlay (shipped SQL; EpiPortal screens in the other repo).
+
+
 
 ## Design principles
 
 1. **Study-centric for operators; definition-centric for authors; instance-centric for ops.**
 2. Never conflate project manifest with `actionConfig`. Never conflate
-   workflow-baked `input_json` identity with `resolvedConfig` science knobs
+  workflow-baked `input_json` identity with `resolvedConfig` science knobs
    (QC guardrails are the latter).
 3. **Publish before run** — only published versions/procedures/profiles in Start.
-    Study operator / study lead never open graph edit.
+  Study operator / study lead never open graph edit.
 4. One primary object per screen; deep-link Study → Run → Task.
 5. Contract-filter catalogs; hide unentitled packs.
 6. Config snapshot (`sp_get_instance_config`) is read-only; change knobs on the study overlay and start a new run.
 7. **Fleet ≠ science knobs ≠ instance lifecycle ≠ task retry ≠ cluster deployment.**
-8. Enable Stop from catalog **`can_stop`**, not role guesswork.
+8. Enable Stop from catalog `can_stop`, not role guesswork.
 9. **Affinity is opaque** — show the key.
 10. Retry is operator-gated `FAILED`→`READY` with the same inputs — never a free-form status editor.
 11. **System administrator** sees clusters, workers, **and** the declared `/work` + published-archive map. Do not hide deployment inside Study Storage, and do not put a site prefix (`s3://epimethyl/samples/`) in nav.
+
+
 
 ## Related
 
@@ -733,3 +831,4 @@ does not exist; former `e_portal.*` helpers that remain are `portal.*`
 - [Portal UI SQL actions plan](../plans/portal-ui-sql-actions.plan.md)
 - [Portal IA canvas](../canvas/README.md#portal-ia)
 - [Deployment — portal resource profile](../deployment/portal_resource_profile.md)
+
