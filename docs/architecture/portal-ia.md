@@ -24,7 +24,9 @@ workers→gateway; HPO grids). **Fleet control:** [Constrained worker ops](const
    not around schema names. Hide nav the role cannot use (no disabled tease).
 3. **Project manifests** (`project_*.json`) hold cohorts and paths — never tool
    knobs. Tunables are schema-driven overlays (site / profile / procedure /
-   instance) → baked `resolvedConfig` on tasks.
+   instance) → baked `resolvedConfig` on tasks. Do not treat QC guardrail
+   defaults as DomainProgram / `input_json` bindings — see
+   [Task input: workflow bindings vs science knobs](#task-input-workflow-bindings-vs-science-knobs).
 4. Portal talks **`portal.sp_*` only** (Azure SQL today; PG twin). Workers talk
    **gateway only**. Never reverse those paths. Do not call `RBAC.*` / `Contract.*`
    write procs from new screens — wrap them as `portal.sp_*`.
@@ -147,7 +149,7 @@ Two DomainPrograms in sequence, then optional prediction
 | Study process defaults | Persist default profile / procedure / analyte / researchMode | `sp_set/get_study_process_defaults`; pickers: `sp_list_*_catalog` **filtered by contract** when `@scope_id` is set |
 | Cohort (samples & arms) | Enrollment, study arms, membership | `sp_list_samples_for_study_enrollment`, `sp_set_sample_analyte`, `sp_list/set_study_group(s)`, `sp_set_study_group_members`, `sp_materialize_study_lists` |
 | Storage | Select **published redacted** `fastqSource` + `sampleDestination` | `sp_list_storage_endpoints` (redacted); persist with `sp_get/set_study_storage`; authoring stays on Platform |
-| Guardrails (next run) | Study-lead `actionConfig` overlay (`alignment_qc` / `extraction_qc`) | `sp_get/set_study_action_config_overlay` — **not** a mid-run rebake |
+| Guardrails (next run) | Study-lead `actionConfig` overlay (`alignment_qc` / `extraction_qc`) | `sp_get/set_study_action_config_overlay` — **not** a mid-run rebake; not workflow `input_json` keys |
 | Project manifests | Cohort paths under `/work/projects/<study>/` | `sp_project_list/get/save`; **no** `actionConfig` knobs |
 | Runs | Instances for this study | `sp_list_study_instances` |
 | **Instance detail** | Gantt, tasks, errors, **recovery verbs** | `sp_get_workflow_instance_header`, `sp_get_instance_tasks`, `sp_get_instance_sample_progress`, `sp_get_instance_config`, `sp_get_node_execution_detail`, `sp_retry_failed_node`, `sp_reclaim_expired_leases`, `sp_stop_node`, `sp_fail_node`, `sp_cancel_instance`, `sp_fail_instance` |
@@ -155,6 +157,68 @@ Two DomainPrograms in sequence, then optional prediction
 
 **Storage:** operators **select** published endpoints. Lab/infra **author** them
 under Platform. Do not put credentials on the study screen.
+
+### Task input: workflow bindings vs science knobs
+
+Both kinds can appear on a claimed task, but they are **not** the same kind of
+`input_json` field. Distinguish them by **layer**, not by “whether they have a
+default.” Contract: [action-parameter-contract](../reference/action-parameter-contract.md).
+
+**Workflow-baked** fields are **identity and bindings**. The DomainProgram
+template names them; the engine substitutes `${var.*}` into top-level
+`input_json` (`sampleId`, `sampleDir`, `projectPath`, `fastqSource`, trim
+counts, `alignmentMode`, …). Retry reuses this payload.
+
+**Science knobs** (QC guardrails, extract thresholds, validation caps) are
+**operator overlays**, not graph parameters. They live under
+`actionConfig.<action_config_key>` (e.g. `alignment_qc.core_guardrails`). The
+workflow injects the whole slice as one envelope:
+`"resolvedConfig": "${var.resolvedConfig__alignment_qc}"`. Changing them is a
+**new instance**, not Retry.
+
+| Question | Workflow-baked | Guardrail / tool defaults |
+|----------|----------------|---------------------------|
+| Who names the key? | Catalog `context_vars` + program `with` | Catalog `action_config_key` (e.g. `alignment_qc`) |
+| Schema | `schemas/tasks/*.input.schema.json` | `schemas/config/alignment_qc.schema.json` (etc.) |
+| Operator edits | Study manifest / storage / sample list | Site, profile, procedure, or **Guardrails (next run)** |
+| Shape on the task | Top-level `sampleId`, `sampleDir`, … | Nested `resolvedConfig.core_guardrails.*` |
+| Can **Retry** change it? | No — same baked payload | No — overlay + **Start new instance** |
+
+Example claimed `sample.methyl_qc` task:
+
+```json
+{
+  "tool": "MethylAlignmentQc",
+  "sampleId": "S001",
+  "sampleDir": "/work/samples/S001",
+  "projectPath": "/work/projects/…/project_….json",
+  "alignmentMode": "pangenome_wgbs",
+  "resolvedConfig": {
+    "core_guardrails": { "median_insert_min_bp": 150, "max_gc_dropout": 5.0 }
+  }
+}
+```
+
+`sampleId` is workflow. `median_insert_min_bp` is not — it only rides inside
+`resolvedConfig`.
+
+**Portal surfaces (keep them distinct):**
+
+| Screen | Shows | Proc |
+|--------|-------|------|
+| **Task detail** | Workflow-baked identity (URI, sample, trim) | `sp_get_node_execution_detail` |
+| **Config snapshot** | What *this run* baked under `resolvedConfig__*` | `sp_get_instance_config` (read-only) |
+| **Guardrails (next run)** | Study overlay for `alignment_qc` / `extraction_qc` | `sp_get/set_study_action_config_overlay` |
+
+Many profiles ship `"alignment_qc": {}`. Instance bake then stores an empty
+slice, and `methylalignmentqc` fills the published WGBS window from
+`CoreGuardrailsConfig` / the alignment-qc JSON Schema. Those numbers never
+appear as DomainProgram parameters. If operators set them on site, profile,
+procedure, or the study overlay, they *are* baked — still only as
+`resolvedConfig`, still not as workflow `input_json` keys.
+
+CI: `scripts/check_task_input_config_boundary.py` fails when a wire field name
+overlaps a package config schema key (identity allowlist excluded).
 
 ### Start-run wizard (must-have UX)
 
@@ -214,7 +278,7 @@ First-class operator UX. The engine does **not** auto-requeue `FAILED` nodes
 5. **Task detail:** `result_code`, `engine_error_code` / `engine_error_message`
    (incl. `4098` `OPERATOR_FAILED`, `4099` `WORKER_STOPPED`), truncated `output_json`, **source URI(s)** for download
    actions, pointer to `/work` `.action_results` (portal does not SSH)
-6. **Config snapshot:** `sp_get_instance_config` (redacted `context_json` + `resolvedConfig__*` slices). Read-only; change knobs via study overlay + new instance.
+6. **Config snapshot:** `sp_get_instance_config` (redacted `context_json` + `resolvedConfig__*` slices). Read-only; change knobs via study overlay + new instance. This is the baked **science** envelope, not the workflow identity fields on `input_json` ([bindings vs knobs](#task-input-workflow-bindings-vs-science-knobs)).
 
 Enable **Stop this task** only when `can_stop` is true. Disable (with reason)
 when `can_stop=false`.
@@ -549,7 +613,9 @@ live uniGUI until cutover.
 ## Design principles
 
 1. **Study-centric for operators; definition-centric for authors; instance-centric for ops.**
-2. Never conflate project manifest with `actionConfig`.
+2. Never conflate project manifest with `actionConfig`. Never conflate
+   workflow-baked `input_json` identity with `resolvedConfig` science knobs
+   (QC guardrails are the latter).
 3. **Publish before run** — only published versions/procedures/profiles in Start.
 4. One primary object per screen; deep-link Study → Run → Task.
 5. Contract-filter catalogs; hide unentitled packs.
@@ -566,7 +632,9 @@ live uniGUI until cutover.
 - [Action provider registry](action-provider-registry.md)
 - [Distributed runtime](distributed-runtime.md)
 - [Component boundaries](component-boundaries.md)
+- [Action parameter contract](../reference/action-parameter-contract.md)
 - [Config registry](config-registry.md)
+- [Layer model](layer-model.md)
 - [Workflow idempotency, retry, and leases](workflow-idempotency-retry-lease.md)
 - [Usage ch.11 — Troubleshooting](../usage/11-troubleshooting-and-recovery.md)
 - [Portal pipeline IA plan](../plans/portal-pipeline-ia.plan.md)

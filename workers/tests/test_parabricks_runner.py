@@ -50,6 +50,50 @@ def test_resolve_paired_fastqs_recursive_glob(tmp_path: Path) -> None:
     assert len(fastqs) == 2
 
 
+def test_resolve_paired_fastqs_skips_absolute_out_of_tree_symlink(
+    tmp_path: Path,
+) -> None:
+    """Clara bind-mounts sampleDir as /workdir; /lambda/... symlink targets miss."""
+    sample_dir = tmp_path / "S_abs"
+    other = tmp_path / "outside"
+    sample_dir.mkdir()
+    other.mkdir()
+    real = other / "S_abs_1.fastq.gz"
+    real.write_bytes(b"r1")
+    (other / "S_abs_2.fastq.gz").write_bytes(b"r2")
+    (sample_dir / "S_abs_1.fastq.gz").symlink_to(real)
+    (sample_dir / "S_abs_2.fastq.gz").symlink_to(other / "S_abs_2.fastq.gz")
+    lane = sample_dir / "AN000_fcA"
+    lane.mkdir()
+    (lane / "S_abs_1.fastq.gz").write_bytes(b"a1")
+    (lane / "S_abs_2.fastq.gz").write_bytes(b"a2")
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_abs")
+    assert [p.relative_to(sample_dir).as_posix() for p in fastqs] == [
+        "AN000_fcA/S_abs_1.fastq.gz",
+        "AN000_fcA/S_abs_2.fastq.gz",
+    ]
+
+
+def test_resolve_paired_fastqs_dedups_root_hardlinks(tmp_path: Path) -> None:
+    """Root hardlinks of lane FASTQs must not become a second Clara --in-fq pair."""
+    sample_dir = tmp_path / "S_hl"
+    lane = sample_dir / "AN000_fcA"
+    lane.mkdir(parents=True)
+    r1 = lane / "S_hl_1.fastq.gz"
+    r2 = lane / "S_hl_2.fastq.gz"
+    r1.write_bytes(b"a1")
+    r2.write_bytes(b"a2")
+    (sample_dir / "fc1_S_hl_1.fastq.gz").hardlink_to(r1)
+    (sample_dir / "fc1_S_hl_2.fastq.gz").hardlink_to(r2)
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_hl")
+    assert [p.relative_to(sample_dir).as_posix() for p in fastqs] == [
+        "AN000_fcA/S_hl_1.fastq.gz",
+        "AN000_fcA/S_hl_2.fastq.gz",
+    ]
+
+
 def test_resolve_paired_fastqs_prefers_lane_pairs_over_merged(tmp_path: Path) -> None:
     """Clara --in-fq per lane; skip vendor *_merged_* concatenations that desync."""
     sample_dir = tmp_path / "S_merge"

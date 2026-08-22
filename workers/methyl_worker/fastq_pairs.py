@@ -78,9 +78,28 @@ def _mate_group(path: Path) -> Tuple[Tuple[str, str, str, str], str] | None:
     return (parent, prefix, sep, segment), match.group("mate")
 
 
+def _inode_key(path: Path) -> Tuple[int, int] | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return (stat.st_dev, stat.st_ino)
+
+
+def _symlink_target_under_sample(path: Path, sample_dir: Path) -> bool:
+    """False for absolute links that Clara cannot open under ``/workdir``."""
+    if not path.is_symlink():
+        return True
+    try:
+        dest = path.resolve()
+        dest.relative_to(sample_dir.resolve())
+    except (OSError, ValueError):
+        return False
+    return dest.is_file()
+
+
 def _collect_fastqs(sample_dir: Path) -> List[Path]:
-    found: List[Path] = []
-    seen: set[Path] = set()
+    candidates: List[Path] = []
     for path in sample_dir.rglob("*"):
         if not path.is_file() or not _matches_fastq(path):
             continue
@@ -90,12 +109,29 @@ def _collect_fastqs(sample_dir: Path) -> List[Path]:
             continue
         if any(_is_aligner_leaf_dirname(part) for part in rel_parts):
             continue
-        resolved = path.resolve()
-        if resolved in seen:
+        if not _symlink_target_under_sample(path, sample_dir):
+            logger.warning(
+                "Skipping FASTQ symlink %s; target is outside %s (Clara /workdir cannot follow it)",
+                path.relative_to(sample_dir),
+                sample_dir,
+            )
             continue
-        seen.add(resolved)
+        candidates.append(path)
+    found: List[Path] = []
+    seen_paths: set[Path] = set()
+    seen_inodes: set[Tuple[int, int]] = set()
+    for path in sorted(candidates):
+        resolved = path.resolve()
+        if resolved in seen_paths:
+            continue
+        inode = _inode_key(path)
+        if inode is not None and inode in seen_inodes:
+            continue
+        seen_paths.add(resolved)
+        if inode is not None:
+            seen_inodes.add(inode)
         found.append(path)
-    return sorted(found)
+    return found
 
 
 def canonical_trimmed_fastqs(sample_dir: Path, sample_id: str) -> Tuple[Path, Path]:
