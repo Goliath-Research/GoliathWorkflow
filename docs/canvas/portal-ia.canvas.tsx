@@ -150,8 +150,9 @@ export default function PortalIaCanvas() {
 
       <Callout tone="info" title="Control layers stay distinct">
         Fleet Drain/Stop is not instance pause. Instance pause is not task Retry.
-        Retry is not a new study run. Missing FASTQ is an external upload to the
-        same source URI, then Retry — the portal does not upload files.
+        Retry is not a new study run. Cluster deployment is not Study Storage.
+        Missing FASTQ is an external upload to the same source URI, then Retry —
+        the portal does not upload files.
       </Callout>
 
       <H2>Navigation</H2>
@@ -162,7 +163,7 @@ export default function PortalIaCanvas() {
           ["Home / Ops", "Operator / infra", "Instances, stale leases, fleet strip"],
           ["Studies", "Operator / study lead", "Pipeline workspace + Runs monitor"],
           ["Workflows", "Author", "Definitions / versions / graph"],
-          ["Platform", "Lab / infra", "Site, packs, storage authoring, fleet"],
+          ["Platform", "Lab / system admin", "Site, packs, storage, cluster deployment, fleet"],
           ["Hyperparameters", "Study lead", "Grids and trials"],
           ["Admin", "Platform admin", "RBAC + Contracts (process packs)"],
         ]}
@@ -263,6 +264,26 @@ export default function PortalIaCanvas() {
           ["wf", "graphs, instances, node_execution, leases", "Execution only"],
           ["RBAC", "Users, grants, scopes, sessions", "User groups"],
           ["Contract", "terms, scopes, pack entitlements, quotas", "Admin only"],
+        ]}
+      />
+
+      <H2>System administrator</H2>
+      <Callout tone="neutral" title="Clusters, workers, and deployment">
+        Platform → Clusters & workers. Fleet desired_state is not the /work map.
+        s3://epimethyl/samples/ (path-style /samples/epimethyl) is a published
+        archive endpoint on the Deployment screen — not a Studies nav leaf.
+        Operators only select redacted endpoints.
+      </Callout>
+      <Table
+        striped
+        headers={["Role", "Path / URI", "Screen"]}
+        rows={[
+          ["Cluster share", "/work (worker_mount_path)", "Clusters"],
+          ["Release", "/work/epimethyl/current", "Deployment"],
+          ["Sample scratch", "/work/samples/{id}/", "Deployment"],
+          ["Study outputs", "/work/projects/<study>/", "Deployment"],
+          ["Lab ingress", "published fastqSource", "Storage authoring"],
+          ["Sample / H5 archive", "published sampleDestination", "Deployment"],
         ]}
       />
 

@@ -1,7 +1,8 @@
 # EpiPortal information architecture
 
 Operator-facing UI for the full pipeline (cohort → sample prep → study lifecycle →
-prediction), plus **Admin** (RBAC) and **Contracts** (process-pack entitlements).
+prediction), plus **Platform** (system administrator: clusters, workers,
+deployment) and **Admin** (RBAC) / **Contracts** (process-pack entitlements).
 EpiPortal (`portal.epimethyl.com`) is the day-2 control plane; this repo owns
 **SQL contracts** (`portal.sp_*`) and domain identity — not the Delphi/uniGUI app.
 
@@ -10,6 +11,9 @@ workers→gateway; HPO grids). **Fleet control:** [Constrained worker ops](const
 **Config layers:** [Layer model](layer-model.md), [Config registry](config-registry.md).
 **Science stages:** [Pipeline stages](pipeline-stages.md), [End-to-end workflow](end-to-end-workflow.md),
 [Portal staged study lifecycle](../../workflow_engine/docs/portal_study_lifecycle.md).
+**Cluster deployment:** [Production platform](../deployment/production-platform.md)
+(Phase 0 `/work` layout), [QNAP inventory](../deployment/reference-inventory-qnap.md),
+[Distributed runtime](distributed-runtime.md).
 **Retry / leases:** [Workflow idempotency](workflow-idempotency-retry-lease.md),
 [Usage ch.11](../usage/11-troubleshooting-and-recovery.md).
 **Plan:** [portal-pipeline-ia](../plans/portal-pipeline-ia.plan.md),
@@ -20,8 +24,9 @@ workers→gateway; HPO grids). **Fleet control:** [Constrained worker ops](const
 1. A **workflow run** is a `wf.workflow_instance` of a **published**
    `wf.workflow_version` (compiled from a DomainProgram). Operators start
    instances; authors publish definitions.
-2. Organize the UI around the **operator pipeline** and **admin RBAC/contracts**,
-   not around schema names. Hide nav the role cannot use (no disabled tease).
+2. Organize the UI around the **operator pipeline**, **system-administrator
+   cluster/deployment**, and **admin RBAC/contracts** — not around schema
+   names. Hide nav the role cannot use (no disabled tease).
 3. **Project manifests** (`project_*.json`) hold cohorts and paths — never tool
    knobs. Tunables are schema-driven overlays (site / profile / procedure /
    instance) → baked `resolvedConfig` on tasks. Do not treat QC guardrail
@@ -30,9 +35,11 @@ workers→gateway; HPO grids). **Fleet control:** [Constrained worker ops](const
 4. Portal talks **`portal.sp_*` only** (Azure SQL today; PG twin). Workers talk
    **gateway only**. Never reverse those paths. Do not call `RBAC.*` / `Contract.*`
    write procs from new screens — wrap them as `portal.sp_*`.
-5. **Fleet control ≠ instance lifecycle ≠ science knobs ≠ task retry.**
-   Drain/Stop worker, pause/cancel run, `actionConfig`, and `FAILED`→`READY`
-   are four different surfaces.
+5. **Fleet control ≠ instance lifecycle ≠ science knobs ≠ task retry ≠
+   cluster deployment.** Drain/Stop worker, pause/cancel run, `actionConfig`,
+   `FAILED`→`READY`, and the declared `/work` + published-archive map are
+   five different surfaces. The **system administrator** owns clusters,
+   workers, **and** that deployment map — not study science.
 
 ```mermaid
 flowchart TB
@@ -45,12 +52,15 @@ flowchart TB
   end
   subgraph adminFloor [Platform_and_Admin]
     StorageAuth[Author_storage_credentials]
+    Deploy[Cluster_deployment_map]
     Fleet[Fleet_console]
     Rbac[Users_roles_grants]
     Contracts[Customer_process_pack_entitlements]
   end
   Cohort --> StoragePick --> Prep --> Life --> Pred
   StorageAuth --> StoragePick
+  Deploy -->|"declared_mounts_and_archive"| StorageAuth
+  Deploy --> Fleet
   Contracts -->|"filter_catalog_and_start"| Prep
   Contracts --> Life
   Contracts --> Pred
@@ -78,10 +88,10 @@ Three different “groups” must not share a UI label:
 
 | Nav | Default audience | Purpose |
 |-----|------------------|---------|
-| **Home / Ops board** | Operator / infra | Running/failed instances, lease alerts, fleet strip — `sp_list_ops_instances`, `sp_list_worker_health`, `sp_list_stale_leases` |
+| **Home / Ops board** | Operator / system administrator | Running/failed instances, lease alerts, fleet strip — `sp_list_ops_instances`, `sp_list_worker_health`, `sp_list_stale_leases` |
 | **Studies** | Operator / study lead | **Pipeline workspace** (primary operator home) |
 | **Workflows** | Author / admin | Definitions, versions, graph; cross-study instance list |
-| **Platform** | Lab / infra admin | Site, packs, storage **authoring**, catalog, fleet console |
+| **Platform** | Lab / **system administrator** | Site, packs, storage **authoring**, **cluster deployment** (`/work` + endpoints), fleet console |
 | **Hyperparameters** | Study lead / operator | Grids, trials, scores (also linked from Study) |
 | **Admin** | Platform admin | **RBAC** + **Contracts** (customers, entitled process packs) |
 
@@ -155,8 +165,9 @@ Two DomainPrograms in sequence, then optional prediction
 | **Instance detail** | Gantt, tasks, errors, **recovery verbs** | `sp_get_workflow_instance_header`, `sp_get_instance_tasks`, `sp_get_instance_sample_progress`, `sp_get_instance_config`, `sp_get_node_execution_detail`, `sp_retry_failed_node`, `sp_reclaim_expired_leases`, `sp_stop_node`, `sp_fail_node`, `sp_cancel_instance`, `sp_fail_instance` |
 | **Start next stage** | Published version → packs → start | Catalog procs + `sp_list_workflow_definitions` + `sp_create_and_start_instance` (`@scope_id`, `@study_row_id`) |
 
-**Storage:** operators **select** published endpoints. Lab/infra **author** them
-under Platform. Do not put credentials on the study screen.
+**Storage:** operators **select** published endpoints. Lab admins author
+ingress; **system administrators** author archive/shared/site and see the
+cluster **Deployment** map. Do not put credentials on the study screen.
 
 ### Task input: workflow bindings vs science knobs
 
@@ -274,7 +285,8 @@ First-class operator UX. The engine does **not** auto-requeue `FAILED` nodes
    - **Stop this task** only when catalog `can_stop` (in-flight) — `sp_stop_node`
    - **Fail this queued action** — `sp_fail_node` (`READY`/`PENDING` only)
    - **Cancel / fail this run** — `sp_cancel_instance` / `sp_fail_instance`
-   - **Related workers:** deep-link to fleet console (Drain/Stop live there)
+   - **Related workers:** deep-link to fleet console (Drain/Stop) and the
+     cluster **Deployment** map (mounts / published endpoints)
 5. **Task detail:** `result_code`, `engine_error_code` / `engine_error_message`
    (incl. `4098` `OPERATOR_FAILED`, `4099` `WORKER_STOPPED`), truncated `output_json`, **source URI(s)** for download
    actions, pointer to `/work` `.action_results` (portal does not SSH)
@@ -360,6 +372,16 @@ Workflows
 
 ## Platform (admin)
 
+**System administrators** live here. Their job is not study science. They own
+**clusters**, **workers**, and **deployment** — the declared share those
+workers mount and the published endpoints that feed and archive samples.
+
+| Concern | Screen | Not the same as |
+|---------|--------|-----------------|
+| **Clusters** | `wf.cluster` rows (`cluster_key`, CIDRs, Arc, mounts) | A study or a DomainProgram |
+| **Workers** | Fleet console (`desired_state`, leases, enroll) | Cancel / fail a run; task Retry |
+| **Deployment** | `/work` roots + bound published endpoints for that cluster | Operator **Storage** pick on a study |
+
 ```
 Platform
   ├─ Site
@@ -372,10 +394,11 @@ Platform
   ├─ Sample field contracts
   ├─ Storage & credentials  (lab ingress vs archive/shared/site)
   ├─ Reference assets
-  └─ Clusters & workers     (fleet console)
-       ├─ Clusters
-       ├─ Workers
-       └─ Enrollment
+  └─ Clusters & workers
+       ├─ Clusters          key, status, CIDRs, Arc, mount fields
+       ├─ Deployment        /work map + bound endpoints (this cluster / site)
+       ├─ Workers           health, Drain / Stop / Resume
+       └─ Enrollment        public IP + external key before gateway enroll
 ```
 
 | Screen | Procs / notes |
@@ -386,7 +409,9 @@ Platform
 | Pipeline profiles | `sp_list/get_pipeline_profile` — admin browse |
 | Assay procedures | `sp_list/get_assay_procedure` |
 | Analytes | `sp_list/get_analyte` |
-| Fleet console | `sp_list_worker_health`, `sp_set_worker_desired_state`, `sp_upsert/list_cluster` |
+| Clusters | `sp_upsert/list_cluster` — `shared_storage_uri`, `worker_mount_path` |
+| **Deployment** | Compose `sp_list_clusters` + `sp_list/get_site` + `sp_list_storage_endpoints` (redacted) + `sp_list_site_reference_assets` — **no new path grammar** |
+| Fleet console | `sp_list_worker_health`, `sp_set_worker_desired_state` |
 | Enrollment | `sp_upsert/list/revoke_worker_enrollment` |
 | Domain programs | `sp_list/get/upsert/publish_domain_program` |
 | Action catalog | `sp_list/get_workflow_actions` |
@@ -394,13 +419,46 @@ Platform
 | Sample field contracts | `sp_list/get_sample_field_contract` — **only** JSON Schema column in DB |
 | Reference assets | `sp_list/get_reference_asset` |
 
-Storage RBAC: **lab admin** → `lab_ingress`; **infra admin** → archive / shared /
-site; operators → published redacted endpoints only.
+Storage RBAC: **lab admin** → `lab_ingress`; **system administrator** (infra)
+→ archive / shared / site + cluster deployment; operators → published
+redacted endpoints only.
+
+### Deployment map (system administrator)
+
+Workers on a cluster share one filesystem. Convention: mount at **`/work`**,
+recorded on `wf.cluster.worker_mount_path` / `shared_storage_uri`.
+`portal.sp_upsert_cluster` defaults those fields to `/work/epimethyl` — that
+is the **promoted release** tree, not the sample scratch and not the QNAP
+archive prefix. The share root is `/work`
+([production-platform Phase 0](../deployment/production-platform.md)).
+
+This is why `s3://epimethyl/samples/` (sometimes written path-style as
+`/samples/epimethyl`) is **not** a Studies nav leaf. It is a **deployment
+fact** on a published archive endpoint (`epimethyl-archive`), shown here
+next to the cluster mount. Operators still only **select** that published
+redacted endpoint on Study → Storage.
+
+| Role | Path / URI | Who authors | Who uses |
+|------|------------|-------------|----------|
+| Cluster share | `/work` (`worker_mount_path`) | System administrator (cluster row) | Every worker on the cluster |
+| Release / runtime | `/work/epimethyl/current` | Promote pipeline | Workers (no git) |
+| Sample scratch | `/work/samples/{sample_id}/` | `init_work_layout.sh` | Baked `sampleDir` / `samples_base_path` |
+| Study outputs | `/work/projects/<study>/` | Layout + study upsert | Operator `projectPath` |
+| Genomes / site | `/work/genomes/`, `/work/site/` | Provision + site publish | Site pins |
+| Lab FASTQ ingress | published `fastqSource` | Lab admin | Study operator (select) |
+| Durable sample / H5 archive | published `sampleDestination` (company example: `s3://epimethyl/samples/` on `epimethyl-archive`) | System administrator | Study operator (select) |
+
+`/work/epimethyl` ≠ `/work/samples` ≠ the archive prefix. Do not hard-code
+any of those strings into Study UI logic. The portal does not SSH; this
+screen shows **declared** cluster + site + endpoint rows
+([QNAP inventory](../deployment/reference-inventory-qnap.md),
+[end-to-end workflow §2](end-to-end-workflow.md#2-where-data-lives)).
 
 ### Home / Ops board — fleet strip
 
 Worker counts by `desired_state`, exclusive-action occupancy, lease-age alerts,
-quick Drain / Stop / Resume (infra admin).
+quick Drain / Stop / Resume (system administrator). Deep-link the cluster
+name to **Deployment** (mounts / endpoints), not only to Drain/Stop.
 
 ---
 
@@ -469,10 +527,10 @@ packs. `PlanCode` / `BillingCycle` are metadata — no billing UI.
 
 | Role | Home | Can | Cannot |
 |------|------|-----|--------|
-| **Study operator** | Studies → Runs | Enroll samples, start instances, view tasks, **Retry** / reclaim, view published packs | Site, secrets, DomainProgram publish, fleet Drain/Stop, Users, Contracts |
+| **Study operator** | Studies → Runs | Enroll samples, start instances, view tasks, **Retry** / reclaim, view published packs | Site, secrets, DomainProgram publish, fleet Drain/Stop, cluster **Deployment**, Users, Contracts |
 | **Study lead** | Studies | Operator + bind procedure/profile, validation lifecycle / HPO | Platform publish; fleet; Admin |
-| **Lab admin** | Platform → Storage (ingress) | Lab ingress endpoints + credentials | Archive/shared/site; fleet Stop unless also infra |
-| **Infra admin** | Platform | Site, fleet Drain/Stop/Resume, archive/shared storage, catalog sync | Clinical PHI edits (if separated) |
+| **Lab admin** | Platform → Storage (ingress) | Lab ingress endpoints + credentials | Archive/shared/site; fleet Stop unless also system administrator |
+| **System administrator** (infra) | Platform → Clusters & workers | Cluster upsert + mounts, enrollment, fleet Drain/Stop/Resume, archive/shared/site storage, **deployment map** | Clinical PHI edits; study science knobs; Users / Contracts |
 | **Program author** | Workflows → Definitions | Edit/publish DomainProgram drafts | Start production studies without study role |
 | **Platform admin** | All | Roles, Contracts, invitations, enrollment revoke, global reclaim, fleet bulk | — |
 
@@ -537,11 +595,13 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_list_studies`, `sp_get/upsert_study` | Study list |
 | `portal.sp_project_list/get/save`, `sp_project_resolve_archive` | Manifest / archive |
 
-### Workers / fleet
+### Workers / fleet / deployment
 
 | Procedure | UI use |
 |-----------|--------|
-| `portal.sp_upsert/list_cluster` | Clusters |
+| `portal.sp_upsert/list_cluster` | Clusters — include `shared_storage_uri`, `worker_mount_path` |
+| `portal.sp_list/get_site`, `sp_list_site_reference_assets` | Deployment map (pins + provisioned genomes) |
+| `portal.sp_list_storage_endpoints` | Deployment map (redacted published ingress / archive) |
 | `portal.sp_upsert/list/revoke_worker_enrollment` | Enrollment |
 | `portal.sp_list_worker_health` | Fleet console (desired_state, heartbeat, leases) |
 | `portal.sp_set_worker_desired_state` | Drain / Stop / Resume |
@@ -596,6 +656,7 @@ live uniGUI until cutover.
 - Cooperative **instance pause / resume** (`can_pause` is false for almost all actions; use Cancel + drain)
 - Assay-procedure SKUs inside a pack; billing/invoicing
 - Auto-start Instance 2 when SamplePrep finishes (gated Start next stage only)
+- EpiPortal **Deployment** screen (compose existing cluster / site / endpoint procs; no new SQL)
 
 **Already shipped (do not re-list as gaps):** `sp_list_ops_instances`,
 `sp_list_worker_health`, `sp_list_sites` / `sp_get_site`, `sp_list_studies`.
@@ -607,7 +668,8 @@ live uniGUI until cutover.
 1. Study pipeline workspace + **monitor / failure / retry** (incl. missing-FASTQ → READY).
 2. Admin RBAC façade.
 3. Contracts + entitled process-pack catalogs.
-4. Wire already-shipped ops/fleet procs into chrome.
+4. Wire already-shipped ops/fleet procs into chrome, plus the system-administrator
+   **Deployment** map (cluster mounts + published endpoints).
 5. Wire cancel/fail/stop + config snapshot + study overlay (shipped SQL; EpiPortal screens in the other repo).
 
 ## Design principles
@@ -620,10 +682,11 @@ live uniGUI until cutover.
 4. One primary object per screen; deep-link Study → Run → Task.
 5. Contract-filter catalogs; hide unentitled packs.
 6. Config snapshot (`sp_get_instance_config`) is read-only; change knobs on the study overlay and start a new run.
-7. **Fleet ≠ science knobs ≠ instance lifecycle ≠ task retry.**
+7. **Fleet ≠ science knobs ≠ instance lifecycle ≠ task retry ≠ cluster deployment.**
 8. Enable Stop from catalog **`can_stop`**, not role guesswork.
 9. **Affinity is opaque** — show the key.
 10. Retry is operator-gated `FAILED`→`READY` with the same inputs — never a free-form status editor.
+11. **System administrator** sees clusters, workers, **and** the declared `/work` + published-archive map. Do not hide deployment inside Study Storage, and do not put a site prefix (`s3://epimethyl/samples/`) in nav.
 
 ## Related
 
@@ -637,6 +700,8 @@ live uniGUI until cutover.
 - [Layer model](layer-model.md)
 - [Workflow idempotency, retry, and leases](workflow-idempotency-retry-lease.md)
 - [Usage ch.11 — Troubleshooting](../usage/11-troubleshooting-and-recovery.md)
+- [Production platform](../deployment/production-platform.md) (Phase 0 `/work`)
+- [QNAP reference inventory](../deployment/reference-inventory-qnap.md)
 - [Portal pipeline IA plan](../plans/portal-pipeline-ia.plan.md)
 - [Portal UI SQL actions plan](../plans/portal-ui-sql-actions.plan.md)
 - [Portal IA canvas](../canvas/README.md#portal-ia)

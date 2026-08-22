@@ -59,7 +59,7 @@ CURSOR_CANVASES_DIR="$HOME/.cursor/projects/my-workspace/canvases" \
 ### Portal IA {#portal-ia}
 
 - **Source:** `docs/canvas/portal-ia.canvas.tsx`
-- **Purpose:** EpiPortal study pipeline workspace, instance monitor + retry, Admin RBAC and contract process packs (SQL contract spec for the other repo)
+- **Purpose:** EpiPortal study pipeline workspace, instance monitor + retry, system-admin cluster deployment, Admin RBAC and contract process packs (SQL contract spec for the other repo)
 - **Markdown companion:** [Portal information architecture](../architecture/portal-ia.md)
 
 ### DB runbook {#methylpipeline-db-runbook}
