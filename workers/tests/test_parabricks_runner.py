@@ -50,6 +50,30 @@ def test_resolve_paired_fastqs_recursive_glob(tmp_path: Path) -> None:
     assert len(fastqs) == 2
 
 
+def test_resolve_paired_fastqs_prefers_lane_pairs_over_merged(tmp_path: Path) -> None:
+    """Clara --in-fq per lane; skip vendor *_merged_* concatenations that desync."""
+    sample_dir = tmp_path / "S_merge"
+    sample_dir.mkdir()
+    (sample_dir / "S_merge_merged_1.fastq.gz").write_bytes(b"m1")
+    (sample_dir / "S_merge_merged_2.fastq.gz").write_bytes(b"m2")
+    lane_a = sample_dir / "AN000_fcA"
+    lane_b = sample_dir / "AN000_fcB"
+    lane_a.mkdir()
+    lane_b.mkdir()
+    (lane_a / "S_merge_1.fastq.gz").write_bytes(b"a1")
+    (lane_a / "S_merge_2.fastq.gz").write_bytes(b"a2")
+    (lane_b / "S_merge_1.fastq.gz").write_bytes(b"b1")
+    (lane_b / "S_merge_2.fastq.gz").write_bytes(b"b2")
+
+    fastqs = runner.resolve_paired_fastqs(sample_dir, "S_merge")
+    assert [p.relative_to(sample_dir).as_posix() for p in fastqs] == [
+        "AN000_fcA/S_merge_1.fastq.gz",
+        "AN000_fcA/S_merge_2.fastq.gz",
+        "AN000_fcB/S_merge_1.fastq.gz",
+        "AN000_fcB/S_merge_2.fastq.gz",
+    ]
+
+
 def test_resolve_paired_fastqs_ignores_align_arm_copies(tmp_path: Path) -> None:
     """Root sampleDir must not feed Clara extra pairs from aligner leaves."""
     sample_dir = tmp_path / "S_arm"

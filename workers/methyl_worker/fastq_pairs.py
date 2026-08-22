@@ -111,6 +111,12 @@ def _is_trimmed_fastq_name(path: Path) -> bool:
     return ".trimmed." in path.name.lower()
 
 
+def _is_concat_merge_fastq_name(path: Path) -> bool:
+    """Vendor ``{id}_merged_1.fastq.gz`` concatenations — often desynced across lanes."""
+    name = path.name.lower()
+    return "_merged_" in name or name.startswith("merged_")
+
+
 def _restore_download_fastqs(sample_dir: Path, sample_id: str) -> None:
     """Bring CAAS-harvested FASTQs back under sampleDir (Align skips ``.caas``)."""
     try:
@@ -195,6 +201,19 @@ def resolve_paired_fastqs(
             f"Expected paired FASTQ files under {sample_dir}, found {len(considered)}"
             + (f": {', '.join(p.name for p in considered)}" if considered else "")
         )
+    lane_pairs = [
+        pair
+        for pair in pairs
+        if not any(_is_concat_merge_fastq_name(path) for path in pair)
+    ]
+    if lane_pairs and len(lane_pairs) < len(pairs):
+        logger.info(
+            "Ignoring %s concatenated *_merged_* pair(s) under %s; using %s lane pair(s)",
+            len(pairs) - len(lane_pairs),
+            sample_dir,
+            len(lane_pairs),
+        )
+        pairs = lane_pairs
     if leftovers:
         logger.warning(
             "Ignoring unpaired FASTQ(s) under %s: %s",
