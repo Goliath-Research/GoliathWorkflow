@@ -135,6 +135,7 @@ Author pipeline studies with four artifacts (no `step_config` in study manifests
 - `schemas/config/project_config.schema.json` — study manifest
 - `schemas/config/profile.schema.json` — pipeline profile
 - `schemas/config/site_manifest.schema.json` — site manifest
+- `schemas/config/study_action_config_overlay.schema.json` — Studies → Guardrails (next run) editor (bind to **effective** values; persist the sparse diff)
 
 Open each JSON type with the matching schema from the dropdown. Tool tuning belongs in **profile** `actionConfig`, not in the study manifest.
 

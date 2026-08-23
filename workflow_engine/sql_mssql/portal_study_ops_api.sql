@@ -230,6 +230,350 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER FUNCTION portal.fn_json_deep_merge(
+    @base nvarchar(max),
+    @overlay nvarchar(max)
+)
+RETURNS nvarchar(max)
+AS
+BEGIN
+    DECLARE @result nvarchar(max);
+    IF @overlay IS NULL OR ISJSON(@overlay) <> 1 OR LEFT(LTRIM(@overlay), 1) <> N'{'
+        RETURN CASE
+            WHEN @base IS NULL OR ISJSON(@base) <> 1 OR LEFT(LTRIM(@base), 1) <> N'{' THEN N'{}'
+            ELSE @base
+        END;
+    SET @result = CASE
+        WHEN @base IS NULL OR ISJSON(@base) <> 1 OR LEFT(LTRIM(@base), 1) <> N'{' THEN N'{}'
+        ELSE @base
+    END;
+
+    DECLARE @key nvarchar(400);
+    DECLARE @val nvarchar(max);
+    DECLARE @type int;
+    DECLARE @path nvarchar(500);
+    DECLARE @child nvarchar(max);
+
+    DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+        SELECT [key], [value], [type] FROM OPENJSON(@overlay);
+    OPEN c;
+    FETCH NEXT FROM c INTO @key, @val, @type;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SET @path = N'$.' + QUOTENAME(@key, N'"');
+        IF @type = 0
+            SET @result = JSON_MODIFY(@result, @path, NULL);
+        ELSE IF @type = 5 AND JSON_QUERY(@result, @path) IS NOT NULL
+        BEGIN
+            SET @child = portal.fn_json_deep_merge(JSON_QUERY(@result, @path), @val);
+            SET @result = JSON_MODIFY(@result, @path, JSON_QUERY(@child));
+        END
+        ELSE IF @type IN (4, 5)
+            SET @result = JSON_MODIFY(@result, @path, JSON_QUERY(@val));
+        ELSE IF @type = 1
+            SET @result = JSON_MODIFY(@result, @path, @val);
+        ELSE IF @type IN (2, 3)
+        BEGIN
+            SET @result = JSON_MODIFY(@result, @path, N'__mp_json_token__');
+            SET @result = REPLACE(@result, N'"__mp_json_token__"', @val);
+        END
+        FETCH NEXT FROM c INTO @key, @val, @type;
+    END
+    CLOSE c;
+    DEALLOCATE c;
+    RETURN @result;
+END
+GO
+
+CREATE OR ALTER FUNCTION portal.fn_json_sparse_diff(
+    @baseline nvarchar(max),
+    @edited nvarchar(max)
+)
+RETURNS nvarchar(max)
+AS
+BEGIN
+    DECLARE @base nvarchar(max) = @baseline;
+    DECLARE @edit nvarchar(max) = @edited;
+    DECLARE @result nvarchar(max) = N'{}';
+    DECLARE @key nvarchar(400);
+    DECLARE @eval nvarchar(max);
+    DECLARE @etype int;
+    DECLARE @bval nvarchar(max);
+    DECLARE @btype int;
+    DECLARE @path nvarchar(500);
+    DECLARE @child nvarchar(max);
+
+    IF @base IS NULL OR ISJSON(@base) <> 1 OR LEFT(LTRIM(@base), 1) <> N'{'
+        SET @base = N'{}';
+    IF @edit IS NULL OR ISJSON(@edit) <> 1 OR LEFT(LTRIM(@edit), 1) <> N'{'
+        SET @edit = N'{}';
+
+    DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+        SELECT [key], [value], [type] FROM OPENJSON(@edit);
+    OPEN c;
+    FETCH NEXT FROM c INTO @key, @eval, @etype;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SET @path = N'$.' + QUOTENAME(@key, N'"');
+        SET @bval = NULL;
+        SET @btype = NULL;
+        SELECT @bval = [value], @btype = [type]
+        FROM OPENJSON(@base)
+        WHERE [key] = @key;
+
+        IF @etype = 0
+        BEGIN
+            IF @btype IS NOT NULL
+            BEGIN
+                SET @result = JSON_MODIFY(@result, @path, N'__mp_json_null__');
+                SET @result = REPLACE(@result, N'"__mp_json_null__"', N'null');
+            END
+        END
+        ELSE IF @etype = 5 AND @btype = 5
+        BEGIN
+            SET @child = portal.fn_json_sparse_diff(@bval, @eval);
+            IF @child IS NOT NULL AND @child <> N'{}'
+                SET @result = JSON_MODIFY(@result, @path, JSON_QUERY(@child));
+        END
+        ELSE IF @btype IS NULL OR @btype <> @etype OR ISNULL(@bval, N'') <> ISNULL(@eval, N'')
+        BEGIN
+            IF @etype = 1
+                SET @result = JSON_MODIFY(@result, @path, @eval);
+            ELSE IF @etype IN (2, 3)
+            BEGIN
+                SET @result = JSON_MODIFY(@result, @path, N'__mp_json_token__');
+                SET @result = REPLACE(@result, N'"__mp_json_token__"', @eval);
+            END
+            ELSE IF @etype IN (4, 5)
+                SET @result = JSON_MODIFY(@result, @path, JSON_QUERY(@eval));
+        END
+        FETCH NEXT FROM c INTO @key, @eval, @etype;
+    END
+    CLOSE c;
+    DEALLOCATE c;
+
+    DECLARE d CURSOR LOCAL FAST_FORWARD FOR
+        SELECT [key] FROM OPENJSON(@base);
+    OPEN d;
+    FETCH NEXT FROM d INTO @key;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM OPENJSON(@edit) WHERE [key] = @key)
+        BEGIN
+            SET @path = N'$.' + QUOTENAME(@key, N'"');
+            SET @result = JSON_MODIFY(@result, @path, N'__mp_json_null__');
+            SET @result = REPLACE(@result, N'"__mp_json_null__"', N'null');
+        END
+        FETCH NEXT FROM d INTO @key;
+    END
+    CLOSE d;
+    DEALLOCATE d;
+    RETURN @result;
+END
+GO
+
+CREATE OR ALTER FUNCTION portal.fn_json_guardrail_slice(@action_config nvarchar(max))
+RETURNS nvarchar(max)
+AS
+BEGIN
+    DECLARE @src nvarchar(max) = @action_config;
+    DECLARE @out nvarchar(max) = N'{}';
+    DECLARE @aq nvarchar(max);
+    DECLARE @eq nvarchar(max);
+
+    IF @src IS NULL OR ISJSON(@src) <> 1 OR LEFT(LTRIM(@src), 1) <> N'{'
+        RETURN N'{}';
+
+    SET @aq = JSON_QUERY(@src, '$.alignment_qc');
+    IF @aq IS NOT NULL
+    BEGIN
+        SET @aq = JSON_MODIFY(@aq, '$.sample_paths', NULL);
+        SET @aq = JSON_MODIFY(@aq, '$.output_dir', NULL);
+        SET @aq = JSON_MODIFY(@aq, '$.validate_schema', NULL);
+        SET @aq = JSON_MODIFY(@aq, '$.genome_fasta', NULL);
+        SET @aq = JSON_MODIFY(@aq, '$.reference_fasta', NULL);
+        SET @out = JSON_MODIFY(@out, '$.alignment_qc', JSON_QUERY(@aq));
+    END
+
+    SET @eq = JSON_QUERY(@src, '$.extraction_qc');
+    IF @eq IS NOT NULL
+    BEGIN
+        SET @eq = JSON_MODIFY(@eq, '$.sample_paths', NULL);
+        SET @out = JSON_MODIFY(@out, '$.extraction_qc', JSON_QUERY(@eq));
+    END
+    RETURN @out;
+END
+GO
+
+CREATE OR ALTER FUNCTION portal.fn_study_guardrails_inherited(@study_row_id bigint)
+RETURNS nvarchar(max)
+AS
+BEGIN
+    DECLARE @doc nvarchar(max);
+    DECLARE @site nvarchar(max) = N'{}';
+    DECLARE @profile nvarchar(max) = N'{}';
+    DECLARE @procedure nvarchar(max) = N'{}';
+    DECLARE @profile_name nvarchar(256);
+    DECLARE @procedure_name nvarchar(256);
+
+    SELECT @doc = CAST(document_json AS nvarchar(max))
+    FROM cfg.study
+    WHERE id = @study_row_id;
+    IF @doc IS NULL OR ISJSON(@doc) <> 1
+        SET @doc = N'{}';
+
+    SET @profile_name = JSON_VALUE(@doc, '$.pipelineProfile');
+    SET @procedure_name = JSON_VALUE(@doc, '$.pipelineProcedure');
+
+    SELECT TOP (1) @site = CAST(COALESCE(JSON_QUERY(CAST(document_json AS nvarchar(max)), '$.actionConfig'), N'{}') AS nvarchar(max))
+    FROM cfg.site
+    WHERE status = 'published'
+    ORDER BY CASE WHEN name = N'default' THEN 0 ELSE 1 END, id DESC;
+
+    IF @profile_name IS NOT NULL AND @profile_name <> N''
+    BEGIN
+        SELECT TOP (1) @profile = CAST(COALESCE(JSON_QUERY(CAST(document_json AS nvarchar(max)), '$.actionConfig'), N'{}') AS nvarchar(max))
+        FROM cfg.pipeline_profile
+        WHERE name = @profile_name AND status IN ('published', 'retired')
+        ORDER BY id DESC;
+    END
+
+    IF @procedure_name IS NOT NULL AND @procedure_name <> N''
+    BEGIN
+        SELECT TOP (1) @procedure = CAST(COALESCE(JSON_QUERY(CAST(document_json AS nvarchar(max)), '$.actionConfig'), N'{}') AS nvarchar(max))
+        FROM cfg.assay_procedure
+        WHERE name = @procedure_name AND status IN ('published', 'retired')
+        ORDER BY id DESC;
+    END
+
+    RETURN portal.fn_json_deep_merge(
+        portal.fn_json_deep_merge(
+            portal.fn_json_guardrail_slice(@site),
+            portal.fn_json_guardrail_slice(@profile)
+        ),
+        portal.fn_json_guardrail_slice(@procedure)
+    );
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_get_study_guardrails_editor
+    @study_row_id bigint
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @study_row_id IS NULL OR @study_row_id <= 0
+        THROW 50001, N'study_row_id is required.', 1;
+    IF NOT EXISTS (SELECT 1 FROM cfg.study WHERE id = @study_row_id)
+        THROW 50010, N'cfg.study not found.', 1;
+
+    DECLARE @doc nvarchar(max);
+    DECLARE @name nvarchar(256);
+    DECLARE @overlay nvarchar(max);
+    DECLARE @inherited nvarchar(max);
+    DECLARE @site_name nvarchar(256);
+
+    SELECT
+        @name = s.name,
+        @doc = CAST(s.document_json AS nvarchar(max))
+    FROM cfg.study s
+    WHERE s.id = @study_row_id;
+    IF @doc IS NULL OR ISJSON(@doc) <> 1
+        SET @doc = N'{}';
+
+    SET @overlay = portal.fn_json_guardrail_slice(
+        COALESCE(JSON_QUERY(@doc, '$.actionConfig'), N'{}')
+    );
+    SET @inherited = portal.fn_study_guardrails_inherited(@study_row_id);
+
+    SELECT TOP (1) @site_name = name
+    FROM cfg.site
+    WHERE status = 'published'
+    ORDER BY CASE WHEN name = N'default' THEN 0 ELSE 1 END, id DESC;
+
+    SELECT
+        @study_row_id AS study_row_id,
+        @name AS study_name,
+        @site_name AS site_name,
+        JSON_VALUE(@doc, '$.pipelineProfile') AS pipeline_profile,
+        JSON_VALUE(@doc, '$.pipelineProcedure') AS pipeline_procedure,
+        N'study_action_config_overlay' AS schema_id,
+        @inherited AS inherited_guardrails,
+        @overlay AS study_guardrail_overlay,
+        portal.fn_json_deep_merge(@inherited, @overlay) AS effective_guardrails;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_set_study_guardrails_editor
+    @study_row_id bigint,
+    @edited_effective nvarchar(max)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @study_row_id IS NULL OR @study_row_id <= 0
+        THROW 50001, N'study_row_id is required.', 1;
+    IF NOT EXISTS (SELECT 1 FROM cfg.study WHERE id = @study_row_id)
+        THROW 50010, N'cfg.study not found.', 1;
+    IF @edited_effective IS NULL OR ISJSON(@edited_effective) <> 1
+        OR LEFT(LTRIM(@edited_effective), 1) <> N'{'
+        THROW 50021, N'edited_effective must be a JSON object (full working document).', 1;
+
+    DECLARE @doc nvarchar(max) = (
+        SELECT CAST(document_json AS nvarchar(max)) FROM cfg.study WHERE id = @study_row_id
+    );
+    IF @doc IS NULL OR ISJSON(@doc) <> 1
+        SET @doc = N'{}';
+
+    DECLARE @existing nvarchar(max) = COALESCE(JSON_QUERY(@doc, '$.actionConfig'), N'{}');
+    DECLARE @inherited nvarchar(max) = portal.fn_study_guardrails_inherited(@study_row_id);
+    DECLARE @edited nvarchar(max) = portal.fn_json_guardrail_slice(@edited_effective);
+    DECLARE @diff nvarchar(max) = portal.fn_json_sparse_diff(@inherited, @edited);
+    DECLARE @new nvarchar(max) = @existing;
+    DECLARE @key nvarchar(400);
+    DECLARE @val nvarchar(max);
+    DECLARE @type int;
+    DECLARE @path nvarchar(500);
+
+    SET @new = JSON_MODIFY(@new, '$.alignment_qc', NULL);
+    SET @new = JSON_MODIFY(@new, '$.extraction_qc', NULL);
+
+    DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+        SELECT [key], [value], [type] FROM OPENJSON(@diff);
+    OPEN c;
+    FETCH NEXT FROM c INTO @key, @val, @type;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        IF @type <> 0
+        BEGIN
+            SET @path = N'$.' + QUOTENAME(@key, N'"');
+            IF @type IN (4, 5)
+                SET @new = JSON_MODIFY(@new, @path, JSON_QUERY(@val));
+            ELSE IF @type = 1
+                SET @new = JSON_MODIFY(@new, @path, @val);
+            ELSE IF @type IN (2, 3)
+            BEGIN
+                SET @new = JSON_MODIFY(@new, @path, N'__mp_json_token__');
+                SET @new = REPLACE(@new, N'"__mp_json_token__"', @val);
+            END
+        END
+        FETCH NEXT FROM c INTO @key, @val, @type;
+    END
+    CLOSE c;
+    DEALLOCATE c;
+
+    SET @doc = JSON_MODIFY(@doc, '$.actionConfig', JSON_QUERY(@new));
+
+    UPDATE cfg.study
+    SET document_json = CAST(@doc AS json),
+        content_hash = CONVERT(nvarchar(128), HASHBYTES('SHA2_256', @doc), 2),
+        updated_at_utc = SYSUTCDATETIME()
+    WHERE id = @study_row_id;
+
+    EXEC portal.sp_get_study_guardrails_editor @study_row_id = @study_row_id;
+END
+GO
+
 CREATE OR ALTER PROCEDURE portal.sp_create_and_start_instance
     @workflow_version_id bigint,
     @context_json nvarchar(max) = NULL,

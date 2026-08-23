@@ -107,6 +107,24 @@ def test_check_mode_fails_on_stale_artifact(tmp_path: Path):
     assert any("stale schema artifact" in msg for msg in drift)
 
 
+def test_study_action_config_overlay_schema_is_the_guardrails_editor():
+    from methyl_alignment_qc.models.config import AlignmentQCConfig
+    from methyl_utils.study_action_config import SCHEMA_ID, StudyActionConfigOverlay
+
+    overlay = generate_schema_dict(StudyActionConfigOverlay, title="StudyActionConfigOverlay")
+    full = generate_schema_dict(AlignmentQCConfig, title="AlignmentQCConfig")
+    assert overlay.get("required", []) == []
+    assert set(overlay["properties"]) == {"alignment_qc", "extraction_qc"}
+    assert "sample_paths" not in overlay["$defs"]["AlignmentQcOverlay"]["properties"]
+    assert overlay["$defs"]["CoreGuardrailsOverlay"]["properties"]["median_insert_min_bp"].get(
+        "default"
+    ) is None
+    assert "sample_paths" in full.get("required", [])
+    specs = {spec.schema_id: spec for spec in list_config_schema_specs()}
+    assert SCHEMA_ID in specs
+    assert specs[SCHEMA_ID].filename == "study_action_config_overlay.schema.json"
+
+
 def test_repo_schemas_config_dir_exists_after_bootstrap():
     root = repo_schemas_config_dir()
     assert root.is_dir(), (

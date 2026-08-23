@@ -315,6 +315,18 @@ objects:
       parameters:
         - { name: study_row_id, type: bigint, direction: in }
       notes: Next-run actionConfig overlay only; does not rebake running input_json
+    - name: portal.sp_get_study_guardrails_editor
+      kind: procedure
+      required: true
+      parameters:
+        - { name: study_row_id, type: bigint, direction: in }
+      notes: Effective next-run guardrails (site→profile→procedure→overlay) plus schema_id study_action_config_overlay
+    - name: portal.sp_set_study_guardrails_editor
+      kind: procedure
+      required: true
+      parameters:
+        - { name: study_row_id, type: bigint, direction: in }
+      notes: Accepts edited effective document; persists sparse diff; preserves non-guardrail actionConfig keys
     - name: portal.sp_get_workflow_instance_header
       kind: procedure
       required: true

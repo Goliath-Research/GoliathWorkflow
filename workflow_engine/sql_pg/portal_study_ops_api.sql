@@ -258,6 +258,304 @@ BEGIN
 END;
 $$;
 
+-- Deep-merge for next-run Guardrails compose (JSON null deletes a leaf).
+CREATE OR REPLACE FUNCTION portal.fn_jsonb_deep_merge(p_base jsonb, p_overlay jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  result jsonb;
+  rec record;
+BEGIN
+  IF p_overlay IS NULL OR jsonb_typeof(p_overlay) <> 'object' THEN
+    RETURN CASE
+      WHEN p_base IS NULL OR jsonb_typeof(p_base) <> 'object' THEN '{}'::jsonb
+      ELSE p_base
+    END;
+  END IF;
+  result := CASE
+    WHEN p_base IS NULL OR jsonb_typeof(p_base) <> 'object' THEN '{}'::jsonb
+    ELSE p_base
+  END;
+  FOR rec IN SELECT key, value FROM jsonb_each(p_overlay)
+  LOOP
+    IF rec.value = 'null'::jsonb THEN
+      result := result - rec.key;
+    ELSIF jsonb_typeof(rec.value) = 'object' AND jsonb_typeof(result->rec.key) = 'object' THEN
+      result := jsonb_set(
+        result,
+        ARRAY[rec.key],
+        portal.fn_jsonb_deep_merge(result->rec.key, rec.value),
+        true
+      );
+    ELSE
+      result := jsonb_set(result, ARRAY[rec.key], rec.value, true);
+    END IF;
+  END LOOP;
+  RETURN result;
+END;
+$$;
+
+-- Overlay such that deep_merge(baseline, overlay) equals edited.
+CREATE OR REPLACE FUNCTION portal.fn_jsonb_sparse_diff(p_baseline jsonb, p_edited jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  baseline jsonb := COALESCE(p_baseline, '{}'::jsonb);
+  edited jsonb := COALESCE(p_edited, '{}'::jsonb);
+  result jsonb := '{}'::jsonb;
+  rec record;
+  child jsonb;
+BEGIN
+  IF jsonb_typeof(baseline) <> 'object' THEN
+    baseline := '{}'::jsonb;
+  END IF;
+  IF jsonb_typeof(edited) <> 'object' THEN
+    edited := '{}'::jsonb;
+  END IF;
+  FOR rec IN SELECT key, value FROM jsonb_each(edited)
+  LOOP
+    IF rec.value = 'null'::jsonb THEN
+      IF baseline ? rec.key THEN
+        result := result || jsonb_build_object(rec.key, null);
+      END IF;
+    ELSIF jsonb_typeof(rec.value) = 'object' AND jsonb_typeof(baseline->rec.key) = 'object' THEN
+      child := portal.fn_jsonb_sparse_diff(baseline->rec.key, rec.value);
+      IF child <> '{}'::jsonb THEN
+        result := result || jsonb_build_object(rec.key, child);
+      END IF;
+    ELSIF (baseline->rec.key) IS DISTINCT FROM rec.value THEN
+      result := result || jsonb_build_object(rec.key, rec.value);
+    END IF;
+  END LOOP;
+  FOR rec IN SELECT key FROM jsonb_each(baseline)
+  LOOP
+    IF NOT (edited ? rec.key) THEN
+      result := result || jsonb_build_object(rec.key, null);
+    END IF;
+  END LOOP;
+  RETURN result;
+END;
+$$;
+
+-- Editor bind surface: alignment_qc + extraction_qc, without workflow identity paths.
+CREATE OR REPLACE FUNCTION portal.fn_jsonb_guardrail_slice(p_action_config jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  src jsonb := COALESCE(p_action_config, '{}'::jsonb);
+  aq jsonb;
+  eq jsonb;
+  out jsonb := '{}'::jsonb;
+BEGIN
+  aq := src->'alignment_qc';
+  IF jsonb_typeof(aq) = 'object' THEN
+    aq := aq - 'sample_paths' - 'output_dir' - 'validate_schema'
+            - 'genome_fasta' - 'reference_fasta';
+    out := jsonb_set(out, '{alignment_qc}', aq, true);
+  ELSIF aq = 'null'::jsonb THEN
+    out := jsonb_set(out, '{alignment_qc}', 'null'::jsonb, true);
+  END IF;
+  eq := src->'extraction_qc';
+  IF jsonb_typeof(eq) = 'object' THEN
+    eq := eq - 'sample_paths';
+    out := jsonb_set(out, '{extraction_qc}', eq, true);
+  ELSIF eq = 'null'::jsonb THEN
+    out := jsonb_set(out, '{extraction_qc}', 'null'::jsonb, true);
+  END IF;
+  RETURN out;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.fn_study_guardrails_inherited(p_study_row_id bigint)
+RETURNS TABLE (
+  site_name text,
+  pipeline_profile text,
+  pipeline_procedure text,
+  inherited_guardrails jsonb
+)
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+  v_doc jsonb;
+  v_site_name text;
+  v_site jsonb := '{}'::jsonb;
+  v_profile jsonb := '{}'::jsonb;
+  v_procedure jsonb := '{}'::jsonb;
+BEGIN
+  SELECT document_json INTO v_doc FROM cfg.study WHERE id = p_study_row_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'cfg.study not found';
+  END IF;
+  v_doc := COALESCE(v_doc, '{}'::jsonb);
+
+  SELECT s.name, COALESCE(s.document_json->'actionConfig', '{}'::jsonb)
+  INTO v_site_name, v_site
+  FROM cfg.site s
+  WHERE s.status = 'published'
+  ORDER BY CASE WHEN s.name = 'default' THEN 0 ELSE 1 END, s.id DESC
+  LIMIT 1;
+
+  SELECT COALESCE(p.document_json->'actionConfig', '{}'::jsonb)
+  INTO v_profile
+  FROM cfg.pipeline_profile p
+  WHERE p.name = v_doc->>'pipelineProfile'
+    AND p.status IN ('published', 'retired')
+  ORDER BY p.id DESC
+  LIMIT 1;
+
+  SELECT COALESCE(a.document_json->'actionConfig', '{}'::jsonb)
+  INTO v_procedure
+  FROM cfg.assay_procedure a
+  WHERE a.name = v_doc->>'pipelineProcedure'
+    AND a.status IN ('published', 'retired')
+  ORDER BY a.id DESC
+  LIMIT 1;
+
+  RETURN QUERY SELECT
+    v_site_name,
+    v_doc->>'pipelineProfile',
+    v_doc->>'pipelineProcedure',
+    portal.fn_jsonb_deep_merge(
+      portal.fn_jsonb_deep_merge(
+        portal.fn_jsonb_guardrail_slice(v_site),
+        portal.fn_jsonb_guardrail_slice(v_profile)
+      ),
+      portal.fn_jsonb_guardrail_slice(v_procedure)
+    );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_get_study_guardrails_editor(p_study_row_id bigint)
+RETURNS TABLE (
+  study_row_id bigint,
+  study_name text,
+  site_name text,
+  pipeline_profile text,
+  pipeline_procedure text,
+  schema_id text,
+  inherited_guardrails jsonb,
+  study_guardrail_overlay jsonb,
+  effective_guardrails jsonb
+)
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+  v_name text;
+  v_overlay jsonb;
+  v_inherited jsonb;
+  v_site text;
+  v_profile text;
+  v_procedure text;
+BEGIN
+  IF p_study_row_id IS NULL OR p_study_row_id <= 0 THEN
+    RAISE EXCEPTION 'study_row_id is required';
+  END IF;
+
+  SELECT s.name, COALESCE(s.document_json->'actionConfig', '{}'::jsonb)
+  INTO v_name, v_overlay
+  FROM cfg.study s
+  WHERE s.id = p_study_row_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'cfg.study not found';
+  END IF;
+
+  SELECT i.site_name, i.pipeline_profile, i.pipeline_procedure, i.inherited_guardrails
+  INTO v_site, v_profile, v_procedure, v_inherited
+  FROM portal.fn_study_guardrails_inherited(p_study_row_id) i;
+
+  RETURN QUERY SELECT
+    p_study_row_id,
+    v_name,
+    v_site,
+    v_profile,
+    v_procedure,
+    'study_action_config_overlay'::text,
+    v_inherited,
+    portal.fn_jsonb_guardrail_slice(v_overlay),
+    portal.fn_jsonb_deep_merge(v_inherited, portal.fn_jsonb_guardrail_slice(v_overlay));
+END;
+$$;
+
+-- Bind SchemaPropertyGrid to effective_guardrails + study_action_config_overlay schema.
+-- Persist only the computed diff; other actionConfig keys (HPO validation, …) stay.
+CREATE OR REPLACE FUNCTION portal.sp_set_study_guardrails_editor(
+  p_study_row_id bigint,
+  p_edited_effective jsonb
+)
+RETURNS TABLE (
+  study_row_id bigint,
+  study_name text,
+  site_name text,
+  pipeline_profile text,
+  pipeline_procedure text,
+  schema_id text,
+  inherited_guardrails jsonb,
+  study_guardrail_overlay jsonb,
+  effective_guardrails jsonb
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_doc jsonb;
+  v_existing jsonb;
+  v_inherited jsonb;
+  v_edited jsonb;
+  v_diff jsonb;
+  v_new jsonb;
+  rec record;
+BEGIN
+  IF p_study_row_id IS NULL OR p_study_row_id <= 0 THEN
+    RAISE EXCEPTION 'study_row_id is required';
+  END IF;
+  IF p_edited_effective IS NULL OR jsonb_typeof(p_edited_effective) <> 'object' THEN
+    RAISE EXCEPTION 'edited_effective must be a JSON object (full working document)';
+  END IF;
+
+  SELECT document_json INTO v_doc FROM cfg.study WHERE id = p_study_row_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'cfg.study not found';
+  END IF;
+  v_doc := COALESCE(v_doc, '{}'::jsonb);
+  v_existing := COALESCE(v_doc->'actionConfig', '{}'::jsonb);
+  IF jsonb_typeof(v_existing) <> 'object' THEN
+    v_existing := '{}'::jsonb;
+  END IF;
+
+  SELECT i.inherited_guardrails INTO v_inherited
+  FROM portal.fn_study_guardrails_inherited(p_study_row_id) i;
+
+  v_edited := portal.fn_jsonb_guardrail_slice(p_edited_effective);
+  v_diff := portal.fn_jsonb_sparse_diff(v_inherited, v_edited);
+
+  v_new := v_existing - 'alignment_qc' - 'extraction_qc';
+  FOR rec IN SELECT key, value FROM jsonb_each(v_diff)
+  LOOP
+    IF rec.value IS NULL OR rec.value = 'null'::jsonb THEN
+      CONTINUE;
+    END IF;
+    v_new := jsonb_set(v_new, ARRAY[rec.key], rec.value, true);
+  END LOOP;
+
+  v_doc := jsonb_set(v_doc, '{actionConfig}', v_new, true);
+
+  UPDATE cfg.study
+  SET document_json = v_doc,
+      content_hash = encode(digest(v_doc::text, 'sha256'), 'hex'),
+      updated_at_utc = now() AT TIME ZONE 'utc'
+  WHERE id = p_study_row_id;
+
+  RETURN QUERY SELECT * FROM portal.sp_get_study_guardrails_editor(p_study_row_id);
+END;
+$$;
+
 DO $drop$
 DECLARE r record;
 BEGIN

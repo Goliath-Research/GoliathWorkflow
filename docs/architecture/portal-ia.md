@@ -184,7 +184,7 @@ Two DomainPrograms in sequence, then optional prediction
 | Study process defaults  | Persist default profile / procedure / analyte / researchMode         | `sp_set/get_study_process_defaults`; pickers: `sp_list_*_catalog` **filtered by contract** when `@scope_id` is set                                                                                                                                                                     |
 | Cohort (samples & arms) | Enrollment, study arms, membership                                   | `sp_list_samples_for_study_enrollment`, `sp_set_sample_analyte`, `sp_list/set_study_group(s)`, `sp_set_study_group_members`, `sp_materialize_study_lists`                                                                                                                              |
 | Storage                 | Select **published redacted** `fastqSource` + `sampleDestination`    | `sp_list_storage_endpoints` (redacted); persist with `sp_get/set_study_storage`; authoring stays on Platform                                                                                                                                                                           |
-| Guardrails (next run)   | Study-lead `actionConfig` overlay (`alignment_qc` / `extraction_qc`) | `sp_get/set_study_action_config_overlay` — **not** a mid-run rebake; not workflow `input_json` keys                                                                                                                                                                                    |
+| Guardrails (next run)   | Edit **effective** `alignment_qc` / `extraction_qc` (inherited + overlay) | `sp_get/set_study_guardrails_editor` binds `schemas/config/study_action_config_overlay.schema.json`; save stores a sparse diff. Raw `sp_get/set_study_action_config_overlay` stays for HPO promote — **not** a mid-run rebake                                                                                                                                 |
 | Project manifests       | Cohort paths under `/work/projects/<study>/`                         | `sp_project_list/get/save`; **no** `actionConfig` knobs                                                                                                                                                                                                                                |
 | Runs                    | Instances for this study                                             | `sp_list_study_instances`                                                                                                                                                                                                                                                              |
 | **Instance detail**     | Gantt, tasks, errors, **recovery verbs**                             | `sp_get_workflow_instance_header`, `sp_get_instance_tasks`, `sp_get_instance_sample_progress`, `sp_get_instance_config`, `sp_get_node_execution_detail`, `sp_retry_failed_node`, `sp_reclaim_expired_leases`, `sp_stop_node`, `sp_fail_node`, `sp_cancel_instance`, `sp_fail_instance` |
@@ -217,7 +217,7 @@ workflow injects the whole slice as one envelope:
 | Question                 | Workflow-baked                          | Guardrail / tool defaults                              |
 | ------------------------ | --------------------------------------- | ------------------------------------------------------ |
 | Who names the key?       | Catalog `context_vars` + program `with` | Catalog `action_config_key` (e.g. `alignment_qc`)      |
-| Schema                   | `schemas/tasks/*.input.schema.json`     | `schemas/config/alignment_qc.schema.json` (etc.)       |
+| Schema                   | `schemas/tasks/*.input.schema.json`     | Guardrails editor: `study_action_config_overlay.schema.json`. Tool runtimes still use `alignment_qc.schema.json` / extraction QC models. |
 | Operator edits           | Study manifest / storage / sample list  | Site, profile, procedure, or **Guardrails (next run)** |
 | Shape on the task        | Top-level `sampleId`, `sampleDir`, …    | Nested `resolvedConfig.core_guardrails.*`              |
 | Can **Retry** change it? | No — same baked payload                 | No — overlay + **Start new instance**                  |
@@ -248,8 +248,29 @@ Example claimed `sample.methyl_qc` task:
 | ------------------------- | -------------------------------------------------- | ---------------------------------------- |
 | **Task detail**           | Workflow-baked identity (URI, sample, trim)        | `sp_get_node_execution_detail`           |
 | **Config snapshot**       | What *this run* baked under `resolvedConfig__`*    | `sp_get_instance_config` (read-only)     |
-| **Guardrails (next run)** | Study overlay for `alignment_qc` / `extraction_qc` | `sp_get/set_study_action_config_overlay` |
+| **Guardrails (next run)** | Effective next-run `alignment_qc` / `extraction_qc` (type-enforced grid) | `sp_get/set_study_guardrails_editor` |
 
+
+**Guardrails editor contract (do not bind a loose overlay JSON):**
+
+1. Load `schemas/config/study_action_config_overlay.schema.json` (`schema_id` from
+   `sp_get_study_guardrails_editor`). Every knob is optional with bounds; there
+   are **no** `sample_paths` / `output_dir` and **no** baked numeric defaults.
+2. Bind `SchemaPropertyGrid` to **`effective_guardrails`** — the current
+   inherited (site → profile → procedure) values plus any study pins. An empty
+   inherited slice stays empty; QC still fills the published WGBS window at run
+   time from `CoreGuardrailsConfig` when nothing is pinned.
+3. On save, send the **full working document** back as `edited_effective`. The
+   setter diffs it against current inherited layers and writes only that sparse
+   overlay (`omit` = inherit, JSON `null` = clear leaf). Non-guardrail
+   `actionConfig` keys (HPO `validation`, …) are preserved.
+4. Do **not** bind `AlignmentQCConfig` / `ExtractionQCConfig` as the editor
+   schema — those require workflow identity and would persist package defaults.
+
+`sp_get/set_study_action_config_overlay` remains the wholesale
+`document_json.actionConfig` accessor for HPO promote
+(`fn_apply_dotted_action_config` first). Operators never edit that blob by
+hand.
 
 Many profiles ship `"alignment_qc": {}`. Instance bake then stores an empty
 slice, and `methylalignmentqc` fills the published WGBS window from
@@ -679,7 +700,8 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_list_samples_for_study_enrollment`                     | Enrollment picker                                                  |
 | `portal.sp_set_sample_analyte`                                    | Bind sample → `cfg.analyte`                                        |
 | `portal.sp_get/set_study_storage`                                 | Persist published `fastqSource` + `sampleDestination` on the study |
-| `portal.sp_get/set_study_action_config_overlay`                   | Next-run guardrail / `actionConfig` overlay                        |
+| `portal.sp_get/set_study_action_config_overlay`                   | Wholesale next-run `actionConfig` (HPO promote)                    |
+| `portal.sp_get/set_study_guardrails_editor`                       | Typed Guardrails grid: effective values in, sparse overlay out     |
 | `portal.sp_list/get/upsert/publish_storage_endpoint`              | Storage admin                                                      |
 | `portal.sp_list/get/upsert/publish_credential`                    | Credential admin                                                   |
 | `portal.sp_list/get_pipeline_profile`                             | Platform process-pack browse                                       |

@@ -188,7 +188,7 @@ export default function PortalIaCanvas() {
                 ["Overview", "sp_get_study_pipeline_progress"],
                 ["Cohort / arms", "sp_set_study_group_members"],
                 ["Storage pick", "sp_get/set_study_storage"],
-                ["Guardrails (next run)", "sp_get/set_study_action_config_overlay"],
+                ["Guardrails (next run)", "sp_get/set_study_guardrails_editor"],
                 ["Runs", "sp_list_study_instances"],
                 ["Instance", "sp_get_workflow_instance_header + tasks"],
                 ["Sample matrix", "sp_get_instance_sample_progress"],

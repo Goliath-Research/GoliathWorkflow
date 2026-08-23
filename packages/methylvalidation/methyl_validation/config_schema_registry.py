@@ -162,6 +162,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="AlignmentQCConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="study_action_config_overlay",
+        module="methyl_utils.study_action_config",
+        class_name="StudyActionConfigOverlay",
+        filename="study_action_config_overlay.schema.json",
+        title="StudyActionConfigOverlay",
+    ),
+    ConfigSchemaSpec(
         schema_id="fragmentomics",
         module="methyl_fragmentomics.config",
         class_name="FragmentomicsStepConfig",

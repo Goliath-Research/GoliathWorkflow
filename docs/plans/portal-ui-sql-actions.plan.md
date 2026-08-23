@@ -2,7 +2,7 @@
 name: Portal UI SQL Actions
 overview: Walk the EpiPortal IA tree (six roles, six nav floors) and give every leaf a `portal.sp_*` contract. Most screens already have procs; this plan implements the instance-67 gaps (study link, storage, guardrail overlay, sample progress, fail/cancel run or action) plus the remaining Admin/HPO wrappers so EpiPortal never writes `wf`/`RBAC`/`Contract` tables directly.
 
-> **Status: IMPLEMENTED.** MSSQL + PG `portal.sp_*` for study link/storage/overlay, instance monitor, fail/cancel/stop, Admin BypassScope, contract setters, and HPO promote. EpiPortal screens remain in the other repo.
+> **Status: IMPLEMENTED.** MSSQL + PG `portal.sp_*` for study link/storage/overlay, instance monitor, fail/cancel/stop, Admin BypassScope, contract setters, and HPO promote. Guardrails editor is `sp_get/set_study_guardrails_editor` + `study_action_config_overlay.schema.json` (effective values in, sparse overlay out). EpiPortal screens remain in the other repo.
 
 azure_devops:
   type: Feature
