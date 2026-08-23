@@ -272,6 +272,30 @@ Example claimed `sample.methyl_qc` task:
 (`fn_apply_dotted_action_config` first). Operators never edit that blob by
 hand.
 
+**EpiPortal (Delphi) — what to add**
+
+Put the grid on **Studies → {Study} → Guardrails (next run)**, not on
+Workflows / graph authoring. A published workflow is only the *procedure*
+that the study will start next; the overlay lives on `cfg.study`. From an
+instance, take `study_row_id` from `sp_get_workflow_instance_header` and
+open that study screen. Do not write `resolvedConfig` or `input_json`.
+
+| Piece | What to ship |
+| ----- | ------------ |
+| Schema file | Copy `schemas/config/study_action_config_overlay.schema.json` into EpiPortal’s schemas root (same catalog as `SchemaPropertyGrid`). Match `schema_id` from GET. |
+| Load | `portal.sp_get_study_guardrails_editor(@study_row_id)` |
+| Bind | `SchemaPropertyGrid.Bind(schema, effective_guardrails)` — parse the JSON object column into `TJSONObject`. Show site / profile / procedure as read-only caption. |
+| Save | `portal.sp_set_study_guardrails_editor(@study_row_id, @edited_effective)` where `@edited_effective` is the **full** working document after edit (not a hand-built patch). |
+| After save | Rebind from the result set (`effective_guardrails` again). Caption can show “pinned vs inherited”. |
+| Do not | Bind `alignment_qc.schema.json` / `ExtractionQCConfig`. Call the wholesale overlay setter from this screen. Edit a running instance. Use Retry to pick up knob changes (start a **new** instance). |
+
+GET columns: `study_row_id`, `study_name`, `site_name`, `pipeline_profile`,
+`pipeline_procedure`, `schema_id`, `inherited_guardrails`,
+`study_guardrail_overlay`, `effective_guardrails`.
+
+Role: study lead (and above). Hide from operators who cannot set process
+defaults if that is already how Study screens are gated.
+
 Many profiles ship `"alignment_qc": {}`. Instance bake then stores an empty
 slice, and `methylalignmentqc` fills the published WGBS window from
 `CoreGuardrailsConfig` / the alignment-qc JSON Schema. Those numbers never
