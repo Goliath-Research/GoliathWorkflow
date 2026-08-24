@@ -33,7 +33,7 @@
       "ref_paths": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-v1.1-mc-grch38.d9.paths.sub",
       "cpg_tsv": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.cpg.tsv",
       "node_replacement_json": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.node.replacement.json",
-      "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+      "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
       "engine": "mojo",
       "image": "epimethyl/methylgrapher:1.70-mojo",
       "align_engine": "gpu_giraffe",
@@ -77,16 +77,16 @@
     }
   },
   "reference_selection": {
-    "linear": "linear/GRCh38/ensembl-114",
-    "gene_annotation": "annotation/gencode/v49",
+    "linear": "linear/GRCh38/ensembl-116",
+    "gene_annotation": "annotation/gencode/v50",
     "pangenome": "pangenome/GRCh38/d9/1.70",
     "pangenome_wgbs": "pangenome/GRCh38/d9-bs/1.70"
   },
   "reference_genome": {
-    "fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+    "fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   },
   "annotation": {
-    "gtf": "/work/genomes/annotation/gencode/v49/gencode.v49.annotation.gtf"
+    "gtf": "/work/genomes/annotation/gencode/v50/gencode.v50.annotation.gtf"
   },
   "methyl_mapper_home": "/work/cache/methyl_mapper",
   "caches": {
@@ -98,7 +98,7 @@
     "min": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.withzip.min",
     "zipcodes": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.zipcodes",
     "ref_paths": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.paths.sub",
-    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   },
   "pangenome_wgbs_genome": {
     "index_prefix": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs",
@@ -117,6 +117,6 @@
     "ref_paths": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-v1.1-mc-grch38.d9.paths.sub",
     "cpg_tsv": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.cpg.tsv",
     "node_replacement_json": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.node.replacement.json",
-    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   }
 }

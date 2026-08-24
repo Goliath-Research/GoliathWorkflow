@@ -11,9 +11,8 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
 # for science knobs — these are inventory layout conventions for materialize).
 LINEAR_FASTA_NAME = "Homo_sapiens.GRCh38.dna.primary_assembly.fa"
 # MojoFq2bamMeth dense-v1 pack siblings (default k=15). Shipped under the same
-# linear/GRCh38/ensembl-114/ prefix as the FASTA; Phase 0 s3_sync pulls them.
+# linear/GRCh38/<ensembl-release>/ prefix as the FASTA; Phase 0 s3_sync pulls them.
 LINEAR_MOJO_K = 15
-GENCODE_GTF_NAME = "gencode.v49.annotation.gtf"
 PANGENOME_FILES = {
     "gbz": "hprc-v1.1-mc-grch38.d9.gbz",
     "dist": "hprc-v1.1-mc-grch38.d9.autoindex.1.70.dist",
@@ -244,7 +243,7 @@ def selected_asset_names(
 ) -> Dict[str, str]:
     """Return selection_key → reference_asset name by matching pin path to inventoryPrefix.
 
-    Pins under ``reference_selection`` (e.g. ``linear/GRCh38/ensembl-114``) must match
+    Pins under ``reference_selection`` (e.g. ``linear/GRCh38/ensembl-116``) must match
     a published asset's ``inventoryPrefix`` (or recipe ``s3_sync``/``download`` key).
     Raises ``ValueError`` when a genome pin is set but no published asset matches.
     """

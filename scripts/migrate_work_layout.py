@@ -45,7 +45,7 @@ TEXT_SUFFIXES = {".json", ".jsonl", ".csv"}
 SKIP_SUFFIXES = {".h5", ".bam", ".fastq", ".fastq.gz", ".tar", ".gz", ".bak", ".legacy.bak"}
 PLATFORM_DIRS = ("epimethyl", "samples", "genomes", "cache", "site", "projects")
 NON_CANONICAL_CONFIG_GLOBS = ("*.program.json", "*.profile.json")
-DEFAULT_GTF = "/work/genomes/annotation/gencode/v49/gencode.v49.annotation.gtf"
+DEFAULT_GTF = "/work/genomes/annotation/gencode/v50/gencode.v50.annotation.gtf"
 SITE_EXAMPLE = REPO_ROOT / "tools/methyl-config-editor/configs/site_grch38.example.json"
 
 
@@ -272,7 +272,7 @@ def ensure_site_manifest(cfg: MigrationConfig, *, dry_run: bool) -> List[str]:
     else:
         data = {
             "reference_genome": {
-                "fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+                "fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
             },
             "annotation": {"gtf": DEFAULT_GTF},
             "methyl_mapper_home": "/work/cache/methyl_mapper",

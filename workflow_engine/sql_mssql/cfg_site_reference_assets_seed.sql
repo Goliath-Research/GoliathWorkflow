@@ -36,8 +36,8 @@ DECLARE @links TABLE (
 );
 
 INSERT INTO @links (asset_name, asset_version, asset_role) VALUES
-    (N'linear-grch38-ensembl-114', N'1', N'reference_genome'),
-    (N'gencode-v49', N'1', N'annotation_gtf'),
+    (N'linear-grch38-ensembl-116', N'1', N'reference_genome'),
+    (N'gencode-v50', N'1', N'annotation_gtf'),
     -- Stock Giraffe HPRC d9. WGBS site: replace with pangenome-grch38-d9-bs-1.70
     -- under the same pangenome_bundle role (cannot link both).
     (N'pangenome-grch38-d9-1.70', N'1', N'pangenome_bundle');

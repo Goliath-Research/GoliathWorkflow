@@ -204,7 +204,7 @@ Add to /work/site/methyl_site.json (adjust linear_ref_fasta to your site FASTA):
     "min": "${MIN}",
     "zipcodes": "${ZIP}",
     "ref_paths": "${PATHS_SUB}",
-    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   }
 
 Enable pangenome alignment in profile/context:

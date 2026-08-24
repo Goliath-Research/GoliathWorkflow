@@ -2,8 +2,8 @@
   "projectPath": "/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
   "primaryAnalyte": "cfdna",
   "isCfdna": true,
-  "referenceFasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
-  "referenceGtf": "/work/genomes/annotation/gencode/v49/gencode.v49.annotation.gtf",
+  "referenceFasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+  "referenceGtf": "/work/genomes/annotation/gencode/v50/gencode.v50.annotation.gtf",
   "fastqStorage": {
     "type": "s3",
     "bucket": "methyl-cohort",

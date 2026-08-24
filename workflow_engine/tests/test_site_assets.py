@@ -21,9 +21,17 @@ _ASSETS = {
         "version": "1",
         "inventoryPrefix": "linear/GRCh38/ensembl-114",
     },
+    "linear-grch38-ensembl-116": {
+        "version": "1",
+        "inventoryPrefix": "linear/GRCh38/ensembl-116",
+    },
     "gencode-v49": {
         "version": "1",
         "inventoryPrefix": "annotation/gencode/v49",
+    },
+    "gencode-v50": {
+        "version": "1",
+        "inventoryPrefix": "annotation/gencode/v50",
     },
     "pangenome-grch38-d9-1.70": {
         "version": "1",
@@ -34,6 +42,26 @@ _ASSETS = {
         "inventoryPrefix": "pangenome/GRCh38/d9-bs/1.70",
     },
 }
+
+
+def test_plan_default_site_pin_is_ensembl_116() -> None:
+    plan = plan_site_asset_links(
+        {
+            "reference_selection": {
+                "linear": "linear/GRCh38/ensembl-116",
+                "gene_annotation": "annotation/gencode/v50",
+                "pangenome": "pangenome/GRCh38/d9/1.70",
+                "pangenome_wgbs": "pangenome/GRCh38/d9-bs/1.70",
+            }
+        },
+        _ASSETS,
+    )
+    roles = {row["asset_role"]: row["asset_name"] for row in plan["linked"]}
+    assert roles == {
+        "reference_genome": "linear-grch38-ensembl-116",
+        "annotation_gtf": "gencode-v50",
+        "pangenome_bundle": "pangenome-grch38-d9-1.70",
+    }
 
 
 def test_plan_skips_wgbs_when_stock_pangenome_pinned() -> None:

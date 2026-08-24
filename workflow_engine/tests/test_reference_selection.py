@@ -28,17 +28,17 @@ def store(tmp_path: Path) -> FileConfigStore:
 def test_apply_reference_selection_fills_paths() -> None:
     doc = {
         "reference_selection": {
-            "linear": "linear/GRCh38/ensembl-114",
-            "gene_annotation": "annotation/gencode/v49",
+            "linear": "linear/GRCh38/ensembl-116",
+            "gene_annotation": "annotation/gencode/v50",
             "pangenome": "pangenome/GRCh38/d9/1.70",
         }
     }
     out = apply_reference_selection(doc, work_root="/work", overwrite=True)
     assert out["reference_genome"]["fasta"].endswith(
-        "linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+        "linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
     )
     assert out["annotation"]["gtf"].endswith(
-        "annotation/gencode/v49/gencode.v49.annotation.gtf"
+        "annotation/gencode/v50/gencode.v50.annotation.gtf"
     )
     assert "pangenome/GRCh38/d9/1.70/" in out["pangenome_genome"]["gbz"]
     assert out["pangenome_genome"]["linear_ref_fasta"] == out["reference_genome"]["fasta"]
@@ -46,8 +46,8 @@ def test_apply_reference_selection_fills_paths() -> None:
 
 def test_verify_selected_paths_ok(tmp_path: Path) -> None:
     work = tmp_path / "work"
-    linear = work / "genomes" / "linear" / "GRCh38" / "ensembl-114"
-    ann = work / "genomes" / "annotation" / "gencode" / "v49"
+    linear = work / "genomes" / "linear" / "GRCh38" / "ensembl-116"
+    ann = work / "genomes" / "annotation" / "gencode" / "v50"
     pan = work / "genomes" / "pangenome" / "GRCh38" / "d9" / "1.70"
     for d in (linear, ann, pan):
         d.mkdir(parents=True)
@@ -58,7 +58,7 @@ def test_verify_selected_paths_ok(tmp_path: Path) -> None:
     pack.mkdir()
     for name in ("meta.json", "kmers.bin", "offsets.bin", "postings.bin"):
         (pack / name).write_bytes(b"x")
-    (ann / "gencode.v49.annotation.gtf").write_text("##gtf\n")
+    (ann / "gencode.v50.annotation.gtf").write_text("##gtf\n")
     for name in (
         "hprc-v1.1-mc-grch38.d9.gbz",
         "hprc-v1.1-mc-grch38.d9.autoindex.1.70.dist",
@@ -70,8 +70,8 @@ def test_verify_selected_paths_ok(tmp_path: Path) -> None:
     doc = apply_reference_selection(
         {
             "reference_selection": {
-                "linear": "linear/GRCh38/ensembl-114",
-                "gene_annotation": "annotation/gencode/v49",
+                "linear": "linear/GRCh38/ensembl-116",
+                "gene_annotation": "annotation/gencode/v50",
                 "pangenome": "pangenome/GRCh38/d9/1.70",
             }
         },
@@ -96,7 +96,11 @@ def test_import_reference_asset_fixtures(store: FileConfigStore) -> None:
     )
     names = {r.name for r in store.list("reference_asset", published_only=True)}
     assert "linear-grch38-ensembl-114" in names
+    assert "linear-grch38-ensembl-116" in names
     assert "gencode-v49" in names
+    assert "gencode-v50" in names
+    assert "rna-grch38-star-ensembl-116" in names
+    assert "rna-grch38-kallisto-gencode-v50" in names
     assert "pangenome-grch38-d9-1.70" in names
     assert "epimethyl-genomes" in {
         r.name for r in store.list("storage_endpoint", published_only=True)
@@ -306,7 +310,7 @@ def test_provision_selected_from_site(store: FileConfigStore, tmp_path: Path) ->
     )
     store.upsert("site", "default", site_doc, status="published")
     # File endpoint override so selected provision does not need network
-    src = tmp_path / "src" / "linear" / "GRCh38" / "ensembl-114"
+    src = tmp_path / "src" / "linear" / "GRCh38" / "ensembl-116"
     src.mkdir(parents=True)
     (src / "marker.txt").write_text("ok")
     store.upsert(
@@ -321,17 +325,17 @@ def test_provision_selected_from_site(store: FileConfigStore, tmp_path: Path) ->
     # Replace recipes with file downloads for unit test
     for name, key, dest_rel in (
         (
-            "linear-grch38-ensembl-114",
-            "linear/GRCh38/ensembl-114/marker.txt",
-            "linear/GRCh38/ensembl-114/marker.txt",
+            "linear-grch38-ensembl-116",
+            "linear/GRCh38/ensembl-116/marker.txt",
+            "linear/GRCh38/ensembl-116/marker.txt",
         ),
     ):
         store.upsert(
             "reference_asset",
             name,
             {
-                "inventoryPrefix": "linear/GRCh38/ensembl-114",
-                "destRoot": str(tmp_path / "work" / "genomes" / "linear" / "GRCh38" / "ensembl-114"),
+                "inventoryPrefix": "linear/GRCh38/ensembl-116",
+                "destRoot": str(tmp_path / "work" / "genomes" / "linear" / "GRCh38" / "ensembl-116"),
                 "recipe": {
                     "steps": [
                         {"op": "mkdir"},
@@ -347,7 +351,7 @@ def test_provision_selected_from_site(store: FileConfigStore, tmp_path: Path) ->
             status="published",
         )
     # Only provision linear in this unit test — shrink selection
-    site_doc["reference_selection"] = {"linear": "linear/GRCh38/ensembl-114"}
+    site_doc["reference_selection"] = {"linear": "linear/GRCh38/ensembl-116"}
     store.upsert("site", "default", site_doc, status="published")
     result = provision_selected_from_site(
         store, work_root=tmp_path / "work", site_name="default", dry_run=False

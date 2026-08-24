@@ -118,7 +118,7 @@ def _reference_gtf(explicit: Optional[str]) -> str:
     gtf = annotation.get("gtf") or annotation.get("referenceGtf") or site.get("referenceGtf")
     if gtf:
         return str(gtf)
-    return "/work/genomes/annotation/gencode/v49/gencode.v49.annotation.gtf"
+    return "/work/genomes/annotation/gencode/v50/gencode.v50.annotation.gtf"
 
 
 def _poll_instance(db: Any, instance_id: int, *, poll: int, timeout: int) -> str:

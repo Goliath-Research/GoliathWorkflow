@@ -106,8 +106,8 @@ bash scripts/init_work_layout.sh --work /work
 
 ```
 epimethyl/genomes/          # myQNAPcloud (same bucket as samples/)
-  linear/GRCh38/ensembl-114/
-  annotation/gencode/v49/
+  linear/GRCh38/ensembl-116/
+  annotation/gencode/v50/
   pangenome/GRCh38/d9/1.70/
         ↓  sync once onto shared /work
 /work/genomes/              # same tree

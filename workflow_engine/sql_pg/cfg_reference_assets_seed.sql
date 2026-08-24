@@ -56,6 +56,69 @@ BEGIN
     name, version, status, content_hash, document_json, storage_endpoint_id, asset_type
   )
   SELECT
+    'linear-grch38-ensembl-116',
+    '1',
+    'published',
+    md5('linear-grch38-ensembl-116@1'),
+    '{"assetType":"linear_genome","destRoot":"/work/genomes/linear/GRCh38/ensembl-116","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"linear/GRCh38/ensembl-116","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"linear/GRCh38/ensembl-116/","dest":"/work/genomes/linear/GRCh38/ensembl-116"}]}}'::jsonb,
+    ep_id,
+    'linear_genome'
+  WHERE NOT EXISTS (
+    SELECT 1 FROM cfg.reference_asset
+    WHERE name = 'linear-grch38-ensembl-116' AND version = '1'
+  );
+
+  INSERT INTO cfg.reference_asset (
+    name, version, status, content_hash, document_json, storage_endpoint_id, asset_type
+  )
+  SELECT
+    'gencode-v50',
+    '1',
+    'published',
+    md5('gencode-v50@1'),
+    '{"assetType":"gtf","destRoot":"/work/genomes/annotation/gencode/v50","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"annotation/gencode/v50","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"annotation/gencode/v50/","dest":"/work/genomes/annotation/gencode/v50"}]}}'::jsonb,
+    ep_id,
+    'gtf'
+  WHERE NOT EXISTS (
+    SELECT 1 FROM cfg.reference_asset WHERE name = 'gencode-v50' AND version = '1'
+  );
+
+  INSERT INTO cfg.reference_asset (
+    name, version, status, content_hash, document_json, storage_endpoint_id, asset_type
+  )
+  SELECT
+    'rna-grch38-star-ensembl-116',
+    '1',
+    'published',
+    md5('rna-grch38-star-ensembl-116@1'),
+    '{"assetType":"rna_star_index","destRoot":"/work/genomes/rna/GRCh38/star/ensembl-116","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"rna/GRCh38/star/ensembl-116","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"rna/GRCh38/star/ensembl-116/","dest":"/work/genomes/rna/GRCh38/star/ensembl-116"}]}}'::jsonb,
+    ep_id,
+    'rna_star_index'
+  WHERE NOT EXISTS (
+    SELECT 1 FROM cfg.reference_asset
+    WHERE name = 'rna-grch38-star-ensembl-116' AND version = '1'
+  );
+
+  INSERT INTO cfg.reference_asset (
+    name, version, status, content_hash, document_json, storage_endpoint_id, asset_type
+  )
+  SELECT
+    'rna-grch38-kallisto-gencode-v50',
+    '1',
+    'published',
+    md5('rna-grch38-kallisto-gencode-v50@1'),
+    '{"assetType":"rna_kallisto_index","destRoot":"/work/genomes/rna/GRCh38/kallisto","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"rna/GRCh38/kallisto","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"rna/GRCh38/kallisto/","dest":"/work/genomes/rna/GRCh38/kallisto"}]}}'::jsonb,
+    ep_id,
+    'rna_kallisto_index'
+  WHERE NOT EXISTS (
+    SELECT 1 FROM cfg.reference_asset
+    WHERE name = 'rna-grch38-kallisto-gencode-v50' AND version = '1'
+  );
+
+  INSERT INTO cfg.reference_asset (
+    name, version, status, content_hash, document_json, storage_endpoint_id, asset_type
+  )
+  SELECT
     'pangenome-grch38-d9-1.70',
     '1',
     'published',

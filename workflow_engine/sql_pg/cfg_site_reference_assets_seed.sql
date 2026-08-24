@@ -41,8 +41,8 @@ BEGIN
   ) ON COMMIT DROP;
 
   INSERT INTO links (asset_name, asset_version, asset_role) VALUES
-    ('linear-grch38-ensembl-114', '1', 'reference_genome'),
-    ('gencode-v49', '1', 'annotation_gtf'),
+    ('linear-grch38-ensembl-116', '1', 'reference_genome'),
+    ('gencode-v50', '1', 'annotation_gtf'),
     -- Stock Giraffe HPRC d9. WGBS site: replace with pangenome-grch38-d9-bs-1.70
     -- under the same pangenome_bundle role (cannot link both).
     ('pangenome-grch38-d9-1.70', '1', 'pangenome_bundle');

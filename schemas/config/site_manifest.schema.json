@@ -10,11 +10,11 @@
       "properties": {
         "linear": {
           "type": "string",
-          "description": "Relative path under genomes/ for the linear FASTA+indexes (e.g. linear/GRCh38/ensembl-114)"
+          "description": "Relative path under genomes/ for the linear FASTA+indexes (e.g. linear/GRCh38/ensembl-116)"
         },
         "gene_annotation": {
           "type": "string",
-          "description": "Relative path under genomes/ for GENCODE GTF (e.g. annotation/gencode/v49)"
+          "description": "Relative path under genomes/ for GENCODE GTF (e.g. annotation/gencode/v50)"
         },
         "pangenome": {
           "type": "string",

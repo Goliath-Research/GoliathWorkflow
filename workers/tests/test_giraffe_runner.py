@@ -32,7 +32,7 @@ def _write_graph_bundle(root: Path) -> dict[str, str]:
 def test_mount_root_excludes_linear_ref_fasta_parent(tmp_path: Path) -> None:
     """Production layout: graph under pangenome/, linear FASTA under linear/."""
     pangenome_dir = tmp_path / "work" / "genomes" / "pangenome" / "GRCh38" / "d9" / "1.70"
-    linear_dir = tmp_path / "work" / "genomes" / "linear" / "GRCh38" / "ensembl-114"
+    linear_dir = tmp_path / "work" / "genomes" / "linear" / "GRCh38" / "ensembl-116"
     pangenome_dir.mkdir(parents=True)
     linear_dir.mkdir(parents=True)
     graph = runner.PangenomeGraphBundle(

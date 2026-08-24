@@ -37,16 +37,16 @@
     }
   },
   "reference_selection": {
-    "linear": "linear/GRCh38/ensembl-114",
-    "gene_annotation": "annotation/gencode/v49",
+    "linear": "linear/GRCh38/ensembl-116",
+    "gene_annotation": "annotation/gencode/v50",
     "pangenome": "pangenome/GRCh38/d9/1.70",
     "pangenome_wgbs": "pangenome/GRCh38/d9-bs/1.70"
   },
   "reference_genome": {
-    "fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+    "fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   },
   "annotation": {
-    "gtf": "/work/genomes/annotation/gencode/v49/gencode.v49.annotation.gtf"
+    "gtf": "/work/genomes/annotation/gencode/v50/gencode.v50.annotation.gtf"
   },
   "methyl_mapper_home": "/work/cache/methyl_mapper",
   "caches": {
@@ -58,15 +58,15 @@
     "min": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.withzip.min",
     "zipcodes": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.zipcodes",
     "ref_paths": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.paths.sub",
-    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   },
   "rna_reference": {
-    "star_index_dir": "/work/genomes/rna/GRCh38/star/ensembl-114",
-    "gtf": "/work/genomes/annotation/gencode/v49/gencode.v49.annotation.gtf",
-    "reference_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
-    "kallisto_index": "/work/genomes/rna/GRCh38/kallisto/gencode.v49.transcripts.idx",
-    "transcriptome_fasta": "/work/genomes/rna/GRCh38/kallisto/gencode.v49.transcripts.fa",
-    "tx2gene": "/work/genomes/rna/GRCh38/kallisto/gencode.v49.tx2gene.tsv"
+    "star_index_dir": "/work/genomes/rna/GRCh38/star/ensembl-116",
+    "gtf": "/work/genomes/annotation/gencode/v50/gencode.v50.annotation.gtf",
+    "reference_fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+    "kallisto_index": "/work/genomes/rna/GRCh38/kallisto/gencode.v50.transcripts.idx",
+    "transcriptome_fasta": "/work/genomes/rna/GRCh38/kallisto/gencode.v50.transcripts.fa",
+    "tx2gene": "/work/genomes/rna/GRCh38/kallisto/gencode.v50.tx2gene.tsv"
   },
   "proteomics_reference": {
     "protein_fasta": "/work/genomes/proteomics/GRCh38/uniprot/UP000005640_9606.fasta",

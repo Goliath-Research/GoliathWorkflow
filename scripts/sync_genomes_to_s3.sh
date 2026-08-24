@@ -6,8 +6,12 @@
 # commit them to git.
 #
 # Canonical tree under genomes/:
-#   linear/GRCh38/ensembl-114/
+#   linear/GRCh38/ensembl-116/       # default site pin (114 remains published)
+#   linear/GRCh38/ensembl-114/       # historical BAMs
+#   annotation/gencode/v50/          # default site pin
 #   annotation/gencode/v49/
+#   rna/GRCh38/star/ensembl-116/     # STAR (Clara rna_fq2bam); out of band for site roles
+#   rna/GRCh38/kallisto/             # kallisto + tx2gene (GENCODE v50)
 #   pangenome/GRCh38/d9/1.70/       # stock HPRC Giraffe indexes
 #   pangenome/GRCh38/d9-bs/1.70/    # methylGrapher C2T+G2A BS bundle
 #   pangenome/canary/gse261315/...  # public HPRC/methylGrapher WGBS canary FASTQs
@@ -35,9 +39,11 @@
 #
 # Verify after sync:
 #   aws s3 ls s3://epimethyl/genomes/ --endpoint-url https://s3.us-east-1.myqnapcloud.io
-#   aws s3 ls s3://epimethyl/genomes/linear/GRCh38/ensembl-114/ \
+#   aws s3 ls s3://epimethyl/genomes/linear/GRCh38/ensembl-116/ \
 #     --endpoint-url https://s3.us-east-1.myqnapcloud.io
-#   aws s3 ls s3://epimethyl/genomes/annotation/gencode/v49/ \
+#   aws s3 ls s3://epimethyl/genomes/annotation/gencode/v50/ \
+#     --endpoint-url https://s3.us-east-1.myqnapcloud.io
+#   aws s3 ls s3://epimethyl/genomes/rna/GRCh38/ \
 #     --endpoint-url https://s3.us-east-1.myqnapcloud.io
 #   aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9/1.70/ \
 #     --endpoint-url https://s3.us-east-1.myqnapcloud.io
@@ -74,8 +80,11 @@ Options:
   --dry-run              Pass --dryrun to aws s3 sync (no transfers)
   --delete               Pass --delete (remove destination extras absent on source; off by default)
   --only PATH            Sync only a subtree under genomes/:
-                           role roots: linear | annotation | pangenome
+                           role roots: linear | annotation | pangenome | rna
                            or a relative path, e.g.:
+                             linear/GRCh38/ensembl-116
+                             annotation/gencode/v50
+                             rna/GRCh38/star/ensembl-116
                              pangenome/GRCh38/d9/1.70
                              pangenome/GRCh38/d9-bs/1.70
                              pangenome/canary
@@ -107,9 +116,9 @@ normalize_only_path() {
     return 2
   fi
   case "$path" in
-    linear|annotation|pangenome|linear/*|annotation/*|pangenome/*) ;;
+    linear|annotation|pangenome|rna|linear/*|annotation/*|pangenome/*|rna/*) ;;
     *)
-      echo "ERROR: --only must be under linear/, annotation/, or pangenome/ (got: $raw)" >&2
+      echo "ERROR: --only must be under linear/, annotation/, pangenome/, or rna/ (got: $raw)" >&2
       return 2
       ;;
   esac

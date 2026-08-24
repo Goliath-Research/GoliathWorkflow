@@ -40,17 +40,21 @@ Pin RNA references once per cluster under site `rna_reference` (see
 
 ```json
 "rna_reference": {
-  "star_index_dir": "/work/genomes/rna/GRCh38/star/ensembl-114",
-  "gtf": "/work/genomes/annotation/gencode/v49/gencode.v49.annotation.gtf",
-  "reference_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
-  "kallisto_index": "/work/genomes/rna/GRCh38/kallisto/gencode.v49.transcripts.idx",
-  "transcriptome_fasta": "/work/genomes/rna/GRCh38/kallisto/gencode.v49.transcripts.fa",
-  "tx2gene": "/work/genomes/rna/GRCh38/kallisto/gencode.v49.tx2gene.tsv"
+  "star_index_dir": "/work/genomes/rna/GRCh38/star/ensembl-116",
+  "gtf": "/work/genomes/annotation/gencode/v50/gencode.v50.annotation.gtf",
+  "reference_fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+  "kallisto_index": "/work/genomes/rna/GRCh38/kallisto/gencode.v50.transcripts.idx",
+  "transcriptome_fasta": "/work/genomes/rna/GRCh38/kallisto/gencode.v50.transcripts.fa",
+  "tx2gene": "/work/genomes/rna/GRCh38/kallisto/gencode.v50.tx2gene.tsv"
 }
 ```
 
 Provision with `scripts/download_rna_reference_grch38.sh` (builds the STAR + kallisto
-indexes and derives `tx2gene` from the GTF).
+indexes and derives `tx2gene` from the GTF). The script prefers host STAR/kallisto when
+present (otherwise Clara `nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1`). GENCODE PRI
+uses `chr1` while the Ensembl primary_assembly FASTA uses `1`/`MT`; STAR is given a
+temporary seqname-remapped GTF so splice junctions index correctly. The inventory GTF
+keeps GENCODE chromosome names.
 
 ## Sample prep flow
 

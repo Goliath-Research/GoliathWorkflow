@@ -124,5 +124,5 @@ if check_paths; then
   exit 0
 fi
 echo "ERROR: selected genome paths still missing after provision" >&2
-echo "Hint: scripts/sync_genomes_to_s3.sh --download --only linear/GRCh38/ensembl-114" >&2
+echo "Hint: scripts/sync_genomes_to_s3.sh --download --only linear/GRCh38/ensembl-116" >&2
 exit 1

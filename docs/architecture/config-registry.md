@@ -81,10 +81,10 @@ methyl-cfg scaffold-action demo.echo --define --capability demo   # git stubs; t
 methyl-cfg sync-library-presets   # enrichment library presets → cfg (kind enrichment_library_preset)
 # Genomes inventory (epimethyl/genomes → /work/genomes); pins from site reference_selection
 methyl-cfg provision-assets --selected-only --site default --work-root /work --dry-run
-methyl-cfg provision-assets --name linear-grch38-ensembl-114 --version 1 --work-root /work --dry-run
+methyl-cfg provision-assets --name linear-grch38-ensembl-116 --version 1 --work-root /work --dry-run
 ```
 
-**Canonical genomes tree** (QNAP + `/work`): `linear/GRCh38/ensembl-114/`, `annotation/gencode/v49/`, `pangenome/GRCh38/d9/1.70/`. Site `reference_selection` pins active versions; `cfg.storage_endpoint` `epimethyl-genomes` (`prefixBase: genomes/`) + `cfg.reference_asset` recipes drive `s3_sync` provision. Phase 0 helper: `scripts/provision_selected_genomes.sh`. Operator upload/provision map: [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md). `cfg.cfg_repo_link_site_asset` is the **only** writer of `cfg.site_reference_asset`. Asset seed does not fill the grid. Construction callers: [`cfg_site_reference_assets_seed.sql`](../../workflow_engine/sql_mssql/cfg_site_reference_assets_seed.sql) (after `cfg.site default@1` exists) and `methyl-cfg link-site-assets --deploy-db` (bootstrap after `import-fs`).
+**Canonical genomes tree** (QNAP + `/work`): `linear/GRCh38/ensembl-116/` (default pin; 114 remains published), `annotation/gencode/v50/` (default; v49 remains), `pangenome/GRCh38/d9/1.70/`. Site `reference_selection` pins active versions; `cfg.storage_endpoint` `epimethyl-genomes` (`prefixBase: genomes/`) + `cfg.reference_asset` recipes drive `s3_sync` provision. Phase 0 helper: `scripts/provision_selected_genomes.sh`. Operator upload/provision map: [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md). `cfg.cfg_repo_link_site_asset` is the **only** writer of `cfg.site_reference_asset`. Asset seed does not fill the grid. Construction callers: [`cfg_site_reference_assets_seed.sql`](../../workflow_engine/sql_mssql/cfg_site_reference_assets_seed.sql) (after `cfg.site default@1` exists) and `methyl-cfg link-site-assets --deploy-db` (bootstrap after `import-fs`).
 
 `METHYL_CFG_STORE` defaults to `/work/epimethyl/cfg-store` (file-backed stand-in that mirrors `cfg.*` tables). Production DDL: `workflow_engine/sql_{pg,mssql}/cfg_*.sql` (wired into `deploy_azure.sh`).
 
