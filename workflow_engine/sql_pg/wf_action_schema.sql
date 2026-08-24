@@ -1,8 +1,10 @@
 /*
   LEGACY — PostgreSQL workflow action JSON Schema blobs.
 
-  Seeding is retired. Prefer wf.data_type + workflow_action.input/output_type_id
-  (wf_data_type.sql). Table kept for read compatibility.
+  Seeding of this table is retired. The bindable JSON Schema lives on
+  wf.data_type.schema_json (wf_data_type.sql). wf.wf_repo_get_action_schema is
+  redefined there to COALESCE type schema → this blob → empty object.
+  Table kept for read compatibility.
 
   Prerequisites: 00_schema.sql (workflow_action)
 

@@ -10,7 +10,7 @@ provider registry**. We do **not** adopt request-scoped dependency injection
 | Layer | Knows about | Extension style |
 |-------|-------------|-----------------|
 | Engine (SQL / local scheduler / compiler) | Node types, scope, `${var.*}` templates | Opaque `ACTION` nodes |
-| Explicit types | `wf.data_type` + fields (seeded from git models) | No JSON Schema blobs on actions |
+| Explicit types | `wf.data_type.schema_json` + field index (seeded from git models) | Editor binds JSON Schema; workers send JSON values |
 | Action catalog | `action_name`, capability, I/O **type FKs**, `domain_effects`, `control` / `dispatch` | Static `ACTION_CATALOG` + export/seed into `wf.workflow_action` |
 | CLI providers | Specialized `CliAction` / collectors | `register_cli_provider(action_name, …)` |
 | In-process handlers | Domain packages | Catalog `in_process_handler` name → `handlers` package |
@@ -103,9 +103,11 @@ sample affinity); other SamplePrep sample-scoped actions use
    vars beyond `with` / `context_vars`.
 
 Workers still **send and receive JSON values** on claim/submit; those values must
-match the action’s explicit `wf.data_type`s. JSON is the wire encoding, not how
-the engine stores type definitions. Do **not** use `cfg.action_definition` or
-seed `wf.workflow_action_schema` blobs.
+match the action’s `wf.data_type`. The **JSON Schema document** on
+`wf.data_type.schema_json` is what Delphi `SchemaPropertyGrid` binds — the field
+table is a SQL index only (lossy). Do **not** use `cfg.action_definition` or
+seed `wf.workflow_action_schema` blobs; `portal.sp_get_action_schema` reads the
+type’s `schema_json`.
 
 **Scaffold shortcut (stubs only):** `methyl-cfg scaffold-action --define
 My.action --capability …` emits task schema files, handler stub under

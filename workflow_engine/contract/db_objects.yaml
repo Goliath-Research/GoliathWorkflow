@@ -133,6 +133,7 @@ objects:
     - name: wf.wf_repo_get_action_schema
       kind: function
       required: true
+      notes: Returns JSON Schema for action I/O from wf.data_type.schema_json (legacy workflow_action_schema blob is fallback).
     - name: wf.wf_repo_list_actions
       kind: function
       required: true

@@ -42,7 +42,7 @@ The worker gateway (`methyl-gateway`) is **claim/submit only** and does **not** 
 Prefer one of:
 
 1. **Filesystem schemas** under **Schemas root** (`schemas/tasks/*.schema.json`, `schemas/domain/*`).
-2. **Portal / wf SQL** — list actions via `portal.sp_list_workflow_actions` / `portal.sp_get_workflow_action` (aliases `sp_list/get_cfg_action`); describe types via `portal.sp_get_data_type` / fields (explicit `wf.data_type`, not schema blobs).
+2. **Portal / wf SQL** — list actions via `portal.sp_list_workflow_actions` / `portal.sp_get_workflow_action` (aliases `sp_list/get_cfg_action`). Bind `SchemaPropertyGrid` to **`schema_json`** from `portal.sp_get_action_schema` (action I/O) or `portal.sp_get_data_type` (named type). Field rows (`sp_list_data_type_fields`) are a SQL index, not the editor contract.
 3. Legacy ini `[Gateway] BaseUrl=.../v1` remote catalog is **deprecated**; do not point the editor at the worker gateway for action schemas.
 
 `TSchemaValidator.AllowTemplatePlaceholders` (default **true**) accepts string values matching `${...}` for any declared type so unresolved template tokens validate at edit time.

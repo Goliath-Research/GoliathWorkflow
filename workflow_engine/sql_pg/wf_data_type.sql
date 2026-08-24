@@ -1,4 +1,7 @@
--- Explicit wf data type registry (no JSON Schema blobs).
+-- Explicit wf data type registry.
+-- schema_json is the JSON Schema document SchemaPropertyGrid binds.
+-- kind / data_type_field / element_type_id are a SQL index over that document
+-- (lossy: no ge/le, descriptions, additionalProperties).
 -- Prerequisites: wf.workflow_action
 
 CREATE TABLE IF NOT EXISTS wf.data_type (
@@ -9,6 +12,7 @@ CREATE TABLE IF NOT EXISTS wf.data_type (
   kind varchar(32) NOT NULL,
   element_type_id bigint NULL REFERENCES wf.data_type (id),
   content_hash text NULL,
+  schema_json jsonb NULL,
   created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at_utc timestamptz NULL,
   CONSTRAINT uq_wf_data_type_name_version UNIQUE (name, version),
@@ -17,6 +21,19 @@ CREATE TABLE IF NOT EXISTS wf.data_type (
     kind IN ('string', 'int', 'bool', 'number', 'datetime', 'bytes', 'enum', 'object', 'array', 'any')
   )
 );
+
+ALTER TABLE wf.data_type
+  ADD COLUMN IF NOT EXISTS schema_json jsonb NULL;
+
+DO $ck$
+BEGIN
+  ALTER TABLE wf.data_type
+    ADD CONSTRAINT ck_wf_data_type_element_kind
+    CHECK (element_type_id IS NULL OR kind = 'array');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END
+$ck$;
 
 CREATE TABLE IF NOT EXISTS wf.data_type_field (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -51,6 +68,9 @@ ALTER TABLE wf.workflow_action
 ALTER TABLE wf.workflow_action
   ADD COLUMN IF NOT EXISTS can_stop boolean NOT NULL DEFAULT true;
 
+DROP FUNCTION IF EXISTS wf.wf_repo_upsert_data_type(text, text, text, text, text, text, text);
+DROP FUNCTION IF EXISTS wf.wf_repo_upsert_data_type(text, text, text, text, text, text, text, jsonb);
+
 CREATE OR REPLACE FUNCTION wf.wf_repo_upsert_data_type(
   p_name text,
   p_version text DEFAULT '1',
@@ -58,7 +78,8 @@ CREATE OR REPLACE FUNCTION wf.wf_repo_upsert_data_type(
   p_kind text DEFAULT 'object',
   p_element_type_name text DEFAULT NULL,
   p_element_type_version text DEFAULT '1',
-  p_content_hash text DEFAULT NULL
+  p_content_hash text DEFAULT NULL,
+  p_schema_json jsonb DEFAULT NULL
 )
 RETURNS TABLE(
   id bigint,
@@ -85,13 +106,14 @@ BEGIN
     LIMIT 1;
   END IF;
 
-  INSERT INTO wf.data_type AS dt(name, version, status, kind, element_type_id, content_hash)
-  VALUES (p_name, v_ver, v_st, p_kind, v_element_id, p_content_hash)
+  INSERT INTO wf.data_type AS dt(name, version, status, kind, element_type_id, content_hash, schema_json)
+  VALUES (p_name, v_ver, v_st, p_kind, v_element_id, p_content_hash, p_schema_json)
   ON CONFLICT ON CONSTRAINT uq_wf_data_type_name_version DO UPDATE SET
     status = EXCLUDED.status,
     kind = EXCLUDED.kind,
     element_type_id = COALESCE(EXCLUDED.element_type_id, dt.element_type_id),
     content_hash = COALESCE(EXCLUDED.content_hash, dt.content_hash),
+    schema_json = COALESCE(EXCLUDED.schema_json, dt.schema_json),
     updated_at_utc = (now() AT TIME ZONE 'utc')
   RETURNING dt.id INTO v_id;
 
@@ -266,7 +288,7 @@ BEGIN
   RETURN QUERY
   SELECT
     a.id, a.action_name, a.input_type_id, a.output_type_id,
-    tin.name, tout.name, a.implementation_status,
+    tin.name, tout.name, a.implementation_status::text,
     a.can_pause, a.can_continue, a.can_stop
   FROM wf.workflow_action a
   LEFT JOIN wf.data_type tin ON tin.id = a.input_type_id
@@ -304,6 +326,9 @@ AS $$
   ORDER BY t.name, t.version;
 $$;
 
+DROP FUNCTION IF EXISTS portal.sp_get_data_type(text, text);
+DROP FUNCTION IF EXISTS wf.wf_repo_get_data_type(text, text);
+
 CREATE OR REPLACE FUNCTION wf.wf_repo_get_data_type(
   p_name text,
   p_version text DEFAULT NULL
@@ -318,14 +343,15 @@ RETURNS TABLE(
   element_type_name text,
   content_hash text,
   created_at_utc timestamptz,
-  updated_at_utc timestamptz
+  updated_at_utc timestamptz,
+  schema_json jsonb
 )
 LANGUAGE sql
 STABLE
 AS $$
   SELECT
     t.id, t.name, t.version, t.status::text, t.kind::text, t.element_type_id,
-    et.name, t.content_hash, t.created_at_utc, t.updated_at_utc
+    et.name, t.content_hash, t.created_at_utc, t.updated_at_utc, t.schema_json
   FROM wf.data_type t
   LEFT JOIN wf.data_type et ON et.id = t.element_type_id
   WHERE t.name = p_name
@@ -387,6 +413,8 @@ AS $$
   SELECT * FROM wf.wf_repo_list_data_types(p_published_only);
 $$;
 
+DROP FUNCTION IF EXISTS portal.sp_get_data_type(text, text);
+
 CREATE OR REPLACE FUNCTION portal.sp_get_data_type(
   p_name text,
   p_version text DEFAULT NULL
@@ -401,7 +429,8 @@ RETURNS TABLE(
   element_type_name text,
   content_hash text,
   created_at_utc timestamptz,
-  updated_at_utc timestamptz
+  updated_at_utc timestamptz,
+  schema_json jsonb
 )
 LANGUAGE sql
 STABLE
@@ -482,4 +511,95 @@ STABLE
 AS $$
   SELECT * FROM portal.sp_list_workflow_actions() a
   WHERE a.action_name = p_action_name;
+$$;
+
+-- Overwrite the blob-only getter from wf_action_schema.sql. Bind the editor
+-- to schema_json on the bound wf.data_type; fall back to legacy blobs.
+CREATE OR REPLACE FUNCTION wf.wf_repo_get_action_schema(
+  p_action_name text,
+  p_direction text
+)
+RETURNS TABLE (
+  action_name text,
+  direction text,
+  schema_id text,
+  schema_json jsonb
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    a.action_name,
+    p_direction,
+    CASE WHEN p_direction = 'input' THEN tin.name ELSE tout.name END,
+    COALESCE(
+      CASE WHEN p_direction = 'input' THEN tin.schema_json ELSE tout.schema_json END,
+      s.schema_json,
+      jsonb_build_object(
+        'type', 'object',
+        'title', COALESCE(
+          CASE WHEN p_direction = 'input' THEN tin.name ELSE tout.name END,
+          p_action_name
+        )
+      )
+    )
+  FROM wf.workflow_action a
+  LEFT JOIN wf.data_type tin ON tin.id = a.input_type_id
+  LEFT JOIN wf.data_type tout ON tout.id = a.output_type_id
+  LEFT JOIN wf.workflow_action_schema s
+    ON s.workflow_action_id = a.id AND s.direction = p_direction
+  WHERE a.action_name = p_action_name;
+$$;
+
+-- Affinity list_actions deploys before this file; overwrite has_* flags so
+-- Config Editor sees a schema when the bound type has schema_json.
+CREATE OR REPLACE FUNCTION wf.wf_repo_list_actions()
+RETURNS TABLE (
+  action_name text,
+  capability text,
+  has_input_schema boolean,
+  has_output_schema boolean,
+  execution_mode text,
+  cli_tool text,
+  in_process_handler text,
+  argv_map jsonb,
+  max_per_worker integer,
+  exclusive_worker boolean,
+  affinity_key_field text,
+  prefer_previous_worker boolean,
+  prefer_continue_group boolean
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    a.action_name,
+    a.capability,
+    (
+      tin.schema_json IS NOT NULL
+      OR EXISTS (
+        SELECT 1 FROM wf.workflow_action_schema si
+        WHERE si.workflow_action_id = a.id AND si.direction = 'input'
+      )
+    ) AS has_input_schema,
+    (
+      tout.schema_json IS NOT NULL
+      OR EXISTS (
+        SELECT 1 FROM wf.workflow_action_schema so
+        WHERE so.workflow_action_id = a.id AND so.direction = 'output'
+      )
+    ) AS has_output_schema,
+    a.execution_mode,
+    a.cli_tool,
+    a.in_process_handler,
+    a.argv_map,
+    a.max_per_worker,
+    a.exclusive_worker,
+    a.affinity_key_field,
+    a.prefer_previous_worker,
+    a.prefer_continue_group
+  FROM wf.workflow_action a
+  LEFT JOIN wf.data_type tin ON tin.id = a.input_type_id
+  LEFT JOIN wf.data_type tout ON tout.id = a.output_type_id
+  ORDER BY a.action_name;
 $$;

@@ -481,8 +481,24 @@ Workflows          (program author / platform admin only)
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | Definition list (read)    | `sp_list_workflow_definitions`                                                                                                | Start wizard (operator/lead); Workflows (author) |
 | Version / graph **write** | `sp_list/get/upsert_domain_program`, `sp_create_workflow_graph`, `sp_get/save_workflow_graph`, `sp_activate_workflow_version` | **Program author / platform admin only**         |
-| Action browser            | `sp_list/get_workflow_actions`; types via `sp_list/get_data_types`                                                            | Author / platform                                |
+| Action browser            | `sp_list/get_workflow_actions`; bind grid to `sp_get_action_schema.schema_json` or `sp_get_data_type.schema_json` | Author / platform                                |
 | Global instances          | `sp_list_ops_instances`, `sp_list_recent_instances`                                                                           | Ops / author                                     |
+
+
+**EpiPortal (Delphi) — DataType / action I/O editor**
+
+`SchemaPropertyGrid` needs a JSON Schema document. `wf.data_type_field` is a
+lossy SQL index (no `ge`/`le`, descriptions, `additionalProperties`) and
+cannot drive the grid. Bind:
+
+1. Action I/O — `portal.sp_get_action_schema(action_name, 'input'|'output')`
+   → `schema_json` (from `wf.data_type.schema_json`).
+2. Named type — `portal.sp_get_data_type(name)` header row → `schema_json`
+   (appended after `updated_at_utc`; MSSQL still returns fields/enums as
+   result sets 2–3).
+
+Do not write a VCL form per numbered type. Do not reconstruct a schema from
+field rows.
 
 
 ---
@@ -537,8 +553,8 @@ Platform
 | Enrollment             | `sp_upsert/list/revoke_worker_enrollment`                                                                                                            |
 | Domain programs        | `sp_list/get/upsert/publish_domain_program`                                                                                                          |
 | Action catalog         | `sp_list/get_workflow_actions`                                                                                                                       |
-| DataType Registry      | `sp_list/get_data_types`, `sp_list_data_type_fields`                                                                                                 |
-| Sample field contracts | `sp_list/get_sample_field_contract` — **only** JSON Schema column in DB                                                                              |
+| DataType Registry      | `sp_list/get_data_types` (`schema_json` on GET), `sp_list_data_type_fields`                                                                          |
+| Sample field contracts | `sp_list/get_sample_field_contract` — covariate JSON Schema                                                                                          |
 | Reference assets       | `sp_list/get_reference_asset`                                                                                                                        |
 
 
@@ -706,9 +722,9 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_cancel_instance` / `sp_fail_instance` | Drain queued work; cancel or fail the run; engine will not activate later stages |
 | `portal.sp_reclaim_expired_leases`               | Ops reclaim                                                                      |
 | `portal.sp_list/get_workflow_actions`            | Action catalog                                                                   |
-| `portal.sp_list/get_data_types`                  | DataType Registry                                                                |
-| `portal.sp_list_data_type_fields`                | DataType Registry fields                                                         |
-| `portal.sp_get_action_schema`                    | Legacy compat only                                                               |
+| `portal.sp_list/get_data_types`                  | DataType Registry; GET `schema_json` is the SchemaPropertyGrid document              |
+| `portal.sp_list_data_type_fields`                | DataType Registry fields (SQL index; do not hand-build UI from this)                 |
+| `portal.sp_get_action_schema`                    | Action I/O JSON Schema (`wf.data_type.schema_json`)                                  |
 
 
 

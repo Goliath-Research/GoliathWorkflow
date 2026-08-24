@@ -95,7 +95,7 @@ Dialect-neutral wrappers used by the REST gateway — see `db_objects.yaml` `rep
 | Object | Purpose |
 |--------|---------|
 | `wf.wf_repo_upsert_action_schema` | Upsert input/output JSON Schema for a workflow action |
-| `wf.wf_repo_get_action_schema` | Fetch one schema document by action name + direction |
+| `wf.wf_repo_get_action_schema` | JSON Schema for an action I/O: `wf.data_type.schema_json`, else legacy blob |
 | `wf.wf_repo_list_actions` | List actions with schema availability + dispatch metadata (`execution_mode`, `cli_tool`, `in_process_handler`, `argv_map`, `max_per_worker`, `exclusive_worker`, affinity flags) |
 | `wf.wf_repo_upsert_workflow_action` | Upsert `wf.workflow_action` row from action catalog (12-arg after `wf_action_dispatch_affinity.sql`) |
 | `wf.wf_repo_create_workflow_graph` | Create workflow def/version/nodes/edges from JSON spec |

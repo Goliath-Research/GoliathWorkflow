@@ -7,10 +7,10 @@
 | Layer | Role |
 |-------|------|
 | **`cfg` schema** | Source of truth for sites, profiles, assay procedures, analytes, DomainProgram IR, studies, storage endpoints/credentials, reference assets |
-| **`wf` schema** | Compiled workflow graphs, instances, task queue, **`wf.data_type`** (explicit types), **`wf.workflow_action`** (dispatch + I/O type FKs) |
-| **`portal`** | Clinical samples; **sole** DB JSON Schema column is sample-extras / `portal.sample_field_contract.schema_json` (flexible covariates) |
+| **`wf` schema** | Compiled workflow graphs, instances, task queue, **`wf.data_type`** (JSON Schema document + SQL field index), **`wf.workflow_action`** (dispatch + I/O type FKs) |
+| **`portal`** | Clinical samples; sample-extras / `portal.sample_field_contract.schema_json` (flexible covariates) |
 | **`/work`** | Materialization target for workers (paths only; **no secrets**) |
-| **Git** | Code, JSON Schema / Pydantic / Mojo contracts that **seed** `wf.data_type` (not stored as schema documents) |
+| **Git** | Code, JSON Schema / Pydantic / Mojo contracts that **seed** `wf.data_type.schema_json` (and the field index) |
 
 ### Relationships (`cfg` ↔ `wf`)
 
@@ -21,7 +21,7 @@ Deployed by `cfg_wf_relationships.sql` (after `cfg_registry_tables.sql`):
 | `cfg.domain_program.workflow_def_id` | `wf.workflow_def.id` | Stable published graph identity |
 | `cfg.domain_program.compiled_workflow_version_id` | `wf.workflow_version.id` | Active compiled IR revision |
 | `cfg.program_publish` | `domain_program` + `workflow_def` + `workflow_version` | Audit of each publish |
-| `wf.workflow_action.input_type_id` / `output_type_id` | `wf.data_type.id` | Explicit action I/O types (fields as rows; **no** `schema_json` on types) |
+| `wf.workflow_action.input_type_id` / `output_type_id` | `wf.data_type.id` | Action I/O types (`schema_json` is the editor document; fields are a SQL index) |
 | `cfg.reference_asset.storage_endpoint_id` | `cfg.storage_endpoint.id` | Primary download/provision source |
 | `cfg.site_reference_asset` | `cfg.site` + `cfg.reference_asset` | Site roles: `reference_genome`, `annotation_gtf`, `pangenome_bundle`, `houseman_seed_basis`, `hitimed_hierarchy_basis`, … **One asset per (`site_id`, `asset_role`)** (`uq_cfg_sra_site_role`). `ck_cfg_sra_role` has no WGBS pangenome role; stock d9-1.70 and WGBS d9-bs-1.70 both compete for `pangenome_bundle`. Site-link seed attaches the stock bundle; swap `@links` for a WGBS site. Dual bind is a model change (widen CHECK + unique). |
 | `cfg.study_instance_link` | `cfg.study` + `wf.workflow_instance` (+ optional program/profile/site) | Which study/config started a run |
@@ -41,10 +41,10 @@ Procs: `cfg.cfg_repo_set_compiled_version`, `cfg.cfg_repo_link_study_instance`, 
 
 | Concern | Lives in |
 |---------|----------|
-| Explicit reusable types | `wf.data_type` + `wf.data_type_field` (+ enum values) |
+| Reusable types | `wf.data_type.schema_json` (JSON Schema for SchemaPropertyGrid) + `wf.data_type_field` / enum values (SQL index) |
 | Action dispatch + I/O type FKs | `wf.workflow_action` |
 | Worker claim/submit bodies | JSON **values** conforming to those types (wire only) |
-| Flexible sample extras / future covariates | **`portal.sample_field_contract.schema_json` only** |
+| Flexible sample extras / future covariates | `portal.sample_field_contract.schema_json` |
 | Git generators | Pydantic / Mojo / `schemas/domain`, `schemas/tasks` → `seed_data_types.py` |
 
 `cfg.action_definition` and seeding of `wf.workflow_action_schema` blobs are **retired**. Use `methyl-cfg sync-actions` (seeds wf) and portal `sp_list/get_workflow_actions` / `sp_list/get_data_type`.
@@ -140,8 +140,9 @@ File-backed store keeps the same structure under `study.extra.studyGroups`. CLI:
 
 - `portal.sp_list_domain_programs` / `sp_get_domain_program` / `sp_upsert_domain_program` — tree editor against `cfg.domain_program`
 - `portal.sp_list/get_workflow_actions` — action catalog from `wf` (input/output **type names**; deprecated aliases `sp_list/get_cfg_action`)
-- `portal.sp_list/get_data_types` (+ field result sets / `sp_list_data_type_fields`) — DataType Registry
-- `portal.sp_list/get_sample_field_contracts` — **only** JSON Schema documents in the DB (sample extras / covariates)
+- `portal.sp_list/get_data_types` (+ field result sets / `sp_list_data_type_fields`) — DataType Registry; **GET returns `schema_json` for SchemaPropertyGrid**
+- `portal.sp_get_action_schema` — action I/O JSON Schema (`wf.data_type.schema_json`, then legacy blob)
+- `portal.sp_list/get_sample_field_contracts` — sample extras / covariate JSON Schema
 - `portal.sp_set_study_group` / `sp_set_study_group_members` / `sp_list_study_groups` / `sp_materialize_study_lists` — study arm enrollment
 - `portal.sp_list_samples_for_study_enrollment` (MSSQL) — picker over `portal.Samples` + `LabSamples` (hard-filters by study `default_analyte_id` when set)
 - `portal.sp_set_sample_analyte` — bind `portal.Samples.analyte_id` → `cfg.analyte`

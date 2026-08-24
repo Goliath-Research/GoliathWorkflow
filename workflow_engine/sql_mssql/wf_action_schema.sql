@@ -1,13 +1,10 @@
 /*
   LEGACY — workflow action JSON Schema blobs.
 
-  Seeding of wf.workflow_action_schema is retired. Action I/O is expressed as
-  explicit wf.data_type (+ data_type_field) and bound via
-  workflow_action.input_type_id / output_type_id (see wf_data_type.sql).
-
-  This table/procs remain for read compatibility (wf_repo_get_action_schema
-  may synthesize a minimal object schema from type names when rows are absent).
-  Prefer portal.sp_get_data_type / sp_list_data_type_fields for Config Editor.
+  Seeding of wf.workflow_action_schema is retired. The bindable JSON Schema
+  lives on wf.data_type.schema_json (see wf_data_type.sql). This table remains
+  for read compatibility; wf_repo_get_action_schema (redefined in
+  wf_data_type.sql) COALESCE type schema → this blob → empty object.
 
   Prerequisites:
   - Base wf schema (workflow_action)

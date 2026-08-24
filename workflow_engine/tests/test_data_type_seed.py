@@ -61,6 +61,51 @@ def test_json_type_to_kind_array(seed) -> None:
     assert ref == "Foo"
 
 
+def test_primitive_json_schema(seed) -> None:
+    integer_schema = seed.primitive_json_schema("int")
+    assert integer_schema["type"] == "integer"
+    assert integer_schema["title"] == "int"
+    dt = seed.primitive_json_schema("datetime")
+    assert dt["type"] == "string"
+    assert dt["format"] == "date-time"
+
+
+def test_editor_schema_keeps_full_root_document(seed) -> None:
+    root = {
+        "title": "Foo",
+        "type": "object",
+        "properties": {"x": {"$ref": "#/$defs/Bar"}},
+        "$defs": {"Bar": {"type": "object", "properties": {"n": {"type": "integer"}}}},
+    }
+    doc = seed.editor_schema_document(
+        "Foo", root, defs=root["$defs"], root_document=root
+    )
+    assert doc["properties"]["x"]["$ref"] == "#/$defs/Bar"
+    assert doc["$defs"]["Bar"]["type"] == "object"
+
+
+def test_editor_schema_nested_def_includes_siblings(seed) -> None:
+    root = {
+        "$defs": {
+            "A": {"type": "object", "properties": {}},
+            "B": {"$ref": "#/$defs/A"},
+        }
+    }
+    doc = seed.editor_schema_document("B", root["$defs"]["B"], defs=root["$defs"])
+    assert doc["$ref"] == "#/$defs/A"
+    assert doc["$defs"]["A"]["type"] == "object"
+    assert doc["title"] == "B"
+
+
+def test_array_and_enum_schemas(seed) -> None:
+    arr = seed.array_json_schema("Foo.items.array", "Bar", defs={"Bar": {"type": "object"}})
+    assert arr["type"] == "array"
+    assert arr["items"]["$ref"] == "#/$defs/Bar"
+    enum_doc = seed.enum_json_schema("Foo.kind", ["a", "b"], description="kind")
+    assert enum_doc["enum"] == ["a", "b"]
+    assert enum_doc["type"] == "string"
+
+
 def test_action_definition_removed_from_kinds() -> None:
     from cfg.kinds import CFG_KINDS, MATERIALIZABLE_KINDS
 

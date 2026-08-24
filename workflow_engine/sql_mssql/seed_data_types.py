@@ -2,8 +2,8 @@
 """
 Seed wf.data_type (+ fields) from schemas/domain and schemas/tasks.
 
-Flattens top-level JSON Schema properties into data_type_field rows.
-Does not store schema documents in SQL.
+Stores the JSON Schema document on wf.data_type.schema_json (SchemaPropertyGrid
+bind target) and flattens properties into data_type_field as a SQL index.
 
 Usage:
   source .venv/bin/activate
@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -39,10 +40,106 @@ PRIMITIVE_KINDS = (
     "any",
 )
 
+JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
+
 
 def _hash(doc: Any) -> str:
     payload = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest().upper()
+
+
+def primitive_json_schema(kind: str, *, title: Optional[str] = None) -> Dict[str, Any]:
+    """Tiny JSON Schema so a primitive type can still bind SchemaPropertyGrid."""
+    name = title or kind
+    type_map = {
+        "string": {"type": "string"},
+        "int": {"type": "integer"},
+        "bool": {"type": "boolean"},
+        "number": {"type": "number"},
+        "datetime": {"type": "string", "format": "date-time"},
+        "bytes": {"type": "string", "contentEncoding": "base64"},
+    }
+    if kind == "any":
+        return {"$schema": JSON_SCHEMA_DRAFT, "title": name}
+    body = type_map.get(kind, {"type": "string"})
+    return {"$schema": JSON_SCHEMA_DRAFT, "title": name, **body}
+
+
+def editor_schema_document(
+    type_name: str,
+    body: Dict[str, Any],
+    *,
+    defs: Optional[Dict[str, Any]] = None,
+    root_document: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """JSON Schema document SchemaPropertyGrid can Bind() without per-type UI.
+
+    Root types store the full file (including $defs). Nested $defs types store
+    the fragment plus sibling $defs so internal $ref still resolve.
+    """
+    if root_document is not None and body is root_document:
+        doc = copy.deepcopy(root_document)
+        doc.setdefault("$schema", JSON_SCHEMA_DRAFT)
+        doc.setdefault("title", type_name)
+        return doc
+
+    doc: Dict[str, Any] = {"$schema": JSON_SCHEMA_DRAFT, "title": type_name}
+    skip = {"$schema", "$id", "title"}
+    for key, value in body.items():
+        if key not in skip:
+            doc[key] = copy.deepcopy(value)
+    sibling_defs = defs
+    if sibling_defs is None and root_document is not None:
+        raw = root_document.get("$defs")
+        sibling_defs = raw if isinstance(raw, dict) else None
+    if sibling_defs:
+        merged = copy.deepcopy(sibling_defs)
+        existing = doc.get("$defs")
+        if isinstance(existing, dict):
+            merged.update(existing)
+        doc["$defs"] = merged
+    return doc
+
+
+def array_json_schema(
+    type_name: str,
+    element_name: str,
+    *,
+    defs: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    if element_name in PRIMITIVE_KINDS or element_name == "any":
+        items = primitive_json_schema(element_name)
+        items.pop("$schema", None)
+        items.pop("title", None)
+    else:
+        items = {"$ref": f"#/$defs/{element_name}"}
+    doc: Dict[str, Any] = {
+        "$schema": JSON_SCHEMA_DRAFT,
+        "title": type_name,
+        "type": "array",
+        "items": items,
+    }
+    if defs:
+        doc["$defs"] = copy.deepcopy(defs)
+    return doc
+
+
+def enum_json_schema(type_name: str, values: List[str], *, description: Optional[str] = None) -> Dict[str, Any]:
+    doc: Dict[str, Any] = {
+        "$schema": JSON_SCHEMA_DRAFT,
+        "title": type_name,
+        "type": "string",
+        "enum": list(values),
+    }
+    if description:
+        doc["description"] = description
+    return doc
+
+
+def _schema_payload(schema: Optional[Dict[str, Any]]) -> Optional[str]:
+    if schema is None:
+        return None
+    return json.dumps(schema, separators=(",", ":"), ensure_ascii=True)
 
 
 def _unwrap_nullable(schema: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
@@ -108,19 +205,23 @@ def _ensure_type(
     version: str = "1",
     element_type_name: Optional[str] = None,
     content_hash: Optional[str] = None,
+    schema: Optional[Dict[str, Any]] = None,
 ) -> None:
     backend = os.environ.get("BACKEND_DB", "mssql").lower()
+    payload = _schema_payload(schema)
+    if content_hash is None and schema is not None:
+        content_hash = _hash(schema)
     if backend == "postgres":
         db._exec_proc(  # noqa: SLF001
-            "SELECT * FROM wf.wf_repo_upsert_data_type(%s,%s,%s,%s,%s,%s,%s)",
-            (name, version, "published", kind, element_type_name, "1", content_hash),
+            "SELECT * FROM wf.wf_repo_upsert_data_type(%s,%s,%s,%s,%s,%s,%s,%s::jsonb)",
+            (name, version, "published", kind, element_type_name, "1", content_hash, payload),
         )
     else:
         db._exec_proc(  # noqa: SLF001
             "EXEC wf.wf_repo_upsert_data_type "
             "@name=?, @version=?, @status=?, @kind=?, "
-            "@element_type_name=?, @element_type_version=?, @content_hash=?",
-            (name, version, "published", kind, element_type_name, "1", content_hash),
+            "@element_type_name=?, @element_type_version=?, @content_hash=?, @schema_json=?",
+            (name, version, "published", kind, element_type_name, "1", content_hash, payload),
         )
 
 
@@ -206,28 +307,45 @@ def _bind_action(
 
 def seed_primitives(db) -> int:
     for kind in PRIMITIVE_KINDS:
-        _ensure_type(db, name=kind, kind=kind)
+        _ensure_type(db, name=kind, kind=kind, schema=primitive_json_schema(kind))
     print(f"upserted {len(PRIMITIVE_KINDS)} primitive data_types")
     return len(PRIMITIVE_KINDS)
 
 
 def _seed_object_from_schema(
-    db, *, type_name: str, schema: Dict[str, Any], defs: Optional[Dict[str, Any]] = None
+    db,
+    *,
+    type_name: str,
+    schema: Dict[str, Any],
+    defs: Optional[Dict[str, Any]] = None,
+    root_document: Optional[Dict[str, Any]] = None,
 ) -> None:
-    defs = defs or schema.get("$defs") or {}
-    # Prefer $defs[type_name] when present
+    defs = defs or (schema.get("$defs") if isinstance(schema.get("$defs"), dict) else {})
     body = schema
     if type_name in defs and isinstance(defs[type_name], dict):
         body = defs[type_name]
-    kind, _ = _json_type_to_kind(body if "type" in body or "properties" in body else {"type": "object"})
+    editor_doc = editor_schema_document(
+        type_name,
+        schema if schema is root_document else body,
+        defs=defs or None,
+        root_document=root_document,
+    )
+    kind, _ = _json_type_to_kind(
+        body if "type" in body or "properties" in body or "enum" in body else {"type": "object"}
+    )
     if kind == "enum" or "enum" in body:
-        _ensure_type(db, name=type_name, kind="enum", content_hash=_hash(body))
         values = [str(v) for v in (body.get("enum") or [])]
+        _ensure_type(
+            db,
+            name=type_name,
+            kind="enum",
+            schema=enum_json_schema(type_name, values, description=body.get("description")),
+        )
         if values:
             _replace_enum(db, type_name=type_name, values=values)
         return
 
-    _ensure_type(db, name=type_name, kind="object", content_hash=_hash(body))
+    _ensure_type(db, name=type_name, kind="object", schema=editor_doc)
     props = body.get("properties") if isinstance(body.get("properties"), dict) else {}
     required = set(body.get("required") or [])
     fields: List[Dict[str, Any]] = []
@@ -237,19 +355,28 @@ def _seed_object_from_schema(
         fkind, fref = _json_type_to_kind(fschema)
         if fkind == "enum":
             enum_type = f"{type_name}.{fname}"
-            _ensure_type(db, name=enum_type, kind="enum")
             vals = fschema.get("enum") or _unwrap_nullable(fschema)[0].get("enum") or []
-            if vals:
-                _replace_enum(db, type_name=enum_type, values=[str(v) for v in vals])
+            str_vals = [str(v) for v in vals]
+            _ensure_type(
+                db,
+                name=enum_type,
+                kind="enum",
+                schema=enum_json_schema(enum_type, str_vals, description=fschema.get("description")),
+            )
+            if str_vals:
+                _replace_enum(db, type_name=enum_type, values=str_vals)
             field_type_name = enum_type
         elif fkind == "array":
             elem_name = fref or "any"
             if elem_name not in PRIMITIVE_KINDS and elem_name != "any":
-                # ensure element object type exists as stub if needed
                 _ensure_type(db, name=elem_name, kind="object")
             arr_name = f"{type_name}.{fname}.array"
             _ensure_type(
-                db, name=arr_name, kind="array", element_type_name=elem_name
+                db,
+                name=arr_name,
+                kind="array",
+                element_type_name=elem_name,
+                schema=array_json_schema(arr_name, elem_name, defs=defs or None),
             )
             field_type_name = arr_name
         elif fkind == "object" and fref:
@@ -290,11 +417,19 @@ def seed_domain_types(db) -> int:
             print(f"skip missing domain schema {path}", file=sys.stderr)
             continue
         schema = json.loads(path.read_text(encoding="utf-8"))
-        # Seed nested $defs as named types
-        for def_name, def_schema in (schema.get("$defs") or {}).items():
+        defs = schema.get("$defs") if isinstance(schema.get("$defs"), dict) else {}
+        for def_name, def_schema in defs.items():
             if isinstance(def_schema, dict):
-                _seed_object_from_schema(db, type_name=def_name, schema=def_schema)
-        _seed_object_from_schema(db, type_name=type_name, schema=schema)
+                _seed_object_from_schema(
+                    db,
+                    type_name=def_name,
+                    schema=def_schema,
+                    defs=defs,
+                    root_document=schema,
+                )
+        _seed_object_from_schema(
+            db, type_name=type_name, schema=schema, defs=defs, root_document=schema
+        )
         count += 1
         print(f"upserted domain data_type:{type_name}")
     return count
@@ -320,10 +455,19 @@ def seed_task_types(db) -> Tuple[int, int]:
                 print(f"skip missing {path}", file=sys.stderr)
                 continue
             schema = json.loads(path.read_text(encoding="utf-8"))
-            for def_name, def_schema in (schema.get("$defs") or {}).items():
+            defs = schema.get("$defs") if isinstance(schema.get("$defs"), dict) else {}
+            for def_name, def_schema in defs.items():
                 if isinstance(def_schema, dict):
-                    _seed_object_from_schema(db, type_name=def_name, schema=def_schema)
-            _seed_object_from_schema(db, type_name=type_name, schema=schema)
+                    _seed_object_from_schema(
+                        db,
+                        type_name=def_name,
+                        schema=def_schema,
+                        defs=defs,
+                        root_document=schema,
+                    )
+            _seed_object_from_schema(
+                db, type_name=type_name, schema=schema, defs=defs, root_document=schema
+            )
             type_count += 1
             print(f"upserted task data_type:{type_name}")
 

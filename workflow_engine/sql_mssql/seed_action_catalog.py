@@ -4,7 +4,8 @@ Seed wf.workflow_action rows from the unified action catalog, then seed
 wf.data_type (+ action input/output type FKs) via seed_data_types.py.
 
 Legacy per-action JSON Schema blobs (wf.workflow_action_schema) are no longer
-seeded; types are explicit rows in wf.data_type / wf.data_type_field.
+seeded; types are explicit rows in wf.data_type / wf.data_type_field, with the
+JSON Schema document stored on wf.data_type.schema_json for SchemaPropertyGrid.
 
 Uses the gateway DB layer (Azure SQL or PostgreSQL) via BACKEND_DB / connection env.
 Legacy PostgreSQL-only path: pass --dsn postgresql://...
@@ -231,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Seeded {action_count} action(s).")
 
-    # Explicit data types + action input/output FKs (no schema blobs).
+    # Explicit data types + action input/output FKs (schema_json on wf.data_type).
     seed_dt = REPO_ROOT / "workflow_engine" / "sql_mssql" / "seed_data_types.py"
     if seed_dt.is_file() and not args.dsn:
         proc = subprocess.run(

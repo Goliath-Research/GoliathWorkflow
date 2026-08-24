@@ -1,11 +1,13 @@
 /*
-  Explicit wf data type registry (no JSON Schema blobs).
+  Explicit wf data type registry.
 
-  Types are composed of kinds + fields (+ enum values). Action I/O points at
+  schema_json is the JSON Schema document SchemaPropertyGrid binds. kind /
+  data_type_field / element_type_id index that document for SQL (lossy: no
+  ge/le, descriptions, additionalProperties). Action I/O points at
   wf.data_type via workflow_action.input_type_id / output_type_id.
 
-  The only JSON Schema column that remains intentional elsewhere is portal
-  sample-extras / disease field contracts (flexible covariates).
+  Portal sample-extras / disease field contracts remain a separate JSON Schema
+  column for flexible covariates.
 
   Prerequisites: base wf.workflow_action
 */
@@ -31,6 +33,7 @@ BEGIN
         kind varchar(32) NOT NULL,
         element_type_id bigint NULL,
         content_hash nvarchar(128) NULL,
+        schema_json json NULL,
         created_at_utc datetime2(3) NOT NULL CONSTRAINT DF_wf_dt_created DEFAULT (SYSUTCDATETIME()),
         updated_at_utc datetime2(3) NULL,
         CONSTRAINT uq_wf_data_type_name_version UNIQUE (name, version),
@@ -48,6 +51,18 @@ IF NOT EXISTS (
     ALTER TABLE wf.data_type WITH CHECK
     ADD CONSTRAINT FK_wf_dt_element_type
         FOREIGN KEY (element_type_id) REFERENCES wf.data_type (id);
+GO
+
+IF COL_LENGTH(N'wf.data_type', N'schema_json') IS NULL
+    ALTER TABLE wf.data_type ADD schema_json json NULL;
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.check_constraints WHERE name = N'ck_wf_data_type_element_kind'
+)
+    ALTER TABLE wf.data_type WITH CHECK
+    ADD CONSTRAINT ck_wf_data_type_element_kind
+        CHECK (element_type_id IS NULL OR kind = 'array');
 GO
 
 IF OBJECT_ID(N'wf.data_type_field', N'U') IS NULL
@@ -121,7 +136,8 @@ CREATE OR ALTER PROCEDURE wf.wf_repo_upsert_data_type
     @kind varchar(32),
     @element_type_name nvarchar(256) = NULL,
     @element_type_version nvarchar(64) = N'1',
-    @content_hash nvarchar(128) = NULL
+    @content_hash nvarchar(128) = NULL,
+    @schema_json json = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -145,11 +161,12 @@ BEGIN
         kind = @kind,
         element_type_id = COALESCE(@element_id, t.element_type_id),
         content_hash = COALESCE(@content_hash, t.content_hash),
+        schema_json = COALESCE(@schema_json, t.schema_json),
         updated_at_utc = SYSUTCDATETIME()
-    WHEN NOT MATCHED THEN INSERT (name, version, status, kind, element_type_id, content_hash)
-        VALUES (@name, @ver, @st, @kind, @element_id, @content_hash);
+    WHEN NOT MATCHED THEN INSERT (name, version, status, kind, element_type_id, content_hash, schema_json)
+        VALUES (@name, @ver, @st, @kind, @element_id, @content_hash, @schema_json);
 
-    SELECT id, name, version, status, kind, element_type_id
+    SELECT id, name, version, status, kind, element_type_id, schema_json
     FROM wf.data_type
     WHERE name = @name AND version = @ver;
 END
@@ -354,7 +371,8 @@ BEGIN
         et.name AS element_type_name,
         t.content_hash,
         t.created_at_utc,
-        t.updated_at_utc
+        t.updated_at_utc,
+        t.schema_json
     FROM wf.data_type t
     LEFT JOIN wf.data_type et ON et.id = t.element_type_id
     WHERE t.id = @type_id;
@@ -495,8 +513,8 @@ BEGIN
 END
 GO
 
-/* Deprecated: keep get_action_schema for Config Editor, prefer data_type fields.
-   When workflow_action_schema rows are absent, synthesize a minimal object schema. */
+/* Config Editor: bind SchemaPropertyGrid to schema_json.
+   Prefer wf.data_type.schema_json; fall back to legacy action-schema blobs. */
 CREATE OR ALTER FUNCTION wf.wf_repo_get_action_schema
 (
     @action_name NVARCHAR(256),
@@ -510,17 +528,58 @@ RETURN
         a.action_name,
         @direction AS direction,
         CASE WHEN @direction = N'input' THEN tin.name ELSE tout.name END AS schema_id,
-        CASE
-            WHEN s.schema_json IS NOT NULL THEN s.schema_json
-            ELSE CAST(N'{"type":"object","title":"' +
-                COALESCE(CASE WHEN @direction = N'input' THEN tin.name ELSE tout.name END, @action_name) +
+        COALESCE(
+            CASE WHEN @direction = N'input' THEN tin.schema_json ELSE tout.schema_json END,
+            s.schema_json,
+            CAST(N'{"type":"object","title":"' +
+                REPLACE(COALESCE(
+                    CASE WHEN @direction = N'input' THEN tin.name ELSE tout.name END,
+                    @action_name
+                ), N'"', N'') +
                 N'"}' AS json)
-        END AS schema_json
+        ) AS schema_json
     FROM wf.workflow_action AS a
     LEFT JOIN wf.data_type tin ON tin.id = a.input_type_id
     LEFT JOIN wf.data_type tout ON tout.id = a.output_type_id
     LEFT JOIN wf.workflow_action_schema AS s
         ON s.workflow_action_id = a.id AND s.direction = @direction
     WHERE a.action_name = @action_name
+);
+GO
+
+CREATE OR ALTER FUNCTION wf.wf_repo_list_actions()
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT
+        a.action_name,
+        a.capability,
+        CAST(CASE
+            WHEN si.workflow_action_id IS NOT NULL THEN 1
+            WHEN tin.schema_json IS NOT NULL THEN 1
+            ELSE 0
+        END AS bit) AS has_input_schema,
+        CAST(CASE
+            WHEN so.workflow_action_id IS NOT NULL THEN 1
+            WHEN tout.schema_json IS NOT NULL THEN 1
+            ELSE 0
+        END AS bit) AS has_output_schema,
+        a.execution_mode,
+        a.cli_tool,
+        a.in_process_handler,
+        a.argv_map,
+        a.max_per_worker,
+        a.exclusive_worker,
+        a.affinity_key_field,
+        a.prefer_previous_worker,
+        a.prefer_continue_group
+    FROM wf.workflow_action AS a
+    LEFT JOIN wf.data_type tin ON tin.id = a.input_type_id
+    LEFT JOIN wf.data_type tout ON tout.id = a.output_type_id
+    LEFT JOIN wf.workflow_action_schema AS si
+        ON si.workflow_action_id = a.id AND si.direction = N'input'
+    LEFT JOIN wf.workflow_action_schema AS so
+        ON so.workflow_action_id = a.id AND so.direction = N'output'
 );
 GO
