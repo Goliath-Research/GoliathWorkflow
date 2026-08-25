@@ -235,7 +235,7 @@ def convert_file(
         if backup and out.exists():
             bak = out.with_suffix(out.suffix + ".bak")
             bak.write_text(out.read_text(encoding="utf-8"), encoding="utf-8")
-        with open(out, "w") as f:
+        with open(out, "w", encoding="utf-8") as f:
             json.dump(v2_dict, f, indent=2)
     except Exception as e:
         return False, f"ERROR writing {out}: {e}"

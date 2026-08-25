@@ -236,6 +236,20 @@ def test_convert_file_apply_with_backup(tmp_path: Path):
     assert (tmp_path / "custom.v2.json.bak").exists()
 
 
+def test_convert_file_writes_utf8_non_ascii_messages(tmp_path: Path):
+    v1 = _minimal_v1_dict()
+    v1["guardrails"]["details"]["q30_percent"]["message"] = "Q30 ≥ 85% — ok"
+    v1_path = tmp_path / "sample.json"
+    v1_path.write_text(json.dumps(v1, ensure_ascii=False), encoding="utf-8")
+    out = tmp_path / "sample.v2.json"
+    ok, msg = convert_file(v1_path, apply=True, output_path=out, validate_v2=True)
+    assert ok
+    raw = out.read_bytes()
+    raw.decode("utf-8")
+    loaded = json.loads(raw.decode("utf-8"))
+    assert loaded["guardrails"]["details"]["q30_percent"]["message"] == "Q30 ≥ 85% — ok"
+
+
 def test_legacy_guardrail_threshold_migrated_then_converted():
     v1 = _minimal_v1_dict()
     v1["guardrails"]["details"]["pf_percent"] = {
