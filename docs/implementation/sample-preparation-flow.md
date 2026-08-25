@@ -311,16 +311,16 @@ Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../wor
 2. **Picard dedup** — `*deduplicate_metrics.txt` or `*duplication_metrics.txt` → `summary_stats` ([`parser.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/parser.py)).
 3. **Family payload** — Parabricks: `{sample_id}.json` or tar rebuild. methylGrapher: `alignment_metrics.json` + optional Picard enrichment when `collectmultiplemetrics: true`.
 4. **Guardrails** — shared layers for all modes; Parabricks-family core/cycles/fragmentomics and/or methylGrapher-family provenance/GAF/BAM checks (see [Guardrails reference](#guardrails-reference)).
-5. **Validate V1** → **convert to V2** → write `{output_base}/{project}/alignment_qc/{sample_id}.json`.
+5. **Validate V1 in memory** (Picard tables still present) → **slim V2.1** → write `{output_base}/{project}/alignment_qc/{sample_id}.json`.
 
-**Inference hazard (docs note only):** `alignmentMode` is seeded on instance context for align/realign branching but is **not** declared on `MethylQcTaskInput` / `sample_methyl_qc.input.schema.json`. When mode is omitted and both a Picard tar and methylGrapher provenance exist, inference can prefer the Parabricks family. Prefer passing `alignmentMode` on the methyl_qc task input when the workflow template allows it.
+**Inference hazard (docs note only):** when `alignmentMode` is omitted and both a Picard tar and methylGrapher provenance exist, inference can prefer the Parabricks family. Prefer passing `alignmentMode` on `MethylQcTaskInput` (`sample.methyl_qc`).
 
 ### Pydantic models and JSON Schema
 
 | Artifact | Path |
 |----------|------|
-| V1 columnar models | [`packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc.py) |
-| V2 row-oriented export | [`packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc_v2.py`](../../packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc_v2.py) |
+| V1 columnar models (in-memory assembly) | [`packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc.py) |
+| V2.1 slim export (disk; not action I/O) | [`packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc_v2.py`](../../packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc_v2.py) |
 | Alignment QC config | [`packages/methylalignmentqc/methyl_alignment_qc/models/config.py`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py) |
 | V2 export JSON Schema | [`schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`](../../schemas/config/alignment_qc/exported_sample_qc_v2.schema.json) |
 | Profile `actionConfig.alignment_qc` schema | [`schemas/config/alignment_qc.schema.json`](../../schemas/config/alignment_qc.schema.json) |
@@ -331,12 +331,13 @@ Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../wor
 | Block | Contents |
 |-------|----------|
 | `summary_stats` | Duplication rate, read counts from Picard metrics |
-| `quality_yield`, `mean_quality_by_cycle`, … | Parabricks sequencing sections |
-| `guardrails.details` | Per-metric pass/fail, observed value, normal range, operator message |
+| `quality_yield`, `gc_bias_summary`, `insert_size_metrics` | Small Parabricks scalars (histograms stay in native Picard files) |
+| `guardrails.details` | Canonical analysis path: per-metric pass/fail, observed value, normal range, operator message |
 | `guardrails.screening` | Cycle-quality disposition and recommended trim counts |
 | `guardrails.overall_pass` | Single boolean bound to workflow `qcPass` |
 | `qc_history` | Append-only list of evaluations (initial + post-remediation retries) |
 | `fragmentomics_metrics` | cfDNA insert-size metrics when enabled |
+| `bisulfite_conversion_metrics` | Sidecar conversion provenance (not a deamination alias) |
 | `alignment_stats` | Derived mapping rate, secondary/supplementary rate, GC uniformity |
 | `alignment_flagstat` | samtools flagstat counters and pairing rates (when enabled) |
 
@@ -416,9 +417,9 @@ Disable alignment gates per project: `"alignment_guardrails": {"enabled": false}
 
 | Metric | Default threshold | Source |
 |--------|-------------------|--------|
-| `conversion_rate_pct` | ≥ 99.0% | `bisulfite_conversion.json` sidecar |
+| `conversion_rate_pct` | ≥ 99.0% | `bisulfite_conversion.json` sidecar (`details.bisulfite_conversion`) |
 | `non_cpg_methylation_pct` | ≤ 2.0% | Sidecar |
-| `deamination_qscore` (proxy) | ≤ 30 | When sidecar missing (`source: auto`) |
+| `deamination_qscore` | ≤ 30 | `details.deamination_qscore` only (Picard pre-adapter). Auto source may note it as a qualitative proxy in `bisulfite_conversion_metrics.notes`; it is not nested under `bisulfite_conversion`. |
 
 ### Cycle screening dispositions
 

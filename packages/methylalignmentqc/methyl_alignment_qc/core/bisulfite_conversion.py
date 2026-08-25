@@ -65,7 +65,6 @@ def resolve_bisulfite_metrics(
     source = str(cfg.source or "sidecar").strip().lower()
     conversion_rate_pct: Optional[float] = None
     non_cpg_methylation_pct: Optional[float] = None
-    deamination_qscore: Optional[int] = None
     measurement_source = source
     notes: Optional[str] = None
 
@@ -83,21 +82,21 @@ def resolve_bisulfite_metrics(
             measurement_source = str(sidecar.get("source") or "sidecar")
             notes = sidecar.get("notes")
 
-    deamination_qscore = _deamination_from_payload(payload)
+    deam = _deamination_from_payload(payload)
 
     if source in {"deamination_proxy", "auto"} and conversion_rate_pct is None:
-        if deamination_qscore is not None:
+        if deam is not None:
             measurement_source = "deamination_proxy"
             notes = (
-                "Quantitative conversion rate not supplied; using Parabricks deamination "
-                "qscore as qualitative bisulfite-conversion proxy only."
+                "Quantitative conversion rate not supplied; using "
+                "guardrails.details.deamination_qscore as a qualitative conversion "
+                "proxy only (not a second metric)."
             )
 
     return BisulfiteConversionMetrics(
         measurement_source=measurement_source,
         conversion_rate_pct=conversion_rate_pct,
         non_cpg_methylation_pct=non_cpg_methylation_pct,
-        deamination_qscore=deamination_qscore,
         min_conversion_rate_pct=float(cfg.min_conversion_rate_pct),
         max_non_cpg_methylation_pct=float(cfg.max_non_cpg_methylation_pct),
         notes=notes,
@@ -112,8 +111,6 @@ def build_bisulfite_guardrails(
     out: Dict[str, GuardrailMetric] = {}
     min_conv = float(cfg.min_conversion_rate_pct)
     max_non_cpg = float(cfg.max_non_cpg_methylation_pct)
-    max_deam = int(cfg.max_deamination_qscore_proxy)
-
     if metrics.conversion_rate_pct is not None:
         val = float(metrics.conversion_rate_pct)
         passed = val >= min_conv
@@ -142,21 +139,17 @@ def build_bisulfite_guardrails(
             ),
         )
 
-    if metrics.deamination_qscore is not None:
-        val = float(metrics.deamination_qscore)
-        passed = val <= max_deam
-        out["deamination_qscore"] = _guardrail_metric(
-            value=val,
-            normal_range=f"<= {max_deam} (proxy)",
-            passed=passed,
-            message=(
-                "Deamination qscore consistent with successful bisulfite conversion (proxy)."
-                if passed
-                else f"Deamination qscore {int(val)} above proxy limit {max_deam}."
-            ),
-        )
-
     return out
+
+
+def nested_guardrail_group_failed(details: Dict[str, Any], key: str) -> bool:
+    """True when a nested heading (e.g. bisulfite_conversion) has any failed metric."""
+    node = details.get(key)
+    if not isinstance(node, dict):
+        return False
+    if "pass" in node:
+        return node.get("pass") is False
+    return any(isinstance(v, dict) and v.get("pass") is False for v in node.values())
 
 
 def apply_bisulfite_conversion_to_payload(
@@ -168,7 +161,9 @@ def apply_bisulfite_conversion_to_payload(
         return
 
     metrics = resolve_bisulfite_metrics(payload, sample_dir, cfg)
-    payload["bisulfite_conversion_metrics"] = metrics.model_dump(mode="python", by_alias=True)
+    payload["bisulfite_conversion_metrics"] = metrics.model_dump(
+        mode="python", by_alias=True, exclude_none=True
+    )
 
     frag_guard = build_bisulfite_guardrails(metrics, cfg)
     if not frag_guard:
@@ -176,11 +171,12 @@ def apply_bisulfite_conversion_to_payload(
 
     guardrails = payload.setdefault("guardrails", {})
     details = guardrails.setdefault("details", {})
-    details["bisulfite_conversion"] = frag_guard
+    dumped = {
+        k: m.model_dump(mode="python", by_alias=True) for k, m in frag_guard.items()
+    }
+    details["bisulfite_conversion"] = dumped
 
-    bis_pass = all(
-        bool(m.model_dump(by_alias=True).get("pass")) for m in frag_guard.values()
-    )
+    bis_pass = all(bool(m.get("pass")) for m in dumped.values())
     if not bis_pass:
         guardrails["overall_pass"] = False
         rec = str(guardrails.get("recommendation") or "")

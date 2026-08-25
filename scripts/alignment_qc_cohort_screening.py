@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Cohort alignment QC screening report from existing V2 JSON exports.
+Cohort alignment QC screening report from existing V2.1 guardrail-summary exports.
 
-Re-runs cycle-quality screening on guardrails + mean_quality_by_cycle without re-alignment.
-Outputs summary JSON and remediation/investigate CSV manifests.
+Default: report stored ``guardrails.screening`` and ``guardrails.details``
+(no Picard tables on the export). Pass ``--recompute`` to re-run cycle screening
+when cycle tables are still present (legacy fat V2.0) or under ``--picard-dir``.
 """
 
 from __future__ import annotations
@@ -48,8 +49,13 @@ def _batch_prefix(sample_id: str) -> str:
     return m.group(1) if m else "other"
 
 
-def _v1_payload_from_v2(raw: Dict[str, Any]) -> Dict[str, Any]:
-    """Minimal V1-shaped dict for screening from V2 export."""
+def _v1_cycles_from_export_or_picard(
+    raw: Dict[str, Any],
+    *,
+    sample_id: str,
+    picard_dir: Optional[Path],
+) -> Dict[str, Any]:
+    """Build a payload with mean_quality_by_cycle for recompute, if available."""
     payload: Dict[str, Any] = dict(raw)
     mqc = raw.get("mean_quality_by_cycle") or {}
     if "rows" in mqc:
@@ -58,6 +64,20 @@ def _v1_payload_from_v2(raw: Dict[str, Any]) -> Dict[str, Any]:
             "cycle": [r["cycle"] for r in rows],
             "mean_quality": [r["mean_quality"] for r in rows],
         }
+        return payload
+    if mqc.get("cycle") and mqc.get("mean_quality"):
+        return payload
+    if picard_dir is None:
+        return payload
+    picard_path = picard_dir / f"{sample_id}.json"
+    if not picard_path.is_file():
+        return payload
+    try:
+        picard = json.loads(picard_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return payload
+    if isinstance(picard, dict) and picard.get("mean_quality_by_cycle"):
+        payload["mean_quality_by_cycle"] = picard["mean_quality_by_cycle"]
     return payload
 
 
@@ -66,19 +86,38 @@ def screen_one_qc_json(
     *,
     cycle_cfg: CycleScreeningConfig,
     opt_cfg: OptionalGuardrailsConfig,
+    recompute: bool = False,
+    picard_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     raw = json.loads(qc_path.read_text(encoding="utf-8"))
-    payload = _v1_payload_from_v2(raw)
     guardrails = dict(raw.get("guardrails") or {})
+    sample_id = str(raw.get("sample_id") or qc_path.stem)
+    stored_screening = guardrails.get("screening") or {}
+
+    if not recompute:
+        return {
+            "sample_id": sample_id,
+            "qc_path": str(qc_path),
+            "overall_pass": guardrails.get("overall_pass"),
+            "screening": stored_screening,
+            "failed_guardrails": failed_guardrail_keys(guardrails),
+        }
+
+    payload = _v1_cycles_from_export_or_picard(raw, sample_id=sample_id, picard_dir=picard_dir)
     apply_optional_guardrails(
         guardrails,
         payload,
         duplication_rate_max=opt_cfg.duplication_rate_max,
         min_pf_reads=opt_cfg.min_pf_reads,
     )
-    screening = screen_cycle_quality(payload, guardrails, cycle_cfg)
+    mqc = payload.get("mean_quality_by_cycle") or {}
+    has_cycles = bool(mqc.get("cycle") or mqc.get("rows") or mqc.get("mean_quality"))
+    if has_cycles:
+        screening = screen_cycle_quality(payload, guardrails, cycle_cfg)
+    else:
+        screening = stored_screening
     return {
-        "sample_id": raw.get("sample_id") or qc_path.stem,
+        "sample_id": sample_id,
         "qc_path": str(qc_path),
         "overall_pass": guardrails.get("overall_pass"),
         "screening": screening,
@@ -92,6 +131,17 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--group", action="append", default=[], metavar="NAME=CSV")
     parser.add_argument("--read-length", type=int, default=None)
+    parser.add_argument(
+        "--recompute",
+        action="store_true",
+        help="Re-run cycle screening from Picard tables (legacy fat export or --picard-dir).",
+    )
+    parser.add_argument(
+        "--picard-dir",
+        type=Path,
+        default=None,
+        help="Directory of native Parabricks {sample_id}.json files for --recompute.",
+    )
     args = parser.parse_args()
 
     groups: Dict[str, List[str]] = {}
@@ -121,7 +171,13 @@ def main() -> int:
                     }
                 )
                 continue
-            row = screen_one_qc_json(qc_path, cycle_cfg=cycle_cfg, opt_cfg=opt_cfg)
+            row = screen_one_qc_json(
+                qc_path,
+                cycle_cfg=cycle_cfg,
+                opt_cfg=opt_cfg,
+                recompute=args.recompute,
+                picard_dir=args.picard_dir,
+            )
             row["group"] = group_name
             row["status"] = "ok"
             row["batch_prefix"] = _batch_prefix(sid)

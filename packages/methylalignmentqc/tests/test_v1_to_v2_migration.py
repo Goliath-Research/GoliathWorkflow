@@ -8,10 +8,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from methyl_alignment_qc.models.sample_qc_v2 import ExportedSampleQCV2Payload
+from methyl_alignment_qc.models.sample_qc_v2 import PICARD_TABLE_KEYS, ExportedSampleQCV2Payload
 from methyl_alignment_qc.utils.v1_to_v2_migration import (
     convert_file,
+    is_slim_v2_export,
     is_v2_alignment_qc_payload,
+    slim_v2_dict,
     v1_dict_to_v2_dict,
 )
 
@@ -166,22 +168,16 @@ def _minimal_v1_dict() -> dict:
     }
 
 
-def test_v1_to_v2_transposes_row_sections():
+def test_v1_to_v2_drops_picard_tables_and_is_slim():
     v1 = _minimal_v1_dict()
     v2 = v1_dict_to_v2_dict(v1)
-    assert v2["metadata"]["schema_version"] == "2.0.0"
-    assert len(v2["mean_quality_by_cycle"]["rows"]) == 2
-    assert v2["mean_quality_by_cycle"]["rows"][1] == {"cycle": 2, "mean_quality": 37.0}
-    assert v2["quality_score_distribution"]["rows"] == [
-        {"q": 20, "count_of_q": 100},
-        {"q": 30, "count_of_q": 90},
-    ]
-    assert v2["base_distribution_by_cycle"]["rows"][0]["pct_a"] == 25.0
-    assert len(v2["gc_bias_details"]["rows"]) == 2
-    assert v2["insert_size_histogram"]["rows"][0]["all_reads_fr_count"] == 10
-    assert v2["error_summaries"]["rows"][1]["ref"] == "C"
-    assert v2["pre_adapter_summaries"]["rows"][0]["artifact_name"] == "Deamination"
-    assert v2["duplication_histogram"]["rows"][0]["bin"] == 1.0
+    assert v2["metadata"]["schema_version"] == "2.1.0"
+    assert v2["metadata"]["export_kind"] == "guardrail_summary"
+    assert "mean_quality_by_cycle" not in v2
+    assert "duplication_histogram" not in v2
+    assert "insert_size_histogram" not in v2
+    assert "pre_adapter_summaries" not in v2
+    assert v2["guardrails"]["details"]["deamination_qscore"]["value"] == 20.0
     ExportedSampleQCV2Payload.model_validate(v2)
 
 
@@ -191,7 +187,31 @@ def test_v2_payload_detected_idempotent_skip(tmp_path: Path):
     path.write_text(json.dumps(v2), encoding="utf-8")
     ok, msg = convert_file(path, apply=False)
     assert not ok
-    assert "SKIP" in msg and "V2" in msg
+    assert "SKIP" in msg and "slim" in msg
+
+
+def test_slim_fat_v2_drops_histogram_rows():
+    v2 = v1_dict_to_v2_dict(_minimal_v1_dict())
+    fat = dict(v2)
+    fat["metadata"] = dict(v2["metadata"])
+    fat["metadata"]["schema_version"] = "2.0.0"
+    fat.pop("export_kind", None)
+    fat["metadata"].pop("export_kind", None)
+    fat["mean_quality_by_cycle"] = {"rows": [{"cycle": 1, "mean_quality": 38.0}]}
+    fat["duplication_histogram"] = {"rows": [{"bin": 1.0, "value": 10.0}]}
+    slim = slim_v2_dict(fat)
+    assert slim["metadata"]["schema_version"] == "2.1.0"
+    assert "mean_quality_by_cycle" not in slim
+    assert "duplication_histogram" not in slim
+    ExportedSampleQCV2Payload.model_validate(slim)
+    assert is_slim_v2_export(slim)
+
+
+def test_v2_schema_excludes_picard_tables():
+    schema = ExportedSampleQCV2Payload.model_json_schema()
+    props = schema.get("properties") or {}
+    for key in PICARD_TABLE_KEYS:
+        assert key not in props
 
 
 def test_convert_file_apply_writes_default_v2_suffix(tmp_path: Path):
@@ -260,4 +280,47 @@ def test_end_to_end_writer_output_is_v2(tmp_path: Path):
     written = json.loads(out_path.read_text(encoding="utf-8"))
     assert is_v2_alignment_qc_payload(written)
     ExportedSampleQCV2Payload.model_validate(written)
-    assert len(written["mean_quality_by_cycle"]["rows"]) == 5
+    assert "mean_quality_by_cycle" not in written
+    assert written["metadata"]["schema_version"] == "2.1.0"
+
+
+def test_convert_file_slims_fat_v2(tmp_path: Path):
+    v2 = v1_dict_to_v2_dict(_minimal_v1_dict())
+    fat = dict(v2)
+    fat["metadata"] = dict(v2["metadata"])
+    fat["metadata"]["schema_version"] = "2.0.0"
+    fat["metadata"].pop("export_kind", None)
+    fat["mean_quality_by_cycle"] = {"rows": [{"cycle": 1, "mean_quality": 38.0}]}
+    path = tmp_path / "fat.json"
+    path.write_text(json.dumps(fat), encoding="utf-8")
+    ok, msg = convert_file(path, apply=True, output_path=path, validate_v2=True)
+    assert ok
+    assert "CONVERTED" in msg
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    assert loaded["metadata"]["schema_version"] == "2.1.0"
+    assert "mean_quality_by_cycle" not in loaded
+    ExportedSampleQCV2Payload.model_validate(loaded)
+
+
+def test_drop_deamination_alias_from_nested_heading():
+    from methyl_alignment_qc.utils.v1_to_v2_migration import drop_deamination_aliases
+
+    raw = _minimal_v1_dict()
+    raw["guardrails"]["details"]["bisulfite_conversion"] = {
+        "deamination_qscore": {"value": 15.0, "normal_range": "<= 30", "pass": True, "message": "alias"},
+        "conversion_rate_pct": {"value": 99.5, "normal_range": ">= 99", "pass": True, "message": "ok"},
+    }
+    raw["bisulfite_conversion_metrics"] = {
+        "measurement_source": "sidecar",
+        "deamination_qscore": 15,
+        "conversion_rate_pct": 99.5,
+        "min_conversion_rate_pct": 99.0,
+        "max_non_cpg_methylation_pct": 2.0,
+    }
+    v2 = v1_dict_to_v2_dict(raw)
+    details = v2["guardrails"]["details"]
+    assert "deamination_qscore" in details
+    assert "deamination_qscore" not in (details.get("bisulfite_conversion") or {})
+    assert "deamination_qscore" not in (v2.get("bisulfite_conversion_metrics") or {})
+    drop_deamination_aliases(v2)
+    ExportedSampleQCV2Payload.model_validate(v2)

@@ -144,27 +144,28 @@ Each linear or stock-pangenome sample directory should contain **`{sample_id}.js
 - `gc_bias_summary`, `insert_size_metrics`
 - `pre_adapter_summaries` — deamination and OxoG artifact qscores
 
-When this file is present, guardrails in `wgbs_parabricks_qc.py` evaluate sequencing and alignment health **before** methylation extraction.
+When this file is present, guardrails in `wgbs_parabricks_qc.py` evaluate sequencing and alignment health **before** methylation extraction. Cycle and insert histograms are used at QC time and are **not** copied into the published alignment QC JSON.
 
 ### methylGrapher WGBS provenance (`pangenome_wgbs`)
 
 WGBS pangenome align writes **`{sample_id}.alignment_metrics.json`** (tool=`methylGrapher`) plus GAF / QC BAM / dedup. After the QC BAM is ready, Align may run Parabricks **`collectmultiplemetrics`** (soft-fail if GPU/image unavailable) and pack real Picard tables into `{sample_id}.qc-metrics.tar`. Provenance then sets `collectmultiplemetrics: true`. Mode-aware QC keeps WGBS provenance as the hard baseline and **optionally** merges Parabricks core + cycle screening when that flag is set and tables are complete — never from a stale linear tar without the flag. BS chemistry can skew artifact/GC metrics; treat Picard enrichment as operational screening only. Guardrails: `wgbs_pangenome_qc.py` (+ optional `wgbs_parabricks_qc`).
 
-### Our equivalent export JSON (V2)
+### Our equivalent export JSON (V2.1)
 
-The worker writes a normalized **V2 row-oriented** JSON per sample (schema: `schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`). Key blocks:
+The worker writes a slim **guardrail summary** per sample (schema: `schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`, `export_kind: guardrail_summary`). This file is a disk export (`qcPath`); it is **not** `MethylQcTaskInput`. Picard cycle/GC/insert/duplication histograms stay in `{sample_id}.json` or `{sample_id}.qc-metrics.tar`. **Canonical analysis path:** `guardrails.details` only. Nested `bisulfite_conversion` is sidecar conversion rates, not a second copy of deamination.
 
 | Block | Contents |
 |-------|----------|
 | `summary_stats` | Duplication rate, read counts from Picard metrics |
-| `quality_yield`, `mean_quality_by_cycle`, … | Parabricks sections (embedded or referenced) |
-| `guardrails.details` | Per-metric pass/fail, observed value, normal range, operator message |
+| `quality_yield`, `gc_bias_summary`, `insert_size_metrics` | Small Parabricks scalars (no histograms) |
+| `guardrails.details` | Per-metric pass/fail, observed value, normal range, operator message. Deamination: `deamination_qscore` here only. |
 | `guardrails.screening` | Cycle-quality disposition and recommended trim counts |
 | `guardrails.overall_pass` | **Single boolean** bound to workflow `qcPass` |
 | `qc_history` | Append-only list of evaluations (initial + post-remediation retries) |
 | `fragmentomics_metrics` | cfDNA insert-size guardrails when enabled |
+| `bisulfite_conversion_metrics` | Sidecar conversion provenance (`measurement_source`, rates, notes) |
 
-V1-shaped payloads are assembled internally and converted to V2 for export; standalone tools can migrate older files with `methyl-qc-migrate-guardrails`.
+V1-shaped payloads are assembled internally (with Picard tables for compute) and converted to V2.1 for export; standalone tools can migrate older files with `methyl-qc-convert-v1-to-v2` or `methyl-qc-migrate-guardrails`.
 
 ## Alignment guardrails: what “good alignment” means
 
@@ -225,7 +226,7 @@ Configure under profile or site `actionConfig.alignment_qc` (not in the study ma
 
 - **Core guardrails:** the sequencing/library window in the table above. Only set the keys you need to move; unset keys keep the acceptance window.
 - **Alignment guardrails:** mapping rate, secondary/supplementary rate, GC uniformity (Picard-derived), and properly paired rate (`samtools flagstat` on the BAM). Enabled by default for `cfdna` and `buffy_coat` via analyte profile. See [implementation guide](../implementation/sample-preparation-flow.md).
-- **Bisulfite conversion:** reads `bisulfite_conversion.json` sidecar when present; otherwise may use deamination qscore as a qualitative proxy.
+- **Bisulfite conversion:** reads `bisulfite_conversion.json` sidecar when present. A missing sidecar with `source: auto` records deamination as a qualitative proxy in `bisulfite_conversion_metrics.notes`; voting still uses `guardrails.details.deamination_qscore` only.
 - **cfDNA fragmentomics:** when `primary_analyte` is `cfdna`, insert-size histogram guardrails can flag abnormal fragment profiles before extraction.
 
 See [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md) for profile defaults.
@@ -256,6 +257,8 @@ python scripts/alignment_qc_cohort_screening.py \
   --group pca=/work/projects/prostate-cancer/data/pca.csv \
   --out /work/projects/prostate-cancer/alignment_qc/screening_report
 ```
+
+Default reads stored `guardrails.screening` (slim exports have no cycle tables). Pass `--recompute` and `--picard-dir` pointing at native Parabricks `{id}.json` files to re-run cycle screening.
 
 ## Extraction QC: confirming enough good reads
 

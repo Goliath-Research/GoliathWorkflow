@@ -13,7 +13,9 @@ def test_remediate_without_cycles_emits_realign_trim(tmp_path: Path) -> None:
         "guardrails": {
             "overall_pass": False,
             "details": {
-                "bisulfite_conversion": {"pass": False, "value": 90.0},
+                "bisulfite_conversion": {
+                    "conversion_rate_pct": {"pass": False, "value": 90.0, "normal_range": ">= 99", "message": "low"}
+                },
             },
         },
         "bisulfite_conversion_metrics": {"conversion_rate_pct": 90.0},

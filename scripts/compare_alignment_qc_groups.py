@@ -43,6 +43,8 @@ GUARDRAIL_SCALAR_KEYS = (
     "gc_coverage_uniformity",
     "properly_paired_rate",
     "supplementary_rate_flagstat",
+    "duplication_rate",
+    "min_pf_reads",
 )
 
 
@@ -74,7 +76,37 @@ def _guardrail_value(details: Dict[str, Any], key: str) -> Tuple[Optional[float]
     return fval, pbool
 
 
+def _is_metric_node(node: Any) -> bool:
+    return isinstance(node, dict) and "pass" in node
+
+
+def _flatten_details(details: Dict[str, Any], row: Dict[str, Any]) -> None:
+    """Copy guardrails.details scalars (and nested headings) into the flat row."""
+    if not isinstance(details, dict):
+        return
+    for key, node in details.items():
+        if not isinstance(node, dict):
+            continue
+        if _is_metric_node(node):
+            val, passed = _guardrail_value(details, key)
+            row[f"guardrail_{key}"] = val
+            row[f"guardrail_{key}_pass"] = passed
+            continue
+        for sub_key, sub_node in node.items():
+            if not _is_metric_node(sub_node):
+                continue
+            val = sub_node.get("value")
+            try:
+                fval = float(val) if val is not None else None
+            except (TypeError, ValueError):
+                fval = None
+            passed = sub_node.get("pass")
+            row[f"guardrail_{key}_{sub_key}"] = fval
+            row[f"guardrail_{key}_{sub_key}_pass"] = bool(passed) if passed is not None else None
+
+
 def flatten_qc_json(qc_path: Path) -> Dict[str, Any]:
+    """Flatten one QC export using ``guardrails.details`` as the metric source."""
     payload = json.loads(qc_path.read_text(encoding="utf-8"))
     row: Dict[str, Any] = {
         "qc_json_sample_id": payload.get("sample_id") or qc_path.stem,
@@ -84,46 +116,21 @@ def flatten_qc_json(qc_path: Path) -> Dict[str, Any]:
     for k, v in summary.items():
         row[f"summary_{k}"] = v
 
-    qy = payload.get("quality_yield") or {}
-    for k in ("total_reads", "pf_reads", "pf_bases", "q30_bases", "pf_q30_bases"):
-        if k in qy:
-            row[f"quality_yield_{k}"] = qy[k]
-    if qy.get("pf_bases") and qy.get("total_bases"):
-        row["quality_yield_pf_fraction"] = float(qy["pf_bases"]) / float(qy["total_bases"])
-    if qy.get("pf_q30_bases") and qy.get("pf_bases"):
-        row["quality_yield_pf_q30_fraction"] = float(qy["pf_q30_bases"]) / float(qy["pf_bases"])
-
     guardrails = payload.get("guardrails") or {}
     row["guardrails_overall_pass"] = guardrails.get("overall_pass")
     screening = guardrails.get("screening") or {}
     row["screening_disposition"] = screening.get("disposition")
     row["trim_front2"] = screening.get("trim_front2")
     row["screening_message"] = screening.get("message")
+    _flatten_details(guardrails.get("details") or {}, row)
+    # Known scalars in case a heading omitted a key that analysis expects.
     details = guardrails.get("details") or {}
     for key in GUARDRAIL_SCALAR_KEYS:
-        val, passed = _guardrail_value(details, key)
-        row[f"guardrail_{key}"] = val
-        row[f"guardrail_{key}_pass"] = passed
-
-    frag = payload.get("fragmentomics_metrics") or {}
-    for k in ("median_insert_size", "nucleosome_peak_bp", "short_fragment_fraction"):
-        if k in frag:
-            row[f"fragmentomics_{k}"] = frag[k]
-
-    align = payload.get("alignment_stats") or {}
-    for k in (
-        "reads_examined",
-        "mapping_rate",
-        "secondary_supplementary_rate",
-        "gc_coverage_uniformity",
-    ):
-        if k in align:
-            row[f"alignment_stats_{k}"] = align[k]
-
-    flagstat = payload.get("alignment_flagstat") or {}
-    for k in ("properly_paired_rate", "supplementary_rate", "mapped_rate"):
-        if k in flagstat:
-            row[f"alignment_flagstat_{k}"] = flagstat[k]
+        col = f"guardrail_{key}"
+        if col not in row:
+            val, passed = _guardrail_value(details, key)
+            row[col] = val
+            row[f"guardrail_{key}_pass"] = passed
 
     return row
 

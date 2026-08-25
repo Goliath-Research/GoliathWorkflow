@@ -24,7 +24,7 @@ def generate_schema_dict_v1() -> dict:
 
 
 def generate_schema_dict_v2() -> dict:
-    """Generate JSON Schema from strict Pydantic model (V2 row-oriented export)."""
+    """Generate JSON Schema for the published slim V2.1 guardrail-summary export."""
     return _schema_dict_from_model(ExportedSampleQCV2Payload, title="ExportedSampleQCV2Payload")
 
 
@@ -67,7 +67,7 @@ def main() -> None:
         "--variant",
         choices=["v1", "v2"],
         default="v1",
-        help="Schema variant: v1 columnar export or v2 row-oriented export (default: v1)",
+        help="Schema variant: v1 internal columnar assembly or v2.1 slim export (default: v1)",
     )
     parser.add_argument(
         "--output",

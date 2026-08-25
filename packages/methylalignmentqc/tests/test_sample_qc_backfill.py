@@ -65,6 +65,11 @@ def test_build_sample_qc_v2_dict_cfdna_profile_layers(tmp_path: Path) -> None:
     assert "mapping_rate" in payload["guardrails"]["details"]
     assert payload.get("fragmentomics_metrics") is not None
     assert payload.get("bisulfite_conversion_metrics") is not None
+    assert "deamination_qscore" not in payload["bisulfite_conversion_metrics"]
+    details = payload["guardrails"]["details"]
+    assert "deamination_qscore" in details
+    bis = details.get("bisulfite_conversion") or {}
+    assert "deamination_qscore" not in bis
     # No BAM in fixture: flagstat guardrails should record failure, not crash
     assert "properly_paired_rate" in payload["guardrails"]["details"]
 

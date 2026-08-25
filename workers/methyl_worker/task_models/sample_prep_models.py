@@ -508,6 +508,8 @@ class RemediationTrigger(BaseModel):
 
 
 class MethylQcTaskInput(BaseModel):
+    """sample.methyl_qc worker input. Picard tables are read from sampleDir;
+    do not embed ExportedSampleQCV2Payload here."""
     model_config = ConfigDict(extra="forbid")
 
     tool: str = "MethylAlignmentQc"
@@ -747,6 +749,8 @@ class TrimFastqTaskOutput(ActionOutputBase):
 
 
 class MethylQcTaskOutput(ActionOutputBase):
+    """sample.methyl_qc worker output. ``qcPath`` points at the slim V2.1
+    guardrail summary; this model is not ExportedSampleQCV2Payload."""
     sampleId: str
     qcPath: str
     guardrails: GuardrailsOutput

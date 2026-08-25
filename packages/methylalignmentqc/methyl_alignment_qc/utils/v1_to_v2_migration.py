@@ -1,7 +1,9 @@
 """
-Convert legacy (V1 columnar) AlignmentQC sample JSON to V2 row-oriented JSON.
+Convert AlignmentQC sample JSON to slim V2.1 guardrail-summary export.
 
-V1 payloads match ExportedSampleQCPayload; V2 payloads match ExportedSampleQCV2Payload.
+V1 payloads match ExportedSampleQCPayload (internal, may include Picard tables).
+Published V2.1 payloads match ExportedSampleQCV2Payload (no histograms).
+Fat V2.0.0 files (row-oriented Picard tables) are slimmed in place to 2.1.0.
 """
 
 from __future__ import annotations
@@ -15,25 +17,13 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 from methyl_alignment_qc.models.sample_qc import ExportedSampleQCPayload
 from methyl_alignment_qc.models.sample_qc_v2 import (
-    ArtifactSummariesRow,
-    ArtifactSummariesV2,
-    BaseDistributionByCycleRow,
-    BaseDistributionByCycleV2,
-    DuplicationHistogramRow,
-    DuplicationHistogramV2,
-    ErrorSummariesRow,
-    ErrorSummariesV2,
+    EXPORT_KIND,
+    PICARD_TABLE_KEYS,
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
     ExportedSampleQCV2Payload,
-    GCBiasDetailsRow,
-    GCBiasDetailsV2,
-    InsertSizeHistogramRow,
-    InsertSizeHistogramV2,
-    MeanQualityByCycleRow,
-    MeanQualityByCycleV2,
     QCV2Metadata,
     QCV2Producer,
-    QualityScoreDistributionRow,
-    QualityScoreDistributionV2,
 )
 
 from .guardrail_migration import migrate_guardrails_payload
@@ -47,7 +37,7 @@ def _producer_package_version() -> str:
 
 
 def is_v2_alignment_qc_payload(payload: Dict[str, Any]) -> bool:
-    """Return True if payload appears to be canonical V2 (row-oriented) export."""
+    """Return True if payload has V2 metadata (2.x), fat or slim."""
     if not isinstance(payload, dict):
         return False
     md = payload.get("metadata")
@@ -57,11 +47,83 @@ def is_v2_alignment_qc_payload(payload: Dict[str, Any]) -> bool:
     if ver.startswith("2."):
         return True
     name = str(md.get("schema_name", "")).strip()
-    return name == "methylalignmentqc.sample_qc" and ver.startswith("2")
+    return name == SCHEMA_NAME and ver.startswith("2")
+
+
+def is_slim_v2_export(payload: Dict[str, Any]) -> bool:
+    """True when the file is already a 2.1+ guardrail summary (no Picard tables)."""
+    if not is_v2_alignment_qc_payload(payload):
+        return False
+    md = payload.get("metadata") or {}
+    ver = str(md.get("schema_version", "")).strip()
+    if ver.startswith("2.1") or ver.startswith("2.2") or ver.startswith("3."):
+        return True
+    if str(md.get("export_kind", "")).strip() == EXPORT_KIND:
+        return not any(k in payload for k in PICARD_TABLE_KEYS)
+    return not any(k in payload for k in PICARD_TABLE_KEYS)
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def drop_deamination_aliases(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove nested/sidecar copies of deamination_qscore (canonical: details.deamination_qscore)."""
+    guard = payload.get("guardrails")
+    if isinstance(guard, dict):
+        details = guard.get("details")
+        if isinstance(details, dict):
+            bis = details.get("bisulfite_conversion")
+            if isinstance(bis, dict):
+                bis.pop("deamination_qscore", None)
+                # Legacy heading stored as a single GuardrailMetric instead of nested keys.
+                if (
+                    "pass" in bis
+                    and "conversion_rate_pct" not in bis
+                    and "non_cpg_methylation_pct" not in bis
+                ):
+                    details["bisulfite_conversion"] = {"conversion_rate_pct": bis}
+                    bis = details["bisulfite_conversion"]
+                else:
+                    for stray in (
+                        "pass",
+                        "value",
+                        "message",
+                        "normal_range",
+                        "threshold",
+                        "note",
+                    ):
+                        bis.pop(stray, None)
+                if not bis:
+                    details.pop("bisulfite_conversion", None)
+    metrics = payload.get("bisulfite_conversion_metrics")
+    if isinstance(metrics, dict):
+        metrics.pop("deamination_qscore", None)
+    return payload
+
+
+def slim_v2_dict(payload: Dict[str, Any], *, exported_at_utc: str | None = None) -> Dict[str, Any]:
+    """Drop Picard tables and deamination aliases from a V2 dict; bump to 2.1.0."""
+    out = dict(payload)
+    for key in PICARD_TABLE_KEYS:
+        out.pop(key, None)
+    drop_deamination_aliases(out)
+    md = dict(out.get("metadata") or {})
+    md["schema_name"] = SCHEMA_NAME
+    md["schema_version"] = SCHEMA_VERSION
+    md["export_kind"] = EXPORT_KIND
+    if exported_at_utc is not None:
+        md["exported_at_utc"] = exported_at_utc
+    elif not md.get("exported_at_utc"):
+        md["exported_at_utc"] = _utc_now_iso()
+    producer = md.get("producer")
+    if not isinstance(producer, dict):
+        md["producer"] = {
+            "package": "methyl_alignment_qc",
+            "version": _producer_package_version(),
+        }
+    out["metadata"] = md
+    return out
 
 
 def v1_model_to_v2(
@@ -69,179 +131,26 @@ def v1_model_to_v2(
     *,
     exported_at_utc: str | None = None,
 ) -> ExportedSampleQCV2Payload:
-    """Build V2 payload from a validated V1 model."""
+    """Build slim V2.1 payload from a validated V1 assembly (histograms not copied)."""
     ts = exported_at_utc if exported_at_utc is not None else _utc_now_iso()
-    metadata = QCV2Metadata(
-        schema_name="methylalignmentqc.sample_qc",
-        schema_version="2.0.0",
+    raw = v1.model_dump(mode="python", by_alias=True, exclude_none=True)
+    drop_deamination_aliases(raw)
+    for key in PICARD_TABLE_KEYS:
+        raw.pop(key, None)
+    raw["metadata"] = QCV2Metadata(
+        schema_name=SCHEMA_NAME,
+        schema_version=SCHEMA_VERSION,
+        export_kind="guardrail_summary",
         exported_at_utc=ts,
         producer=QCV2Producer(package="methyl_alignment_qc", version=_producer_package_version()),
-    )
-
-    mean_rows: List[MeanQualityByCycleRow] = []
-    if v1.mean_quality_by_cycle is not None:
-        mqc = v1.mean_quality_by_cycle
-        mean_rows = [
-            MeanQualityByCycleRow(cycle=int(c), mean_quality=float(mq))
-            for c, mq in zip(mqc.cycle, mqc.mean_quality)
-        ]
-
-    q_rows: List[QualityScoreDistributionRow] = []
-    if v1.quality_score_distribution is not None:
-        qsd = v1.quality_score_distribution
-        q_rows = [
-            QualityScoreDistributionRow(q=int(q), count_of_q=int(cq))
-            for q, cq in zip(qsd.Q, qsd.COUNT_OF_Q)
-        ]
-
-    base_rows: List[BaseDistributionByCycleRow] = []
-    if v1.base_distribution_by_cycle is not None:
-        bd = v1.base_distribution_by_cycle
-        base_rows = [
-            BaseDistributionByCycleRow(
-                cycle=int(c),
-                pct_a=float(a),
-                pct_c=float(cc),
-                pct_g=float(g),
-                pct_t=float(t),
-                pct_n=float(n),
-            )
-            for c, a, cc, g, t, n in zip(
-                bd.cycle,
-                bd.PCT_A,
-                bd.PCT_C,
-                bd.PCT_G,
-                bd.PCT_T,
-                bd.PCT_N,
-            )
-        ]
-
-    gc_rows: List[GCBiasDetailsRow] = []
-    if v1.gc_bias_details is not None:
-        gcd = v1.gc_bias_details
-        gc_rows = [
-            GCBiasDetailsRow(
-                gc=int(gc),
-                windows=int(w),
-                read_starts=int(rs),
-                mean_base_quality=float(mbq),
-                normalized_coverage=float(nc),
-                error_bar=float(eb),
-            )
-            for gc, w, rs, mbq, nc, eb in zip(
-                gcd.GC,
-                gcd.WINDOWS,
-                gcd.READ_STARTS,
-                gcd.MEAN_BASE_QUALITY,
-                gcd.NORMALIZED_COVERAGE,
-                gcd.ERROR_BAR,
-            )
-        ]
-
-    insert_rows: List[InsertSizeHistogramRow] = []
-    if v1.insert_size_histogram is not None:
-        ish = v1.insert_size_histogram
-        n_ins = len(ish.insert_size)
-        for i in range(n_ins):
-            insert_rows.append(
-                InsertSizeHistogramRow(
-                    insert_size=int(ish.insert_size[i]),
-                    pair_orientation=str(ish.pair_orientation[i]),
-                    all_reads_fr_count=int(ish.all_reads_fr_count[i]),
-                    value=float(ish.VALUE[i]) if i < len(ish.VALUE) else None,
-                    all_sets=int(ish.all_sets[i]) if i < len(ish.all_sets) else None,
-                    optical_sets=int(ish.optical_sets[i]) if i < len(ish.optical_sets) else None,
-                    non_optical_sets=int(ish.non_optical_sets[i]) if i < len(ish.non_optical_sets) else None,
-                )
-            )
-
-    err_rows: List[ErrorSummariesRow] = []
-    if v1.error_summaries is not None:
-        es = v1.error_summaries
-        err_rows = [
-            ErrorSummariesRow(
-                ref=str(rf),
-                alt=str(alt),
-                count=int(cnt),
-                rate=float(rate),
-                qscore=int(qs),
-            )
-            for rf, alt, cnt, rate, qs in zip(es.REF, es.ALT, es.COUNT, es.RATE, es.QSCORE)
-        ]
-
-    def _artifact_rows(art: Any) -> List[ArtifactSummariesRow]:
-        if art is None:
-            return []
-        return [
-            ArtifactSummariesRow(
-                artifact_name=str(nm),
-                total_qscore=int(tq),
-                worst_cxt=str(wx),
-                worst_cxt_qscore=int(wxq),
-            )
-            for nm, tq, wx, wxq in zip(art.ARTIFACT_NAME, art.TOTAL_QSCORE, art.WORST_CXT, art.WORST_CXT_QSCORE)
-        ]
-
-    duph = v1.duplication_histogram
-    dup_rows: List[DuplicationHistogramRow] = []
-    if duph is not None:
-        for i in range(len(duph.BIN)):
-            dup_rows.append(
-                DuplicationHistogramRow(
-                    bin=float(duph.BIN[i]),
-                    value=float(duph.VALUE[i]),
-                    all_sets=int(duph.all_sets[i]) if i < len(duph.all_sets) else None,
-                    optical_sets=int(duph.optical_sets[i]) if i < len(duph.optical_sets) else None,
-                    non_optical_sets=int(duph.non_optical_sets[i]) if i < len(duph.non_optical_sets) else None,
-                )
-            )
-
-    return ExportedSampleQCV2Payload(
-        metadata=metadata,
-        sample_id=v1.sample_id,
-        quality_yield=v1.quality_yield,
-        mean_quality_by_cycle=MeanQualityByCycleV2(rows=mean_rows) if v1.mean_quality_by_cycle is not None else None,
-        quality_score_distribution=(
-            QualityScoreDistributionV2(rows=q_rows) if v1.quality_score_distribution is not None else None
-        ),
-        base_distribution_by_cycle=(
-            BaseDistributionByCycleV2(rows=base_rows) if v1.base_distribution_by_cycle is not None else None
-        ),
-        gc_bias_summary=v1.gc_bias_summary,
-        gc_bias_details=GCBiasDetailsV2(rows=gc_rows) if v1.gc_bias_details is not None else None,
-        insert_size_metrics=v1.insert_size_metrics,
-        insert_size_histogram=(
-            InsertSizeHistogramV2(rows=insert_rows) if v1.insert_size_histogram is not None else None
-        ),
-        error_summaries=ErrorSummariesV2(rows=err_rows) if v1.error_summaries is not None else None,
-        pre_adapter_summaries=(
-            ArtifactSummariesV2(rows=_artifact_rows(v1.pre_adapter_summaries))
-            if v1.pre_adapter_summaries is not None
-            else None
-        ),
-        bait_bias_summaries=(
-            ArtifactSummariesV2(rows=_artifact_rows(v1.bait_bias_summaries))
-            if v1.bait_bias_summaries is not None
-            else None
-        ),
-        conversion_log=v1.conversion_log,
-        duplication_metrics=list(v1.duplication_metrics or []),
-        duplication_histogram=DuplicationHistogramV2(rows=dup_rows),
-        summary_stats=v1.summary_stats,
-        guardrails=v1.guardrails,
-        alignment_stats=v1.alignment_stats,
-        alignment_flagstat=v1.alignment_flagstat,
-        fragmentomics_metrics=v1.fragmentomics_metrics,
-        bisulfite_conversion_metrics=v1.bisulfite_conversion_metrics,
-        qc_history=v1.qc_history,
-        sample_prep_log_path=v1.sample_prep_log_path,
-        wgbs_align_metrics=v1.wgbs_align_metrics,
-    )
+    ).model_dump(mode="python", by_alias=True, exclude_none=True)
+    return ExportedSampleQCV2Payload.model_validate(raw)
 
 
 def v1_dict_to_v2_model(raw: Dict[str, Any]) -> ExportedSampleQCV2Payload:
-    """Migrate guardrails if needed, validate as V1, then convert to V2."""
+    """Migrate guardrails if needed, strip aliases, validate as V1, convert to slim V2.1."""
     migrated, _ = migrate_guardrails_payload(raw)
+    drop_deamination_aliases(migrated)
     v1 = ExportedSampleQCPayload.model_validate(migrated)
     return v1_model_to_v2(v1)
 
@@ -257,6 +166,15 @@ def v1_dict_to_v2_dict(raw: Dict[str, Any], *, exported_at_utc: str | None = Non
             }
         )
     return v2.model_dump(mode="python", by_alias=True, exclude_none=True)
+
+
+def _to_slim_v2_dict(payload: Dict[str, Any], *, exported_at_utc: str | None = None) -> Dict[str, Any]:
+    if is_v2_alignment_qc_payload(payload):
+        slim = slim_v2_dict(payload, exported_at_utc=exported_at_utc)
+        return ExportedSampleQCV2Payload.model_validate(slim).model_dump(
+            mode="python", by_alias=True, exclude_none=True
+        )
+    return v1_dict_to_v2_dict(payload, exported_at_utc=exported_at_utc)
 
 
 def _iter_json_files(target: Path, recursive: bool = True) -> Iterable[Path]:
@@ -284,7 +202,7 @@ def convert_file(
     validate_v2: bool = True,
 ) -> Tuple[bool, str]:
     """
-    Convert one JSON file from V1 to V2.
+    Convert one JSON file from V1 or fat V2.0 to slim V2.1.
 
     Returns (changed_or_success, status_message).
     """
@@ -294,11 +212,11 @@ def convert_file(
     except Exception as e:
         return False, f"ERROR reading {path}: {e}"
 
-    if is_v2_alignment_qc_payload(payload):
-        return False, f"SKIP {path} (already V2)"
+    if is_slim_v2_export(payload):
+        return False, f"SKIP {path} (already slim V2.1)"
 
     try:
-        v2_dict = v1_dict_to_v2_dict(payload)
+        v2_dict = _to_slim_v2_dict(payload)
     except Exception as e:
         return False, f"ERROR converting {path}: {e}"
 
@@ -317,7 +235,7 @@ def convert_file(
         if backup and out.exists():
             bak = out.with_suffix(out.suffix + ".bak")
             bak.write_text(out.read_text(encoding="utf-8"), encoding="utf-8")
-        with open(out, "w", encoding="utf-8") as f:
+        with open(out, "w") as f:
             json.dump(v2_dict, f, indent=2)
     except Exception as e:
         return False, f"ERROR writing {out}: {e}"
@@ -333,7 +251,7 @@ def convert_directory(
     apply: bool = False,
     validate_v2: bool = True,
 ) -> List[Tuple[bool, str]]:
-    """Convert all V1 JSON files under source_dir into output_dir (flat mirror by basename)."""
+    """Convert all V1 / fat-V2 JSON files under source_dir into output_dir."""
     results: List[Tuple[bool, str]] = []
     for src in _iter_json_files(source_dir, recursive=recursive):
         if not apply:
@@ -343,11 +261,11 @@ def convert_directory(
             except Exception as e:
                 results.append((False, f"ERROR reading {src}: {e}"))
                 continue
-            if is_v2_alignment_qc_payload(payload):
-                results.append((False, f"SKIP {src} (already V2)"))
+            if is_slim_v2_export(payload):
+                results.append((False, f"SKIP {src} (already slim V2.1)"))
                 continue
             try:
-                v1_dict_to_v2_dict(payload)
+                _to_slim_v2_dict(payload)
             except Exception as e:
                 results.append((False, f"ERROR converting {src}: {e}"))
                 continue
@@ -362,7 +280,7 @@ def convert_directory(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Convert AlignmentQC V1 (columnar) JSON files to V2 (row-oriented).",
+        description="Convert AlignmentQC V1 or fat V2.0 JSON files to slim V2.1 guardrail summaries.",
     )
     parser.add_argument("target", type=Path, help="Path to a JSON file or directory of JSON files")
     parser.add_argument(
@@ -420,7 +338,6 @@ def main() -> None:
         print(msg)
         raise SystemExit(0 if ok or msg.startswith("SKIP") else 1)
 
-    # Directory
     if args.apply and args.output_dir is None:
         print("Error: --output-dir is required when converting a directory with --apply")
         raise SystemExit(1)
@@ -438,11 +355,11 @@ def main() -> None:
             except Exception as e:
                 print(f"ERROR reading {src}: {e}")
                 continue
-            if is_v2_alignment_qc_payload(payload):
-                print(f"SKIP {src} (already V2)")
+            if is_slim_v2_export(payload):
+                print(f"SKIP {src} (already slim V2.1)")
                 continue
             try:
-                v1_dict_to_v2_dict(payload)
+                _to_slim_v2_dict(payload)
             except Exception as e:
                 print(f"ERROR converting {src}: {e}")
                 continue

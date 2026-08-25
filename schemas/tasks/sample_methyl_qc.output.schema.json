@@ -161,6 +161,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "description": "sample.methyl_qc worker output. ``qcPath`` points at the slim V2.1\nguardrail summary; this model is not ExportedSampleQCV2Payload.",
   "properties": {
     "action_name": {
       "anyOf": [

@@ -94,3 +94,30 @@ def test_migrate_file_apply_overwrites_json(tmp_path: Path):
 
     backup_path = path.with_suffix(".json.bak")
     assert backup_path.exists()
+
+
+def test_migrate_guardrails_payload_recurses_nested_headings():
+    from methyl_alignment_qc.utils.guardrail_migration import migrate_guardrails_payload
+
+    payload = {
+        "guardrails": {
+            "details": {
+                "bisulfite_conversion": {
+                    "conversion_rate_pct": {
+                        "value": 99.5,
+                        "threshold": ">= 99",
+                        "pass": True,
+                        "note": "sidecar",
+                    }
+                }
+            }
+        }
+    }
+    migrated, changed = migrate_guardrails_payload(payload)
+    assert changed is True
+    heading = migrated["guardrails"]["details"]["bisulfite_conversion"]
+    assert "message" not in heading
+    conv = heading["conversion_rate_pct"]
+    assert conv["normal_range"] == ">= 99"
+    assert conv["message"] == "sidecar"
+    assert "threshold" not in conv

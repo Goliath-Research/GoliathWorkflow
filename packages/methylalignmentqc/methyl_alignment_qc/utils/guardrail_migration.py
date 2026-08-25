@@ -66,8 +66,28 @@ def migrate_guardrail_metric(metric: Dict[str, Any]) -> Tuple[Dict[str, Any], bo
     return migrated, changed
 
 
+def _is_metric_node(node: Any) -> bool:
+    return isinstance(node, dict) and "pass" in node
+
+
+def _migrate_details_node(node: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
+    """Migrate a GuardrailMetric, or recurse into a nested heading."""
+    if _is_metric_node(node):
+        return migrate_guardrail_metric(node)
+    changed = False
+    out = dict(node)
+    for key, child in node.items():
+        if not isinstance(child, dict):
+            continue
+        migrated_child, child_changed = _migrate_details_node(child)
+        if child_changed:
+            out[key] = migrated_child
+            changed = True
+    return out, changed
+
+
 def migrate_guardrails_payload(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
-    """Migrate all metrics under payload['guardrails']['details']."""
+    """Migrate all metrics under payload['guardrails']['details'] (including nested headings)."""
     if not isinstance(payload, dict):
         return payload, False
 
@@ -87,7 +107,7 @@ def migrate_guardrails_payload(payload: Dict[str, Any]) -> Tuple[Dict[str, Any],
     for metric_name, metric_data in details.items():
         if not isinstance(metric_data, dict):
             continue
-        migrated_metric, metric_changed = migrate_guardrail_metric(metric_data)
+        migrated_metric, metric_changed = _migrate_details_node(metric_data)
         if metric_changed:
             new_details[metric_name] = migrated_metric
             changed = True

@@ -75,3 +75,17 @@ def test_low_conversion_fails_guardrail(tmp_path: Path):
     cfg = BisulfiteConversionConfig(enabled=True, min_conversion_rate_pct=99.0)
     apply_bisulfite_conversion_to_payload(payload, sample_dir, cfg)
     assert payload["guardrails"]["overall_pass"] is False
+
+
+def test_auto_proxy_does_not_alias_deamination(tmp_path: Path):
+    sample_dir = tmp_path / "sampleC"
+    sample_dir.mkdir()
+    payload = _minimal_payload()
+    cfg = BisulfiteConversionConfig(enabled=True, source="auto")
+    apply_bisulfite_conversion_to_payload(payload, sample_dir, cfg)
+    metrics = payload["bisulfite_conversion_metrics"]
+    assert "deamination_qscore" not in metrics
+    assert metrics["measurement_source"] == "deamination_proxy"
+    details = payload["guardrails"]["details"]
+    assert details["deamination_qscore"]["value"] == 15
+    assert "deamination_qscore" not in (details.get("bisulfite_conversion") or {})

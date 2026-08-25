@@ -259,8 +259,39 @@
       "title": "BaseDistributionByCycle",
       "type": "object"
     },
+    "BisulfiteConversionGuardrailDetails": {
+      "additionalProperties": false,
+      "description": "Sidecar conversion checks only. Deamination is not nested here.",
+      "properties": {
+        "conversion_rate_pct": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "non_cpg_methylation_pct": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "BisulfiteConversionGuardrailDetails",
+      "type": "object"
+    },
     "BisulfiteConversionMetrics": {
       "additionalProperties": false,
+      "description": "Provenance for conversion sidecar thresholds. Deamination lives only on\n``guardrails.details.deamination_qscore`` \u2014 do not restate it here.",
       "properties": {
         "conversion_rate_pct": {
           "anyOf": [
@@ -273,18 +304,6 @@
           ],
           "default": null,
           "title": "Conversion Rate Pct"
-        },
-        "deamination_qscore": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Deamination Qscore"
         },
         "max_non_cpg_methylation_pct": {
           "title": "Max Non Cpg Methylation Pct",
@@ -689,17 +708,13 @@
         "bisulfite_conversion": {
           "anyOf": [
             {
-              "additionalProperties": {
-                "$ref": "#/$defs/GuardrailMetric"
-              },
-              "type": "object"
+              "$ref": "#/$defs/BisulfiteConversionGuardrailDetails"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Bisulfite Conversion"
+          "default": null
         },
         "deamination_qscore": {
           "anyOf": [
@@ -1761,7 +1776,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Final exported per-sample QC JSON.",
+  "description": "Internal V1-shaped assembly (includes Picard tables). Not action I/O.\n``methyl-qc`` validates this in memory, then writes slim V2.1.",
   "properties": {
     "alignment_flagstat": {
       "anyOf": [

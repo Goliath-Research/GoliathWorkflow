@@ -161,110 +161,39 @@
       "title": "AlignmentStats",
       "type": "object"
     },
-    "ArtifactSummariesRow": {
+    "BisulfiteConversionGuardrailDetails": {
       "additionalProperties": false,
+      "description": "Sidecar conversion checks only. Deamination is not nested here.",
       "properties": {
-        "artifact_name": {
-          "title": "Artifact Name",
-          "type": "string"
+        "conversion_rate_pct": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
-        "total_qscore": {
-          "title": "Total Qscore",
-          "type": "integer"
-        },
-        "worst_cxt": {
-          "title": "Worst Cxt",
-          "type": "string"
-        },
-        "worst_cxt_qscore": {
-          "title": "Worst Cxt Qscore",
-          "type": "integer"
+        "non_cpg_methylation_pct": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
-      "required": [
-        "artifact_name",
-        "total_qscore",
-        "worst_cxt",
-        "worst_cxt_qscore"
-      ],
-      "title": "ArtifactSummariesRow",
-      "type": "object"
-    },
-    "ArtifactSummariesV2": {
-      "additionalProperties": false,
-      "properties": {
-        "rows": {
-          "items": {
-            "$ref": "#/$defs/ArtifactSummariesRow"
-          },
-          "title": "Rows",
-          "type": "array"
-        }
-      },
-      "required": [
-        "rows"
-      ],
-      "title": "ArtifactSummariesV2",
-      "type": "object"
-    },
-    "BaseDistributionByCycleRow": {
-      "additionalProperties": false,
-      "properties": {
-        "cycle": {
-          "title": "Cycle",
-          "type": "integer"
-        },
-        "pct_a": {
-          "title": "Pct A",
-          "type": "number"
-        },
-        "pct_c": {
-          "title": "Pct C",
-          "type": "number"
-        },
-        "pct_g": {
-          "title": "Pct G",
-          "type": "number"
-        },
-        "pct_n": {
-          "title": "Pct N",
-          "type": "number"
-        },
-        "pct_t": {
-          "title": "Pct T",
-          "type": "number"
-        }
-      },
-      "required": [
-        "cycle",
-        "pct_a",
-        "pct_c",
-        "pct_g",
-        "pct_t",
-        "pct_n"
-      ],
-      "title": "BaseDistributionByCycleRow",
-      "type": "object"
-    },
-    "BaseDistributionByCycleV2": {
-      "additionalProperties": false,
-      "properties": {
-        "rows": {
-          "items": {
-            "$ref": "#/$defs/BaseDistributionByCycleRow"
-          },
-          "title": "Rows",
-          "type": "array"
-        }
-      },
-      "required": [
-        "rows"
-      ],
-      "title": "BaseDistributionByCycleV2",
+      "title": "BisulfiteConversionGuardrailDetails",
       "type": "object"
     },
     "BisulfiteConversionMetrics": {
       "additionalProperties": false,
+      "description": "Provenance for conversion sidecar thresholds. Deamination lives only on\n``guardrails.details.deamination_qscore`` \u2014 do not restate it here.",
       "properties": {
         "conversion_rate_pct": {
           "anyOf": [
@@ -277,18 +206,6 @@
           ],
           "default": null,
           "title": "Conversion Rate Pct"
-        },
-        "deamination_qscore": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Deamination Qscore"
         },
         "max_non_cpg_methylation_pct": {
           "title": "Max Non Cpg Methylation Pct",
@@ -369,78 +286,6 @@
       "title": "ConversionLog",
       "type": "object"
     },
-    "DuplicationHistogramRow": {
-      "additionalProperties": false,
-      "properties": {
-        "all_sets": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "All Sets"
-        },
-        "bin": {
-          "title": "Bin",
-          "type": "number"
-        },
-        "non_optical_sets": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Non Optical Sets"
-        },
-        "optical_sets": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Optical Sets"
-        },
-        "value": {
-          "title": "Value",
-          "type": "number"
-        }
-      },
-      "required": [
-        "bin",
-        "value"
-      ],
-      "title": "DuplicationHistogramRow",
-      "type": "object"
-    },
-    "DuplicationHistogramV2": {
-      "additionalProperties": false,
-      "properties": {
-        "rows": {
-          "items": {
-            "$ref": "#/$defs/DuplicationHistogramRow"
-          },
-          "title": "Rows",
-          "type": "array"
-        }
-      },
-      "required": [
-        "rows"
-      ],
-      "title": "DuplicationHistogramV2",
-      "type": "object"
-    },
     "DuplicationMetric": {
       "additionalProperties": false,
       "properties": {
@@ -498,57 +343,6 @@
         "ESTIMATED_LIBRARY_SIZE"
       ],
       "title": "DuplicationMetric",
-      "type": "object"
-    },
-    "ErrorSummariesRow": {
-      "additionalProperties": false,
-      "properties": {
-        "alt": {
-          "title": "Alt",
-          "type": "string"
-        },
-        "count": {
-          "title": "Count",
-          "type": "integer"
-        },
-        "qscore": {
-          "title": "Qscore",
-          "type": "integer"
-        },
-        "rate": {
-          "title": "Rate",
-          "type": "number"
-        },
-        "ref": {
-          "title": "Ref",
-          "type": "string"
-        }
-      },
-      "required": [
-        "ref",
-        "alt",
-        "count",
-        "rate",
-        "qscore"
-      ],
-      "title": "ErrorSummariesRow",
-      "type": "object"
-    },
-    "ErrorSummariesV2": {
-      "additionalProperties": false,
-      "properties": {
-        "rows": {
-          "items": {
-            "$ref": "#/$defs/ErrorSummariesRow"
-          },
-          "title": "Rows",
-          "type": "array"
-        }
-      },
-      "required": [
-        "rows"
-      ],
-      "title": "ErrorSummariesV2",
       "type": "object"
     },
     "FragmentomicsGuardrailDetails": {
@@ -628,62 +422,6 @@
       "title": "FragmentomicsMetrics",
       "type": "object"
     },
-    "GCBiasDetailsRow": {
-      "additionalProperties": false,
-      "properties": {
-        "error_bar": {
-          "title": "Error Bar",
-          "type": "number"
-        },
-        "gc": {
-          "title": "Gc",
-          "type": "integer"
-        },
-        "mean_base_quality": {
-          "title": "Mean Base Quality",
-          "type": "number"
-        },
-        "normalized_coverage": {
-          "title": "Normalized Coverage",
-          "type": "number"
-        },
-        "read_starts": {
-          "title": "Read Starts",
-          "type": "integer"
-        },
-        "windows": {
-          "title": "Windows",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "gc",
-        "windows",
-        "read_starts",
-        "mean_base_quality",
-        "normalized_coverage",
-        "error_bar"
-      ],
-      "title": "GCBiasDetailsRow",
-      "type": "object"
-    },
-    "GCBiasDetailsV2": {
-      "additionalProperties": false,
-      "properties": {
-        "rows": {
-          "items": {
-            "$ref": "#/$defs/GCBiasDetailsRow"
-          },
-          "title": "Rows",
-          "type": "array"
-        }
-      },
-      "required": [
-        "rows"
-      ],
-      "title": "GCBiasDetailsV2",
-      "type": "object"
-    },
     "GCBiasSummary": {
       "additionalProperties": false,
       "properties": {
@@ -720,17 +458,13 @@
         "bisulfite_conversion": {
           "anyOf": [
             {
-              "additionalProperties": {
-                "$ref": "#/$defs/GuardrailMetric"
-              },
-              "type": "object"
+              "$ref": "#/$defs/BisulfiteConversionGuardrailDetails"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Bisulfite Conversion"
+          "default": null
         },
         "deamination_qscore": {
           "anyOf": [
@@ -1098,95 +832,6 @@
       "title": "GuardrailReport",
       "type": "object"
     },
-    "InsertSizeHistogramRow": {
-      "additionalProperties": false,
-      "properties": {
-        "all_reads_fr_count": {
-          "title": "All Reads Fr Count",
-          "type": "integer"
-        },
-        "all_sets": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "All Sets"
-        },
-        "insert_size": {
-          "title": "Insert Size",
-          "type": "integer"
-        },
-        "non_optical_sets": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Non Optical Sets"
-        },
-        "optical_sets": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Optical Sets"
-        },
-        "pair_orientation": {
-          "title": "Pair Orientation",
-          "type": "string"
-        },
-        "value": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Value"
-        }
-      },
-      "required": [
-        "insert_size",
-        "pair_orientation",
-        "all_reads_fr_count"
-      ],
-      "title": "InsertSizeHistogramRow",
-      "type": "object"
-    },
-    "InsertSizeHistogramV2": {
-      "additionalProperties": false,
-      "properties": {
-        "rows": {
-          "items": {
-            "$ref": "#/$defs/InsertSizeHistogramRow"
-          },
-          "title": "Rows",
-          "type": "array"
-        }
-      },
-      "required": [
-        "rows"
-      ],
-      "title": "InsertSizeHistogramV2",
-      "type": "object"
-    },
     "InsertSizeMetrics": {
       "additionalProperties": false,
       "properties": {
@@ -1276,47 +921,18 @@
       "title": "InsertSizeMetrics",
       "type": "object"
     },
-    "MeanQualityByCycleRow": {
-      "additionalProperties": false,
-      "properties": {
-        "cycle": {
-          "title": "Cycle",
-          "type": "integer"
-        },
-        "mean_quality": {
-          "title": "Mean Quality",
-          "type": "number"
-        }
-      },
-      "required": [
-        "cycle",
-        "mean_quality"
-      ],
-      "title": "MeanQualityByCycleRow",
-      "type": "object"
-    },
-    "MeanQualityByCycleV2": {
-      "additionalProperties": false,
-      "properties": {
-        "rows": {
-          "items": {
-            "$ref": "#/$defs/MeanQualityByCycleRow"
-          },
-          "title": "Rows",
-          "type": "array"
-        }
-      },
-      "required": [
-        "rows"
-      ],
-      "title": "MeanQualityByCycleV2",
-      "type": "object"
-    },
     "QCV2Metadata": {
       "additionalProperties": false,
       "properties": {
+        "export_kind": {
+          "const": "guardrail_summary",
+          "default": "guardrail_summary",
+          "description": "Guardrail summary written to disk. Not a sample.methyl_qc task input or output model; histograms remain in Picard native files.",
+          "title": "Export Kind",
+          "type": "string"
+        },
         "exported_at_utc": {
-          "description": "ISO-8601 UTC timestamp when V2 export was produced",
+          "description": "ISO-8601 UTC timestamp when the export was produced",
           "title": "Exported At Utc",
           "type": "string"
         },
@@ -1342,7 +958,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "2.0.0",
+          "default": "2.1.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -1647,42 +1263,6 @@
       "title": "QcScreeningReport",
       "type": "object"
     },
-    "QualityScoreDistributionRow": {
-      "additionalProperties": false,
-      "properties": {
-        "count_of_q": {
-          "title": "Count Of Q",
-          "type": "integer"
-        },
-        "q": {
-          "title": "Q",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "q",
-        "count_of_q"
-      ],
-      "title": "QualityScoreDistributionRow",
-      "type": "object"
-    },
-    "QualityScoreDistributionV2": {
-      "additionalProperties": false,
-      "properties": {
-        "rows": {
-          "items": {
-            "$ref": "#/$defs/QualityScoreDistributionRow"
-          },
-          "title": "Rows",
-          "type": "array"
-        }
-      },
-      "required": [
-        "rows"
-      ],
-      "title": "QualityScoreDistributionV2",
-      "type": "object"
-    },
     "QualityYield": {
       "additionalProperties": false,
       "properties": {
@@ -1905,7 +1485,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Row-oriented per-sample QC JSON (V2) for tools and Azure SQL OPENJSON.",
+  "description": "Slim per-sample QC JSON (V2.1) for operators and ``qcPath``.\n\nDo not use this model as ``MethylQcTaskInput`` / catalog ``resolvedConfig``.",
   "properties": {
     "alignment_flagstat": {
       "anyOf": [
@@ -1922,28 +1502,6 @@
       "anyOf": [
         {
           "$ref": "#/$defs/AlignmentStats"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "bait_bias_summaries": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ArtifactSummariesV2"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "base_distribution_by_cycle": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/BaseDistributionByCycleV2"
         },
         {
           "type": "null"
@@ -1973,9 +1531,6 @@
       ],
       "default": null
     },
-    "duplication_histogram": {
-      "$ref": "#/$defs/DuplicationHistogramV2"
-    },
     "duplication_metrics": {
       "items": {
         "$ref": "#/$defs/DuplicationMetric"
@@ -1983,32 +1538,10 @@
       "title": "Duplication Metrics",
       "type": "array"
     },
-    "error_summaries": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ErrorSummariesV2"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
     "fragmentomics_metrics": {
       "anyOf": [
         {
           "$ref": "#/$defs/FragmentomicsMetrics"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "gc_bias_details": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/GCBiasDetailsV2"
         },
         {
           "type": "null"
@@ -2030,17 +1563,6 @@
     "guardrails": {
       "$ref": "#/$defs/GuardrailReport"
     },
-    "insert_size_histogram": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/InsertSizeHistogramV2"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
     "insert_size_metrics": {
       "anyOf": [
         {
@@ -2052,30 +1574,8 @@
       ],
       "default": null
     },
-    "mean_quality_by_cycle": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/MeanQualityByCycleV2"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
     "metadata": {
       "$ref": "#/$defs/QCV2Metadata"
-    },
-    "pre_adapter_summaries": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ArtifactSummariesV2"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
     },
     "qc_history": {
       "anyOf": [
@@ -2091,17 +1591,6 @@
       ],
       "default": null,
       "title": "Qc History"
-    },
-    "quality_score_distribution": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/QualityScoreDistributionV2"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
     },
     "quality_yield": {
       "anyOf": [
@@ -2149,7 +1638,6 @@
     "metadata",
     "sample_id",
     "duplication_metrics",
-    "duplication_histogram",
     "summary_stats",
     "guardrails"
   ],

@@ -126,12 +126,13 @@ def test_process_samples_to_qc_jsons_includes_guardrails_when_parabricks_json_pr
     assert output_file.exists()
 
     payload = json.loads(output_file.read_text(encoding="utf-8"))
-    assert payload.get("metadata", {}).get("schema_version", "").startswith("2.")
-    assert "quality_yield" in payload
+    assert payload.get("metadata", {}).get("schema_version") == "2.1.0"
     assert payload["sample_id"] == "sampleA"
-    assert "rows" in payload["mean_quality_by_cycle"]
-    assert "duplication_histogram" in payload
-    assert "rows" in payload["duplication_histogram"]
+    assert "quality_yield" in payload
+    assert "mean_quality_by_cycle" not in payload
+    assert "duplication_histogram" not in payload
+    assert "insert_size_histogram" not in payload
+    assert "pre_adapter_summaries" not in payload
     assert "guardrails" in payload
     assert payload["guardrails"]["sample_id"] == "sampleA"
     assert "details" in payload["guardrails"]

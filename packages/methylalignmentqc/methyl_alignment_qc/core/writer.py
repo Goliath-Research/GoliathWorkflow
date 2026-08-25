@@ -1,5 +1,5 @@
 """
-Write per-sample QC JSON files for database storage.
+Write per-sample slim V2.1 guardrail-summary JSON files.
 """
 
 import json
@@ -23,7 +23,7 @@ from ..models.config import (
     OptionalGuardrailsConfig,
 )
 from .alignment_derived_qc import apply_alignment_derived_guardrails, compute_alignment_stats
-from .bisulfite_conversion import apply_bisulfite_conversion_to_payload
+from .bisulfite_conversion import apply_bisulfite_conversion_to_payload, nested_guardrail_group_failed
 from .bam_flagstat import apply_flagstat_guardrails, run_flagstat
 from .cycle_quality_screening import (
     apply_screening_recommendations,
@@ -478,11 +478,8 @@ def _apply_screening_and_audit(
         tf = int(cfg.fallback_trim_front or 0)
         tt = int(cfg.fallback_trim_tail or 0)
         conv = payload.get("bisulfite_conversion_metrics") or {}
-        conv_fail = False
         details = (guardrails.get("details") or {}) if isinstance(guardrails, dict) else {}
-        bis_gr = details.get("bisulfite_conversion") if isinstance(details, dict) else None
-        if isinstance(bis_gr, dict) and bis_gr.get("pass") is False:
-            conv_fail = True
+        conv_fail = nested_guardrail_group_failed(details, "bisulfite_conversion")
         mapped_fail = False
         bam_rate = details.get("wgbs_bam_mapped_rate") if isinstance(details, dict) else None
         if isinstance(bam_rate, dict) and bam_rate.get("pass") is False:
@@ -567,7 +564,10 @@ def build_sample_qc_v2_dict(
     alignment_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Build one V2 sample QC export dict from a sample directory.
+    Build one slim V2.1 guardrail-summary export dict from a sample directory.
+
+    Picard tables are read from the sample dir, used to compute guardrails, then
+    dropped from the returned payload.
 
     Expects Picard deduplicate metrics ({sample_id}.deduplicate_metrics.txt) and
     either Parabricks metrics (linear/pangenome) or methylGrapher provenance
@@ -876,7 +876,7 @@ def process_samples_to_qc_jsons(
 ) -> None:
     """
     Parse each sample directory and write one JSON per sample to output_dir.
-    Output files: {output_dir}/{sample_id}.json (V2 row-oriented schema).
+    Output files: {output_dir}/{sample_id}.json (slim V2.1 guardrail summary).
 
     Args:
         sample_paths: List of sample directory paths

@@ -51,8 +51,8 @@ Typical runs require:
 
 ## Typical Outputs
 
-The package writes one structured **V2** (row-oriented) JSON summary per sample and can optionally validate those files against the package schema (V1-shaped assembly is validated internally, then converted to V2 for export).
-For the Parabricks family, when `{sample_name}.json` is present, `methyl-qc` uses it for metrics and guardrails; the written output in `--output-dir` is always the V2 export shape.
+The package writes one slim **V2.1 guardrail-summary** JSON per sample (`export_kind: guardrail_summary`) and can optionally validate the in-memory V1-shaped assembly (including Picard tables) before converting for export.
+For the Parabricks family, when `{sample_name}.json` is present, `methyl-qc` uses it to **compute** metrics and guardrails; histograms stay in that native file (or `{sample_name}.qc-metrics.tar`). The written output in `--output-dir` is always the slim V2.1 export.
 
 For Parabricks-family pre-checks, the standalone `wgbs_parabricks_qc.py` utility can write a `guardrails` block into the input JSON (or into `--output` if specified). This block includes each metric's `value`, `normal_range`, pass/fail state, and a user-facing `message` that explains why the guardrail matters.
 
@@ -68,7 +68,7 @@ Enable in `actionConfig.alignment_qc.bisulfite_conversion` (profile/site). Place
 }
 ```
 
-`methyl-qc` adds `bisulfite_conversion_metrics` and `guardrails.details.bisulfite_conversion`. With `source: auto`, a missing sidecar uses the Parabricks deamination qscore as a qualitative proxy only.
+`methyl-qc` adds `bisulfite_conversion_metrics` and, when the sidecar supplies rates, nested `guardrails.details.bisulfite_conversion` (`conversion_rate_pct` / `non_cpg_methylation_pct` only). Deamination votes only as `guardrails.details.deamination_qscore`. With `source: auto` and a missing sidecar, `measurement_source` / `notes` record that deamination is a qualitative proxy — they do **not** nest a second `deamination_qscore` under the conversion heading.
 
 ## Read 2 cycle screening and remediation
 
@@ -113,6 +113,8 @@ python scripts/alignment_qc_cohort_screening.py \
   --out /work/AlignmentQC/screening_report
 ```
 
+Default uses stored `guardrails.screening`. Add `--recompute --picard-dir /path/to/parabricks_json` to rebuild cycle screening from native tables.
+
 ## cfDNA fragmentomics (insert-size)
 
 When `validation.regulatory.primary_analyte` is `cfdna`, the [analyte profile](../../docs/ANALYTE_PROFILES.md) enables cfDNA fragmentomics guardrails automatically (or set `fragmentomics` / `auto_profile_from_analyte` explicitly). Metrics are stored in `fragmentomics_metrics` on each sample JSON. Bisulfite conversion QC is also enabled by default for WGBS analytes.
@@ -137,8 +139,8 @@ If you already have historical JSON outputs with older guardrail fields (`thresh
 
 Export the strict, versionable JSON Schema generated from the Pydantic export models:
 
-- `methyl-qc-export-schema` (default: **V1** columnar payload)
-- `methyl-qc-export-schema --variant v2` (**V2** row-oriented payload)
+- `methyl-qc-export-schema` (default: **V1** internal columnar assembly — still includes Picard tables)
+- `methyl-qc-export-schema --variant v2` (**V2.1** slim guardrail-summary export)
 - `methyl-qc-export-schema --check` — drift check (delegates to the repo-wide exporter when `methyl-validation` is installed)
 
 Default output paths (package-local, kept for backward compatibility):
@@ -156,16 +158,20 @@ methyl-export-config-schemas --check      # fail if artifacts are stale
 
 `methyl-qc-export-schema` still writes the package `schemas/` tree and mirrors to `schemas/config/` when the central exporter is available. Use `--output` on `methyl-qc-export-schema` only for ad-hoc paths.
 
-## V2 row-oriented JSON (tools / Azure SQL)
+## Slim V2.1 JSON (tools / Azure SQL)
 
-`methyl-qc` writes **V2** JSON (`ExportedSampleQCV2Payload`; see `exported_sample_qc_v2.schema.json`). For **legacy V1** files already on disk (columnar arrays), convert in place or to a new tree with:
+`methyl-qc` writes **V2.1** JSON (`ExportedSampleQCV2Payload`; see `exported_sample_qc_v2.schema.json`). That model is a **disk export**, not `MethylQcTaskInput` / `MethylQcTaskOutput`. Workers bind `sampleDir` + `qcPath` and a compact guardrail/screening summary; Picard tables are read from the sample directory.
+
+**Canonical analysis path:** `guardrails.details` (including nested headings such as `fragmentomics` and sidecar `bisulfite_conversion`). Do not copy `deamination_qscore` under `bisulfite_conversion`.
+
+For **legacy V1** files (columnar arrays, including histograms) or **fat V2.0** files (row-oriented Picard tables), convert in place or to a new tree with:
 
 - Dry-run (no writes):
   - `methyl-qc-convert-v1-to-v2 /path/to/sample.json`
   - `methyl-qc-convert-v1-to-v2 /path/to/json_dir`
-- Write V2 next to a single file (default name `<stem>.v2.json`):
+- Write V2.1 next to a single file (default name `<stem>.v2.json`):
   - `methyl-qc-convert-v1-to-v2 /path/to/sample.json --apply`
-- Write a directory of V1 files into a target folder (each output basename `<stem>.v2.json`):
+- Write a directory of files into a target folder (each output basename `<stem>.v2.json`):
   - `methyl-qc-convert-v1-to-v2 /path/to/json_dir --apply --output-dir /path/to/v2_out`
 - Custom output path (single file):
   - `methyl-qc-convert-v1-to-v2 /path/to/sample.json --apply --output /path/to/out.json`
@@ -174,38 +180,11 @@ methyl-export-config-schemas --check      # fail if artifacts are stale
 - Skip post-conversion Pydantic validation (not recommended):
   - `... --no-validate-v2`
 
-V2 files include top-level `metadata` (`schema_name`, `schema_version`, `exported_at_utc`, `producer`) and row arrays under keys such as `mean_quality_by_cycle.rows`, `insert_size_histogram.rows`, etc. Files that already look like V2 are skipped.
+Slim V2.1 files include top-level `metadata` (`schema_name`, `schema_version` `2.1.0`, `export_kind`, `exported_at_utc`, `producer`) plus summary scalars and `guardrails`. Files that are already slim V2.1 are skipped. Fat V2.0 files are slimmed (histogram keys dropped).
 
-### Azure SQL Database (`json` column + `OPENJSON`)
+### Azure SQL Database (`json` column)
 
-Assume a table `dbo.sample_qc (sample_id nvarchar(256) NOT NULL, qc_json json NOT NULL)` and V2 payload in `qc_json`.
-
-**Mean quality by cycle (typed rows):**
-
-```sql
-SELECT s.sample_id, j.cycle, j.mean_quality
-FROM dbo.sample_qc AS s
-CROSS APPLY OPENJSON(s.qc_json, '$.mean_quality_by_cycle.rows')
-  WITH (
-    cycle           int             '$.cycle',
-    mean_quality    float           '$.mean_quality'
-  ) AS j;
-```
-
-**Insert-size histogram:**
-
-```sql
-SELECT s.sample_id, j.insert_size, j.pair_orientation, j.all_reads_fr_count
-FROM dbo.sample_qc AS s
-CROSS APPLY OPENJSON(s.qc_json, '$.insert_size_histogram.rows')
-  WITH (
-    insert_size           int     '$.insert_size',
-    pair_orientation      nvarchar(8) '$.pair_orientation',
-    all_reads_fr_count    int     '$.all_reads_fr_count'
-  ) AS j;
-```
-
-**Scalar summary + guardrails (no `OPENJSON` on arrays):**
+Assume a table `dbo.sample_qc (sample_id nvarchar(256) NOT NULL, qc_json json NOT NULL)` and a V2.1 payload in `qc_json`. Query **guardrail scalars** with `JSON_VALUE`. Histogram arrays are not on the published export — they remain in Parabricks `{id}.json` / `{id}.qc-metrics.tar`.
 
 ```sql
 SELECT
@@ -213,8 +192,10 @@ SELECT
   CAST(JSON_VALUE(s.qc_json, '$.summary_stats.duplication_rate') AS float) AS duplication_rate,
   CAST(JSON_VALUE(s.qc_json, '$.guardrails.overall_pass') AS bit) AS overall_pass,
   JSON_VALUE(s.qc_json, '$.guardrails.details.q30_percent.value') AS q30_value,
-  JSON_VALUE(s.qc_json, '$.guardrails.details.q30_percent.pass') AS q30_pass
+  JSON_VALUE(s.qc_json, '$.guardrails.details.q30_percent.pass') AS q30_pass,
+  JSON_VALUE(s.qc_json, '$.guardrails.details.deamination_qscore.value') AS deamination_qscore,
+  JSON_VALUE(s.qc_json, '$.guardrails.details.bisulfite_conversion.conversion_rate_pct.value') AS conversion_rate_pct
 FROM dbo.sample_qc AS s;
 ```
 
-For filtered indexes on extracted scalars, use persisted computed columns that wrap `JSON_VALUE` / `OPENJSON` projections (Azure SQL supports indexed computed columns when deterministic).
+For filtered indexes on extracted scalars, use persisted computed columns that wrap `JSON_VALUE` projections (Azure SQL supports indexed computed columns when deterministic).

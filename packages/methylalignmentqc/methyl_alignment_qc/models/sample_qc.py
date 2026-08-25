@@ -180,14 +180,24 @@ class GuardrailMetric(BaseModel):
 
 
 class BisulfiteConversionMetrics(BaseModel):
+    """Provenance for conversion sidecar thresholds. Deamination lives only on
+    ``guardrails.details.deamination_qscore`` — do not restate it here."""
+
     model_config = ConfigDict(extra="forbid")
     measurement_source: str
     conversion_rate_pct: Optional[float] = None
     non_cpg_methylation_pct: Optional[float] = None
-    deamination_qscore: Optional[int] = None
     min_conversion_rate_pct: float
     max_non_cpg_methylation_pct: float
     notes: Optional[str] = None
+
+
+class BisulfiteConversionGuardrailDetails(BaseModel):
+    """Sidecar conversion checks only. Deamination is not nested here."""
+
+    model_config = ConfigDict(extra="forbid")
+    conversion_rate_pct: Optional[GuardrailMetric] = None
+    non_cpg_methylation_pct: Optional[GuardrailMetric] = None
 
 
 class FragmentomicsMetrics(BaseModel):
@@ -288,7 +298,7 @@ class GuardrailDetails(BaseModel):
     properly_paired_rate: Optional[GuardrailMetric] = None
     supplementary_rate_flagstat: Optional[GuardrailMetric] = None
     fragmentomics: Optional[FragmentomicsGuardrailDetails] = None
-    bisulfite_conversion: Optional[Dict[str, GuardrailMetric]] = None
+    bisulfite_conversion: Optional[BisulfiteConversionGuardrailDetails] = None
     # pangenome_wgbs (methylGrapher) specific
     wgbs_provenance: Optional[GuardrailMetric] = None
     wgbs_gaf_present: Optional[GuardrailMetric] = None
@@ -328,7 +338,8 @@ class GuardrailReport(BaseModel):
 
 
 class ParabricksMetricsPayload(BaseModel):
-    """Canonical metrics payload used as base export content (mode-aware optionals)."""
+    """Picard/Parabricks tables used as QC *inputs*. Histograms stay here (and in
+    ``{id}.qc-metrics.tar``); they are not copied into the published V2.1 export."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -351,7 +362,8 @@ class ParabricksMetricsPayload(BaseModel):
 
 
 class ExportedSampleQCPayload(ParabricksMetricsPayload):
-    """Final exported per-sample QC JSON."""
+    """Internal V1-shaped assembly (includes Picard tables). Not action I/O.
+    ``methyl-qc`` validates this in memory, then writes slim V2.1."""
 
     model_config = ConfigDict(extra="forbid")
 

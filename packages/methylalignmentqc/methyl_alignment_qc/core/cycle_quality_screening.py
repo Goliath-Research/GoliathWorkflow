@@ -248,18 +248,23 @@ def _cycles_acceptable(guardrails: Dict[str, Any], threshold: float) -> bool:
     return True
 
 
+def _is_metric_node(node: Any) -> bool:
+    return isinstance(node, dict) and "pass" in node
+
+
 def _failed_guardrail_keys(guardrails: Dict[str, Any]) -> List[str]:
     details = guardrails.get("details") or {}
     failed: List[str] = []
     for key, node in details.items():
-        if key in ("fragmentomics", "bisulfite_conversion"):
+        if not isinstance(node, dict):
             continue
-        if isinstance(node, dict) and node.get("pass") is False:
-            failed.append(str(key))
-        elif isinstance(node, dict):
-            for sub_key, sub_node in node.items():
-                if isinstance(sub_node, dict) and sub_node.get("pass") is False:
-                    failed.append(f"{key}.{sub_key}")
+        if _is_metric_node(node):
+            if node.get("pass") is False:
+                failed.append(str(key))
+            continue
+        for sub_key, sub_node in node.items():
+            if _is_metric_node(sub_node) and sub_node.get("pass") is False:
+                failed.append(f"{key}.{sub_key}")
     return failed
 
 

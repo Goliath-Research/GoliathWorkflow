@@ -31,7 +31,7 @@ flowchart TD
   W --> O
 ```
 
-**Inference hazard:** `alignmentMode` is seeded on instance context for align/realign but is not declared on `MethylQcTaskInput` / `sample_methyl_qc.input.schema.json`. When mode is omitted and both a Picard tar and methylGrapher provenance exist, inference can prefer the Parabricks family. Prefer an explicit mode on the task input when the workflow template allows it.
+**Inference hazard:** when `alignmentMode` is omitted and both a Picard tar and methylGrapher provenance exist, inference can prefer the Parabricks family. Prefer an explicit mode on `MethylQcTaskInput`.
 
 ## Input metrics
 
@@ -50,7 +50,7 @@ Each sample directory should contain `{sample_id}.json` (or a reconstructible `{
 - `gc_bias_summary`, `insert_size_metrics`
 - `pre_adapter_summaries` — deamination and OxoG artifact qscores
 
-Guardrails in `wgbs_parabricks_qc.py` evaluate PF%, Q30, mean/min cycle quality, GC/AT dropout, median insert size, and deamination/OxoG scores. Cycle screening and (for cfDNA) fragmentomics apply on this family.
+Guardrails in `wgbs_parabricks_qc.py` evaluate PF%, Q30, mean/min cycle quality, GC/AT dropout, median insert size, and deamination/OxoG scores. Cycle screening and (for cfDNA) fragmentomics apply on this family. Per-cycle and histogram tables stay in the native Parabricks file; they are not copied into the published export.
 
 Stock Giraffe (`pangenome`) uses the **same** Parabricks guardrail set as linear (science differs; QC family does not).
 
@@ -75,9 +75,9 @@ Beyond family-specific sequencing/library checks, `alignment_derived_qc.py` deri
 
 Analyte profiles enable these guardrails by default for `cfdna` and `buffy_coat`. See the [sample preparation flow](../../implementation/sample-preparation-flow.md) for thresholds and operator guidance.
 
-## Export JSON (V2)
+## Export JSON (V2.1)
 
-The worker writes row-oriented JSON validated against `schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`. Key blocks:
+The worker writes a slim guardrail-summary JSON (`export_kind: guardrail_summary`) validated against `schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`. This is a disk export (`qcPath`), not `MethylQcTaskInput`. **Canonical analysis path:** `guardrails.details`. Nested `bisulfite_conversion` holds sidecar conversion rates only; deamination is `details.deamination_qscore`.
 
 | Block | Role |
 |-------|------|
@@ -85,6 +85,7 @@ The worker writes row-oriented JSON validated against `schemas/config/alignment_
 | `guardrails.overall_pass` | Bound to workflow `qcPass` (AND of evaluated checks) |
 | `guardrails.screening` | Cycle-quality disposition and recommended trim bases (or `NO_CYCLE_METRICS` on WGBS) |
 | `qc_history` | Append-only audit (initial + post-remediation retries) |
+| `quality_yield` / `gc_bias_summary` / `insert_size_metrics` | Small Parabricks scalars (no cycle/insert histograms) |
 | `alignment_stats` | Derived mapping and GC uniformity metrics |
 | `alignment_flagstat` | samtools flagstat summary (when enabled) |
 

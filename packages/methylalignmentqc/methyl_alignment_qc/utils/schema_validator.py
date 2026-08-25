@@ -2,7 +2,8 @@
 Validation for MethylAlignmentQC per-sample QC JSON.
 
 Validates a single sample's metrics dict (duplication_metrics, duplication_histogram)
-during assembly before export. The final file written by `methyl-qc` is V2 row-oriented JSON.
+during in-memory assembly before export. The final file written by `methyl-qc` is
+slim V2.1 JSON (histograms dropped).
 """
 
 from typing import Dict, Any, List

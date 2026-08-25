@@ -47,3 +47,53 @@ def test_load_group_rows_keeps_csv_sample_id_when_json_differs(tmp_path: Path) -
     assert rows[0]["sample_id"] == "canonical-id"
     assert rows[0]["qc_json_sample_id"] == "internal-wrong-id"
     assert rows[0]["qc_status"] == "ok"
+
+
+def test_flatten_qc_json_reads_guardrails_details_only(tmp_path: Path) -> None:
+    qc_path = tmp_path / "s1.json"
+    qc_path.write_text(
+        json.dumps(
+            {
+                "sample_id": "s1",
+                "summary_stats": {"total_reads": 1000, "duplication_rate": 0.08},
+                "quality_yield": {"total_reads": 9999, "pf_reads": 1},
+                "alignment_stats": {"mapping_rate": 0.99},
+                "guardrails": {
+                    "overall_pass": False,
+                    "details": {
+                        "q30_percent": {
+                            "value": 88.0,
+                            "normal_range": ">= 85",
+                            "pass": True,
+                            "message": "ok",
+                        },
+                        "deamination_qscore": {
+                            "value": 15.0,
+                            "normal_range": "<= 30",
+                            "pass": True,
+                            "message": "ok",
+                        },
+                        "bisulfite_conversion": {
+                            "conversion_rate_pct": {
+                                "value": 99.5,
+                                "normal_range": ">= 99",
+                                "pass": True,
+                                "message": "ok",
+                            },
+                        },
+                    },
+                    "screening": {"disposition": "USE_CURRENT_ALIGNMENT", "trim_front2": 0},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    flat = flatten_qc_json(qc_path)
+    assert "quality_yield_total_reads" not in flat
+    assert "mapping_rate" not in flat
+    assert flat["summary_duplication_rate"] == 0.08
+    assert flat["guardrail_q30_percent"] == 88.0
+    assert flat["guardrail_deamination_qscore"] == 15.0
+    assert flat["guardrail_bisulfite_conversion_conversion_rate_pct"] == 99.5
+    assert "guardrail_bisulfite_conversion_deamination_qscore" not in flat
+    assert flat["screening_disposition"] == "USE_CURRENT_ALIGNMENT"

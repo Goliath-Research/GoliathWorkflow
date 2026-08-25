@@ -205,7 +205,11 @@ class BisulfiteConversionConfig(BaseModel):
     max_deamination_qscore_proxy: int = Field(
         default=30,
         ge=0,
-        description="Pass deamination qscore proxy when <= this value.",
+        description=(
+            "Unused for voting. Deamination is evaluated only as "
+            "guardrails.details.deamination_qscore (core_guardrails.max_deamination_qscore). "
+            "Kept so existing site/profile keys remain valid."
+        ),
     )
 
 

@@ -89,6 +89,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "description": "sample.methyl_qc worker input. Picard tables are read from sampleDir;\ndo not embed ExportedSampleQCV2Payload here.",
   "properties": {
     "alignmentMode": {
       "anyOf": [
