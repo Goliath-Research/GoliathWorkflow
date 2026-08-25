@@ -41,9 +41,10 @@ The claim SP then:
 
 `wf` only sees opaque keys and catalog flags — no SamplePrep node names in SQL.
 
-**FOREACH (parallel samples):** one sample `FAILED` does **not** fail the instance until every
-iteration is terminal (drain-then-fail). Siblings stay `READY`/`RUNNING`. After the last
-sample finishes, a remaining child `FAILED` marks the instance `FAILED`.
+**FOREACH (parallel samples):** one sample `FAILED` does **not** fail the instance.
+Siblings stay `READY`/`RUNNING`. After every iteration is terminal (succeeded, skipped
+after fail_task, or cancelled), the FOREACH succeeds and the instance can **COMPLETED**.
+Missing FASTQ, disqualified samples, and QC fails must not leave the instance `RUNNING`.
 
 **Archive:** `${var.sampleDestination}` always resolves (JSON `null` when no archive profile). Full-archive `rejectReason` is JSON `null` (QC-fail archives set a literal reason).
 The handler skips upload when destination is null. Do not omit the key from `samples[]`.

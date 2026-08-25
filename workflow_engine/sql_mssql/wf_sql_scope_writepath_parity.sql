@@ -306,7 +306,13 @@ BEGIN
 
         DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
 
-        -- Node failed; leave instance RUNNING so sibling FOREACH tasks remain claimable.
+        IF NOT EXISTS (
+            SELECT 1 FROM wf.workflow_instance
+            WHERE id = @inst AND status = N'RUNNING'
+        )
+            RETURN;
+        IF @parent IS NOT NULL
+            EXEC wf.wf_engine_continue_parent @parent_node_execution_id = @parent;
         RETURN;
     END
 

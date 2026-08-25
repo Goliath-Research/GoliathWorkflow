@@ -51,7 +51,7 @@ BAM deletion (`sample.delete_bam`) is **not** gated by this flag. Durable copies
 
 - Default lease: **3600 s** for Parabricks and MethylExtractor; **600 s** for download/delete/QC.
 - Transient failures (network, GPU OOM): worker returns lease via heartbeat extension or explicit fail; middle-tier may re-queue if policy allows.
-- Permanent failures (`result_code < 0`): instance **FAILED**; operator fixes inputs and starts a new instance.
+- Permanent failures (`result_code < 0`) on one sample: that sample's remaining steps are **SKIPPED**; sibling samples keep running. When every sample is terminal, the instance **COMPLETED**. Failed download/QC nodes stay `FAILED` for operators. Do not leave the instance `RUNNING` because a sample was missing, disqualified, or failed QC.
 
 ---
 
@@ -305,7 +305,7 @@ V2 alignment QC document. Workflow binds:
 
 Path binding: `$.guardrails.overall_pass` → scope variable **`qcPass`**.
 
-Hard QC failure: `result_code < 0` fails the instance; soft fail uses `overall_pass: false` and **IF** routes to `sample.qc_failed`.
+Hard QC failure: `result_code < 0` skips the rest of that sample (instance stays RUNNING until the cohort drains). Soft fail uses `overall_pass: false` and **IF** routes to `sample.qc_failed`.
 
 ---
 

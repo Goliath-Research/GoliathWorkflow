@@ -165,7 +165,15 @@ BEGIN
         ended_at_utc = (now() AT TIME ZONE 'utc'), engine_error_code = p_result_code
     WHERE id = p_action_execution_id;
     DELETE FROM wf.task_lease WHERE node_execution_id = p_action_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
+    IF NOT EXISTS (
+      SELECT 1 FROM wf.workflow_instance wi
+      WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+    ) THEN
+      RETURN;
+    END IF;
+    IF v_parent IS NOT NULL THEN
+      CALL wf.wf_engine_continue_parent(v_parent);
+    END IF;
     RETURN;
   END IF;
 

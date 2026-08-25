@@ -319,8 +319,8 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Drain all iterations before failing the instance so sibling FOREACH
-  -- tasks stay claimable after one sample fail_task.
+  -- Drain all iterations before closing the FOREACH so sibling tasks stay
+  -- claimable after one sample fail_task.
   SELECT count(*) INTO v_finished
   FROM wf.node_execution
   WHERE parent_node_execution_id = p_foreach_execution_id
@@ -330,16 +330,7 @@ BEGIN
     RETURN;
   END IF;
 
-  IF EXISTS (
-    SELECT 1 FROM wf.node_execution
-    WHERE parent_node_execution_id = p_foreach_execution_id AND status = 'FAILED'
-  ) THEN
-    UPDATE wf.node_execution SET status = 'FAILED', ended_at_utc = (now() AT TIME ZONE 'utc')
-    WHERE id = p_foreach_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
-    RETURN;
-  END IF;
-
+  -- All iterations terminal. FAILED/SKIPPED samples must not keep the instance RUNNING.
   UPDATE wf.node_execution SET status = 'SUCCEEDED', ended_at_utc = (now() AT TIME ZONE 'utc')
   WHERE id = p_foreach_execution_id;
   CALL wf.wf_engine_on_composite_complete(p_foreach_execution_id);
@@ -427,7 +418,17 @@ BEGIN
         engine_error_message = LEFT(COALESCE(NULLIF(p_output_json->>'error', ''), 'action failed'), 1024)
     WHERE id = p_action_execution_id;
     DELETE FROM wf.task_lease WHERE node_execution_id = p_action_execution_id;
-    UPDATE wf.workflow_instance SET status = 'FAILED', completed_at_utc = (now() AT TIME ZONE 'utc') WHERE id = v_inst AND status = 'RUNNING';
+    -- Leave instance RUNNING so sibling FOREACH tasks remain claimable, then
+    -- continue the parent so this sample SEQUENCE can skip leftover steps.
+    IF NOT EXISTS (
+      SELECT 1 FROM wf.workflow_instance wi
+      WHERE wi.id = v_inst AND wi.status = 'RUNNING'
+    ) THEN
+      RETURN;
+    END IF;
+    IF v_parent IS NOT NULL THEN
+      CALL wf.wf_engine_continue_parent(v_parent);
+    END IF;
     RETURN;
   END IF;
 

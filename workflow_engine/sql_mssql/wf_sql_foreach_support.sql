@@ -340,7 +340,7 @@ BEGIN
         RETURN;
     END
 
-    /* Drain all iterations before failing the instance. Action fail_task already
+    /* Drain all iterations before closing the FOREACH. Action fail_task already
        leaves the instance RUNNING so sibling FOREACH tasks stay claimable. */
     DECLARE @finished INT = (
         SELECT COUNT(*)
@@ -352,16 +352,8 @@ BEGIN
     IF @finished < @max
         RETURN;
 
-    IF EXISTS (
-        SELECT 1 FROM wf.node_execution
-        WHERE parent_node_execution_id = @foreach_execution_id AND status = N'FAILED'
-    )
-    BEGIN
-        UPDATE wf.node_execution SET status = N'FAILED', ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
-        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst AND status = N'RUNNING';
-        RETURN;
-    END
-
+    -- All iterations terminal. FAILED/SKIPPED samples (missing FASTQ, disqualified,
+    -- leftover steps after fail_task) must not keep the instance RUNNING.
     UPDATE wf.node_execution SET status = N'SUCCEEDED', ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
     EXEC wf.wf_engine_on_composite_complete @node_execution_id = @foreach_execution_id;
 END;
@@ -469,8 +461,19 @@ BEGIN
 
     IF @last_status = N'FAILED'
     BEGIN
-        UPDATE wf.node_execution SET status = N'FAILED', ended_at_utc = SYSUTCDATETIME() WHERE id = @sequence_execution_id;
-        UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst AND status = N'RUNNING';
+        -- This sample is done. Skip leftover steps and close the SEQUENCE so the
+        -- parent FOREACH can drain. Do not fail the instance (siblings may still run).
+        UPDATE wf.node_execution
+        SET status = N'SKIPPED', ended_at_utc = SYSUTCDATETIME()
+        WHERE parent_node_execution_id = @sequence_execution_id
+          AND status IN (N'PENDING', N'READY');
+
+        UPDATE wf.node_execution
+        SET status = N'SKIPPED', ended_at_utc = SYSUTCDATETIME()
+        WHERE id = @sequence_execution_id
+          AND status IN (N'PENDING', N'READY', N'RUNNING');
+
+        EXEC wf.wf_engine_on_composite_complete @node_execution_id = @sequence_execution_id;
         RETURN;
     END
 
@@ -539,7 +542,15 @@ BEGIN
 
         DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
 
-        -- Node failed; leave instance RUNNING so sibling FOREACH tasks remain claimable.
+        -- Leave instance RUNNING so sibling FOREACH tasks remain claimable, then
+        -- continue the parent so this sample SEQUENCE can skip leftover steps.
+        IF NOT EXISTS (
+            SELECT 1 FROM wf.workflow_instance
+            WHERE id = @inst AND status = N'RUNNING'
+        )
+            RETURN;
+        IF @parent IS NOT NULL
+            EXEC wf.wf_engine_continue_parent @parent_node_execution_id = @parent;
         RETURN;
     END
 

@@ -7,8 +7,9 @@
   Prerequisites: wf schema with json columns on workflow_instance / node_execution.
 
   NOTE: This script redefines wf.wf_engine_on_action_complete. It MUST keep
-  wf.wf_apply_output_bindings (qcPass / qcPath scope) and must not fail the
-  whole instance on a single action failure (sibling FOREACH claimability).
+    wf.wf_apply_output_bindings (qcPass / qcPath scope). A single action failure
+    must continue the parent (skip leftover sample steps) and must not fail the
+    whole instance (sibling FOREACH claimability).
 */
 
 SET ANSI_NULLS ON;
@@ -51,8 +52,16 @@ BEGIN
 
         DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
 
-        -- Node failed; leave instance RUNNING so sibling FOREACH tasks remain claimable.
-        -- Do not overwrite operator CANCELLED/FAILED.
+        -- Leave instance RUNNING so sibling FOREACH tasks remain claimable, then
+        -- continue the parent so this sample SEQUENCE can skip leftover steps.
+        -- Missing FASTQ / disqualified samples must not freeze the graph.
+        IF NOT EXISTS (
+            SELECT 1 FROM wf.workflow_instance
+            WHERE id = @inst AND status = N'RUNNING'
+        )
+            RETURN;
+        IF @parent IS NOT NULL
+            EXEC wf.wf_engine_continue_parent @parent_node_execution_id = @parent;
         RETURN;
     END
 

@@ -87,8 +87,10 @@ class ForeachContinuationSqlTests(unittest.TestCase):
                 offenders.append(f"{path.name}:{name}")
         self.assertEqual([], offenders)
 
-    def test_parallel_continue_drains_before_instance_fail(self) -> None:
-        """One FAILED child must not fail the instance until all iterations finish."""
+    def test_parallel_continue_drains_then_completes(self) -> None:
+        """One FAILED child must not fail the instance; after all iterations
+        finish the FOREACH succeeds so missing/disqualified samples do not leave
+        the instance RUNNING."""
         targets = (
             MSSQL_DIR / "wf_sql_foreach_support.sql",
             PG_DIR / "08_foreach_support.sql",
@@ -111,15 +113,19 @@ class ForeachContinuationSqlTests(unittest.TestCase):
             self.assertIsNotNone(
                 finished_idx, f"{path.name} must wait until all FOREACH children finish"
             )
-            fail_idx = re.search(
-                r"parent_node_execution_id\s*=\s*(?:@foreach_execution_id|p_foreach_execution_id)"
-                r".{0,200}status\s*=\s*N?'FAILED'",
-                body[finished_idx.end() :],
-                re.IGNORECASE | re.DOTALL,
+            after = body[finished_idx.end() :]
+            self.assertIsNone(
+                re.search(
+                    r"workflow_instance\s+SET\s+status\s*=\s*N?'FAILED'",
+                    after,
+                    re.IGNORECASE,
+                ),
+                f"{path.name} must not fail the instance after FOREACH drain",
             )
-            self.assertIsNotNone(
-                fail_idx,
-                f"{path.name} must fail the instance only after all iterations are terminal",
+            self.assertRegex(
+                after,
+                r"wf_engine_on_composite_complete",
+                msg=f"{path.name} must close the FOREACH after all iterations are terminal",
             )
             early = body[: finished_idx.start()]
             self.assertIsNone(
@@ -130,6 +136,69 @@ class ForeachContinuationSqlTests(unittest.TestCase):
                     re.IGNORECASE | re.DOTALL,
                 ),
                 f"{path.name} fail-fast on first FAILED child would strand sibling samples",
+            )
+
+    def test_action_fail_continues_parent(self) -> None:
+        """fail_task must continue the parent SEQUENCE/FOREACH or the graph freezes."""
+        targets = (
+            (MSSQL_DIR / "wf_json_native_params.sql", "wf_engine_on_action_complete"),
+            (MSSQL_DIR / "wf_sql_foreach_support.sql", "wf_engine_on_action_complete"),
+            (PG_DIR / "08_foreach_support.sql", "wf_engine_on_action_complete"),
+        )
+        for path, proc in targets:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            pattern = _PG_PROC if path.parent.name == "sql_pg" else _MSSQL_PROC
+            body = next(
+                (m.group("body") for m in pattern.finditer(text) if m.group("name").lower() == proc),
+                None,
+            )
+            self.assertIsNotNone(body, f"{path.name} missing {proc}")
+            fail_m = re.search(
+                r"(?:@result_code|p_result_code)\s*<\s*0(?P<fail>.*?)(?:UPDATE\s+wf\.node_execution\s+SET\s+status\s*=\s*N?'SUCCEEDED')",
+                body,
+                re.IGNORECASE | re.DOTALL,
+            )
+            self.assertIsNotNone(fail_m, f"{path.name}:{proc} missing result_code < 0 branch")
+            fail = fail_m.group("fail")
+            self.assertIn(
+                "continue_parent",
+                fail.lower(),
+                f"{path.name}:{proc} fail path must call wf_engine_continue_parent",
+            )
+            self.assertIsNone(
+                re.search(
+                    r"workflow_instance\s+SET\s+status\s*=\s*N?'FAILED'",
+                    fail,
+                    re.IGNORECASE,
+                ),
+                f"{path.name}:{proc} must not fail the instance on a single action fail",
+            )
+
+    def test_sequence_continue_skips_after_child_fail(self) -> None:
+        """A FAILED sequence child must skip leftover steps, not fail the instance."""
+        targets = (
+            (MSSQL_DIR / "wf_sql_foreach_support.sql", _MSSQL_PROC),
+            (PG_DIR / "03_engine_core.sql", _PG_PROC),
+        )
+        for path, pattern in targets:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            body = next(
+                (
+                    m.group("body")
+                    for m in pattern.finditer(text)
+                    if m.group("name").lower() == "wf_sequence_continue"
+                ),
+                None,
+            )
+            self.assertIsNotNone(body, f"{path.name} missing wf_sequence_continue")
+            self.assertIn("SKIPPED", body.upper(), f"{path.name} must skip leftover sequence steps")
+            self.assertIsNone(
+                re.search(
+                    r"workflow_instance\s+SET\s+status\s*=\s*N?'FAILED'",
+                    body,
+                    re.IGNORECASE,
+                ),
+                f"{path.name} sequence_continue must not fail the instance on a child fail",
             )
 
     def test_archive_dest_missing_resolves_as_null(self) -> None:
