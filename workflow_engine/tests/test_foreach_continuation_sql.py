@@ -139,10 +139,17 @@ class ForeachContinuationSqlTests(unittest.TestCase):
             )
 
     def test_action_fail_continues_parent(self) -> None:
-        """fail_task must continue the parent SEQUENCE/FOREACH or the graph freezes."""
+        """Nested fail_task must continue the parent SEQUENCE/FOREACH or the graph freezes.
+
+        A root-level ACTION (no parent) must fail the instance; leaving it RUNNING
+        has no parent to drain.
+        """
         targets = (
             (MSSQL_DIR / "wf_json_native_params.sql", "wf_engine_on_action_complete"),
             (MSSQL_DIR / "wf_sql_foreach_support.sql", "wf_engine_on_action_complete"),
+            (MSSQL_DIR / "wf_sql_scope_writepath_parity.sql", "wf_engine_on_action_complete"),
+            (PG_DIR / "03_engine_core.sql", "wf_engine_on_action_complete"),
+            (PG_DIR / "06_scope_writepath_parity.sql", "wf_engine_on_action_complete"),
             (PG_DIR / "08_foreach_support.sql", "wf_engine_on_action_complete"),
         )
         for path, proc in targets:
@@ -165,13 +172,28 @@ class ForeachContinuationSqlTests(unittest.TestCase):
                 fail.lower(),
                 f"{path.name}:{proc} fail path must call wf_engine_continue_parent",
             )
-            self.assertIsNone(
-                re.search(
-                    r"workflow_instance\s+SET\s+status\s*=\s*N?'FAILED'",
-                    fail,
-                    re.IGNORECASE,
-                ),
-                f"{path.name}:{proc} must not fail the instance on a single action fail",
+            parent_null = re.search(
+                r"(?:@parent|v_parent)\s+IS\s+NULL",
+                fail,
+                re.IGNORECASE,
+            )
+            instance_failed = re.search(
+                r"workflow_instance\s+SET\s+status\s*=\s*N?'FAILED'",
+                fail,
+                re.IGNORECASE,
+            )
+            self.assertIsNotNone(
+                parent_null,
+                f"{path.name}:{proc} fail path must handle a NULL parent",
+            )
+            self.assertIsNotNone(
+                instance_failed,
+                f"{path.name}:{proc} root ACTION fail must mark the instance FAILED",
+            )
+            self.assertLess(
+                parent_null.start(),
+                instance_failed.start(),
+                f"{path.name}:{proc} instance FAILED must be gated on parent IS NULL",
             )
 
     def test_sequence_continue_skips_after_child_fail(self) -> None:

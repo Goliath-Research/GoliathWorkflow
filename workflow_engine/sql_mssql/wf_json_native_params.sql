@@ -7,9 +7,10 @@
   Prerequisites: wf schema with json columns on workflow_instance / node_execution.
 
   NOTE: This script redefines wf.wf_engine_on_action_complete. It MUST keep
-    wf.wf_apply_output_bindings (qcPass / qcPath scope). A single action failure
+    wf.wf_apply_output_bindings (qcPass / qcPath scope). A nested action failure
     must continue the parent (skip leftover sample steps) and must not fail the
-    whole instance (sibling FOREACH claimability).
+    whole instance (sibling FOREACH claimability). A root-level ACTION failure
+    (no parent) must mark the instance FAILED.
 */
 
 SET ANSI_NULLS ON;
@@ -52,16 +53,23 @@ BEGIN
 
         DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
 
-        -- Leave instance RUNNING so sibling FOREACH tasks remain claimable, then
-        -- continue the parent so this sample SEQUENCE can skip leftover steps.
-        -- Missing FASTQ / disqualified samples must not freeze the graph.
+        -- Nested fail: leave instance RUNNING so sibling FOREACH tasks remain
+        -- claimable, then continue the parent so this sample SEQUENCE can skip
+        -- leftover steps. A root-level ACTION has no parent to propagate to, so
+        -- fail the instance instead of leaving it RUNNING.
         IF NOT EXISTS (
             SELECT 1 FROM wf.workflow_instance
             WHERE id = @inst AND status = N'RUNNING'
         )
             RETURN;
-        IF @parent IS NOT NULL
-            EXEC wf.wf_engine_continue_parent @parent_node_execution_id = @parent;
+        IF @parent IS NULL
+        BEGIN
+            UPDATE wf.workflow_instance
+            SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME()
+            WHERE id = @inst AND status = N'RUNNING';
+            RETURN;
+        END
+        EXEC wf.wf_engine_continue_parent @parent_node_execution_id = @parent;
         RETURN;
     END
 
