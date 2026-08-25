@@ -364,6 +364,7 @@ AS $$
 DECLARE
   v_ptype text;
   v_inst bigint;
+  v_if_status text;
 BEGIN
   SELECT wn.node_type, ne.workflow_instance_id
   INTO v_ptype, v_inst
@@ -383,7 +384,20 @@ BEGIN
   ELSIF v_ptype = 'PARALLEL' THEN
     CALL wf.wf_parallel_continue(p_parent_node_execution_id);
   ELSIF v_ptype IN ('IF','SWITCH') THEN
-    UPDATE wf.node_execution SET status = 'SUCCEEDED', ended_at_utc = (now() AT TIME ZONE 'utc') WHERE id = p_parent_node_execution_id;
+    -- A failed ACTION (or a SEQUENCE skipped after a child fail) must not
+    -- close the IF/SWITCH as SUCCEEDED: the outer sample SEQUENCE would
+    -- then activate leftover steps instead of skipping them.
+    v_if_status := 'SUCCEEDED';
+    IF EXISTS (
+      SELECT 1 FROM wf.node_execution
+      WHERE parent_node_execution_id = p_parent_node_execution_id
+        AND status IN ('FAILED', 'SKIPPED')
+    ) THEN
+      v_if_status := 'FAILED';
+    END IF;
+    UPDATE wf.node_execution
+    SET status = v_if_status, ended_at_utc = (now() AT TIME ZONE 'utc')
+    WHERE id = p_parent_node_execution_id;
     CALL wf.wf_engine_on_composite_complete(p_parent_node_execution_id);
   ELSIF v_ptype = 'REPEAT' THEN
     CALL wf.wf_repeat_continue(p_parent_node_execution_id);

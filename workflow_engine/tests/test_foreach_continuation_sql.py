@@ -196,6 +196,47 @@ class ForeachContinuationSqlTests(unittest.TestCase):
                 f"{path.name}:{proc} instance FAILED must be gated on parent IS NULL",
             )
 
+    def test_continue_parent_if_switch_propagates_branch_failure(self) -> None:
+        """IF/SWITCH must not close as SUCCEEDED when the taken branch failed or was skipped.
+
+        Otherwise the outer sample SEQUENCE treats the IF as success and activates
+        leftover steps instead of skipping them.
+        """
+        targets = (
+            MSSQL_DIR / "wf_sql_foreach_support.sql",
+            PG_DIR / "03_engine_core.sql",
+            PG_DIR / "08_foreach_support.sql",
+        )
+        for path in targets:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            pattern = _PG_PROC if path.parent.name == "sql_pg" else _MSSQL_PROC
+            body = next(
+                (
+                    m.group("body")
+                    for m in pattern.finditer(text)
+                    if m.group("name").lower() == "wf_engine_continue_parent"
+                ),
+                None,
+            )
+            self.assertIsNotNone(body, f"{path.name} missing wf_engine_continue_parent")
+            if_arm = re.search(
+                r"(?:@ptype|v_ptype)\s+IN\s*\(\s*N?'IF'.*?(?:ELSE IF|ELSIF|END IF|END;)",
+                body,
+                re.IGNORECASE | re.DOTALL,
+            )
+            self.assertIsNotNone(if_arm, f"{path.name} missing IF/SWITCH arm in continue_parent")
+            arm = if_arm.group(0)
+            self.assertRegex(
+                arm,
+                r"status\s+IN\s*\(\s*N?'FAILED'\s*,\s*N?'SKIPPED'\s*\)",
+                msg=f"{path.name} IF/SWITCH must inspect FAILED/SKIPPED children",
+            )
+            self.assertRegex(
+                arm,
+                r"N?'FAILED'",
+                msg=f"{path.name} IF/SWITCH must be able to close as FAILED",
+            )
+
     def test_sequence_continue_skips_after_child_fail(self) -> None:
         """A FAILED sequence child must skip leftover steps, not fail the instance."""
         targets = (

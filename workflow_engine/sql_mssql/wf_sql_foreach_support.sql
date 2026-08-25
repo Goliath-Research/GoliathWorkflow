@@ -414,7 +414,20 @@ BEGIN
 
     ELSE IF @ptype IN (N'IF', N'SWITCH')
     BEGIN
-        UPDATE wf.node_execution SET status = N'SUCCEEDED', ended_at_utc = SYSUTCDATETIME() WHERE id = @parent_node_execution_id;
+        -- A failed ACTION (or a SEQUENCE skipped after a child fail) must not
+        -- close the IF/SWITCH as SUCCEEDED: the outer sample SEQUENCE would
+        -- then activate leftover steps instead of skipping them.
+        DECLARE @if_status VARCHAR(32) = N'SUCCEEDED';
+        IF EXISTS (
+            SELECT 1 FROM wf.node_execution
+            WHERE parent_node_execution_id = @parent_node_execution_id
+              AND status IN (N'FAILED', N'SKIPPED')
+        )
+            SET @if_status = N'FAILED';
+
+        UPDATE wf.node_execution
+        SET status = @if_status, ended_at_utc = SYSUTCDATETIME()
+        WHERE id = @parent_node_execution_id;
         EXEC wf.wf_engine_on_composite_complete @node_execution_id = @parent_node_execution_id;
     END
 
