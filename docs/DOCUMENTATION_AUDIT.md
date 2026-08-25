@@ -1,7 +1,7 @@
 # MethylPipeline Documentation Audit
 
-**Date:** 2026-08-10 (Markdown-first MkDocs migration)  
-**Prior:** 2026-07-09 comprehensive audit; 2026-06-26 IA revision  
+**Date:** 2026-08-25 (SamplePrep docs audit — arm layout, V2.1, CPU extract, native manifest)  
+**Prior:** 2026-08-10 Markdown-first MkDocs migration; 2026-07-09 comprehensive audit; 2026-06-26 IA revision  
 **Scope:** Theory, Usage, Implementation, Architecture, Reference, deployment, DomainProgram language, regulatory.
 
 This document is the canonical register of documentation coverage, canonical sources, stale items, and maintenance rules.
@@ -16,7 +16,7 @@ This document is the canonical register of documentation coverage, canonical sou
 | **Implementation** | [`docs/implementation/`](implementation/index.md) | Consolidated | Package index at `implementation/packages/` |
 | **Architecture** | [`docs/architecture/`](architecture/index.md) | Consolidated | Inline Mermaid |
 | **Reference** | [`docs/reference/`](reference/documentation-toolchain.md) | Active | Config matrix, DomainProgram language, toolchain ADR |
-| **SamplePrep + QC** | Usage [ch.03](usage/03-sample-prep-and-qc.md), [alignment engines](usage/alignment-engines.md), [`sample-preparation-flow.md`](implementation/sample-preparation-flow.md) | Documented | Three-mode align; native-Mojo `pangenome_wgbs`; explicit Clara for linear/stock |
+| **SamplePrep + QC** | Usage [ch.03](usage/03-sample-prep-and-qc.md), [alignment engines](usage/alignment-engines.md), [`sample-preparation-flow.md`](implementation/sample-preparation-flow.md) | Documented (2026-08-25) | `sampleRoot` vs `sampleDir` arm leaf; QC export V2.1; CPU MethylExtractor vs GPU alignment; native extract manifest preserve-or-synthesize |
 | **Deployment** | [`deployment/operator-journey.md`](deployment/operator-journey.md) | Dual-backend | Worker-only gateway |
 | **Regulatory** | [`regulatory/`](regulatory/README.md) | Synthesis | Claim-boundary admonitions; customer nav via `mkdocs.customer.yml` |
 | **Platform overview** | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) | Canonical | Quick synthesis + canvas |

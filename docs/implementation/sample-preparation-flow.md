@@ -55,7 +55,10 @@ flowchart LR
     azSrc["azure_blob: container + prefix"]
   end
   dl[sample.download_fastq]
-  work["/work/samples/sample_id"]
+  subgraph workTree ["/work/samples/id"]
+    root["sampleRoot: FASTQs, .caas/"]
+    arm["sampleDir: align.{mode}.{engine}/\nBAM, QC, H5, manifests"]
+  end
   prep[align_QC_extract]
   arch[sample.archive_sample]
   subgraph destinations [Durable archive destinations]
@@ -66,8 +69,9 @@ flowchart LR
   fileSrc --> dl
   s3Src --> dl
   azSrc --> dl
-  dl --> work
-  work --> prep
+  dl --> root
+  root --> arm
+  arm --> prep
   prep --> arch
   arch --> fileDst
   arch --> s3Dst
@@ -78,7 +82,7 @@ flowchart LR
 
 ### Sample source options (input)
 
-Every sample carries a typed `fastqSource` (discriminated union in [`packages/methyldomain/methyl_domain/fastq_storage.py`](../../packages/methyldomain/methyl_domain/fastq_storage.py)). The worker action `sample.download_fastq` (`sample.download-fastq`) stages all FASTQs for one sample into `/work/samples/{sample_id}/` via [`workers/methyl_worker/fastq_source.py`](../../workers/methyl_worker/fastq_source.py).
+Every sample carries a typed `fastqSource` (discriminated union in [`packages/methyldomain/methyl_domain/fastq_storage.py`](../../packages/methyldomain/methyl_domain/fastq_storage.py)). The worker action `sample.download_fastq` (`sample.download-fastq`) stages all FASTQs for one sample into **`sampleRoot`** `/work/samples/{sample_id}/` via [`workers/methyl_worker/fastq_source.py`](../../workers/methyl_worker/fastq_source.py). Alignment, QC, extract, and H5 land in the bound **`sampleDir`** arm leaf (`align.{mode}.{engine}/`).
 
 | Scheme | Keys | Staging mechanism |
 |--------|------|-------------------|
@@ -104,13 +108,12 @@ Secrets are marked `writeOnly` in JSON schema. **Production:** DB SoT (`cfg.cred
 
 **Idempotency:** `download_from_source` skips a file when local size matches remote and mtime is within ±1 s.
 
-### Shared processing layer (`/work/samples/{sample_id}/`)
+### Shared processing layer (`sampleRoot` vs `sampleDir`)
 
-All source schemes converge on the same per-sample directory on shared cluster storage:
+All source schemes converge on the same per-sample tree on shared cluster storage. **`sampleRoot`** is `/work/samples/{sample_id}/`; **`sampleDir`** is the alignment-arm leaf under it (see [sample-prep-tooling.md](../architecture/sample-prep-tooling.md) — do not duplicate that diagram here).
 
-- Staged FASTQs: `*_1.fastq.gz`, `*_2.fastq.gz`
-- Alignment artifacts: BAM, Picard dedup metrics, Parabricks qc-metrics tar
-- Methylation outputs: `{chr}-{CG|CHG|CHH}.h5`, extraction manifest, QC JSON
+- `sampleRoot`: staged FASTQs (`*_1.fastq.gz`, `*_2.fastq.gz`), `.caas/`
+- `sampleDir` (`align.linear.parabricks/`, `align.linear.mojo/`, `align.pangenome.parabricks/`, `align.pangenome_wgbs.mojo/`, …): BAM, Picard dedup, QC tar/JSON, `{chr}-{CG|CHG|CHH}.h5`, extraction manifest, `timing.json`, QC JSON
 
 Study manifests reference this tree via `samples_base_path` (default `/work/samples`). See [Artifact map](#artifact-map) below for the full file list.
 
@@ -168,7 +171,7 @@ Samples without H5 evidence are excluded from cohort comparisons (`reason: exclu
 
 | Layer | Artifact | What it holds |
 |-------|----------|---------------|
-| **Instance context** | `context_json` on sample-prep start | `fastqStorage`, `sampleStorage`, `samples[]` with `fastqSource`, `sampleDestination`, `sampleDir` |
+| **Instance context** | `context_json` on sample-prep start | `fastqStorage`, `sampleStorage`, `samples[]` with `fastqSource`, `sampleDestination`, `sampleRoot`, `sampleDir` |
 | **Site manifest** | `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | Reference genome, GTF, caches, Parabricks — **not** cloud credentials |
 | **Portal** | `SampleStorageDefaults` | Operator archive profile defaults (e.g. `epimethyl-samples`) |
 | **Study manifest** | `project.json` | `samples_base_path`, cohort CSVs — **not** FASTQ/archive credentials |
@@ -183,7 +186,8 @@ Example instance context (S3 ingress + S3 archive, abbreviated):
     "credentials": { "authMode": "instance_profile" } },
   "samples": [{
     "sampleId": "DPLST-051425-111148",
-    "sampleDir": "/work/samples/DPLST-051425-111148",
+    "sampleRoot": "/work/samples/DPLST-051425-111148",
+    "sampleDir": "/work/samples/DPLST-051425-111148/align.linear.parabricks",
     "fastqPrefix": "plasma/DPLST-051425-111148/",
     "fastqSource": { "type": "s3", "bucket": "methyl-cohort", "prefix": "plasma/DPLST-051425-111148/", ... },
     "sampleDestination": { "type": "s3", "bucket": "methyl-archive", "prefix": "plasma/DPLST-051425-111148/", ... }
@@ -217,7 +221,7 @@ See [Storage topology](#storage-topology-sample-sources-and-result-archival) abo
 
 Clara Parabricks runs in Docker via `pbrun fq2bam_meth` with bisulfite-aware alignment. The runner prefers `{sample_id}_1/2.trimmed.fastq.gz` after fastp remediation, else the original FASTQs.
 
-**Outputs under `/work/samples/{sample_id}/`:**
+**Outputs under the bound `sampleDir` arm leaf** (e.g. `/work/samples/{sample_id}/align.linear.parabricks/`):
 
 | Artifact | Role |
 |----------|------|
@@ -517,13 +521,15 @@ Both extractors must emit:
 
 methylGrapher builds this shape from emitted linear CpG calls (`build_canonical_extraction_manifest` in [`methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py)) while retaining graph provenance.
 
+**Manifest ownership (linear / stock):** MethylExtractor owns the native complete manifest (`schema_name: methylextractor.extraction_manifest`), including `read_filtering`, `summary.cpg_fraction_sites_covered`, and native `metadata`. The worker overlays worker-owned lists (`h5_files`, `pattern_files`, action provenance) when those keys are absent. It does **not** replace a complete native file with a sidecar synthesis. Synthesis is only for missing, stub, or incomplete manifests.
+
 ### Recommended operational QC pattern
 
 1. Compare alignment QC `summary_stats.total_reads` and `duplication_rate` with extraction manifest `summary.cpg_weighted_mean_coverage`.
 2. If extraction coverage fails while alignment passed, suspect aggressive `min_mapq`/`min_phred` or localized BAM quality issues — do not blindly lower thresholds. On the WGBS pangenome path, also verify linear-coordinate projection / `linear_cpg_tsv` and asset fingerprints in `alignment_metrics.json`.
 3. Use [`scripts/alignment_qc_cohort_screening.py`](../../scripts/alignment_qc_cohort_screening.py) for cohort-level alignment review; extraction failures are per-sample via `{sample_id}.extraction_qc.json`.
 
-**Implemented:** MethylExtractor emits `reads_seen` / `reads_used` / `read_retention_rate` in the extraction manifest `read_filtering` block (see MethylExtractor `docs/extraction_qc_contract.md`), and `methylextractionqc` evaluates the `read_discard_fraction` guardrail (`max_discard_fraction`, default ≤ 0.9) against it.
+**Implemented:** MethylExtractor emits `reads_seen` / `reads_used` / `read_retention_rate` in the native extraction manifest `read_filtering` block (see MethylExtractor `docs/extraction_qc_contract.md`). The worker **preserve-or-synthesizes** that file: a complete native `methylextractor.extraction_manifest` (expected chromosomes present, `summary.cpg_weighted_mean_coverage` set) is kept — including `read_filtering` — and the worker overlays `h5_files`, `pattern_files`, and action provenance when missing. Stubs or incomplete files (for example a leftover chr21-only manifest) are synthesized from `{chrom}-{ctx}.json` sidecars. `methylextractionqc` evaluates the `read_discard_fraction` guardrail (`max_discard_fraction`, default ≤ 0.9) against `read_filtering`, so preserve-or-synthesize is what makes the guardrail actually see native filter stats.
 
 ## cfDNA fragmentomics as additional QC
 
@@ -564,23 +570,25 @@ Phase 2 is used in validation readiness and Grok advisory payloads — **not** a
 
 ## Artifact map
 
-Per sample under `/work/samples/{sample_id}/`:
+`sampleRoot` = `/work/samples/{sample_id}/`. `sampleDir` = `{sampleRoot}/align.{mode}.{engine}/`. Layout source: [sample-prep-tooling.md](../architecture/sample-prep-tooling.md).
 
-| Artifact | Role |
-|----------|------|
-| `*_1.fastq.gz`, `*_2.fastq.gz` | Original paired FASTQs (retained until final QC) |
-| `*_1.trimmed.fastq.gz`, `*_2.trimmed.fastq.gz` | Post-fastp FASTQs (remediation path) |
-| `*deduplicate_metrics.txt` | Picard-style duplication metrics (linear / Giraffe / methylGrapher QC BAM) |
-| `{sample_id}.qc-metrics.tar` | Parabricks / methylGrapher tabular metrics |
-| `{sample_id}.json` | Optional Parabricks consolidated metrics |
-| `{sample_id}.bam` | Aligned / QC-compatible BAM |
-| `{sample_id}.alignment.gaf` | methylGrapher merged GAF (WGBS pangenome) |
-| `{sample_id}.alignment_metrics.json` | methylGrapher align provenance + asset fingerprints |
-| `{sample_id}.extraction_manifest.json` | Canonical extractor / methylGrapher summary |
-| `{sample_id}.extraction_qc.json` | Extraction guardrail report |
-| `{sample_id}.sample_prep_log.jsonl` | Append-only audit of every prep action |
-| `{chr}-CG.h5` (and CHG/CHH) | Methylation matrices |
-| `{chr}-CG.patterns.h5` | Read-level pattern sidecars for downstream `pipeline.info_measures` |
+| Artifact | Location | Role |
+|----------|----------|------|
+| `*_1.fastq.gz`, `*_2.fastq.gz` | `sampleRoot` | Original paired FASTQs (retained until final QC) |
+| `*_1.trimmed.fastq.gz`, `*_2.trimmed.fastq.gz` | `sampleRoot` | Post-fastp FASTQs (remediation path) |
+| `.caas/` | `sampleRoot` | Sample-identity skip store |
+| `*deduplicate_metrics.txt` | `sampleDir` | Picard-style duplication metrics (linear / Giraffe / methylGrapher QC BAM) |
+| `{sample_id}.qc-metrics.tar` | `sampleDir` | Parabricks / methylGrapher tabular metrics |
+| `{sample_id}.json` | `sampleDir` | Optional Parabricks consolidated metrics |
+| `{sample_id}.bam` | `sampleDir` | Aligned / QC-compatible BAM |
+| `{sample_id}.alignment.gaf` | `sampleDir` | methylGrapher merged GAF (WGBS pangenome) |
+| `{sample_id}.alignment_metrics.json` | `sampleDir` | methylGrapher align provenance + asset fingerprints |
+| `{sample_id}.extraction_manifest.json` | `sampleDir` | Canonical extractor / methylGrapher summary (preserve-or-synthesize) |
+| `{sample_id}.timing.json` | `sampleDir` | MethylExtractor phase elapsed-ms |
+| `{sample_id}.extraction_qc.json` | `sampleDir` | Extraction guardrail report |
+| `{sample_id}.sample_prep_log.jsonl` | `sampleDir` | Append-only audit of every prep action |
+| `{chr}-CG.h5` (and CHG/CHH) | `sampleDir` | Methylation matrices |
+| `{chr}-CG.patterns.h5` | `sampleDir` | Optional read-level pattern sidecars for downstream `pipeline.info_measures` |
 
 Project-scoped alignment QC export: `{output_base}/{project}/alignment_qc/{sample_id}.json`
 
@@ -595,7 +603,8 @@ Before starting SamplePrep, confirm:
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
 - [ ] Instance `context_json` includes `fastqStorage`, `samples[]`; reference genome on site manifest
 - [ ] Stock pangenome: run [`scripts/download_pangenome_hprc_grch38.sh`](../../scripts/download_pangenome_hprc_grch38.sh), set `pangenome_genome`, `alignmentMode: "pangenome"`
-- [ ] WGBS pangenome: provision `pangenome_wgbs_genome` / `d9-bs/1.70`, set `alignmentMode: "pangenome_wgbs"`, `METHYL_METHYLGRAPHER_IMAGE`, and pass the canary checklist
+- [ ] Linear / stock extract: `actionConfig.methyl_extract.chrom_parallel` / `max_rss_gb` reviewed for the node's RAM
+- [ ] WGBS pangenome: provision `pangenome_wgbs_genome` / `d9-bs/1.70`, set `alignmentMode: "pangenome_wgbs"`, `METHYL_MOJO_ALIGN_IMAGE`, and pass the canary checklist
 
 Example profile `actionConfig.alignment_qc` snippet:
 
@@ -641,14 +650,16 @@ Example profile `actionConfig.alignment_qc` snippet:
 ```bash
 source .venv/bin/activate
 
-# Alignment QC for one sample directory
-methyl-qc --samples /work/samples/SAMPLE_ID --output-dir /work/projects/prostate-cancer/alignment_qc
+# Alignment QC: --samples is the arm leaf (sampleDir), not sampleRoot
+methyl-qc --samples /work/samples/SAMPLE_ID/align.linear.parabricks \
+  --output-dir /work/projects/prostate-cancer/alignment_qc
 
 # Project-scoped (resolves profile/site actionConfig.alignment_qc)
 methyl-qc --project /work/projects/prostate-cancer/configs/project_Example.json
 
-# Extraction QC after MethylExtractor
-methyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID --sample-id SAMPLE_ID
+# Extraction QC after MethylExtractor (--sample-dir = same arm leaf)
+methyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID/align.linear.parabricks \
+  --sample-id SAMPLE_ID
 
 # Cohort alignment screening (offline)
 python scripts/alignment_qc_cohort_screening.py \

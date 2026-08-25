@@ -1,6 +1,6 @@
 # SamplePrepPipeline — per-sample upstream workflow
 
-**SamplePrepPipeline** is the **universal entry point** for every sample entering MethylPipeline: cfDNA or buffy-coat, from any structured laboratory `fastqSource` (file / S3 / Azure Blob). It orchestrates ingest, alignment (**native-Mojo** methylGrapher on NVIDIA/AMD for `pangenome_wgbs`, or **explicit** Clara Parabricks for `linear`/`pangenome`), **mode-aware alignment QC** (with optional fastp remediation), optional cfDNA fragmentomics, methylation extraction (GPU MethylExtractor or native-Mojo MethylCall), **extraction QC**, optional HDF5 archive, and cleanup **per sample** — in parallel — before **DataDrivenPipeline** consumes `{chrom}-CG.h5` files.
+**SamplePrepPipeline** is the **universal entry point** for every sample entering MethylPipeline: cfDNA or buffy-coat, from any structured laboratory `fastqSource` (file / S3 / Azure Blob). It orchestrates ingest, alignment (**native-Mojo** methylGrapher on NVIDIA/AMD for `pangenome_wgbs`, or **explicit** Clara Parabricks for `linear`/`pangenome`), **mode-aware alignment QC** (with optional fastp remediation), optional cfDNA fragmentomics, methylation extraction (CPU MethylExtractor or native-Mojo MethylCall), **extraction QC**, optional HDF5 archive, and cleanup **per sample** — in parallel — before **DataDrivenPipeline** consumes `{chrom}-CG.h5` files.
 
 **Source of truth (workflow graph):** [`../domain/fixtures/sample_prep.program.json`](../domain/fixtures/sample_prep.program.json)
 

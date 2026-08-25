@@ -373,6 +373,85 @@ def _load_context_stat_json(sample_dir: Path, chrom: str, context: str) -> Optio
     return payload if isinstance(payload, dict) else None
 
 
+def _normalize_chrom_key(chrom: str) -> str:
+    return str(chrom).lstrip("chr")
+
+
+def _extraction_manifest_path(sample_dir: Path, sample_id: str) -> Path:
+    return sample_dir / f"{sample_id}.extraction_manifest.json"
+
+
+def _load_existing_extraction_manifest(
+    sample_dir: Path,
+    sample_id: str,
+) -> Optional[Dict[str, Any]]:
+    path = _extraction_manifest_path(sample_dir, sample_id)
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _is_complete_native_extraction_manifest(
+    manifest: Mapping[str, Any],
+    chromosomes: Sequence[str],
+) -> bool:
+    """True when the file is a complete ``methylextractor.extraction_manifest``.
+
+    Completeness: schema name matches, every expected chromosome is present in
+    ``per_chromosome``, and ``summary.cpg_weighted_mean_coverage`` is set.
+    Stubs (e.g. chr21-only ``WORKER_STUB_EXTERNAL`` leftovers) fail this check.
+    """
+    metadata = manifest.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    if metadata.get("schema_name") != "methylextractor.extraction_manifest":
+        return False
+    summary = manifest.get("summary")
+    if not isinstance(summary, dict):
+        return False
+    if summary.get("cpg_weighted_mean_coverage") is None:
+        return False
+    per_chromosome = manifest.get("per_chromosome")
+    if not isinstance(per_chromosome, dict):
+        return False
+    present = {
+        _normalize_chrom_key(key)
+        for key, entry in per_chromosome.items()
+        if isinstance(entry, dict)
+    }
+    expected = {_normalize_chrom_key(chrom) for chrom in chromosomes}
+    return bool(expected) and expected <= present
+
+
+def _overlay_worker_owned_manifest_fields(
+    manifest: Dict[str, Any],
+    *,
+    sample_id: str,
+    h5_files: Sequence[str],
+    pattern_files: Sequence[str] | None,
+) -> Dict[str, Any]:
+    """Fill worker-owned lists and action provenance when the native file omits them."""
+    metadata = manifest.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        manifest["metadata"] = metadata
+    if not metadata.get("action"):
+        metadata["action"] = "sample.methyl_extract"
+    if not metadata.get("extractor"):
+        metadata["extractor"] = "MethylExtractor"
+    if not metadata.get("sample_id"):
+        metadata["sample_id"] = sample_id
+    if "h5_files" not in manifest:
+        manifest["h5_files"] = list(h5_files)
+    if "pattern_files" not in manifest:
+        manifest["pattern_files"] = list(pattern_files or [])
+    return manifest
+
+
 def build_canonical_extraction_manifest_from_stats(
     *,
     sample_id: str,
@@ -384,12 +463,13 @@ def build_canonical_extraction_manifest_from_stats(
 ) -> Dict[str, Any]:
     """Build ``methyl_extraction_qc`` canonical manifest from MethylExtractor JSON sidecars.
 
-    The installed MethylExtractor CLI writes per-chromosome ``{chrom}-{ctx}.json``
-    (``avg_coverage``, ``avg_methylation_level``, …) and HDF5s, but does **not**
-    emit ``{sampleId}.extraction_manifest.json``. The WGBS methylGrapher extract
-    path already synthesizes that file; the linear ``sample.methyl_extract`` path
-    must do the same or extraction QC will read a stale stub (e.g. chr21-only
-    ``WORKER_STUB_EXTERNAL`` leftover) and fail chromosome completeness.
+    MethylExtractor writes per-chromosome ``{chrom}-{ctx}.json`` sidecars
+    (``avg_coverage``, ``avg_methylation_level``, …), HDF5s, and a native
+    ``{sampleId}.extraction_manifest.json`` (including ``read_filtering``).
+    This helper synthesizes the sample manifest from sidecars when that native
+    file is missing, a ``WORKER_STUB_EXTERNAL`` leftover, or incomplete (e.g.
+    chr21-only). Prefer :func:`ensure_extraction_manifest`, which preserves a
+    complete native file and only falls back to this synthesis.
     """
     contexts_list = [str(c) for c in contexts] or ["CG"]
     per_chromosome: Dict[str, Dict[str, Any]] = {}
@@ -401,7 +481,7 @@ def build_canonical_extraction_manifest_from_stats(
     missing: List[str] = []
 
     for chrom in chromosomes:
-        chrom_key = str(chrom).lstrip("chr")
+        chrom_key = _normalize_chrom_key(chrom)
         chrom_entry: Dict[str, Any] = {}
         for ctx in contexts_list:
             stats = _load_context_stat_json(sample_dir, chrom_key, ctx)
@@ -479,7 +559,7 @@ def write_extraction_manifest(
     manifest: Mapping[str, Any],
 ) -> Path:
     """Atomically write ``{sampleId}.extraction_manifest.json`` (overwrites stubs)."""
-    path = sample_dir / f"{sample_id}.extraction_manifest.json"
+    path = _extraction_manifest_path(sample_dir, sample_id)
     tmp = path.with_suffix(path.suffix + ".tmp")
     ensure_work_writable(path)
     write_work_text(tmp, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
@@ -498,7 +578,34 @@ def ensure_extraction_manifest(
     h5_files: Sequence[str],
     pattern_files: Sequence[str] | None = None,
 ) -> Path:
-    """Synthesize and write the canonical extraction manifest for linear extract."""
+    """Preserve a complete native MethylExtractor manifest, or synthesize one.
+
+    When ``{sampleId}.extraction_manifest.json`` is a complete
+    ``methylextractor.extraction_manifest`` (expected chromosomes in
+    ``per_chromosome``, ``summary.cpg_weighted_mean_coverage`` set), keep native
+    ``read_filtering``, ``summary.cpg_fraction_sites_covered``, and metadata, and
+    overlay worker-owned ``h5_files`` / ``pattern_files`` / action provenance if
+    missing. Otherwise synthesize from per-context JSON sidecars so extraction QC
+    does not see a stale stub.
+    """
+    existing = _load_existing_extraction_manifest(sample_dir, sample_id)
+    if existing is not None and _is_complete_native_extraction_manifest(
+        existing, chromosomes
+    ):
+        manifest = _overlay_worker_owned_manifest_fields(
+            existing,
+            sample_id=sample_id,
+            h5_files=h5_files,
+            pattern_files=pattern_files,
+        )
+        path = write_extraction_manifest(sample_dir, sample_id, manifest)
+        logger.info(
+            "Preserved native extraction manifest for %s (%s chromosomes)",
+            sample_id,
+            len(chromosomes),
+        )
+        return path
+
     manifest = build_canonical_extraction_manifest_from_stats(
         sample_id=sample_id,
         sample_dir=sample_dir,

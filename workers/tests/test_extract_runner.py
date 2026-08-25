@@ -4,11 +4,91 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
 
 from methyl_worker import extract_runner as runner
+
+
+def _write_sidecar_stats(
+    sample_dir: Path,
+    chrom: str,
+    *,
+    avg_coverage: float = 12.0,
+    contexts: tuple[str, ...] = ("CG", "CHG", "CHH"),
+) -> None:
+    for ctx in contexts:
+        (sample_dir / f"{chrom}-{ctx}.json").write_text(
+            json.dumps(
+                {
+                    "num_positions": 100,
+                    "total_methylated": 80,
+                    "total_unmethylated": 20,
+                    "avg_methylation_level": 0.8,
+                    "avg_coverage": avg_coverage,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+
+def _complete_native_manifest(
+    *,
+    sample_id: str,
+    chromosomes: list[str],
+    cpg_cov: float = 17.25,
+) -> dict:
+    per_chromosome = {}
+    for chrom in chromosomes:
+        key = chrom.lstrip("chr")
+        per_chromosome[key] = {
+            "CG": {
+                "num_positions": 250,
+                "methylation_level": 0.71,
+                "mean_coverage": 15.5,
+            },
+            "CHG": {"num_positions": 10, "methylation_level": 0.01, "mean_coverage": 8.0},
+            "CHH": {"num_positions": 10, "methylation_level": 0.008, "mean_coverage": 7.0},
+        }
+    return {
+        "metadata": {
+            "schema_name": "methylextractor.extraction_manifest",
+            "schema_version": "1.0.0",
+            "exported_at_utc": "2026-08-25T12:00:00Z",
+            "sample_id": sample_id,
+            "contexts_extracted": ["CG", "CHG", "CHH"],
+            "filters": {"min_mapq": 20, "min_phred": 5, "min_cov": 1},
+        },
+        "summary": {
+            "cpg_weighted_mean_coverage": cpg_cov,
+            "cpg_methylation_level": 0.71,
+            "cpg_fraction_sites_covered": 0.42,
+            "chromosomes_processed": len(per_chromosome),
+        },
+        "read_filtering": {
+            "reads_seen": 1000,
+            "reads_used": 800,
+            "read_retention_rate": 0.8,
+        },
+        "per_chromosome": per_chromosome,
+    }
+
+
+def _assert_not_extractor(mock_run: Any) -> None:
+    # Skip path must not invoke MethylExtractor. Do not use assert_not_called():
+    # resolve/load may call subprocess.run for unrelated probes (e.g. uname -p).
+    def _is_extractor_call(call: object) -> bool:
+        args = getattr(call, "args", ())
+        if not args:
+            return False
+        cmd = args[0]
+        if isinstance(cmd, (list, tuple)):
+            return any("MethylExtractor" in str(part) for part in cmd)
+        return "MethylExtractor" in str(cmd)
+
+    assert not any(_is_extractor_call(c) for c in mock_run.call_args_list)
 
 
 def _write_min_project(
@@ -297,19 +377,7 @@ def test_idempotent_skip_when_all_h5_present(tmp_path: Path) -> None:
     sample_dir.mkdir()
     for name in ("1-CG.h5", "1-CHG.h5", "1-CHH.h5"):
         (sample_dir / name).write_bytes(b"h5")
-    for ctx in ("CG", "CHG", "CHH"):
-        (sample_dir / f"1-{ctx}.json").write_text(
-            json.dumps(
-                {
-                    "num_positions": 100,
-                    "total_methylated": 80,
-                    "total_unmethylated": 20,
-                    "avg_methylation_level": 0.8,
-                    "avg_coverage": 12.0,
-                }
-            ),
-            encoding="utf-8",
-        )
+    _write_sidecar_stats(sample_dir, "1", avg_coverage=12.0)
     # Stale stub must be overwritten.
     (sample_dir / "S3.extraction_manifest.json").write_text(
         json.dumps(
@@ -330,24 +398,120 @@ def test_idempotent_skip_when_all_h5_present(tmp_path: Path) -> None:
             input_json=_task_input("S3", sample_dir, ref, action_config),
         )
 
-    # Skip path must not invoke MethylExtractor. Do not use assert_not_called():
-    # resolve/load may call subprocess.run for unrelated probes (e.g. uname -p).
-    def _is_extractor_call(call: object) -> bool:
-        args = getattr(call, "args", ())
-        if not args:
-            return False
-        cmd = args[0]
-        if isinstance(cmd, (list, tuple)):
-            return any("MethylExtractor" in str(part) for part in cmd)
-        return "MethylExtractor" in str(cmd)
-
-    assert not any(_is_extractor_call(c) for c in mock_run.call_args_list)
+    _assert_not_extractor(mock_run)
     assert out["h5Files"] == ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
     manifest = json.loads((sample_dir / "S3.extraction_manifest.json").read_text(encoding="utf-8"))
     assert set(manifest["per_chromosome"]) == {"1"}
     assert manifest["per_chromosome"]["1"]["CG"]["mean_coverage"] == 12.0
     assert manifest["metadata"]["extractor"] == "MethylExtractor"
     assert (sample_dir / "S3.extraction_manifest.json").stat().st_size > 0
+
+
+def test_complete_native_manifest_survives_skip(tmp_path: Path) -> None:
+    project = tmp_path / "project.json"
+    ref, action_config = _write_min_project(project, chromosomes=["1"])
+    sample_dir = tmp_path / "S_native_skip"
+    sample_dir.mkdir()
+    for name in ("1-CG.h5", "1-CHG.h5", "1-CHH.h5"):
+        (sample_dir / name).write_bytes(b"h5")
+    native = _complete_native_manifest(sample_id="S_native_skip", chromosomes=["1"])
+    (sample_dir / "S_native_skip.extraction_manifest.json").write_text(
+        json.dumps(native),
+        encoding="utf-8",
+    )
+
+    with patch("methyl_worker.extract_runner.subprocess.run") as mock_run:
+        out = runner.run_methyl_extract(
+            sample_id="S_native_skip",
+            sample_dir=sample_dir,
+            project=project,
+            input_json=_task_input("S_native_skip", sample_dir, ref, action_config),
+        )
+
+    _assert_not_extractor(mock_run)
+    assert out["h5Files"] == ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
+    manifest = json.loads(
+        (sample_dir / "S_native_skip.extraction_manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["read_filtering"] == native["read_filtering"]
+    assert manifest["summary"]["cpg_fraction_sites_covered"] == 0.42
+    assert manifest["summary"]["cpg_weighted_mean_coverage"] == 17.25
+    assert manifest["metadata"]["filters"] == native["metadata"]["filters"]
+    assert manifest["metadata"]["exported_at_utc"] == "2026-08-25T12:00:00Z"
+    assert manifest["metadata"]["action"] == "sample.methyl_extract"
+    assert manifest["metadata"]["extractor"] == "MethylExtractor"
+    assert manifest["h5_files"] == ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
+    assert manifest["pattern_files"] == []
+
+
+def test_complete_native_manifest_survives_post_extract_rewrite(tmp_path: Path) -> None:
+    project = tmp_path / "project.json"
+    ref, action_config = _write_min_project(project, chromosomes=["1"])
+    sample_dir = tmp_path / "S_native_run"
+    sample_dir.mkdir()
+    (sample_dir / "S_native_run.bam").write_bytes(b"BAM")
+    native = _complete_native_manifest(sample_id="S_native_run", chromosomes=["1"])
+
+    def fake_run(cmd, **kwargs):
+        for name in ("1-CG.h5", "1-CHG.h5", "1-CHH.h5"):
+            (sample_dir / name).write_bytes(b"h5")
+        _write_sidecar_stats(sample_dir, "1", avg_coverage=11.0)
+        (sample_dir / "S_native_run.extraction_manifest.json").write_text(
+            json.dumps(native),
+            encoding="utf-8",
+        )
+        return type("P", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with patch.object(runner, "_extractor_bin", return_value="/usr/bin/MethylExtractor"):
+        with patch("methyl_worker.extract_runner.subprocess.run", side_effect=fake_run):
+            out = runner.run_methyl_extract(
+                sample_id="S_native_run",
+                sample_dir=sample_dir,
+                project=project,
+                input_json=_task_input("S_native_run", sample_dir, ref, action_config),
+            )
+
+    assert len(out["h5Files"]) == 3
+    manifest = json.loads(
+        (sample_dir / "S_native_run.extraction_manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["read_filtering"] == native["read_filtering"]
+    assert manifest["summary"]["cpg_fraction_sites_covered"] == 0.42
+    assert manifest["summary"]["cpg_weighted_mean_coverage"] == 17.25
+    assert manifest["per_chromosome"]["1"]["CG"]["mean_coverage"] == 15.5
+    assert manifest["metadata"]["filters"]["min_mapq"] == 20
+    assert manifest["h5_files"] == ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
+
+
+def test_synthesizes_manifest_from_sidecars_when_no_native(tmp_path: Path) -> None:
+    project = tmp_path / "project.json"
+    ref, action_config = _write_min_project(project, chromosomes=["1"])
+    sample_dir = tmp_path / "S_synth"
+    sample_dir.mkdir()
+    for name in ("1-CG.h5", "1-CHG.h5", "1-CHH.h5"):
+        (sample_dir / name).write_bytes(b"h5")
+    _write_sidecar_stats(sample_dir, "1", avg_coverage=12.0)
+    assert not (sample_dir / "S_synth.extraction_manifest.json").exists()
+
+    with patch("methyl_worker.extract_runner.subprocess.run") as mock_run:
+        out = runner.run_methyl_extract(
+            sample_id="S_synth",
+            sample_dir=sample_dir,
+            project=project,
+            input_json=_task_input("S_synth", sample_dir, ref, action_config),
+        )
+
+    _assert_not_extractor(mock_run)
+    assert out["h5Files"] == ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
+    manifest = json.loads(
+        (sample_dir / "S_synth.extraction_manifest.json").read_text(encoding="utf-8")
+    )
+    assert "read_filtering" not in manifest
+    assert manifest["per_chromosome"]["1"]["CG"]["mean_coverage"] == 12.0
+    assert manifest["summary"]["cpg_weighted_mean_coverage"] == 12.0
+    assert "cpg_fraction_sites_covered" not in manifest["summary"]
+    assert manifest["metadata"]["extractor"] == "MethylExtractor"
+    assert manifest["metadata"]["action"] == "sample.methyl_extract"
 
 
 def test_build_manifest_from_stats_covers_all_chroms(tmp_path: Path) -> None:

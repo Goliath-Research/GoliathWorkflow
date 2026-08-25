@@ -124,6 +124,22 @@ check_absent '`POST /v1/workflows/definitions`' 'Deploy via deploy_workflow_defi
 check_absent '`POST /v1/workflows/instances`' 'Start instances via methyl-study-start or portal SQL'
 check_absent '/v1/admin/catalog' 'Admin routes removed; use seed_action_catalog.py'
 
+# SamplePrep facts that drifted after mojo-align / MethylExtractor / arm-layout (2026-08-25).
+check_absent 'GPU MethylExtractor' 'MethylExtractor is CPU (C/HTSlib/HDF5); GPU is alignment'
+
+check_absent 'alignmentMode is not yet on the methyl_qc' 'alignmentMode is on schemas/tasks/sample_methyl_qc.input.schema.json'
+
+# METHYL_METHYLGRAPHER_MOJO_IMAGE as a primary pin (a same-line "deprecated alias" note is allowed).
+if rg -n 'METHYL_METHYLGRAPHER_MOJO_IMAGE' "${RG_GLOBS[@]}" . >/tmp/doc_fresh_mojo_image.txt 2>/dev/null; then
+  if grep -vi 'deprecated' /tmp/doc_fresh_mojo_image.txt >/tmp/doc_fresh_hits.txt && [[ -s /tmp/doc_fresh_hits.txt ]]; then
+    echo "FAIL: Use METHYL_MOJO_ALIGN_IMAGE as the primary pin (deprecated alias sentence OK)" >&2
+    head -30 /tmp/doc_fresh_hits.txt >&2
+    fail=1
+  fi
+fi
+
+check_absent 'does \*\*not\*\* emit.*extraction_manifest' 'MethylExtractor emits {sampleId}.extraction_manifest.json; describe preserve-or-synthesize'
+
 # Retired action name in active operator docs.
 check_absent 'sample\.upload_h5' 'Use sample.archive_sample'
 

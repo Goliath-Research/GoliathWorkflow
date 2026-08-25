@@ -4,6 +4,8 @@ overview: Fill methylGrapher-mojo to scientific parity with Python methylGrapher
 
 > **Status: IN PROGRESS — dual-ship ready.** Phases 0–3 implemented: engine+Mojo CLI in methylGrapher-mojo, DS20M subset parity vs 0.2.0, `:1.70-mojo` image + `engine` config knob. Phase 4 cutover gate pending operator flip after full-sample science/perf.
 
+> **Superseded runbook names:** live pins are `MOJO_ALIGN_*` / `METHYL_MOJO_ALIGN_IMAGE` and `/opt/mojo-align` — see [`archive-methylgrapher-mojo.plan.md`](archive-methylgrapher-mojo.plan.md) and [`alignment-engines.md`](../usage/alignment-engines.md).
+
 azure_devops:
   type: Feature
   title: "methylGrapher-mojo cutover (performance successor)"

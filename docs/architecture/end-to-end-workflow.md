@@ -167,7 +167,7 @@ flowchart TD
   G -->|no| I{"useWgbsPangenome?"}
   H --> I
   I -->|yes| IX["sample.methylgrapher_wgbs_extract<br/>(native-Mojo MethylCall/MergeCpG)"]
-  I -->|no| IY["sample.methyl_extract<br/>(GPU MethylExtractor)"]
+  I -->|no| IY["sample.methyl_extract<br/>(CPU MethylExtractor)"]
   IX --> J["sample.extraction_qc"]
   IY --> J
   J --> K{"extractionQcPass?"}

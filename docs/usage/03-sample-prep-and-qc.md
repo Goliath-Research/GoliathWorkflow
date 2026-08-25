@@ -9,7 +9,7 @@
 
 Without these gates, bad alignments would waste GPU cycles, and under-covered or poorly converted extractions would pollute centroids, DMP discovery, and classifiers.
 
-Each sample is aligned using **linear** or **stock pangenome** (NVIDIA Clara Parabricks — **explicit** config) or **WGBS pangenome** (native-Mojo methylGrapher on NVIDIA CUDA or AMD HIP), then passes through mode-aware QC gates below. Extraction is GPU MethylExtractor for linear/stock pangenome, or native-Mojo methylGrapher extract for WGBS pangenome.
+Each sample is aligned using **linear** or **stock pangenome** (NVIDIA Clara Parabricks — **explicit** config) or **WGBS pangenome** (native-Mojo methylGrapher on NVIDIA CUDA or AMD HIP), then passes through mode-aware QC gates below. **Alignment is GPU** (Clara or mojo-align). **Extraction is CPU:** MethylExtractor (C/HTSlib/HDF5) for linear/stock pangenome, or native-Mojo methylGrapher extract for WGBS pangenome.
 
 **Workflow source of truth:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
 
@@ -97,25 +97,37 @@ flowchart TD
 
 ## Where artifacts live
 
-Per sample under `/work/samples/{sample_id}/`:
+Production binds **`sampleRoot`** = `/work/samples/{sample_id}/` (FASTQs, `.caas/`) and **`sampleDir`** = `{sampleRoot}/align.{mode}.{engine}/` (BAM, QC, H5, manifests). Full tooling diagram: [sample-prep-tooling.md](../architecture/sample-prep-tooling.md).
 
-| Artifact | Role |
-|----------|------|
-| `*deduplicate_metrics.txt` | Picard-style duplication metrics from Parabricks / methylGrapher QC BAM |
-| `{sample_id}.json` | Parabricks WGBS metrics JSON (sequencing + alignment) |
-| `{sample_id}.qc-metrics.tar` | Optional tar of tabular metrics (used when JSON is absent) |
-| `{sample_id}.alignment.gaf` | methylGrapher merged GAF (WGBS pangenome mode) |
-| `{sample_id}.alignment_metrics.json` | methylGrapher align provenance + asset fingerprints |
-| `{output_base}/{project}/alignment_qc/{sample_id}.json` | Normalized **V2** alignment QC export (when run project-scoped) |
-| `{sample_id}.extraction_manifest.json` | Extractor / methylGrapher extract summary |
-| `{sample_id}.extraction_qc.json` | Extraction guardrail report |
-| `{sample_id}.sample_prep_log.jsonl` | Append-only audit of every prep action |
-| `{chr}-CG.h5` | Methylation matrices consumed by `methyl-centroid` |
-| `{chr}-CG.patterns.h5` | Read-level pattern sidecars for informME |
+```text
+/work/samples/<id>/                 # sampleRoot: FASTQs, .caas/
+  align.linear.parabricks/          # sampleDir (Clara linear)
+  align.linear.mojo/
+  align.pangenome.parabricks/
+  align.pangenome_wgbs.mojo/        # sampleDir (WGBS)
+```
+
+| Artifact | Location | Role |
+|----------|----------|------|
+| `*_1.fastq.gz`, `*_2.fastq.gz` | `sampleRoot` | Staged paired FASTQs (retained until final QC) |
+| `.caas/` | `sampleRoot` | Sample-identity skip store (not per-arm) |
+| `{sample_id}.bam` | `sampleDir` | Aligned / QC-compatible BAM |
+| `*deduplicate_metrics.txt` | `sampleDir` | Picard-style duplication metrics from Parabricks / methylGrapher QC BAM |
+| `{sample_id}.json` | `sampleDir` | Parabricks WGBS metrics JSON (sequencing + alignment) |
+| `{sample_id}.qc-metrics.tar` | `sampleDir` | Optional tar of tabular metrics (used when JSON is absent) |
+| `{sample_id}.alignment.gaf` | `sampleDir` | methylGrapher merged GAF (WGBS pangenome mode) |
+| `{sample_id}.alignment_metrics.json` | `sampleDir` | methylGrapher align provenance + asset fingerprints |
+| `{output_base}/{project}/alignment_qc/{sample_id}.json` | project tree | Normalized **V2.1** `guardrail_summary` export (when run project-scoped) |
+| `{sample_id}.extraction_manifest.json` | `sampleDir` | Extractor / methylGrapher extract summary (`read_filtering` when native) |
+| `{sample_id}.timing.json` | `sampleDir` | MethylExtractor phase elapsed-ms (BAM scan vs HDF5 write) |
+| `{sample_id}.extraction_qc.json` | `sampleDir` | Extraction guardrail report |
+| `{sample_id}.sample_prep_log.jsonl` | `sampleDir` | Append-only audit of every prep action |
+| `{chr}-CG.h5` | `sampleDir` | Methylation matrices consumed by `methyl-centroid` |
+| `{chr}-CG.patterns.h5` | `sampleDir` | Optional read-level pattern sidecars for informME |
 
 ## Alignment QC: inputs and normalized JSON
 
-`methyl-qc` (`packages/methylalignmentqc`) is **mode-aware**. It prefers task `alignmentMode` (`linear` | `pangenome` | `pangenome_wgbs`), otherwise infers the metrics family from artifacts. Soft-fail still flows through `guardrails.overall_pass` → workflow `qcPass`. **Note:** `alignmentMode` is not yet on the methyl_qc task JSON Schema; when omitted, a co-located Picard tar can make inference prefer the Parabricks family over methylGrapher provenance — pass mode explicitly when the workflow template allows it.
+`methyl-qc` (`packages/methylalignmentqc`) is **mode-aware**. It prefers task `alignmentMode` (`linear` | `pangenome` | `pangenome_wgbs`) from [`sample_methyl_qc.input.schema.json`](../../schemas/tasks/sample_methyl_qc.input.schema.json), otherwise infers the metrics family from artifacts. Soft-fail still flows through `guardrails.overall_pass` → workflow `qcPass`. Pass `alignmentMode` (worker) / `--alignment-mode` when artifacts from more than one family could be present.
 
 | Mode | Required artifacts (hard-fail if missing) | Votes on `overall_pass` |
 |------|-------------------------------------------|-------------------------|
@@ -266,7 +278,9 @@ Alignment QC validates the **QC BAM** (linear, stock Giraffe, or methylGrapher-r
 
 ### Input: extraction manifest
 
-Both extractors write `{sample_id}.extraction_manifest.json` with the **canonical** blocks consumed by `methyl_extraction_qc`:
+Extract manifests are **preserve-or-synthesize**. A complete native `methylextractor.extraction_manifest` (expected chromosomes present, `summary.cpg_weighted_mean_coverage` set) is **kept**, including `read_filtering`. Stubs or incomplete files are synthesized from `{chrom}-{ctx}.json` sidecars; the worker may overlay `h5_files`, `pattern_files`, and action provenance when those lists are missing. methylGrapher extract still writes the canonical blocks plus graph provenance.
+
+Both extractors expose `{sample_id}.extraction_manifest.json` with the **canonical** blocks consumed by `methyl_extraction_qc`:
 
 - `metadata.contexts_extracted` — contexts present in the call set
 - `summary` — genome-wide CpG weighted mean coverage, optional CHH/CHG methylation levels
@@ -298,7 +312,7 @@ Override thresholds via profile `actionConfig.extraction_qc`. Schema: `schemas/e
 | Did sequencing and alignment produce a usable BAM? | Alignment QC |
 | Did we extract enough confident methylation signal genome-wide? | Extraction QC |
 
-A sample can pass alignment but fail extraction (e.g., coverage collapse on certain chromosomes). Conversely, remediation after alignment QC prevents spending extract GPU time on BAMs that will never support stable downstream statistics.
+A sample can pass alignment but fail extraction (e.g., coverage collapse on certain chromosomes). Conversely, remediation after alignment QC prevents spending extract **CPU** time on BAMs that will never support stable downstream statistics. Alignment is the GPU-bound step; MethylExtractor is not.
 
 ## Pass, fail, and handoff
 
@@ -308,6 +322,8 @@ A sample can pass alignment but fail extraction (e.g., coverage collapse on cert
 | Fail alignment (not fixable) | `qcPass: false` | — | QC-only archive, mark failed, skip extract |
 | Fail after remediation | `qcPass: false` (attempt 2) | — | Same as above |
 | Pass alignment, fail extraction | `qcPass: true` | `extractionQcPass: false` | QC-only archive, mark failed; H5 may exist but must not enter production cohorts |
+
+**FOREACH:** one sample `FAILED` does **not** fail the instance; siblings continue (`READY`/`RUNNING`). The instance can **COMPLETED** after every iteration is terminal. See [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md).
 
 When SamplePrep instance **COMPLETED**, start stability or discovery workflows with the same `projectPath`. Downstream code resolves HDF5 via `methyl_domain.helpers.resolve_methylation_h5_path()` — do not hard-code sample paths.
 
@@ -323,22 +339,27 @@ Before starting SamplePrep, confirm:
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
 - [ ] Instance `context_json` includes `fastqStorage`, `referenceFasta`, `samples[]`
 - [ ] Stock pangenome: site `pangenome_genome` bundle staged, `alignmentMode: "pangenome"`
-- [ ] WGBS pangenome: site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` staged (`d9-bs/1.70`), `alignmentMode: "pangenome_wgbs"`, `METHYL_METHYLGRAPHER_IMAGE` set; gate promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md)
+- [ ] Linear / stock extract: `actionConfig.methyl_extract.chrom_parallel` and `max_rss_gb` set for the node's RAM (CPU MethylExtractor)
+- [ ] WGBS pangenome: site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` staged (`d9-bs/1.70`), `alignmentMode: "pangenome_wgbs"`, `METHYL_MOJO_ALIGN_IMAGE` set; gate promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md)
 
 ## Commands (standalone debugging)
 
 ```bash
 source .venv/bin/activate
 
-# Alignment QC for one sample directory
-methyl-qc --samples /work/samples/SAMPLE_ID --output-dir /work/projects/prostate-cancer/alignment_qc
+# Alignment QC: --samples is the arm leaf (BAM/QC live in sampleDir, not sampleRoot)
+methyl-qc --samples /work/samples/SAMPLE_ID/align.linear.parabricks \
+  --output-dir /work/projects/prostate-cancer/alignment_qc
 
 # Project-scoped (uses profile actionConfig.alignment_qc via METHYL_PROFILE)
 methyl-qc --project /work/projects/prostate-cancer/configs/project_Example.json
 
-# Extraction QC after MethylExtractor
-methyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID --sample-id SAMPLE_ID
+# Extraction QC after MethylExtractor (--sample-dir = same arm leaf)
+methyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID/align.linear.parabricks \
+  --sample-id SAMPLE_ID
 ```
+
+On the worker path, `sample.methyl_qc` takes `alignmentMode` (`--alignment-mode` when the CLI wrapper forwards it) so family detection stays fail-closed when more than one metrics family could be present.
 
 ## Related documentation
 

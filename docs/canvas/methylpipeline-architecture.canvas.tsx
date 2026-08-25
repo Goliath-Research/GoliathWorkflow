@@ -679,7 +679,7 @@ export default function MethylPipelineArchitectureCanvas() {
             </Row>
             <H3>Usage</H3>
             <Row gap={12} style={{ flexWrap: "wrap" }}>
-              <DocLink path="docs/usage/03-sample-prep-and-qc.qmd">ch.03 Sample prep</DocLink>
+              <DocLink path="docs/usage/03-sample-prep-and-qc.md">ch.03 Sample prep</DocLink>
               <DocLink path="docs/usage/04-orchestration-workflow-run.qmd">ch.04 Orchestration</DocLink>
               <DocLink path="docs/usage/14-deployment-and-distributed-workflow.qmd">ch.14 Deploy</DocLink>
               <DocLink path="docs/usage/18-samd-study-lifecycle.qmd">ch.18 SaMD ladder</DocLink>

@@ -1,5 +1,7 @@
 # methylGrapher-mojo cutover gate
 
+> **Superseded runbook names:** live pins are `MOJO_ALIGN_*` / `METHYL_MOJO_ALIGN_IMAGE` and `/opt/mojo-align` — see [`archive-methylgrapher-mojo.plan.md`](archive-methylgrapher-mojo.plan.md) and [`alignment-engines.md`](../usage/alignment-engines.md).
+
 Companion to [`methylgrapher-mojo-cutover.plan.md`](methylgrapher-mojo-cutover.plan.md), [`pangenome-wgbs-methyl-qc.plan.md`](pangenome-wgbs-methyl-qc.plan.md), [`extend-former-out-of-scope.plan.md`](extend-former-out-of-scope.plan.md), and [`gh200-wgbs-dual-graph-align.plan.md`](gh200-wgbs-dual-graph-align.plan.md).
 
 ## Current default (this lab)

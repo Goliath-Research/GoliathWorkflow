@@ -15,14 +15,12 @@ This installs `MethylExtractor` to `/usr/local/bin/` (machine image provisioning
 
 ## Production worker contract
 
-Remote workers receive **`input_json`** from the workflow engine and read **`project.json`** from shared storage (`/work/...`). No environment variables are required.
+Workers consume **`--resolved-config` only** (Universal Action Input Contract). They do **not** re-read `project.json`, pipeline profiles, or `METHYL_*` env for tool parameters. `projectPath` on `input_json` is provenance/logging only.
 
 | Source | Fields |
 |--------|--------|
-| `input_json` | `sampleId`, `sampleDir`, `project`, `referenceFasta` (+ optional overrides) |
-| `resolvedConfig` / profile | `actionConfig.methyl_extract` (chromosomes from study manifest; extract contexts, read-level knobs) |
-
-Workers on the distributed path receive merged config via `--resolved-config`; they do **not** read `step_config` from `project.json`.
+| `input_json` | `sampleId`, `sampleRoot`, `sampleDir` (arm leaf), `project`, `referenceFasta` (+ optional overrides) |
+| `--resolved-config` | `actionConfig.methyl_extract` (chromosomes, extract contexts, `chrom_parallel`, `max_rss_gb`, read-level knobs) |
 
 ### Extract contexts vs downstream `contexts`
 
@@ -42,9 +40,10 @@ Extracting all contexts lets `sample.delete_bam` reclaim space without losing CH
 ## Manual / local dev
 
 ```bash
+# Local wrapper: --sample-dir is the arm leaf. Distributed workers use --resolved-config only.
 ./scripts/methyl_extract.sh DPLST-051425-111148 \
   --project /work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json \
-  --sample-dir /work/samples/DPLST-051425-111148
+  --sample-dir /work/samples/DPLST-051425-111148/align.linear.parabricks
 ```
 
 Optional dev env: `METHYL_EXTRACTOR_BIN` if the binary is not on default PATH.
@@ -59,6 +58,7 @@ Under `{sampleDir}`:
 | Read-level sidecar | `{chrom}-{ctx}.patterns.h5` | Per-tile read co-methylation histograms (when `--read-level`) |
 | Extraction log | `{sampleId}.methyl_extract.log` | Command log |
 | Phase timing | `{sampleId}.timing.json` | Elapsed-ms per chromosome (BAM vs write) |
+| Extraction manifest | `{sampleId}.extraction_manifest.json` | **Preserve-or-synthesize:** keep a complete native `methylextractor.extraction_manifest` (including `read_filtering`); synthesize stubs/incomplete files from sidecars; overlay `h5_files` / `pattern_files` / provenance when missing |
 
 ### Read-level pattern sidecar (optional)
 

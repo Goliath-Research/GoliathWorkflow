@@ -6,7 +6,7 @@ MethylPipeline SamplePrep supports three `alignmentMode` values. This page is th
 
 | `alignmentMode` | Primary action(s) | Default engine | Explicit alternative | Notes |
 |-----------------|-------------------|----------------|----------------------|-------|
-| `linear` | `sample.parabricks_fq2bam` | Clara Parabricks `fq2bam_meth` (NVIDIA) | **MojoFq2bamMeth** when `actionConfig.parabricks.engine=mojo` | Portable NVIDIA / AMD / CPU; Clara remains an explicit config choice |
+| `linear` | `sample.parabricks_fq2bam` | Clara Parabricks `fq2bam_meth` (NVIDIA) | **MojoFq2bamMeth** when `actionConfig.parabricks.engine=mojo` | Portable NVIDIA / AMD / CPU; Clara remains an explicit config choice. Linear `engine=mojo` defaults to FM-index (`METHYLGRAPHER_LINEAR_ENGINE=fm` on `${REF}.bwameth.c2t`), not the frozen k-mer parity engine. |
 | `pangenome` | `sample.parabricks_giraffe` | Clara Parabricks giraffe → BAM | — | Stock (non-bisulfite) HPRC-style path; **not** replaced by mojo-align Giraffe |
 | `pangenome_wgbs` | `sample.methylgrapher_wgbs_align` → extract | Native Mojo Giraffe (`align_engine=gpu_giraffe` / `mojo_giraffe`) on NVIDIA CUDA or AMD HIP | `cpu_vg` (`vg giraffe`) only when GPU vendor is unknown or for parity/rollback | Graph-aware GAF → MethylCall; Parabricks giraffe is **not** a GAF substitute |
 
@@ -40,6 +40,7 @@ See [Sample prep and QC](03-sample-prep-and-qc.md), [Sample preparation flow](..
 |----------|------|
 | `giraffe/docs/GIRAFFE_SPEC.md` | Native Mojo Giraffe GBZ → GAF contract for `pangenome_wgbs` |
 | `fq2bam-meth/docs/LINEAR_FQ2BAM_SPEC.md` | MojoFq2bamMeth BAM + QC JSON contract for `linear` + `engine=mojo` |
+| `fq2bam-meth/docs/LINEAR_ENGINES.md` | FM-index default (`engine=fm`) vs frozen k-mer `parity` / experimental `speed` |
 | `giraffe/docs/PHASE0_GH200_ALIGN.md` | Why Parabricks `pbrun giraffe` cannot emit science GAF |
 | `giraffe/docs/BENCHMARK_GIRAFFE.md` | Operator wall-time / parity gates vs `vg` |
 | `fq2bam-meth/docs/BENCHMARK_FQ2BAM_METH.md` | Clara vs Mojo linear bakeoff gates |

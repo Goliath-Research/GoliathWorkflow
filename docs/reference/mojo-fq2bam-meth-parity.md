@@ -2,21 +2,23 @@
 
 Capability remains `sample.parabricks_fq2bam` / `parabricks.fq2bam`. Switch with **explicit** `actionConfig.parabricks.engine` (`parabricks` = Clara, `mojo` = MojoFq2bamMeth) — never an automatic consequence of `pangenome_wgbs` Mojo failure. See [`mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md).
 
+**Production default (linear `engine=mojo`):** FM-index (`METHYLGRAPHER_LINEAR_ENGINE=fm`) on Clara's `${REF}.bwameth.c2t` BWA index, native BGZF BAM, GPU sort + markdup. The frozen k-mer path (`engine=parity`) is a science fallback, not the operator default. Engine contract: sibling mojo-align [`fq2bam-meth/docs/LINEAR_ENGINES.md`](https://dev.azure.com/EpiMethyl/Development/_git/mojo-align?path=/fq2bam-meth/docs/LINEAR_ENGINES.md). QC metrics remain `metrics_source: samtools+placeholders` until Picard enrichment — placeholders are not Clara-equivalent hard fails (see [sample-prep-tooling.md](../architecture/sample-prep-tooling.md)).
+
 ## Downstream consumers (must match)
 
-| Artifact / field | Used by | Clara | Mojo MVP |
-|------------------|---------|-------|----------|
-| `{sampleId}.bam` (+ index) | `methyl_extract`, remediation | Yes | Yes (BWA-MEM C2T/G2A) |
-| `{sampleId}.json` Parabricks shape | `wgbs_parabricks_qc` | Yes | Yes (shaped subset) |
-| `{sampleId}.qc-metrics/` + `.tar` | `methyl_qc` packaging | Yes | Yes |
+| Artifact / field | Used by | Clara | Mojo (FM default) |
+|------------------|---------|-------|-------------------|
+| `{sampleId}.bam` (+ index) | `methyl_extract`, remediation | Yes | Yes — FM-index C2T/G2A on `${REF}.bwameth.c2t` |
+| `{sampleId}.json` Parabricks shape | `wgbs_parabricks_qc` | Yes | Yes (shaped subset; placeholders where Picard is absent) |
+| `{sampleId}.qc-metrics/` + `.tar` | `methyl_qc` packaging | Yes | Yes (packaging present; tables may be placeholder) |
 | `quality_yield.*` | PF / Q30 guardrails | Full | Synthetic from flagstat + defaults |
 | `mean_quality_by_cycle.mean_quality` | cycle / post-20 quality | Full | Flat Q36 proxy array |
 | `gc_bias_summary.at/gc_dropout` | GC guardrails | Full | Neutral defaults (1.0) |
 | `insert_size_metrics.median_insert_size` | insert guardrail | Full | Default 200 until Picard CollectInsertSize |
 | `pre_adapter_summaries` Deamination / OxoG | bisulfite proxy | Full | Conservative Deamination=5, OxoG=40 |
 | `alignment_summary.mapped_rate` | optional | Often | From `samtools flagstat` |
-| `{sampleId}.deduplicate_metrics.txt` | Picard-style | Yes | Optional / empty MVP |
-| GPU sort/write | Clara `--gpusort` | Yes | N/A (samtools sort) |
+| `{sampleId}.deduplicate_metrics.txt` | Picard-style | Yes | GPU markdup counts; Picard-column file until enrichment |
+| GPU sort / markdup | Clara `--gpusort` | Yes | Yes (native GPU sort + markdup; `samtools index` only) |
 
 ## GATK 4 / Picard consumer bar (in scope for cutover)
 
