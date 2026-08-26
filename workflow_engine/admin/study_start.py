@@ -6,8 +6,10 @@ Compiles DomainPrograms, plans instance context, bakes resolvedConfig scope vars
 and creates/starts workflow instances via the backend-agnostic DB layer
 (``rest.db_client`` → MSSQL or PostgreSQL).
 
-Not part of the worker-only REST gateway. Production portal uses ``portal.sp_*``;
-this CLI is for operators, CI, and Cursor developer mode.
+Not part of the worker-only REST gateway. Production portal queues
+``cfg.study_start_request``; this CLI's ``drain-requests`` command bakes
+``resolvedConfig`` from materialized ``/work`` and calls
+``portal.sp_create_and_start_instance``.
 """
 
 from __future__ import annotations
@@ -240,6 +242,24 @@ def cmd_plan_iterations(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_drain_requests(args: argparse.Namespace) -> int:
+    from ops.study_start_queue import drain_requests
+
+    db = _open_db()
+    try:
+        results = drain_requests(
+            db,
+            claimed_by=args.claimed_by,
+            lease_seconds=args.lease_seconds,
+            limit=args.limit,
+        )
+    finally:
+        db.close()
+    json.dump(results, sys.stdout, indent=2, default=str)
+    sys.stdout.write("\n")
+    return 0 if all("error" not in r for r in results) else 1
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     ensure_import_paths()
 
@@ -348,6 +368,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_plan.add_argument("--workflow-instance-id", type=int, default=None)
     p_plan.add_argument("--no-persist-extension", action="store_true")
     p_plan.set_defaults(func=cmd_plan_iterations)
+
+    p_drain = sub.add_parser(
+        "drain-requests",
+        help=(
+            "Claim queued cfg.study_start_request rows, bake resolvedConfig "
+            "from materialized /work, then create/start/link via SQL"
+        ),
+    )
+    p_drain.add_argument("--claimed-by", default=None)
+    p_drain.add_argument("--lease-seconds", type=int, default=600)
+    p_drain.add_argument("--limit", type=int, default=1, help="Max requests this pass")
+    p_drain.set_defaults(func=cmd_drain_requests)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

@@ -257,7 +257,7 @@ objects:
         - { name: context_json, type: json, direction: in, nullable: true }
         - { name: scope_id, type: int, direction: in, nullable: true }
         - { name: study_row_id, type: bigint, direction: in, nullable: true }
-      notes: Creates instance then EXEC wf.sp_start_workflow_instance (DB activation). Optional scope_id enforces process-pack entitlement + active contract. Optional study_row_id links via cfg.study_instance_link.
+      notes: Daemon last step after Python finalize. Portal Delphi queues a study_start_request instead. Optional scope_id pack check; optional study_row_id links via cfg.study_instance_link.
     - name: portal.sp_get_instance_tasks
       kind: procedure
       required: true
@@ -316,6 +316,51 @@ objects:
       parameters:
         - { name: study_row_id, type: bigint, direction: in }
       notes: Next-run actionConfig overlay only; does not rebake running input_json
+    - name: portal.sp_preview_study_start
+      kind: procedure
+      required: true
+      parameters:
+        - { name: study_row_id, type: bigint, direction: in }
+        - { name: stage, type: text, direction: in }
+      notes: Assemble start intent JSON; does not insert. Does not bake resolvedConfig.
+    - name: portal.sp_request_study_start
+      kind: procedure
+      required: true
+      parameters:
+        - { name: study_row_id, type: bigint, direction: in }
+        - { name: stage, type: text, direction: in }
+        - { name: workflow_version_id, type: bigint, direction: in }
+        - { name: request_json, type: json, direction: in }
+      notes: Insert cfg.study_start_request queued. Portal only.
+    - name: portal.sp_claim_study_start_request
+      kind: procedure
+      required: true
+      parameters:
+        - { name: claimed_by, type: text, direction: in }
+      notes: Daemon lease claim
+    - name: portal.sp_complete_study_start_request
+      kind: procedure
+      required: true
+      parameters:
+        - { name: request_id, type: bigint, direction: in }
+        - { name: workflow_instance_id, type: bigint, direction: in }
+    - name: portal.sp_fail_study_start_request
+      kind: procedure
+      required: true
+      parameters:
+        - { name: request_id, type: bigint, direction: in }
+        - { name: error_message, type: text, direction: in }
+    - name: portal.sp_get_study_start_request
+      kind: procedure
+      required: true
+      parameters:
+        - { name: request_id, type: bigint, direction: in }
+      notes: Portal poll
+    - name: portal.sp_list_study_start_stages
+      kind: procedure
+      required: true
+      parameters:
+        - { name: study_row_id, type: bigint, direction: in }
     - name: portal.sp_get_study_guardrails_editor
       kind: procedure
       required: true

@@ -188,7 +188,7 @@ Two DomainPrograms in sequence, then optional prediction
 | Project manifests       | Cohort paths under `/work/projects/<study>/`                         | `sp_project_list/get/save`; **no** `actionConfig` knobs                                                                                                                                                                                                                                |
 | Runs                    | Instances for this study                                             | `sp_list_study_instances`                                                                                                                                                                                                                                                              |
 | **Instance detail**     | Gantt, tasks, errors, **recovery verbs**                             | `sp_get_workflow_instance_header`, `sp_get_instance_tasks`, `sp_get_instance_sample_progress`, `sp_get_instance_config`, `sp_get_node_execution_detail`, `sp_retry_failed_node`, `sp_reclaim_expired_leases`, `sp_stop_node`, `sp_fail_node`, `sp_cancel_instance`, `sp_fail_instance` |
-| **Start next stage**    | Published version → packs → start                                    | Catalog procs + `sp_list_workflow_definitions` + `sp_create_and_start_instance` (`@scope_id`, `@study_row_id`)                                                                                                                                                                         |
+| **Start next stage**    | Next-stage wizard queues intent                                      | `sp_list_study_start_stages` + `sp_preview_study_start` + `sp_request_study_start` (poll `sp_get_study_start_request`). Python `methyl-study-start drain-requests` bakes and calls `sp_create_and_start_instance`. |
 
 
 **Storage:** operators **select** published endpoints. Lab admins author
@@ -308,23 +308,38 @@ overlaps a package config schema key (identity allowlist excluded).
 
 ### Start-run wizard (must-have UX)
 
-1. Select **published** workflow definition + version (stage-aware: SamplePrep
-  first; after prep completes, offer StudyValidationLifecycle; after freeze+model,
-   offer hold-out / optional prediction).
-2. Select **analyte** + **assay procedure** + **pipeline profile** (and research
-  mode if any), **intersected with the session scope’s entitled process packs**.
-   Prefill from `sp_get_study_process_defaults`. If the study’s
-   `primary_modality` is not entitled, do **not** offer Start.
-3. Confirm **project manifest** / sample subset / `executionScopeId` if needed.
-4. Create instance with `context_json` carrying `pipelineProfile`,
-  `pipelineProcedure`, `researchMode`, `projectPath`. Prefer
-   `cfg.study_instance_link`.
+Portal **queues** a start request. It does **not** bake `resolvedConfig` and does
+**not** call `portal.sp_create_and_start_instance`. Ops Python
+(`methyl-study-start drain-requests`) claims `cfg.study_start_request`, loads
+site/profile/procedure from materialized `/work` (`methyl-cfg materialize` must
+have run), runs `finalize_instance_context` once, then creates/starts/links via
+SQL.
+
+1. Select a **published** `cfg.study`.
+2. Select **next stage** (SamplePrep or StudyValidationLifecycle only), filtered
+  by published graphs with a root node and what the study already has.
+3. Confirm the **published version** (active + has root).
+4. Process pack (profile / procedure / researchMode / analyte) is prefilled from
+  `sp_get_study_process_defaults`. Overrides stay among published rows. Hide the
+  pack when the study modality is not entitled.
+5. Cohort is read-only from `cfg.study_group` / members.
+6. Storage / reference are captions (`sp_resolve_study_archive`, site assets).
+7. Guardrails caption: inherited vs pinned (`sp_get_study_guardrails_editor`).
+  Editing stays on Studies → Guardrails.
+8. Preview **intent** JSON (the request). Baked `resolvedConfig` appears on
+  Monitor / instance Config after the daemon finishes.
+9. **Queue start** → poll `sp_get_study_start_request` → jump to Monitor with the
+  new `workflow_instance_id`.
+
+Always rebuild the request from current controls at submit (no stale context
+cache). Pass `@scope_id` only when the session already has it; otherwise NULL
+(contract quota UI is out of this slice).
 
 Do **not** open DomainProgram IR editing on this path — that is **Workflows**
 authoring, not Study. Binding a published procedure/profile or a next-run
 `actionConfig` overlay is **not** modifying the graph. Do **not** list
 deprecated `mc_*` aliases or `visibility=hidden` packs. Hide unentitled packs
-(no disabled tease).
+(no disabled tease). Prediction / hold-out is out of this slice.
 
 ### Process-pack catalog rules
 
@@ -704,7 +719,10 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | ------------------------------------------------ | -------------------------------------------------------------------------------- |
 | `portal.sp_list_workflow_definitions`            | Start wizard / Workflows list (`@scope_id` optional)                             |
 | `portal.sp_create_workflow_graph`                | Publish compiled graph (author)                                                  |
-| `portal.sp_create_and_start_instance`            | Start run; optional `@scope_id` pack check + `@study_row_id` link                |
+| `portal.sp_create_and_start_instance`            | Daemon last step after bake; optional `@scope_id` + `@study_row_id` link |
+| `portal.sp_preview_study_start` / `sp_request_study_start` | Start wizard intent + queue |
+| `portal.sp_get_study_start_request`              | Start wizard poll |
+| `portal.sp_claim_study_start_request`            | `methyl-study-start drain-requests` |
 | `portal.sp_link_study_instance`                  | Attach an existing run (e.g. instance 67) to a cfg study                         |
 | `portal.sp_get_workflow_instance`                | Thin id/status (compat)                                                          |
 | `portal.sp_get_workflow_instance_header`         | Instance header (study, profile, counts)                                         |

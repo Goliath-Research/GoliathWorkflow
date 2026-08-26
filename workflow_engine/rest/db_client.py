@@ -129,13 +129,18 @@ def create_workflow_instance(
     workflow_version_id: int,
     context_json: Optional[dict[str, Any]],
 ) -> int:
-    """Create instance after study sync + finalize (bakes executionScopeId)."""
+    """Create instance after study sync + finalize (bakes executionScopeId).
+
+    Skip a second finalize when context already contains resolvedConfig__* slices.
+    """
     ensure_import = Path(__file__).resolve().parents[1]
     if str(ensure_import) not in sys.path:
         sys.path.insert(0, str(ensure_import))
     from workflow_context import finalize_instance_context
 
-    ctx = finalize_instance_context(dict(context_json or {}))
+    ctx = dict(context_json or {})
+    if not any(str(k).startswith("resolvedConfig") for k in ctx):
+        ctx = finalize_instance_context(ctx)
     with _use_db(db_or_dsn) as db:
         return db.create_workflow_instance(workflow_version_id, ctx)
 

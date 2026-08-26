@@ -24,15 +24,8 @@ def _bind_methylation_sample_arms(body: Dict[str, Any], context: Dict[str, Any])
     bind_production_sample_arms(context, program=program)
 
 
-def start_sample_prep(
-    db: Any,
-    body: Dict[str, Any],
-    *,
-    create_workflow_definition,
-    create_workflow_instance,
-    start_workflow_instance,
-) -> Dict[str, Any]:
-    """Plan samples, build context_json, create and start SamplePrepPipeline."""
+def plan_sample_prep_instance_context(db: Any, body: Dict[str, Any]) -> Dict[str, Any]:
+    """Plan samples and bake context_json (does not create an instance)."""
     project_path = body.get("projectPath")
     if not project_path:
         raise ValueError("projectPath is required")
@@ -107,6 +100,19 @@ def start_sample_prep(
     elif context.get("sampleStorage") is None and context.get("h5Storage") is None:
         context.setdefault("sampleDestination", None)
         context.setdefault("h5Destination", None)
+    return context
+
+
+def start_sample_prep(
+    db: Any,
+    body: Dict[str, Any],
+    *,
+    create_workflow_definition,
+    create_workflow_instance,
+    start_workflow_instance,
+) -> Dict[str, Any]:
+    """Plan samples, build context_json, create and start SamplePrepPipeline."""
+    context = plan_sample_prep_instance_context(db, body)
 
     program_path = body.get("program_path")
     if program_path is None and body.get("workflow_version_id") is None:
