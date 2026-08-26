@@ -40,7 +40,7 @@ Procedure git packs keep `engine` unset / python-compatible until multi-site sci
    - Linear vs pangenome_wgbs acceptance thresholds remain the science gate; mode-aware QC unblocks SamplePrep soft-fail.
 
 4. **Image / deploy** — **PASS (local)**
-   - `scripts/build_methylgrapher_mojo_image.sh` + `smoke_64k.sh epimethyl/methylgrapher:1.70-mojo` (image id `423d4da877f5` on this host; push/digest pin when publishing to registry).
+   - `scripts/build_mojo_align_image.sh` + `smoke_64k.sh epimethyl/methylgrapher:1.70-mojo` (image id `423d4da877f5` on this host; push/digest pin when publishing to registry).
    - Keep `:1.70` python image as one-release rollback (`engine: python`).
 
 5. **Thread cap**

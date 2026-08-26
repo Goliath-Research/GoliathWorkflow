@@ -122,7 +122,7 @@ Documented in [`docs/usage/alignment-engines.md`](../usage/alignment-engines.md)
 - Pangenome WGBS: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py)
 - MethylExtractor CLI: [`workers/methyl_worker/extract_runner.py`](../../workers/methyl_worker/extract_runner.py)
 - Mode branch: [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
-- Image bake: [`scripts/build_methylgrapher_mojo_image.sh`](../../scripts/build_methylgrapher_mojo_image.sh) + mojo-align `scripts/stage_flat_image_tree.sh`
+- Image bake: [`scripts/build_mojo_align_image.sh`](../../scripts/build_mojo_align_image.sh) + mojo-align `scripts/stage_flat_image_tree.sh`
 - Extract QC contract: MethylExtractor `docs/extraction_qc_contract.md` ↔ [`packages/methylextractionqc/`](../../packages/methylextractionqc/)
 
 ---

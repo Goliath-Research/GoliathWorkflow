@@ -101,7 +101,7 @@ Worker docs ([workers/docs/methyl_extractor.md](../../workers/docs/methyl_extrac
 
 ### Historical plans (do not rewrite)
 
-Leave `methylgrapher-mojo-cutover*.md`, `native-mojo-align-hotpath.plan.md`, etc. as records (filenames keep the former name). Add a **one-line superseded banner** only on plans that operators still open as runbooks (`METHYLGRAPHER_MOJO_*`, `build_methylgrapher_mojo_image.sh`, `/opt/methylgrapher-mojo`). Point to [archive-methylgrapher-mojo.plan.md](archive-methylgrapher-mojo.plan.md) and [alignment-engines.md](../usage/alignment-engines.md). The former git repository does not exist; file links in those records should point at **mojo-align**.
+Leave `methylgrapher-mojo-cutover*.md`, `native-mojo-align-hotpath.plan.md`, etc. as records (filenames keep the former name). Add a **one-line superseded banner** only on plans that operators still open as runbooks (`METHYLGRAPHER_MOJO_*`, `/opt/methylgrapher-mojo`). Point to [archive-methylgrapher-mojo.plan.md](archive-methylgrapher-mojo.plan.md) and [alignment-engines.md](../usage/alignment-engines.md). Image bake is `scripts/build_mojo_align_image.sh`. The former git repository does not exist; file links in those records should point at **mojo-align**.
 
 ---
 
