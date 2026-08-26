@@ -20,7 +20,7 @@ todos:
     content: Add regression test for header→os:Z contract
     status: completed
   - id: overlay-sync
-    content: Sync fixed sources to methylgrapher-mojo-overlay (+ mount GPU kernels / quartet_map)
+    content: Sync fixed sources to mojo-align-overlay (+ mount GPU kernels / quartet_map)
     status: completed
   - id: revalidate
     content: Re-Align/extract 74758; assert mC>0; refresh Feb Clara parity
@@ -36,19 +36,19 @@ todos:
 
 MethylCall decides met vs unmet from **`os:Z` (original bisulfite read) vs graph base**, not from the converted alignment string:
 
-```356:376:/home/ubuntu/methylGrapher-mojo/src/mcall.mojo
+```356:376:/home/ubuntu/mojo-align/methylgrapher/src/mcall.mojo
 # CT: C→met=1, T→met=0; GA: G→met=1, A→met=0
 ```
 
 Classic methylGrapher embeds the original sequence in the converted FASTQ header:
 
-```534:534:/home/ubuntu/methylGrapher-mojo/engine/utility.py
+```534:534:/home/ubuntu/mojo-align/methylgrapher/engine/utility.py
 newl = f"{original_qn1}_{conversion_str}_{reminder}_{seq}\n{converted_seq}\n+\n{phred}\n"
 ```
 
 and `tmp_gaf_processing` recovers it into `os:Z`. Mojo Align skips that recovery and instead:
 
-1. Strips the header to bare qname ([`_read_one`](methylGrapher-mojo/src/giraffe_stream_map.mojo))
+1. Strips the header to bare qname ([`_read_one`](../../../mojo-align/giraffe/src/giraffe_stream_map.mojo))
 2. Emits `os:Z:` + **converted** `a.seq`
 
 Converted C2T bodies have no remaining `C` → every CT call is `T` → `met=0`. Observed on Feb goldens and on post-CS-fix Aligns (111803/48267): `mC_sum=0`, Clara has real mC.
@@ -61,7 +61,7 @@ flowchart LR
   hdr["Header field original_seq"] -.->|"currently discarded"| emit
 ```
 
-Do **not** change `alignment_to_methylation` bit logic (it matches [`engine/mcall.py`](../../../../methylGrapher-mojo/engine/mcall.py) / `python_reference`).
+Do **not** change `alignment_to_methylation` bit logic (it matches [`engine/mcall.py`](../../../mojo-align/methylgrapher/engine/mcall.py) / `python_reference`).
 
 ## Implementation
 
@@ -69,10 +69,10 @@ Do **not** change `alignment_to_methylation` bit logic (it matches [`engine/mcal
 
 Extend read carriers with `original_seq` and `conversion` (e.g. `C2T`/`G2A`):
 
-- [`src/giraffe_stream_map.mojo`](../../../../methylGrapher-mojo/src/giraffe_stream_map.mojo) — `StreamRead`
-- [`src/giraffe_gpu_map_kernels.mojo`](../../../../methylGrapher-mojo/src/giraffe_gpu_map_kernels.mojo) — `StreamReadGPU`
-- [`src/giraffe_mapper.mojo`](../../../../methylGrapher-mojo/src/giraffe_mapper.mojo) — `FastqRead`
-- [`engine/quartet_map.py`](../../../../methylGrapher-mojo/engine/quartet_map.py) — `_iter_fastq` yield
+- [`src/giraffe_stream_map.mojo`](../../../mojo-align/giraffe/src/giraffe_stream_map.mojo) — `StreamRead`
+- [`src/giraffe_gpu_map_kernels.mojo`](../../../mojo-align/giraffe/src/giraffe_gpu_map_kernels.mojo) — `StreamReadGPU`
+- [`src/giraffe_mapper.mojo`](../../../mojo-align/giraffe/src/giraffe_mapper.mojo) — `FastqRead`
+- [`engine/quartet_map.py`](../../../mojo-align/giraffe/python/quartet_map.py) — `_iter_fastq` yield
 
 Parse methylGrapher headers: `{qname}_{C2T|G2A}_{shard}_{original_seq}`:
 
@@ -106,11 +106,11 @@ Mapping still uses converted `seq`; only tags change.
 
 ### 3. Regression test
 
-[`tests/test_os_z_from_fastq_header.py`](../../../../methylGrapher-mojo/tests/test_os_z_from_fastq_header.py) — header parse + tag builder + MethylCall met=0 vs met=1 when `os:Z` is converted vs original.
+[`tests/test_os_z_from_fastq_header.py`](../../../mojo-align/giraffe/tests/test_os_z_from_fastq_header.py) — header parse + tag builder + MethylCall met=0 vs met=1 when `os:Z` is converted vs original.
 
 ### 4. Deploy overlay + worker sync
 
-Overlay: `/work/epimethyl/images/methylgrapher-mojo-overlay/` (includes `giraffe_gpu_map_kernels.mojo`, `quartet_map.py`).
+Overlay: `/work/epimethyl/images/mojo-align-overlay/` (includes `giraffe_gpu_map_kernels.mojo`, `quartet_map.py`).
 
 Worker mounts: [`add_mojo_src_overlay_mounts`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py) mounts stream_map / GPU kernels / mapper / quartet_map.
 

@@ -2,7 +2,7 @@
 
 > **Superseded runbook names:** live pins are `MOJO_ALIGN_*` / `METHYL_MOJO_ALIGN_IMAGE` and `/opt/mojo-align` — see [`archive-methylgrapher-mojo.plan.md`](archive-methylgrapher-mojo.plan.md) and [`alignment-engines.md`](../usage/alignment-engines.md).
 
-See methylGrapher-mojo [`docs/ROCM_GIRAFFE_GATES.md`](../../../methylGrapher-mojo/docs/ROCM_GIRAFFE_GATES.md) for image build and host prereqs.
+See mojo-align [`giraffe/docs/ROCM_GIRAFFE_GATES.md`](../../../mojo-align/giraffe/docs/ROCM_GIRAFFE_GATES.md) for image build and host prereqs.
 
 | Gate | Status |
 |------|--------|

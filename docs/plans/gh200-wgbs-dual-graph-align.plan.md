@@ -28,13 +28,13 @@ todos:
 
 ## Phase 0 outcome
 
-See [methylGrapher-mojo `docs/PHASE0_GH200_ALIGN.md`](../../../methylGrapher-mojo/docs/PHASE0_GH200_ALIGN.md) (sibling repo). **Parabricks `pbrun giraffe` 4.7.0-1 cannot emit GAF / named-coordinates** → NO-GO as MethylCall science mapper. Stock `pangenome` BAM path unchanged.
+See [mojo-align `giraffe/docs/PHASE0_GH200_ALIGN.md`](../../../mojo-align/giraffe/docs/PHASE0_GH200_ALIGN.md). **Parabricks `pbrun giraffe` 4.7.0-1 cannot emit GAF / named-coordinates** → NO-GO as MethylCall science mapper. Stock `pangenome` BAM path unchanged.
 
 ## What landed
 
 | Layer | Change |
 |-------|--------|
-| methylGrapher-mojo | `engine/align_backends.py`, Mojo `src/align.mojo`, Align CLI `-align_engine` |
+| mojo-align | `methylgrapher/engine/align_backends.py`, Mojo `methylgrapher/src/align.mojo`, Align CLI `-align_engine` |
 | Image | `epimethyl/methylgrapher:1.70-mojo` rebuilt |
 | Worker | `align_engine` on `MethylGrapherWgbsStepConfig` / bundle; Docker `-e METHYLGRAPHER_ALIGN_ENGINE` |
 | Capability | GH200 workers advertise `methylgrapher.wgbs_gpu_align` when GPU present |

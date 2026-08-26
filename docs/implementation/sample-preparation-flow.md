@@ -294,7 +294,7 @@ When instance/profile/procedure sets `alignmentMode: "pangenome_wgbs"` (scope `u
 - On 64 KB-page ARM64 the image must contain `jemalloc=off` vg for any vg-assisted QC BAM path.
 - Compare quality vs cost with [`scripts/compare_sample_prep_linear_vs_wgbs.sh`](../../scripts/compare_sample_prep_linear_vs_wgbs.sh); gate promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md).
 
-**Code default flag:** launcher/env defaults in the sibling `methylGrapher-mojo` repo may still say `engine=python` / `align_engine=cpu_vg` for dual-ship rollback. Production site/profile config should pin Mojo GPU as above — do not treat those code defaults as the SamplePrep contract.
+**Code default flag:** launcher/env defaults in the sibling `mojo-align` repo may still say `engine=python` / `align_engine=cpu_vg` for dual-ship rollback. Production site/profile config should pin Mojo GPU as above — do not treat those code defaults as the SamplePrep contract.
 
 Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py).
 

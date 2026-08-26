@@ -29,4 +29,4 @@ todos:
 
 # Pure Mojo Giraffe (Buffy ≤2 h)
 
-See implementation in `methylGrapher-mojo` (`engine/segment_pack.py`, `engine/minimizer_index.py`, `engine/quartet_map.py`, `src/giraffe_*.mojo`) and cutover gate [`mojo-giraffe-cutover-gate.md`](mojo-giraffe-cutover-gate.md).
+See implementation in mojo-align (`giraffe/python/segment_pack.py`, `giraffe/python/quartet_map.py`, `giraffe/src/giraffe_*.mojo`) and cutover gate [`mojo-giraffe-cutover-gate.md`](mojo-giraffe-cutover-gate.md).

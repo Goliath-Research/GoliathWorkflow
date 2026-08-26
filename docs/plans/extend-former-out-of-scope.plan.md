@@ -36,7 +36,7 @@ todos:
 |---------------------|----------|
 | Full Buffy 238 re-align / rewrite Feb linear H5 | **Wait** until first 25 samples SamplePrep COMPLETED successfully |
 | Picard `collectmultiplemetrics` for WGBS QC | **In scope** — after QC BAM in the **worker** (not inside methylGrapher binary) |
-| Native MergeCpG (+ ConversionRate port) | **In scope** — methylGrapher-mojo, same dual-ship pattern as MethylCall |
+| Native MergeCpG (+ ConversionRate port) | **In scope** — mojo-align, same dual-ship pattern as MethylCall |
 | Long-read path | **Stay deferred** — ONT/PacBio surface; irrelevant to Illumina WGBS Buffy |
 | re-PrepareGenome | **Stay deferred** — keep QNAP `d9-bs/1.70`; rebuild only on asset change |
 | Move QC BAM/H5 packaging into Mojo | **Stay deferred** — already correct in [`methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py) |
@@ -64,7 +64,7 @@ flowchart TD
 
 ### 2. Native Mojo MergeCpG (+ ConversionRate)
 
-- Primary code: `/home/ubuntu/methylGrapher-mojo` (`src/merge_cpg.mojo`, `src/conversion_rate.mojo`).
+- Primary code: `/home/ubuntu/mojo-align` (`methylgrapher/src/merge_cpg.mojo`, `methylgrapher/src/conversion_rate.mojo`).
 - Toy + DS20M `graph.cpg.tsv` parity; ConversionRate CLI requires lambda spike-in (Buffy may not call it).
 - Rollback: `METHYLGRAPHER_MCALL_ENGINE=python` in [`methylGrapher.mojo.sh`](../../workers/docker/methylgrapher/methylGrapher.mojo.sh) or site `engine=python` + `:1.70`.
 

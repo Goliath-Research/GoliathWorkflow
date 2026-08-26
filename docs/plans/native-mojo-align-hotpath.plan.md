@@ -4,7 +4,7 @@ azure_devops:
   type: Feature
   title: "Native Mojo Align Hotpath (≤2h pangenome + faster-than-Clara linear)"
   epic_id: 413
-overview: "Eliminate Python from the production GBZ and linear map hot loops in methylGrapher-mojo, then rebuild/distribute the fleet image and clear science + wall-clock gates so ~738 Buffy Aligns (238 pending + 500 inbound) run the fastest science-backed path: pangenome_wgbs dual-map ≤~2h and linear Mojo strictly faster than Clara."
+overview: "Eliminate Python from the production GBZ and linear map hot loops in mojo-align, then rebuild/distribute the fleet image and clear science + wall-clock gates so ~738 Buffy Aligns (238 pending + 500 inbound) run the fastest science-backed path: pangenome_wgbs dual-map ≤~2h and linear Mojo strictly faster than Clara."
 
 > **Status: IMPLEMENTED (code + image).** Toy stream-map PASS; `:1.70-mojo` rebuilt (`3b0b063d…` / OCI `8ca56896…`). Operator gates (Buffy ≤2h, DS20M, linear &lt; Clara, sister load) tracked in [`native-mojo-align-hotpath-gates.md`](native-mojo-align-hotpath-gates.md).
 
@@ -34,8 +34,8 @@ todos:
 ## Context
 
 - Fleet already has `:1.70-mojo` with GPU gate/warmup (`36686778` / OCI manifest `a8286ef4`) on all four GH200s.
-- **Bottleneck:** production `pangenome_wgbs` still does locate→cluster→extend→GAF in Python [`engine/quartet_map.py`](/home/ubuntu/methylGrapher-mojo/engine/quartet_map.py) (~75% wall in `cluster_extend`). Mojo [`giraffe_gbz.mojo`](/home/ubuntu/methylGrapher-mojo/src/giraffe_gbz.mojo) only gates device, warms GPU, then calls that streamer.
-- **Linear:** native mapper exists ([`src/linear_*.mojo`](/home/ubuntu/methylGrapher-mojo/src/)), but DeviceContext seed is still largely probe/warmup; Clara wall gate PENDING.
+- **Bottleneck:** production `pangenome_wgbs` still does locate→cluster→extend→GAF in Python [`quartet_map.py`](/home/ubuntu/mojo-align/giraffe/python/quartet_map.py) (~75% wall in `cluster_extend`). Mojo [`giraffe_gbz.mojo`](/home/ubuntu/mojo-align/giraffe/src/giraffe_gbz.mojo) only gates device, warms GPU, then calls that streamer.
+- **Linear:** native mapper exists ([`linear_*.mojo`](/home/ubuntu/mojo-align/fq2bam-meth/src/)), but DeviceContext seed is still largely probe/warmup; Clara wall gate PENDING.
 - **Scale:** ~238 Aligns pending + ~500 inbound ⇒ must not cut fleet over until Buffy ≤~2h **and** DS20M MethylCall parity pass. In-flight instance 59 keeps current image until the new digest is proven.
 
 ```mermaid
@@ -62,28 +62,28 @@ flowchart LR
 | Cutover | New image digest only after gates; sisters `enable_fleet_mojo_align.sh`; no DomainProgram topology change |
 | Fallback | Bakeoff/fleet: `METHYLGRAPHER_GPU_REQUIRE=1`; `gpu_giraffe_fallback=mojo` (no silent multi-hour `vg`) |
 
-## Phase A — Native Mojo GBZ stream map (methylGrapher-mojo)
+## Phase A — Native Mojo GBZ stream map (mojo-align `giraffe/`)
 
 Replace the production call in `map_gbz_native` so it **does not** import `engine.quartet_map` for the hot loop.
 
 1. **Add streaming Mojo mapper** (new module e.g. `src/giraffe_stream_map.mojo`):
    - Stream FASTQ batches (reuse batch size semantics of `METHYLGRAPHER_MOJO_READ_BATCH`; never full-file Mojo load).
    - Batch minimizer / seed on DeviceContext (`giraffe_gpu_kernels`) — hashes must feed extend (no discard-after-count).
-   - Locate via Mojo `.min` path ([`giraffe_minzip.mojo`](/home/ubuntu/methylGrapher-mojo/src/giraffe_minzip.mojo)); cluster via [`giraffe_dist.mojo`](/home/ubuntu/methylGrapher-mojo/src/giraffe_dist.mojo).
-   - Extend via [`gapless_extend_native`](/home/ubuntu/methylGrapher-mojo/src/giraffe_gapless.mojo) (remove Python `_gapless_extend` from production).
-   - Stream GAF emit ([`giraffe_gaf_emit.mojo`](/home/ubuntu/methylGrapher-mojo/src/giraffe_gaf_emit.mojo)); PE primary tags `ri`/`os`/`rc`; aim for vg-compatible `-M 2` multimapping enough for MethylCall.
-2. **Retarget** [`giraffe_gbz.mojo`](/home/ubuntu/methylGrapher-mojo/src/giraffe_gbz.mojo) `map_gbz_native` → stream mapper; keep dense-pack ensure; fail closed if pack/device missing.
+   - Locate via Mojo `.min` path ([`giraffe_minzip.mojo`](/home/ubuntu/mojo-align/giraffe/src/giraffe_minzip.mojo)); cluster via [`giraffe_dist.mojo`](/home/ubuntu/mojo-align/giraffe/src/giraffe_dist.mojo).
+   - Extend via [`gapless_extend_native`](/home/ubuntu/mojo-align/giraffe/src/giraffe_gapless.mojo) (remove Python `_gapless_extend` from production).
+   - Stream GAF emit ([`giraffe_gaf_emit.mojo`](/home/ubuntu/mojo-align/giraffe/src/giraffe_gaf_emit.mojo)); PE primary tags `ri`/`os`/`rc`; aim for vg-compatible `-M 2` multimapping enough for MethylCall.
+2. **Retarget** [`giraffe_gbz.mojo`](/home/ubuntu/mojo-align/giraffe/src/giraffe_gbz.mojo) `map_gbz_native` → stream mapper; keep dense-pack ensure; fail closed if pack/device missing.
 3. **Demote** `engine/quartet_map.py` to reference/oracle for parity tests only (not production Align).
 4. **Stage timers** stay (`METHYLGRAPHER_PROFILE_STAGES`) so bakeoffs show seed / locate / cluster_extend / gaf_emit shares.
 5. **Tests:** toy GBZ PE golden; known-mapped Buffy C2T subset (13/13 today); smoke that production path logs Mojo stages with **no** `quartet_map seed_backend=` / Python extend.
 
-Update [`docs/GIRAFFE_SPEC.md`](/home/ubuntu/methylGrapher-mojo/docs/GIRAFFE_SPEC.md) / README status row to match (GBZ = native stream, not Python).
+Update [`GIRAFFE_SPEC.md`](/home/ubuntu/mojo-align/giraffe/docs/GIRAFFE_SPEC.md) / README status row to match (GBZ = native stream, not Python).
 
-## Phase B — Linear faster than Clara (methylGrapher-mojo)
+## Phase B — Linear faster than Clara (mojo-align `fq2bam-meth/`)
 
-1. Make [`linear_gpu_kernels`](/home/ubuntu/methylGrapher-mojo/src/linear_gpu_kernels.mojo) seeds the actual input to [`extend_read_with_seeds`](/home/ubuntu/methylGrapher-mojo/src/linear_extend.mojo) (same fail-closed DeviceContext rules as Giraffe).
-2. Tune streaming (`METHYLGRAPHER_LINEAR_READ_BATCH`), index cache, fused BS convert on-mapper path; keep Python only for convert orchestration / samtools / QC JSON in [`engine/fq2bam_meth.py`](/home/ubuntu/methylGrapher-mojo/engine/fq2bam_meth.py).
-3. Bakeoff: [`scripts/benchmark_clara_fq2bam_meth.sh`](/home/ubuntu/methylGrapher-mojo/scripts/benchmark_clara_fq2bam_meth.sh) + MethylPipeline [`scripts/compare_mojo_fq2bam_vs_clara.py`](/home/ubuntu/MethylPipeline/scripts/compare_mojo_fq2bam_vs_clara.py) gates (flagstat Δ, CpG Spearman) **plus** wall **Mojo &lt; Clara**.
+1. Make [`linear_gpu_kernels`](/home/ubuntu/mojo-align/fq2bam-meth/src/linear_gpu_kernels.mojo) seeds the actual input to [`extend_read_with_seeds`](/home/ubuntu/mojo-align/fq2bam-meth/src/linear_extend.mojo) (same fail-closed DeviceContext rules as Giraffe).
+2. Tune streaming (`METHYLGRAPHER_LINEAR_READ_BATCH`), index cache, fused BS convert on-mapper path; keep Python only for convert orchestration / samtools / QC JSON in [`fq2bam_meth.py`](/home/ubuntu/mojo-align/fq2bam-meth/python/fq2bam_meth.py).
+3. Bakeoff: [`scripts/benchmark_clara_fq2bam_meth.sh`](/home/ubuntu/mojo-align/fq2bam-meth/scripts/benchmark_clara_fq2bam_meth.sh) + MethylPipeline [`scripts/compare_mojo_fq2bam_vs_clara.py`](/home/ubuntu/MethylPipeline/scripts/compare_mojo_fq2bam_vs_clara.py) gates (flagstat Δ, CpG Spearman) **plus** wall **Mojo &lt; Clara**.
 4. Fleet linear procedure already exists: `buffy_wgbs_linear_mojo_gene_fc` (`parabricks.engine=mojo`). Flip site/procedure only after gate.
 
 ## Phase C — Image, site bake, fleet (MethylPipeline)

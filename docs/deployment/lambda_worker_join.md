@@ -14,7 +14,7 @@ Platform phases: [production-platform.md](production-platform.md).
 | **Azure Arc** | Connected Machine inventory, policy, `X-Arc-Resource-Id` | You (human approval) or approved SP | Gateway attest — **not** release bits or enroll API |
 | **Portal + gateway** | Preregistered public IP → one-time `worker_token` | Portal UI + `methyl-worker enroll` | Trust join for claim/submit |
 
-**Containers are not in Azure.** Parabricks comes from NGC into shared `/work/epimethyl/docker`. methylGrapher-mojo (and similar GPU side-cars) are separate images — not part of Epimethyl-Release-Deploy. MethylPipeline and MethylExtractor stay as **wheels + native per-arch binaries** on the share (not omnibus containers).
+**Containers are not in Azure.** Parabricks comes from NGC into shared `/work/epimethyl/docker`. mojo-align (and similar GPU side-cars) are separate images — not part of Epimethyl-Release-Deploy. MethylPipeline and MethylExtractor stay as **wheels + native per-arch binaries** on the share (not omnibus containers).
 
 ```mermaid
 flowchart LR

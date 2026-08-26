@@ -25,7 +25,7 @@ export METHYLGRAPHER_GIRAFFE_DEVICE=nvidia
 # from methylgrapher_align.log COMMAND → GAF land.
 ```
 
-When Parabricks (or successor) gains GAF output, re-run `scripts/spike_gh200_dual_graph_align.sh` in methylGrapher-mojo and update Phase 0.
+When Parabricks (or successor) gains GAF output, re-run `giraffe/scripts/spike_gh200_dual_graph_align.sh` in mojo-align and update Phase 0.
 Also see [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md).
 
 ## Site flip (only after gate)

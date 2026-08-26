@@ -32,10 +32,10 @@ Companion to [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md),
 ```bash
 # Build dense packs per strand from each Giraffe GBZ (node-id aligned; do NOT use wl.gfa):
 export VG_PATH=vg   # or scripts/vg_docker_wrap.sh
-python /opt/methylgrapher-mojo/scripts/build_mojo_segment_pack.py --from-gbz \
+python /opt/mojo-align/scripts/build_mojo_segment_pack.py --from-gbz \
   --gbz /work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.C2T.giraffe.gbz \
   --out /work/cache/mojo_segments/hprc-d9-bs.wl.C2T.giraffe.gbz.mojo_segments
-python /opt/methylgrapher-mojo/scripts/build_mojo_segment_pack.py --from-gbz \
+python /opt/mojo-align/scripts/build_mojo_segment_pack.py --from-gbz \
   --gbz /work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.giraffe.gbz \
   --out /work/cache/mojo_segments/hprc-d9-bs.wl.G2A.giraffe.gbz.mojo_segments
 

@@ -1,6 +1,6 @@
 ---
 name: Cross-repo tool analysis
-overview: Cross-repository analysis of how MethylPipeline orchestrates mojo-align (MethylGrapher refactor / Parabricks alternatives) and MethylExtractor (MethylDackel fork), with a ranked improvement backlog across all four checkouts.
+overview: Cross-repository analysis of how MethylPipeline orchestrates mojo-align (MethylGrapher refactor / Parabricks alternatives) and MethylExtractor (MethylDackel fork), with a ranked improvement backlog across the three live checkouts.
 
 > **Status: Implemented** — plan promoted; P0 contract fixes and P2 extractor tests landed (AB#703).
 
@@ -27,7 +27,7 @@ todos:
     status: completed
     work_item_id: 707
   - id: p0-cutover-paths
-    content: "Remove dual-repo hardcoded path fallbacks; pin METHYLGRAPHER_MOJO_ROOT to mojo-align only"
+    content: "Remove dual-repo hardcoded path fallbacks; pin MOJO_ALIGN_ROOT to mojo-align only"
     status: completed
     work_item_id: 708
   - id: p2-extractor-tests
@@ -42,7 +42,7 @@ todos:
 
 ## Verdict
 
-MethylPipeline is the **orchestrator**; mojo-align is the **canonical science align stack** (linear + pangenome WGBS); MethylExtractor is the **linear/stock-pangenome methylation caller** with JSON for **extraction QC** (not alignment QC); methylGrapher-mojo is a **rollback monolith** superseded by mojo-align. The architecture is coherent, but production still depends on Clara for Picard metrics, dual-repo drift, open performance gates, and naming/contract friction between QC stages.
+MethylPipeline is the **orchestrator**; mojo-align is the **canonical science align stack** (linear + pangenome WGBS); MethylExtractor is the **linear/stock-pangenome methylation caller** with JSON for **extraction QC** (not alignment QC). The architecture is coherent, but production still depends on Clara for Picard metrics, open performance gates, and naming/contract friction between QC stages.
 
 Operator-facing summary: [`docs/architecture/sample-prep-tooling.md`](../architecture/sample-prep-tooling.md).
 
@@ -68,10 +68,6 @@ flowchart TB
     GC[gpu-common]
   end
 
-  subgraph legacy [methylGrapher-mojo]
-    Old[flat monolith rollback only]
-  end
-
   subgraph extract [MethylExtractor]
     ME[MethylDackel fork C binary]
   end
@@ -94,7 +90,6 @@ flowchart TB
   QC1 -->|qcPass pangenome_wgbs| MgR --> MG
   MG --> QC2
   CMM -.->|optional Picard enrichment| QC1
-  Old -.->|METHYLGRAPHER_MOJO_ROOT rollback| MgR
   GC --> FQ
   GC --> GF
 ```
@@ -104,7 +99,6 @@ flowchart TB
 | Repo | Role | Consumed by MethylPipeline as |
 |------|------|-------------------------------|
 | mojo-align | Canonical Mojo monorepo: `gpu-common`, `fq2bam-meth`, `giraffe`, `methylgrapher` | Baked into `epimethyl/methylgrapher:1.70-mojo-{cuda,rocm}`; CLI `methylGrapher` |
-| methylGrapher-mojo | Pre-split monolith; dual-CI / rollback | Only if `METHYLGRAPHER_MOJO_ROOT` still points here |
 | MethylExtractor | Heavily modified MethylDackel → HDF5 + JSON | Host binary `METHYL_EXTRACTOR_BIN` via `sample.methyl_extract` |
 | MethylPipeline | Workflow, workers, QC packages, `/work` contracts | Owners of mode branching and QC Pass/Fail |
 
@@ -167,4 +161,3 @@ See original analysis: runner split, engine default fail-closed, Clara surface r
 
 - Implementing Giraffe performance work or Clara bakeoffs
 - Changing production site defaults
-- Merging methylGrapher-mojo into mojo-align git history (already migrated; archive is ops)

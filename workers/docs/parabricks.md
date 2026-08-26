@@ -19,7 +19,7 @@ Implementation: [`methyl_worker/parabricks_runner.py`](../methyl_worker/parabric
 ### Mojo (`engine=mojo`)
 
 - CUDA **or** ROCm host (or CPU-only with `align_device=cpu`)
-- methylGrapher-mojo image with `bwa` + `samtools` (see Dockerfile.mojo)
+- mojo-align image (`epimethyl/methylgrapher:1.70-mojo-*`) with `bwa` + `samtools` (see Dockerfile.mojo)
 - ROCm: see [`docs/deployment/worker-rocm.md`](../../docs/deployment/worker-rocm.md)
 
 ## Configuration (site / profile → resolvedConfig)

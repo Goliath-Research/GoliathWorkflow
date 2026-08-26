@@ -33,8 +33,8 @@ MojoGiraffe QC emits linear SAM (streaming) using dense GRCh38 segment offsets; 
 
 | Piece | Path |
 |-------|------|
-| Offsets builder | `methylGrapher-mojo/scripts/build_grch38_offsets.py` |
+| Offsets builder | `giraffe/scripts/build_grch38_offsets.py` (mojo-align) |
 | Offsets cache | `/work/cache/mojo_segments/hprc-d9-bs.wl.grch38_offsets/` |
 | Mojo emit | `src/giraffe_sam_emit.mojo`, `src/giraffe_grch38_offsets.mojo` |
 | Runner | `workers/methyl_worker/methylgrapher_wgbs_runner.py` (`build_qc_bam_mojo_sam_command`) |
-| Overlay | `/work/epimethyl/images/methylgrapher-mojo-overlay/src/` |
+| Overlay | `/work/epimethyl/images/mojo-align-overlay/src/` |

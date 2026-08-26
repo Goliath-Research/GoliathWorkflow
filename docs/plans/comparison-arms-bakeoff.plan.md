@@ -154,4 +154,4 @@ Copy to `docs/plans/comparison-arms-bakeoff.plan.md`, README row, new ADO Featur
 - Implementing Giraffe ≤2h kernel work
 - Flipping production site `actionConfig` defaults to Mojo-only
 - Removing Clara / vg / MethylDackel from release or docs
-- Merging methylGrapher-mojo archive decisions beyond “rollback checkout still allowed via explicit `METHYLGRAPHER_MOJO_ROOT`”
+- Renaming historical plan filenames that still use the former tree’s name

@@ -35,7 +35,7 @@ Follow-on to [`gh200-wgbs-dual-graph-align.plan.md`](gh200-wgbs-dual-graph-align
 
 | Area | Location |
 |------|----------|
-| Spec + fixtures | `methylGrapher-mojo/docs/GIRAFFE_SPEC.md`, `tests/data/giraffe_fixture/` |
+| Spec + fixtures | `giraffe/docs/GIRAFFE_SPEC.md`, `giraffe/tests/data/giraffe_fixture/` (mojo-align) |
 | Mojo modules | `src/giraffe_*.mojo` + `MojoGiraffe` CLI |
 | GPU seed helper | `scripts/giraffe_gpu_minimizer.py` (CuPy when present; target `nvidia:sm_90` / `amdgpu`) |
 | Backends | `engine/align_backends.py` — `cpu_vg` \| `gpu_giraffe` \| `mojo_giraffe` |

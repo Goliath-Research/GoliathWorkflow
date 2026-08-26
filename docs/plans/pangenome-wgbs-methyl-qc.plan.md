@@ -28,7 +28,7 @@ todos:
     content: Cleanup stub/linear artifacts; gateway SamplePrep start for missing25
     status: completed
   - id: mcall-native-hot-loop
-    content: Port alignment_to_methylation + GFA segment lookup to native Mojo; wire parallelize() (methylGrapher-mojo)
+    content: Port alignment_to_methylation + GFA segment lookup to native Mojo; wire parallelize() (mojo-align)
     status: completed
   - id: mcall-fullsample-gate
     content: Full-sample MethylCall parity/perf vs 0.2.0; mojo unit tests; gzip I/O as needed
@@ -59,7 +59,7 @@ todos:
 
 ### Part B — MethylCall Mojo
 
-Primary code: `/home/ubuntu/methylGrapher-mojo`
+Primary code: `/home/ubuntu/mojo-align` (`methylgrapher/`)
 
 - Native `alignment_to_methylation`, GFA `Dict` lookup, `parallelize()`, gzip helpers
 - `MethylCall` CLI routes to native path (`METHYLGRAPHER_MCALL_ENGINE=python` rollback)

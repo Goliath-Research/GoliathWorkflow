@@ -33,7 +33,7 @@ Procedure git packs keep `engine` unset / python-compatible until multi-site sci
    - Unit tests: `pixi run mojo -I src tests/test_mcall_core.mojo`
 
 2. **Performance (required for flip)** — **PASS (subset)**
-   - See methylGrapher-mojo `docs/BENCHMARK_MCALL.md`: native `-t` 8 ≈ 134 s / 15.6 GiB RSS vs python 174 s / 22 GiB on the same subset.
+   - See mojo-align `methylgrapher/docs/BENCHMARK_MCALL.md`: native `-t` 8 ≈ 134 s / 15.6 GiB RSS vs python 174 s / 22 GiB on the same subset.
    - Full Buffy GAF (~679 GiB for `HBCST-052125-87293`) wall/RSS is an operator follow-up after deploy; expect larger relative win once GFA load is amortized.
 
 3. **Science (shared with wgbs-alignment-decision)**

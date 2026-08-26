@@ -30,7 +30,7 @@ todos:
 
 # GPU-native Mojo Giraffe hotpath
 
-Code lives in [`/home/ubuntu/methylGrapher-mojo`](/home/ubuntu/methylGrapher-mojo). Fleet Align stays disabled until Buffy ≤2h + DS20M.
+Code lives in [`/home/ubuntu/mojo-align`](/home/ubuntu/mojo-align) (`giraffe/`). Fleet Align stays disabled until Buffy ≤2h + DS20M.
 
 ## Delivered modules
 

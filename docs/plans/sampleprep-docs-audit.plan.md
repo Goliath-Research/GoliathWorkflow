@@ -93,7 +93,7 @@ Worker docs ([workers/docs/methyl_extractor.md](../../workers/docs/methyl_extrac
 
 ### Already current (do not rewrite; only cross-link)
 
-- [alignment-engines.md](../usage/alignment-engines.md) — `MOJO_ALIGN_*`, `/opt/mojo-align`, archived methylGrapher-mojo
+- [alignment-engines.md](../usage/alignment-engines.md) — `MOJO_ALIGN_*`, `/opt/mojo-align`
 - [sample-prep-tooling.md](../architecture/sample-prep-tooling.md) — arm layout, compare arms, `mojo_linear` placeholder metrics
 - [How to define samples.md](../user-manual/How%20to%20define%20samples.md) — `sampleRoot` / `sampleDir`
 - [sample_prep_capabilities.md](../../workflow_engine/contract/sample_prep_capabilities.md) — arm layout + FOREACH skip semantics
@@ -101,7 +101,7 @@ Worker docs ([workers/docs/methyl_extractor.md](../../workers/docs/methyl_extrac
 
 ### Historical plans (do not rewrite)
 
-Leave `methylgrapher-mojo-cutover*.md`, `native-mojo-align-hotpath.plan.md`, etc. as records. Add a **one-line superseded banner** only on plans that operators still open as runbooks (`METHYLGRAPHER_MOJO_*`, `build_methylgrapher_mojo_image.sh`, `/opt/methylgrapher-mojo`). Point to [archive-methylgrapher-mojo.plan.md](archive-methylgrapher-mojo.plan.md) and [alignment-engines.md](../usage/alignment-engines.md).
+Leave `methylgrapher-mojo-cutover*.md`, `native-mojo-align-hotpath.plan.md`, etc. as records (filenames keep the former name). Add a **one-line superseded banner** only on plans that operators still open as runbooks (`METHYLGRAPHER_MOJO_*`, `build_methylgrapher_mojo_image.sh`, `/opt/methylgrapher-mojo`). Point to [archive-methylgrapher-mojo.plan.md](archive-methylgrapher-mojo.plan.md) and [alignment-engines.md](../usage/alignment-engines.md). The former git repository does not exist; file links in those records should point at **mojo-align**.
 
 ---
 

@@ -37,7 +37,7 @@ todos:
 
 ## Why both
 
-- **Science / ops preferred path:** `alignmentMode=pangenome_wgbs` (Mojo Giraffe → GAF → MethylCall). Already on GH200; AMD stubs exist in methylGrapher-mojo `giraffe_device.mojo` / `giraffe_gpu_kernels.mojo`.
+- **Science / ops preferred path:** `alignmentMode=pangenome_wgbs` (Mojo Giraffe → GAF → MethylCall). Already on GH200; AMD stubs exist in mojo-align `giraffe/src/giraffe_device.mojo` / `giraffe_gpu_kernels.mojo`.
 - **Political / legacy path:** `alignmentMode=linear` today = NVIDIA-only Clara Parabricks `fq2bam_meth`. Leadership may force this; without a Mojo linear aligner, leaving Lambda means losing linear GPU Align or staying CUDA-locked.
 - **Leverage:** ship **both** under one portable device contract (`cpu|nvidia|amd|auto`) so switching modes is profile/site `actionConfig`, not a vendor rewrite.
 

@@ -115,14 +115,14 @@ flowchart LR
 
 ## Decision: do **not** containerize MethylPipeline / MethylExtractor (like mojo)
 
-Keep CI artifacts — MP wheels + per-arch native MethylExtractor — on shared `/work/epimethyl`. Containers remain for GPU/tool side-cars (Parabricks/NGC, methylGrapher-mojo, DIA-NN, etc.).
+Keep CI artifacts — MP wheels + per-arch native MethylExtractor — on shared `/work/epimethyl`. Containers remain for GPU/tool side-cars (Parabricks/NGC, mojo-align, DIA-NN, etc.).
 
 ## Out of scope
 
 - Automating QNAP/NFS mount creation (mount remains ops)
 - Putting Parabricks/mojo/MP/ME images into Azure Container Registry
 - Rebuilding MethylPipeline/MethylExtractor as primary runtime containers
-- Building methylGrapher-mojo in ADO CI
+- Building mojo-align in ADO CI
 - Replacing Arc approval with fully unattended onboarding (document SP path later)
 
 ## Success criteria

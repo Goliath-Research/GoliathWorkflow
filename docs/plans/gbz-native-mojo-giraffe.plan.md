@@ -32,7 +32,7 @@ Follow-on to [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md).
 
 | Area | Location |
 |------|----------|
-| Spec | `methylGrapher-mojo/docs/GIRAFFE_SPEC.md` (GBZ contract) |
+| Spec | `giraffe/docs/GIRAFFE_SPEC.md` in mojo-align (GBZ contract) |
 | Helper / cache | `engine/giraffe_gbz_helper.py`, `scripts/build_mojo_gbz_cache.py` |
 | Mojo modules | `giraffe_gbz.mojo`, `giraffe_minzip.mojo`, `giraffe_dist.mojo` |
 | CLI | `MojoGiraffe -gbz … -dist … -min … [-zipcodes]` |

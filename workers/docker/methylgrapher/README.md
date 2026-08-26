@@ -32,7 +32,7 @@ Pin `actionConfig.methylgrapher_wgbs.align_engine=gpu_giraffe|mojo_giraffe` and 
 
 On 64 KB-page ARM64 (Grace / GH200) any vg-assisted QC BAM path needs `jemalloc=off` vg baked into the image.
 
-**Code default flag:** the sibling `mojo-align` launcher may still default `align_engine=cpu_vg` for dual-ship rollback until Buffy ≤2 h + DS20M gates pass. Production site/profile config should pin Mojo GPU as above. The `methylGrapher-mojo` git repo is archived.
+**Code default flag:** the sibling `mojo-align` launcher may still default `align_engine=cpu_vg` for dual-ship rollback until Buffy ≤2 h + DS20M gates pass. Production site/profile config should pin Mojo GPU as above.
 
 ## Production model (do not compile on deploy)
 
