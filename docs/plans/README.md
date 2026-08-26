@@ -82,6 +82,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`portal-multi-instance-hpo.plan.md`](portal-multi-instance-hpo.plan.md) | _(pending ADO)_ | Portal multi-instance hyperparameter grid | `rename-wf-execution-scope`, `typed-hpo-schemas`, `cfg-search-ledger`, `grid-expander`, `score-promote`, `legacy-bridge-docs`, `tests-promote-plan` |
 | [`portal-pipeline-ia.plan.md`](portal-pipeline-ia.plan.md) | _(pending ADO)_ | Portal pipeline IA, RBAC admin, and contract packs | `rewrite-portal-ia`, `sql-study-pipeline`, `sql-ops-recovery`, `sql-rbac-admin`, `sql-contract-packs`, `canvas-and-crosslinks` |
 | [`portal-ui-sql-actions.plan.md`](portal-ui-sql-actions.plan.md) | _(pending ADO)_ | Portal UI SQL actions per leaf | `sql-study-link-storage`, `sql-guardrail-overlay`, `sql-instance-monitor`, `sql-fail-cancel-stop`, `sql-admin-hpo-holes`, `docs-ia-plan` |
+| [`study-control-start.plan.md`](study-control-start.plan.md) | _(pending ADO)_ | Study Control Start wizard (queue + Python bake) | `sql-queue`, `daemon`, `start-ui`, `align-create`, `docs` |
 | [`di_action-agnostic_assessment_0d376284.plan.md`](di_action-agnostic_assessment_0d376284.plan.md) | **AB#664** | DI action-agnostic assessment | (see plan frontmatter) |
 | [`methylit-standalone-doc.plan.md`](methylit-standalone-doc.plan.md) | **AB#668** | MethylIT Standalone Doc | (see plan frontmatter) |
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |

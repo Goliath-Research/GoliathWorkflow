@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "ExtractionQCGuardrailConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "max_chg_methylation_level": {
+          "default": 0.02,
+          "title": "Max Chg Methylation Level",
+          "type": "number"
+        },
+        "max_chh_methylation_level": {
+          "default": 0.02,
+          "title": "Max Chh Methylation Level",
+          "type": "number"
+        },
+        "max_discard_fraction": {
+          "default": 0.9,
+          "title": "Max Discard Fraction",
+          "type": "number"
+        },
+        "min_autosomal_coverage_uniformity_ratio": {
+          "default": 0.5,
+          "title": "Min Autosomal Coverage Uniformity Ratio",
+          "type": "number"
+        },
+        "min_cpg_weighted_mean_coverage": {
+          "default": 10.0,
+          "title": "Min Cpg Weighted Mean Coverage",
+          "type": "number"
+        }
+      },
+      "title": "ExtractionQCGuardrailConfig",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "expected_chromosomes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Expected Chromosomes",
+      "type": "array"
+    },
+    "guardrails": {
+      "$ref": "#/$defs/ExtractionQCGuardrailConfig"
+    },
+    "sample_paths": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Sample Paths",
+      "type": "array"
+    }
+  },
+  "title": "ExtractionQCConfig",
+  "type": "object"
+}

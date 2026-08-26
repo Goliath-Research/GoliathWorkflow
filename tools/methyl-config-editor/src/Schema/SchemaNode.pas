@@ -38,6 +38,7 @@ type
     Title: string;
     Description: string;
     JsonType: string;
+    TypeName: string; // catalog / $ref name; Title is the field caption
     Nullable: Boolean;
     ReadOnly: Boolean;
     Required: Boolean;
@@ -155,6 +156,7 @@ begin
   Result.Title := Title;
   Result.Description := Description;
   Result.JsonType := JsonType;
+  Result.TypeName := TypeName;
   Result.Nullable := Nullable;
   Result.ReadOnly := ReadOnly;
   Result.Required := Required;

@@ -78,15 +78,8 @@ def resolve_workflow_version_id(
     return int(created["workflow_version_id"])
 
 
-def start_study_validation(
-    db: Any,
-    body: Dict[str, Any],
-    *,
-    create_workflow_definition,
-    create_workflow_instance,
-    start_workflow_instance,
-) -> Dict[str, Any]:
-    """Plan iterations, enrich instance context, create and start a validation workflow."""
+def plan_study_validation_instance_context(body: Dict[str, Any]) -> Dict[str, Any]:
+    """Plan validation context and bake resolvedConfig (does not create an instance)."""
     project_path = body.get("projectPath")
     if not project_path:
         raise ValueError("projectPath is required")
@@ -98,7 +91,19 @@ def start_study_validation(
     planner_payload = dict(body)
     planner_payload.setdefault("projectPath", project_path)
     planned = plan_validation_context(planner_payload)
-    context = finalize_instance_context(planned.model_dump(mode="json"))
+    return finalize_instance_context(planned.model_dump(mode="json"))
+
+
+def start_study_validation(
+    db: Any,
+    body: Dict[str, Any],
+    *,
+    create_workflow_definition,
+    create_workflow_instance,
+    start_workflow_instance,
+) -> Dict[str, Any]:
+    """Plan iterations, enrich instance context, create and start a validation workflow."""
+    context = plan_study_validation_instance_context(body)
 
     version_id = resolve_workflow_version_id(
         db,

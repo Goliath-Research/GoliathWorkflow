@@ -3,6 +3,8 @@
 
   Deploy after portal_contract_api.sql, portal_study_pipeline_api.sql,
   portal_ops_recovery_api.sql.
+
+  Study start queue (Portal intent, Python bake) is cfg_study_start_request.sql.
 */
 
 ALTER TABLE wf.node_execution

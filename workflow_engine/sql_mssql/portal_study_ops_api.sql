@@ -4,6 +4,8 @@
   Link / storage / next-run actionConfig overlay, instance header + config
   snapshot, sample×stage progress, and run/task fail-cancel-stop.
 
+  Study start queue (Portal intent, Python bake) is cfg_study_start_request.sql.
+
   Deploy after portal_contract_api.sql, portal_study_pipeline_api.sql,
   portal_ops_recovery_api.sql, wf_worker_desired_state.sql.
 
