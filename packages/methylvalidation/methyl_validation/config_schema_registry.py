@@ -169,6 +169,20 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="StudyActionConfigOverlay",
     ),
     ConfigSchemaSpec(
+        schema_id="sample_prep_guardrails_overlay",
+        module="methyl_utils.study_action_config",
+        class_name="StudyActionConfigOverlay",
+        filename="sample_prep_guardrails_overlay.schema.json",
+        title="SamplePrepGuardrailsOverlay",
+    ),
+    ConfigSchemaSpec(
+        schema_id="sample_prep_guardrails",
+        module="methyl_utils.study_action_config",
+        class_name="SamplePrepGuardrails",
+        filename="sample_prep_guardrails.schema.json",
+        title="SamplePrepGuardrails",
+    ),
+    ConfigSchemaSpec(
         schema_id="fragmentomics",
         module="methyl_fragmentomics.config",
         class_name="FragmentomicsStepConfig",

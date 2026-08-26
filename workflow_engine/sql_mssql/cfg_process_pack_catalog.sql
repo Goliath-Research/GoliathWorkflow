@@ -338,3 +338,63 @@ BEGIN
     EXEC portal.sp_get_study_process_defaults @study_row_id = @study_row_id;
 END
 GO
+
+CREATE OR ALTER PROCEDURE portal.sp_upsert_pipeline_profile
+    @name nvarchar(256),
+    @version nvarchar(64),
+    @status varchar(32) = 'draft',
+    @document_json json
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_upsert
+        @kind = N'pipeline_profile',
+        @name = @name,
+        @version = @version,
+        @status = @status,
+        @document_json = @document_json;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_publish_pipeline_profile
+    @name nvarchar(256),
+    @version nvarchar(64)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_publish
+        @kind = N'pipeline_profile',
+        @name = @name,
+        @version = @version;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_upsert_assay_procedure
+    @name nvarchar(256),
+    @version nvarchar(64),
+    @status varchar(32) = 'draft',
+    @document_json json
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_upsert
+        @kind = N'assay_procedure',
+        @name = @name,
+        @version = @version,
+        @status = @status,
+        @document_json = @document_json;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_publish_assay_procedure
+    @name nvarchar(256),
+    @version nvarchar(64)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_publish
+        @kind = N'assay_procedure',
+        @name = @name,
+        @version = @version;
+END
+GO

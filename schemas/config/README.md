@@ -39,7 +39,9 @@ Pytest also enforces this: `packages/methylvalidation/tests/test_config_schema_e
 | `classifier.schema.json` | `ClassificationConfig` |
 | `predictor.schema.json` | `PredictorConfig` |
 | `alignment_qc.schema.json` | `AlignmentQCConfig` |
-| `study_action_config_overlay.schema.json` | `StudyActionConfigOverlay` (Studies → Guardrails editor; not the full QC configs) |
+| `study_action_config_overlay.schema.json` | `StudyActionConfigOverlay` (study GET `schema_id` alias; overlay Guardrails editor) |
+| `sample_prep_guardrails_overlay.schema.json` | `StudyActionConfigOverlay` (profile / procedure overlay type name) |
+| `sample_prep_guardrails.schema.json` | `SamplePrepGuardrails` (site full published window; no sample paths) |
 | `centroid.schema.json` | `MethylCentroidConfig` |
 | `queue_discovery_task_v1.schema.json` | `DiscoveryRunTaskV1` |
 | `alignment_qc/exported_sample_qc*.schema.json` | AlignmentQC export payloads |

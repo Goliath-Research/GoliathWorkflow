@@ -106,6 +106,18 @@ def test_array_and_enum_schemas(seed) -> None:
     assert enum_doc["type"] == "string"
 
 
+def test_config_guardrail_type_files_exist(seed) -> None:
+    assert seed.CONFIG_DIR.is_dir()
+    for type_name, filename in seed.CONFIG_GUARDRAIL_TYPES:
+        path = seed.CONFIG_DIR / filename
+        assert path.is_file(), path
+        assert type_name in (
+            "sample_prep_guardrails",
+            "sample_prep_guardrails_overlay",
+            "study_action_config_overlay",
+        )
+
+
 def test_action_definition_removed_from_kinds() -> None:
     from cfg.kinds import CFG_KINDS, MATERIALIZABLE_KINDS
 

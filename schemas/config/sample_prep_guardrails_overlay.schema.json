@@ -966,6 +966,6 @@
       "description": "Extraction QC guardrails overlay. Omit the object to inherit the whole slice."
     }
   },
-  "title": "StudyActionConfigOverlay",
+  "title": "SamplePrepGuardrailsOverlay",
   "type": "object"
 }

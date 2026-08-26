@@ -72,3 +72,28 @@ Set at **site** (deployment-wide) and/or **profile** (procedure pack):
 ```
 
 Resolution: `packages/methylgeneselect/methyl_gene_select/caps.py` (no hardcoded fallbacks).
+
+## Example: SamplePrep core guardrails
+
+Publish the WGBS/extraction window on the **site** (`cfg.site` / `/work/site/methyl_site.json`). Profile, procedure, and study persist only sparse overlays.
+
+```json
+"actionConfig": {
+  "alignment_qc": {
+    "core_guardrails": {
+      "min_pf_percent": 90.0,
+      "min_q30_percent": 85.0,
+      "min_mean_quality": 35.0,
+      "min_quality_post20": 30.0,
+      "max_at_dropout": 3.0,
+      "max_gc_dropout": 5.0,
+      "median_insert_min_bp": 150,
+      "median_insert_max_bp": 300,
+      "max_deamination_qscore": 30,
+      "min_oxog_qscore": 20
+    }
+  }
+}
+```
+
+Python `CoreGuardrailsConfig` defaults remain fail-closed if a site slice is still empty during migration; they are not the operator-facing published window. Portal editors: `sample_prep_guardrails` (site full) vs `sample_prep_guardrails_overlay` (other layers).

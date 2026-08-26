@@ -24,17 +24,15 @@ def test_committed_config_schemas_match_pydantic_models():
 def test_schema_export_is_deterministic(tmp_path: Path):
     root = tmp_path / "schemas"
     export_all_config_schemas(schemas_root=root, write=True)
-    first = {
-        p.read_text(encoding="utf-8")
-        for p in sorted(root.rglob("*.schema.json"))
-    }
+    first_files = sorted(root.rglob("*.schema.json"))
+    first = {p.read_text(encoding="utf-8") for p in first_files}
     export_all_config_schemas(schemas_root=root, write=True)
     second = {
         p.read_text(encoding="utf-8")
         for p in sorted(root.rglob("*.schema.json"))
     }
     assert first == second
-    assert len(first) == len(list_config_schema_specs())
+    assert len(first_files) == len(list_config_schema_specs())
 
 
 def test_generate_schema_dict_sets_json_schema_meta():
@@ -109,10 +107,17 @@ def test_check_mode_fails_on_stale_artifact(tmp_path: Path):
 
 def test_study_action_config_overlay_schema_is_the_guardrails_editor():
     from methyl_alignment_qc.models.config import AlignmentQCConfig
-    from methyl_utils.study_action_config import SCHEMA_ID, StudyActionConfigOverlay
+    from methyl_utils.study_action_config import (
+        FULL_SCHEMA_ID,
+        OVERLAY_SCHEMA_ID,
+        SCHEMA_ID,
+        SamplePrepGuardrails,
+        StudyActionConfigOverlay,
+    )
 
     overlay = generate_schema_dict(StudyActionConfigOverlay, title="StudyActionConfigOverlay")
     full = generate_schema_dict(AlignmentQCConfig, title="AlignmentQCConfig")
+    site = generate_schema_dict(SamplePrepGuardrails, title="SamplePrepGuardrails")
     assert overlay.get("required", []) == []
     assert set(overlay["properties"]) == {"alignment_qc", "extraction_qc"}
     assert "sample_paths" not in overlay["$defs"]["AlignmentQcOverlay"]["properties"]
@@ -120,9 +125,14 @@ def test_study_action_config_overlay_schema_is_the_guardrails_editor():
         "default"
     ) is None
     assert "sample_paths" in full.get("required", [])
+    assert site["$defs"]["CoreGuardrailsFull"]["properties"]["median_insert_min_bp"].get("default") == 150
     specs = {spec.schema_id: spec for spec in list_config_schema_specs()}
     assert SCHEMA_ID in specs
     assert specs[SCHEMA_ID].filename == "study_action_config_overlay.schema.json"
+    assert OVERLAY_SCHEMA_ID in specs
+    assert specs[OVERLAY_SCHEMA_ID].filename == "sample_prep_guardrails_overlay.schema.json"
+    assert FULL_SCHEMA_ID in specs
+    assert specs[FULL_SCHEMA_ID].filename == "sample_prep_guardrails.schema.json"
 
 
 def test_repo_schemas_config_dir_exists_after_bootstrap():

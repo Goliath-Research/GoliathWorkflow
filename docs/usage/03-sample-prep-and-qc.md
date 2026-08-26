@@ -181,7 +181,9 @@ V1-shaped payloads are assembled internally (with Picard tables for compute) and
 
 ## Alignment guardrails: what “good alignment” means
 
-Core WGBS guardrails are **operator-configurable** under `actionConfig.alignment_qc.core_guardrails` (site or profile layer). The acceptance window applied when a key is unset is:
+Core WGBS guardrails are **operator-configurable**. The **published acceptance window** lives on the **site** (`actionConfig.alignment_qc.core_guardrails` + `extraction_qc.guardrails`). Pipeline profile, assay procedure, and study documents persist only a **sparse overlay** (omit = inherit, JSON `null` = clear). Analyte packs still fill missing keys at instance bake; they are not part of the SQL inherited merge.
+
+When a key is unset after merge, QC still applies this fail-closed window (also the site fixture default):
 
 | Metric | Acceptance window | Config key | Why it matters |
 |--------|-------------------|------------|----------------|
@@ -194,13 +196,13 @@ Core WGBS guardrails are **operator-configurable** under `actionConfig.alignment
 | Deamination qscore | ≤ 30 | `max_deamination_qscore` | Expected WGBS conversion signal |
 | OxoG qscore | ≥ 20 | `min_oxog_qscore` | Oxidative damage risk |
 
-Widen or tighten a window per deployment rather than editing Python — for example, a cohort whose GC dropout sits just above 5 can be admitted with `"core_guardrails": {"max_gc_dropout": 6.0}`. The reported `normal_range` in the QC JSON always echoes the configured value, so a report is self-describing.
+Widen or tighten a window per **deployment** on the site document rather than editing Python — for example, a cohort whose GC dropout sits just above 5 can be admitted with `"core_guardrails": {"max_gc_dropout": 6.0}` on the site (full window still required) or as a sparse pin on profile / procedure / study. The reported `normal_range` in the QC JSON always echoes the configured value, so a report is self-describing.
 
 Each metric carries a **`message`** explaining the biological/operational concern. `guardrails.overall_pass` is the logical AND of all evaluated checks (including optional and analyte-specific add-ons).
 
 ### Optional and analyte-specific checks
 
-Configure under profile or site `actionConfig.alignment_qc` (not in the study manifest):
+Configure under **site** `actionConfig.alignment_qc` for the published window. Profile / procedure / study may pin diffs only (not in the study manifest cohorts file):
 
 ```json
 {
@@ -334,7 +336,7 @@ Workers tag scope with **`MethylSampleRef`** including `alignmentQc`, `extractio
 Before starting SamplePrep, confirm:
 
 - [ ] `project.json` lists samples and `samples_base_path` / `path_remap` resolve to `/work/samples/...`
-- [ ] Profile/site `actionConfig.alignment_qc` thresholds match analyte (cfDNA vs buffy coat)
+- [ ] Site `actionConfig.alignment_qc.core_guardrails` publishes the full QC window; profile/procedure/study only pin diffs. Analyte (cfDNA vs buffy coat) fill-missing still applies at bake.
 - [ ] Profile `actionConfig.extraction_qc` min coverage appropriate for WGBS depth expectations
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
 - [ ] Instance `context_json` includes `fastqStorage`, `referenceFasta`, `samples[]`

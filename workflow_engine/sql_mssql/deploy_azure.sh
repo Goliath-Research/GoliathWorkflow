@@ -138,6 +138,7 @@ SCRIPTS=(
   portal_rbac_api.sql
   portal_contract_api.sql
   portal_study_ops_api.sql
+  portal_guardrails_editor.sql
   cfg_study_start_request.sql
 )
 

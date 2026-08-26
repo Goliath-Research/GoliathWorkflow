@@ -155,6 +155,7 @@ Studies / {Study}
   Overview                 stage rollup across instances
   Cohort                   enroll portal.Samples into cfg.study_group arms
   Storage                  pick published fastqSource + sampleDestination
+  Guardrails (next run)    study overlay only — do not POST to site/profile/procedure
   Sample prep              Instance 1: download → align → QC → extract → archive
   Study lifecycle          Instance 2: stability → freeze → model → validation
   Prediction               optional blind / predictor-only (gated; not accuracy)
@@ -184,7 +185,7 @@ Two DomainPrograms in sequence, then optional prediction
 | Study process defaults  | Persist default profile / procedure / analyte / researchMode         | `sp_set/get_study_process_defaults`; pickers: `sp_list_*_catalog` **filtered by contract** when `@scope_id` is set                                                                                                                                                                     |
 | Cohort (samples & arms) | Enrollment, study arms, membership                                   | `sp_list_samples_for_study_enrollment`, `sp_set_sample_analyte`, `sp_list/set_study_group(s)`, `sp_set_study_group_members`, `sp_materialize_study_lists`                                                                                                                              |
 | Storage                 | Select **published redacted** `fastqSource` + `sampleDestination`    | `sp_list_storage_endpoints` (redacted); persist with `sp_get/set_study_storage`; authoring stays on Platform                                                                                                                                                                           |
-| Guardrails (next run)   | Edit **effective** `alignment_qc` / `extraction_qc` (inherited + overlay) | `sp_get/set_study_guardrails_editor` binds `schemas/config/study_action_config_overlay.schema.json`; save stores a sparse diff. Raw `sp_get/set_study_action_config_overlay` stays for HPO promote — **not** a mid-run rebake                                                                                                                                 |
+| Guardrails (next run)   | Edit **effective** `alignment_qc` / `extraction_qc` (inherited + overlay) | `sp_get/set_study_guardrails_editor` binds `wf.data_type` `study_action_config_overlay` (alias of `sample_prep_guardrails_overlay`). Save stores a sparse diff on **this study only**. Deep-link caption to Platform Site / Profile / Procedure. Raw `sp_get/set_study_action_config_overlay` stays for HPO promote — **not** a mid-run rebake |
 | Project manifests       | Cohort paths under `/work/projects/<study>/`                         | `sp_project_list/get/save`; **no** `actionConfig` knobs                                                                                                                                                                                                                                |
 | Runs                    | Instances for this study                                             | `sp_list_study_instances`                                                                                                                                                                                                                                                              |
 | **Instance detail**     | Gantt, tasks, errors, **recovery verbs**                             | `sp_get_workflow_instance_header`, `sp_get_instance_tasks`, `sp_get_instance_sample_progress`, `sp_get_instance_config`, `sp_get_node_execution_detail`, `sp_retry_failed_node`, `sp_reclaim_expired_leases`, `sp_stop_node`, `sp_fail_node`, `sp_cancel_instance`, `sp_fail_instance` |
@@ -251,21 +252,22 @@ Example claimed `sample.methyl_qc` task:
 | **Guardrails (next run)** | Effective next-run `alignment_qc` / `extraction_qc` (type-enforced grid) | `sp_get/set_study_guardrails_editor` |
 
 
-**Guardrails editor contract (do not bind a loose overlay JSON):**
+**Guardrails editor contract (two `wf.data_type` documents, four screens):**
 
-1. Load `schemas/config/study_action_config_overlay.schema.json` (`schema_id` from
-   `sp_get_study_guardrails_editor`). Every knob is optional with bounds; there
-   are **no** `sample_paths` / `output_dir` and **no** baked numeric defaults.
-2. Bind `SchemaPropertyGrid` to **`effective_guardrails`** — the current
-   inherited (site → profile → procedure) values plus any study pins. An empty
-   inherited slice stays empty; QC still fills the published WGBS window at run
-   time from `CoreGuardrailsConfig` when nothing is pinned.
-3. On save, send the **full working document** back as `edited_effective`. The
-   setter diffs it against current inherited layers and writes only that sparse
-   overlay (`omit` = inherit, JSON `null` = clear leaf). Non-guardrail
-   `actionConfig` keys (HPO `validation`, …) are preserved.
-4. Do **not** bind `AlignmentQCConfig` / `ExtractionQCConfig` as the editor
-   schema — those require workflow identity and would persist package defaults.
+| Screen | `schema_id` | Persist |
+|--------|-------------|---------|
+| Platform → Site → Guardrails | `sample_prep_guardrails` | **Full** published `alignment_qc` + `extraction_qc` window (no `sample_paths` / `output_dir`) |
+| Platform → Pipeline profile → Guardrails | `sample_prep_guardrails_overlay` | Sparse diff vs site; SET upserts a **draft** version, UI calls `sp_publish_pipeline_profile` |
+| Platform → Assay procedure → Guardrails | `sample_prep_guardrails_overlay` | Sparse vs site+profile; SET upserts a **draft**; UI calls `sp_publish_assay_procedure` |
+| Studies → Guardrails (next run) | `study_action_config_overlay` (alias of the overlay type) | Sparse vs site+profile+procedure; **study row only** |
+
+Inherited merge for overlay editors: site (full) → profile overlay → procedure overlay → study overlay. Analyte fill-missing stays at instance bake (caption on the grid; **not** in SQL GET). Python `CoreGuardrailsConfig` defaults remain fail-closed if a site slice is still empty during migration.
+
+1. Bind `SchemaPropertyGrid` from `portal.sp_get_data_type(name)` using GET `schema_id`. Overlay knobs are optional with bounds; the site document carries the published-window numbers. There are **no** `sample_paths` / `output_dir`.
+2. Overlay screens bind to **`effective_guardrails`** (inherited + this layer’s pins). Site GET has no sparse overlay column — `effective_guardrails` **is** the stored full slice.
+3. Overlay save: send the **full working document** as `edited_effective`. The setter diffs against inherited layers (`omit` = inherit, JSON `null` = clear). Site save replaces the QC slice with the full edited window and **rejects** a partial core/extraction window. Non-guardrail `actionConfig` keys are preserved.
+4. Caption + deep-link: show site / profile / procedure identity; study lead opens Platform screens read-only if entitled, but the study grid **must not POST** to shared layers.
+5. Do **not** bind `AlignmentQCConfig` / `ExtractionQCConfig` / `alignment_qc.schema.json` as the editor schema.
 
 `sp_get/set_study_action_config_overlay` remains the wholesale
 `document_json.actionConfig` accessor for HPO promote
@@ -274,33 +276,39 @@ hand.
 
 **EpiPortal (Delphi) — what to add**
 
-Put the grid on **Studies → {Study} → Guardrails (next run)**, not on
-Workflows / graph authoring. A published workflow is only the *procedure*
-that the study will start next; the overlay lives on `cfg.study`. From an
-instance, take `study_row_id` from `sp_get_workflow_instance_header` and
-open that study screen. Do not write `resolvedConfig` or `input_json`.
+Four SchemaPropertyGrid leaves. Studies grid writes **only**
+`sp_set_study_guardrails_editor`. Platform grids write the matching
+`sp_set_*_guardrails_editor`. From an instance, take `study_row_id` from
+`sp_get_workflow_instance_header` and open the study Guardrails screen.
+Do not write `resolvedConfig` or `input_json`.
 
 | Piece | What to ship |
 | ----- | ------------ |
-| Schema file | Copy `schemas/config/study_action_config_overlay.schema.json` into EpiPortal’s schemas root (same catalog as `SchemaPropertyGrid`). Match `schema_id` from GET. |
-| Load | `portal.sp_get_study_guardrails_editor(@study_row_id)` |
-| Bind | `SchemaPropertyGrid.Bind(schema, effective_guardrails)` — parse the JSON object column into `TJSONObject`. Show site / profile / procedure as read-only caption. |
-| Save | `portal.sp_set_study_guardrails_editor(@study_row_id, @edited_effective)` where `@edited_effective` is the **full** working document after edit (not a hand-built patch). |
-| After save | Rebind from the result set (`effective_guardrails` again). Caption can show “pinned vs inherited”. |
-| Do not | Bind `alignment_qc.schema.json` / `ExtractionQCConfig`. Call the wholesale overlay setter from this screen. Edit a running instance. Use Retry to pick up knob changes (start a **new** instance). |
+| Schema files | Bind via `wf.data_type.schema_json` (`sp_get_data_type`). Copies: `sample_prep_guardrails.schema.json` (site) and `sample_prep_guardrails_overlay.schema.json` / `study_action_config_overlay.schema.json` (overlay). Match `schema_id` from GET. |
+| Load | Site: `sp_get_site_guardrails_editor`. Profile: `sp_get_profile_guardrails_editor`. Procedure: `sp_get_assay_procedure_guardrails_editor`. Study: `sp_get_study_guardrails_editor`. |
+| Bind | Overlay: `SchemaPropertyGrid.Bind(schema, effective_guardrails)`. Site: same column (full window). Caption: identity + “pinned vs inherited” + analyte bake note. |
+| Save | `sp_set_*_guardrails_editor(..., edited_effective)` with the **full** working document. Profile/procedure SET returns a **draft** `version`/`status`; call `sp_publish_*` when the operator publishes. |
+| After save | Rebind from the result set. Study GET `schema_id` stays `study_action_config_overlay`. |
+| Do not | Bind `alignment_qc.schema.json` / `ExtractionQCConfig`. Let the study screen POST to site/profile/procedure. Edit a running instance. Use Retry to pick up knob changes (start a **new** instance). |
 
-GET columns: `study_row_id`, `study_name`, `site_name`, `pipeline_profile`,
+Study GET columns: `study_row_id`, `study_name`, `site_name`, `pipeline_profile`,
 `pipeline_procedure`, `schema_id`, `inherited_guardrails`,
 `study_guardrail_overlay`, `effective_guardrails`.
 
-Role: study lead (and above). Hide from operators who cannot set process
-defaults if that is already how Study screens are gated.
+Profile GET adds `version`, `status`, `profile_guardrail_overlay`. Procedure GET
+adds `version`, `status`, `procedure_guardrail_overlay`. Site GET:
+`schema_id = sample_prep_guardrails`, `effective_guardrails` only.
+
+RBAC: **system administrator** edits site; **platform admin** edits packs
+(profile/procedure) then publish; **study lead** (and above) edits the study
+overlay. Hide Platform pack editors from study operators.
 
 Many profiles ship `"alignment_qc": {}`. Instance bake then stores an empty
 slice, and `methylalignmentqc` fills the published WGBS window from
-`CoreGuardrailsConfig` / the alignment-qc JSON Schema. Those numbers never
-appear as DomainProgram parameters. If operators set them on site, profile,
-procedure, or the study overlay, they *are* baked — still only as
+`CoreGuardrailsConfig` / the alignment-qc JSON Schema **only if the site window
+is still empty**. Prefer publishing the window on the site document. Those
+numbers never appear as DomainProgram parameters. If operators set them on site,
+profile, procedure, or the study overlay, they *are* baked — still only as
 `resolvedConfig`, still not as workflow `input_json` keys.
 
 CI: `scripts/check_task_input_config_boundary.py` fails when a wire field name
@@ -537,9 +545,12 @@ workers mount and the published endpoints that feed and archive samples.
 ```
 Platform
   ├─ Site
+  │    └─ Guardrails            full published QC window (sample_prep_guardrails)
   ├─ Process packs          (full list incl. retired — not the operator catalog)
   │    ├─ Pipeline profiles
+  │    │    └─ Guardrails       sparse overlay vs site (draft + publish)
   │    └─ Assay procedures
+  │         └─ Guardrails       sparse overlay vs site+profile (draft + publish)
   ├─ Domain programs
   ├─ Action catalog
   ├─ DataType Registry
@@ -556,11 +567,11 @@ Platform
 
 | Screen                 | Procs / notes                                                                                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Site                   | `sp_list/get/upsert/publish_site`, `sp_list_site_reference_assets`                                                                                   |
+| Site                   | `sp_list/get/upsert/publish_site`, `sp_list_site_reference_assets`, **`sp_get/set_site_guardrails_editor`** (full window) |
 | Storage endpoints      | `sp_list/get/upsert/publish_storage_endpoint`                                                                                                        |
 | Credentials            | `sp_list/get/upsert/publish_credential` (never to `/work`)                                                                                           |
-| Pipeline profiles      | `sp_list/get_pipeline_profile` — admin browse                                                                                                        |
-| Assay procedures       | `sp_list/get_assay_procedure`                                                                                                                        |
+| Pipeline profiles      | `sp_list/get_pipeline_profile`, **`sp_upsert/publish_pipeline_profile`**, **`sp_get/set_profile_guardrails_editor`**                                  |
+| Assay procedures       | `sp_list/get_assay_procedure`, **`sp_upsert/publish_assay_procedure`**, **`sp_get/set_assay_procedure_guardrails_editor`**                            |
 | Analytes               | `sp_list/get_analyte`                                                                                                                                |
 | Clusters               | `sp_upsert/list_cluster` — `shared_storage_uri`, `worker_mount_path`                                                                                 |
 | **Deployment**         | Compose `sp_list_clusters` + `sp_list/get_site` + `sp_list_storage_endpoints` (redacted) + `sp_list_site_reference_assets` — **no new path grammar** |
@@ -693,12 +704,12 @@ packs. `PlanCode` / `BillingCycle` are metadata — no billing UI.
 
 | Role                             | Home                          | Can                                                                                                           | Cannot                                                                                                                                |
 | -------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Study operator**               | Studies → Runs                | Enroll samples, start **published** instances, view tasks, **Retry** / reclaim, view entitled packs           | Edit/save/activate a workflow graph; DomainProgram publish; site; secrets; fleet Drain/Stop; cluster **Deployment**; Users; Contracts |
-| **Study lead**                   | Studies                       | Operator + bind **published** procedure/profile, next-run overlay, validation lifecycle / HPO                 | **Same graph writes as operator** — no draft, save, compile, or activate; Platform publish; fleet; Admin                              |
+| **Study operator**               | Studies → Runs                | Enroll samples, start **published** instances, view tasks, **Retry** / reclaim, view entitled packs           | Edit/save/activate a workflow graph; DomainProgram publish; site; secrets; fleet Drain/Stop; cluster **Deployment**; Users; Contracts; **shared-layer guardrails** |
+| **Study lead**                   | Studies                       | Operator + bind **published** procedure/profile, **study Guardrails overlay**, validation lifecycle / HPO     | **Same graph writes as operator** — no draft, save, compile, or activate; Platform publish; fleet; Admin; **must not POST study grid to site/profile/procedure** |
 | **Lab admin**                    | Platform → Storage (ingress)  | Lab ingress endpoints + credentials                                                                           | Archive/shared/site; fleet Stop unless also system administrator; workflow graph writes                                               |
-| **System administrator** (infra) | Platform → Clusters & workers | Cluster upsert + mounts, enrollment, fleet Drain/Stop/Resume, archive/shared/site storage, **deployment map** | Clinical PHI edits; study science knobs; Users / Contracts; workflow graph writes                                                     |
+| **System administrator** (infra) | Platform → Clusters & workers | Cluster upsert + mounts, enrollment, fleet Drain/Stop/Resume, archive/shared/site storage, **deployment map**, **site Guardrails (full window)** | Clinical PHI edits; study science knobs; Users / Contracts; workflow graph writes                                                     |
 | **Program author**               | Workflows → Definitions       | Edit drafts, save graph, compile, **publish / activate** versions                                             | Start production studies without a study role                                                                                         |
-| **Platform admin**               | All                           | Roles, Contracts, invitations, enrollment revoke, global reclaim, fleet bulk, **workflow publish**            | —                                                                                                                                     |
+| **Platform admin**               | All                           | Roles, Contracts, invitations, enrollment revoke, global reclaim, fleet bulk, **workflow publish**, **profile/procedure Guardrails + pack publish** | —                                                                                                                                     |
 
 
 Day-2 operators use **portal UI only** (company identity / MFA) — not SQL tools,
@@ -759,7 +770,12 @@ MSSQL + PG twins under `workflow_engine/sql_mssql/` and `sql_pg/`.
 | `portal.sp_set_sample_analyte`                                    | Bind sample → `cfg.analyte`                                        |
 | `portal.sp_get/set_study_storage`                                 | Persist published `fastqSource` + `sampleDestination` on the study |
 | `portal.sp_get/set_study_action_config_overlay`                   | Wholesale next-run `actionConfig` (HPO promote)                    |
-| `portal.sp_get/set_study_guardrails_editor`                       | Typed Guardrails grid: effective values in, sparse overlay out     |
+| `portal.sp_get/set_study_guardrails_editor`                       | Study overlay grid (`study_action_config_overlay`); sparse out     |
+| `portal.sp_get/set_site_guardrails_editor`                        | Site full QC window (`sample_prep_guardrails`)                     |
+| `portal.sp_get/set_profile_guardrails_editor`                     | Profile sparse overlay vs site; SET upserts a draft                |
+| `portal.sp_get/set_assay_procedure_guardrails_editor`             | Procedure sparse overlay vs site+profile; SET upserts a draft      |
+| `portal.sp_upsert/publish_pipeline_profile`                       | Platform pack authoring (wraps `cfg.cfg_repo_*`)                   |
+| `portal.sp_upsert/publish_assay_procedure`                        | Platform procedure authoring                                       |
 | `portal.sp_list/get/upsert/publish_storage_endpoint`              | Storage admin                                                      |
 | `portal.sp_list/get/upsert/publish_credential`                    | Credential admin                                                   |
 | `portal.sp_list/get_pipeline_profile`                             | Platform process-pack browse                                       |

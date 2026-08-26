@@ -64,7 +64,17 @@
       "output_format": "hdf5"
     },
     "alignment_qc": {
+      "auto_profile_from_analyte": false,
       "cycle_screening": {
+        "enabled": true,
+        "r2_start_window_cycles": 5,
+        "recovery_cycles": 10,
+        "r2_quality_threshold": 30.0,
+        "max_trim_bases": 8,
+        "multi_region_min_separate_dips": 2,
+        "read_edge_window": 10,
+        "broad_bad_cycle_count": 8,
+        "localized_max_span": 6,
         "remediate_without_cycles": true,
         "fallback_trim_front": 5,
         "fallback_trim_tail": 0
@@ -72,8 +82,37 @@
       "bisulfite_conversion": {
         "enabled": true,
         "source": "sidecar",
-        "sidecar_filename": "bisulfite_conversion.json"
+        "sidecar_filename": "bisulfite_conversion.json",
+        "min_conversion_rate_pct": 99.0,
+        "max_non_cpg_methylation_pct": 2.0,
+        "max_deamination_qscore_proxy": 30
+      },
+      "core_guardrails": {
+        "min_pf_percent": 90.0,
+        "min_q30_percent": 85.0,
+        "min_mean_quality": 35.0,
+        "min_quality_post20": 30.0,
+        "max_at_dropout": 3.0,
+        "max_gc_dropout": 5.0,
+        "median_insert_min_bp": 150,
+        "median_insert_max_bp": 300,
+        "max_deamination_qscore": 30,
+        "min_oxog_qscore": 20
       }
+    },
+    "extraction_qc": {
+      "guardrails": {
+        "min_cpg_weighted_mean_coverage": 10.0,
+        "max_chh_methylation_level": 0.02,
+        "max_chg_methylation_level": 0.02,
+        "min_autosomal_coverage_uniformity_ratio": 0.5,
+        "max_discard_fraction": 0.9
+      },
+      "expected_chromosomes": [
+        "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+        "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+        "21", "22", "X", "Y"
+      ]
     }
   },
   "reference_selection": {

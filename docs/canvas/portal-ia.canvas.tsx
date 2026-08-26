@@ -163,7 +163,7 @@ export default function PortalIaCanvas() {
           ["Home / Ops", "Operator / infra", "Instances, stale leases, fleet strip"],
           ["Studies", "Operator / study lead", "Pipeline workspace + Runs monitor"],
           ["Workflows", "Program author / platform admin", "Graph edit + publish — hidden from operator/lead"],
-          ["Platform", "Lab / system admin", "Site, packs, storage, cluster deployment, fleet"],
+          ["Platform", "Lab / system admin", "Site + Guardrails, packs + Guardrails, storage, cluster deployment, fleet"],
           ["Hyperparameters", "Study lead", "Grids and trials"],
           ["Admin", "Platform admin", "RBAC + Contracts (process packs)"],
         ]}
@@ -246,6 +246,50 @@ export default function PortalIaCanvas() {
           </CardBody>
         </Card>
       </Grid>
+
+      <H2>Platform SamplePrep Guardrails</H2>
+      <Text tone="secondary">
+        Two wf.data_type documents. Site persists the full published window.
+        Profile, procedure, and study persist a sparse overlay. Study GET keeps
+        schema_id study_action_config_overlay so existing wiring does not break.
+        The study grid must not POST to shared layers.
+      </Text>
+      <Table
+        striped
+        headers={["Screen", "schema_id", "Proc", "Persist"]}
+        rows={[
+          [
+            "Platform → Site → Guardrails",
+            "sample_prep_guardrails",
+            "sp_get/set_site_guardrails_editor",
+            "Full QC slice; reject partial window",
+          ],
+          [
+            "Platform → Profile → Guardrails",
+            "sample_prep_guardrails_overlay",
+            "sp_get/set_profile_guardrails_editor",
+            "Sparse vs site; upsert draft then publish",
+          ],
+          [
+            "Platform → Procedure → Guardrails",
+            "sample_prep_guardrails_overlay",
+            "sp_get/set_assay_procedure_guardrails_editor",
+            "Sparse vs site+profile; upsert draft then publish",
+          ],
+          [
+            "Studies → Guardrails (next run)",
+            "study_action_config_overlay",
+            "sp_get/set_study_guardrails_editor",
+            "Sparse vs inherited; study row only",
+          ],
+        ]}
+        rowTone={["info", undefined, undefined, "success"]}
+      />
+      <Text tone="tertiary" size="small">
+        RBAC: system administrator (site), platform admin (packs), study lead
+        (study overlay). Caption + deep-link inherited layers. Analyte
+        fill-missing stays at instance bake, not in SQL GET.
+      </Text>
 
       <H2>Missing FASTQ</H2>
       <Callout tone="warning" title="Same URI, then Retry">
@@ -343,6 +387,11 @@ export default function PortalIaCanvas() {
             "Monitor / retry / cancel",
             "header, sample progress, config snapshot, retry, fail/stop node, cancel/fail instance",
             "portal_ops_recovery_api.sql + portal_study_ops_api.sql",
+          ],
+          [
+            "Layered Guardrails editors",
+            "site/profile/procedure GET/SET + pack upsert/publish",
+            "portal_guardrails_editor.sql + cfg_process_pack_catalog.sql",
           ],
           [
             "RBAC admin",

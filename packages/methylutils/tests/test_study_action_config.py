@@ -9,10 +9,17 @@ from methyl_alignment_qc.models.config import AlignmentQCConfig, CoreGuardrailsC
 from methyl_extraction_qc.models.config import ExtractionQCConfig
 from methyl_utils.action_config_resolver import deep_merge
 from methyl_utils.study_action_config import (
+    FULL_SCHEMA_ID,
+    OVERLAY_SCHEMA_ID,
     SCHEMA_ID,
+    SamplePrepGuardrails,
     StudyActionConfigOverlay,
+    assert_full_core_window,
+    compose_guardrails,
     compose_study_guardrails,
     overlay_from_edited_effective,
+    published_sample_prep_guardrails,
+    site_action_config_from_edited_full,
     slice_guardrails,
     sparse_overlay_diff,
 )
@@ -194,3 +201,89 @@ def test_overlay_from_edited_unchanged_drops_guardrail_keys():
     )
     assert "alignment_qc" not in stored
     assert stored == {"validation": {"stability_dmp_freq": 0.5}}
+
+
+def test_full_model_has_published_window_and_no_identity():
+    dumped = SamplePrepGuardrails().model_dump()
+    core = dumped["alignment_qc"]["core_guardrails"]
+    assert core["median_insert_min_bp"] == 150
+    assert core["max_gc_dropout"] == 5.0
+    assert dumped["extraction_qc"]["guardrails"]["max_discard_fraction"] == 0.9
+    assert "sample_paths" not in dumped["alignment_qc"]
+    assert "output_dir" not in dumped["alignment_qc"]
+    published = published_sample_prep_guardrails()
+    assert published["alignment_qc"]["core_guardrails"]["min_pf_percent"] == 90.0
+    with pytest.raises(ValidationError):
+        SamplePrepGuardrails.model_validate(
+            {"alignment_qc": {"sample_paths": ["/work/samples/S001"]}}
+        )
+
+
+def test_full_schema_is_not_alignment_qc_runtime():
+    full = generate_schema_dict(SamplePrepGuardrails, title="SamplePrepGuardrails")
+    runtime = generate_schema_dict(AlignmentQCConfig, title="AlignmentQCConfig")
+    assert set(full["properties"]) == {"alignment_qc", "extraction_qc"}
+    assert "sample_paths" not in full["$defs"]["AlignmentQcFull"]["properties"]
+    core = full["$defs"]["CoreGuardrailsFull"]["properties"]["median_insert_min_bp"]
+    assert core.get("default") == 150
+    assert "sample_paths" in runtime.get("required", [])
+
+
+def test_assert_full_core_window_rejects_partial():
+    with pytest.raises(ValueError, match="full published window"):
+        assert_full_core_window({"alignment_qc": {"core_guardrails": {"max_gc_dropout": 6.0}}})
+    assert_full_core_window(published_sample_prep_guardrails())
+
+
+def test_site_action_config_from_edited_preserves_other_keys():
+    stored = site_action_config_from_edited_full(
+        edited_effective=published_sample_prep_guardrails(),
+        existing_action_config={
+            "alignment_qc": {"core_guardrails": {"median_insert_min_bp": 140}},
+            "validation": {"stability_dmp_freq": 0.5},
+        },
+    )
+    assert stored["validation"] == {"stability_dmp_freq": 0.5}
+    assert stored["alignment_qc"]["core_guardrails"]["median_insert_min_bp"] == 150
+    with pytest.raises(ValueError, match="full published window"):
+        site_action_config_from_edited_full(
+            edited_effective={"alignment_qc": {"core_guardrails": {"median_insert_min_bp": 150}}},
+            existing_action_config={},
+        )
+
+
+def test_compose_guardrails_layers_and_schema_ids():
+    site = published_sample_prep_guardrails()
+    profile = {"alignment_qc": {"core_guardrails": {"max_gc_dropout": 6.0}}}
+    procedure = {"alignment_qc": {"cycle_screening": {"fallback_trim_front": 5}}}
+    study = {"alignment_qc": {"core_guardrails": {"median_insert_min_bp": 140}}}
+
+    site_view = compose_guardrails(site_action_config=site, through_layer="site")
+    assert site_view["schema_id"] == FULL_SCHEMA_ID
+    assert site_view["inherited"] == {}
+    assert site_view["effective"]["alignment_qc"]["core_guardrails"]["median_insert_min_bp"] == 150
+
+    profile_view = compose_guardrails(
+        site_action_config=site, profile_action_config=profile, through_layer="profile"
+    )
+    assert profile_view["schema_id"] == OVERLAY_SCHEMA_ID
+    assert profile_view["effective"]["alignment_qc"]["core_guardrails"]["max_gc_dropout"] == 6.0
+    assert profile_view["effective"]["alignment_qc"]["core_guardrails"]["median_insert_min_bp"] == 150
+
+    proc_view = compose_guardrails(
+        site_action_config=site,
+        profile_action_config=profile,
+        procedure_action_config=procedure,
+        through_layer="procedure",
+    )
+    assert proc_view["effective"]["alignment_qc"]["cycle_screening"]["fallback_trim_front"] == 5
+
+    study_view = compose_guardrails(
+        site_action_config=site,
+        profile_action_config=profile,
+        procedure_action_config=procedure,
+        study_overlay=study,
+        through_layer="study",
+    )
+    assert study_view["schema_id"] == SCHEMA_ID
+    assert study_view["effective"]["alignment_qc"]["core_guardrails"]["median_insert_min_bp"] == 140

@@ -45,9 +45,21 @@ Procs: `cfg.cfg_repo_set_compiled_version`, `cfg.cfg_repo_link_study_instance`, 
 | Action dispatch + I/O type FKs | `wf.workflow_action` |
 | Worker claim/submit bodies | JSON **values** conforming to those types (wire only) |
 | Flexible sample extras / future covariates | `portal.sample_field_contract.schema_json` |
-| Git generators | Pydantic / Mojo / `schemas/domain`, `schemas/tasks` → `seed_data_types.py` |
+| Git generators | Pydantic / Mojo / `schemas/domain`, `schemas/tasks`, `schemas/config` (guardrail editor types) → `seed_data_types.py` |
 
-`cfg.action_definition` and seeding of `wf.workflow_action_schema` blobs are **retired**. Use `methyl-cfg sync-actions` (seeds wf) and portal `sp_list/get_workflow_actions` / `sp_list/get_data_type`.
+`cfg.action_definition` and seeding of `wf.workflow_action_schema` blobs are **retired**. Use `methyl-cfg sync-actions` (seeds wf, including SamplePrep guardrail types from `schemas/config`) and portal `sp_list/get_workflow_actions` / `sp_list/get_data_type`.
+
+## SamplePrep guardrails (site window + overlays)
+
+The published WGBS/extraction QC window is **site data**, not a Python constant and not four copies of `AlignmentQCConfig`.
+
+| `wf.data_type` name | Bind | Persist |
+|---------------------|------|---------|
+| `sample_prep_guardrails` | Platform → Site grid | Full `alignment_qc` + `extraction_qc` slice |
+| `sample_prep_guardrails_overlay` | Profile / procedure grids | Sparse diff vs inherited |
+| `study_action_config_overlay` | Studies → Guardrails | Same overlay model (alias so existing IA/Delphi wiring does not break) |
+
+Merge for overlay editors: site (full) → profile overlay → procedure overlay → study overlay. **Analyte fill-missing** still happens at instance bake (`finalize_instance_context`), not in SQL GET. Portal procs: `portal.sp_get/set_*_guardrails_editor` in `portal_guardrails_editor.sql` (twins). Do not bind `alignment_qc.schema.json`.
 
 ```mermaid
 flowchart LR

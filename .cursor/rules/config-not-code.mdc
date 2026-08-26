@@ -38,3 +38,9 @@ MethylPipeline is **disease-agnostic** and **deployment-configurable**. Do not e
 - **DB workflow:** gateway enriches `context_json.actionConfig`; workers read `resolvedConfig` and `monte_carlo_runs/queue/mc_config.json` snapshots.
 
 When adding a new tunable parameter, add it to the appropriate JSON schema + profile/site examples — not to Python defaults.
+
+## Examples (SamplePrep core guardrails)
+
+- **Site (published window):** `actionConfig.alignment_qc.core_guardrails` (full core + extraction keys). Operator-facing source of the WGBS acceptance window.
+- **Profile / procedure / study:** sparse overlay of the same keys (omit = inherit). Do not copy the full window onto `samd_research.profile.json`.
+- **Python:** `CoreGuardrailsConfig` numeric defaults are fail-closed migration only — not the published window.

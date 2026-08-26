@@ -544,3 +544,63 @@ BEGIN
   RETURN QUERY SELECT * FROM portal.sp_get_study_process_defaults(p_study_row_id);
 END;
 $$;
+
+DO $drop$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.prokind
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'portal' AND p.proname IN (
+      'sp_upsert_pipeline_profile', 'sp_publish_pipeline_profile',
+      'sp_upsert_assay_procedure', 'sp_publish_assay_procedure'
+    )
+  LOOP
+    IF r.prokind = 'p' THEN
+      EXECUTE format('DROP PROCEDURE IF EXISTS %s CASCADE', r.sig);
+    ELSE
+      EXECUTE format('DROP FUNCTION IF EXISTS %s CASCADE', r.sig);
+    END IF;
+  END LOOP;
+END $drop$;
+
+CREATE OR REPLACE FUNCTION portal.sp_upsert_pipeline_profile(
+  p_name text,
+  p_version text,
+  p_status text,
+  p_document jsonb
+)
+RETURNS TABLE(id bigint)
+LANGUAGE sql AS $$
+  SELECT * FROM cfg.cfg_repo_upsert('pipeline_profile', p_name, p_version, p_status, p_document);
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_publish_pipeline_profile(
+  p_name text,
+  p_version text
+)
+RETURNS TABLE(id bigint)
+LANGUAGE sql AS $$
+  SELECT * FROM cfg.cfg_repo_publish('pipeline_profile', p_name, p_version);
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_upsert_assay_procedure(
+  p_name text,
+  p_version text,
+  p_status text,
+  p_document jsonb
+)
+RETURNS TABLE(id bigint)
+LANGUAGE sql AS $$
+  SELECT * FROM cfg.cfg_repo_upsert('assay_procedure', p_name, p_version, p_status, p_document);
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_publish_assay_procedure(
+  p_name text,
+  p_version text
+)
+RETURNS TABLE(id bigint)
+LANGUAGE sql AS $$
+  SELECT * FROM cfg.cfg_repo_publish('assay_procedure', p_name, p_version);
+$$;

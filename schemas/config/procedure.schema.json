@@ -50,6 +50,15 @@
     "stabilityGeneFeaturecutsEnabled": { "type": "boolean" },
     "actionConfig": {
       "type": "object",
+      "description": "Per-action parameter overlays. QC slices are sparse overlays of the site window.",
+      "properties": {
+        "alignment_qc": {
+          "$ref": "sample_prep_guardrails_overlay.schema.json#/properties/alignment_qc"
+        },
+        "extraction_qc": {
+          "$ref": "sample_prep_guardrails_overlay.schema.json#/properties/extraction_qc"
+        }
+      },
       "additionalProperties": {
         "type": "object",
         "additionalProperties": true

@@ -14,6 +14,8 @@
 
 Set **`regulatory.primary_analyte`** once in the study manifest (`cfdna`, `buffy_coat`, or `combined`). The resolver merges analyte-specific defaults into profile/site `actionConfig` via `merge_step_config` in `packages/methylutils/methyl_utils/analyte_profiles.py` (explicit profile or site keys always win). Procedure and instance overlays still win over analyte fill-missing defaults.
 
+The **core QC window** (`alignment_qc.core_guardrails`, `extraction_qc.guardrails`) is published on the **site**. Analyte packs still **fill-missing at instance bake** (fragmentomics, bisulfite, CHG/CHH caps, …). They are **not** part of the portal SQL inherited merge used by the Guardrails grids. Do not pin `fragmentomics.enabled: false` on the site document if analyte fill-missing should still enable cfDNA fragmentomics.
+
 Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.
 
 ## What each analyte enables

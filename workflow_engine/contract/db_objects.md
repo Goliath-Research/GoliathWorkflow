@@ -118,6 +118,12 @@ Deploy [`../sql/portal_workflow_api.sql`](../sql/portal_workflow_api.sql) (Azure
 | `portal.sp_link_study_instance` | Attach a run to `cfg.study` |
 | `portal.sp_get/set_study_storage` | Persist published FASTQ/archive endpoints on the study |
 | `portal.sp_get/set_study_action_config_overlay` | Next-run `actionConfig` overlay (no mid-run rebake) |
+| `portal.sp_get/set_study_guardrails_editor` | Study overlay grid (`study_action_config_overlay`) |
+| `portal.sp_get/set_site_guardrails_editor` | Site full QC window (`sample_prep_guardrails`) |
+| `portal.sp_get/set_profile_guardrails_editor` | Profile sparse overlay vs site; SET upserts a draft |
+| `portal.sp_get/set_assay_procedure_guardrails_editor` | Procedure sparse overlay vs site+profile; SET upserts a draft |
+| `portal.sp_upsert/publish_pipeline_profile` | Platform pack authoring |
+| `portal.sp_upsert/publish_assay_procedure` | Platform procedure authoring |
 | `portal.sp_get_workflow_instance_header` | Instance header (study, profile, counts) |
 | `portal.sp_get_instance_config` | Redacted context + `resolvedConfig` snapshot |
 | `portal.sp_get_instance_sample_progress` | Sample × stage matrix |

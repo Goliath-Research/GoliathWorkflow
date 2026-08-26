@@ -30,7 +30,7 @@ def generate_schema_dict(model: type[BaseModel], *, title: str | None = None) ->
     schema = model.model_json_schema(by_alias=True)
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     if title:
-        schema.setdefault("title", title)
+        schema["title"] = title
     return schema
 
 

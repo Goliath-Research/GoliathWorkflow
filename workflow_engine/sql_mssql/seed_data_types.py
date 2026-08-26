@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Seed wf.data_type (+ fields) from schemas/domain and schemas/tasks.
+Seed wf.data_type (+ fields) from schemas/domain, schemas/tasks, and
+schemas/config (SamplePrep guardrail editor types).
 
 Stores the JSON Schema document on wf.data_type.schema_json (SchemaPropertyGrid
 bind target) and flattens properties into data_type_field as a SQL index.
@@ -24,8 +25,15 @@ from typing import Any, Dict, List, Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOMAIN_DIR = REPO_ROOT / "schemas" / "domain"
 TASKS_DIR = REPO_ROOT / "schemas" / "tasks"
+CONFIG_DIR = REPO_ROOT / "schemas" / "config"
 REGISTRY_PATH = DOMAIN_DIR / "registry.json"
 WF_ENGINE = REPO_ROOT / "workflow_engine"
+
+CONFIG_GUARDRAIL_TYPES = (
+    ("sample_prep_guardrails", "sample_prep_guardrails.schema.json"),
+    ("sample_prep_guardrails_overlay", "sample_prep_guardrails_overlay.schema.json"),
+    ("study_action_config_overlay", "study_action_config_overlay.schema.json"),
+)
 
 sys.path.insert(0, str(REPO_ROOT / "workers"))
 sys.path.insert(0, str(WF_ENGINE))
@@ -435,6 +443,33 @@ def seed_domain_types(db) -> int:
     return count
 
 
+def seed_config_types(db) -> int:
+    """Seed SamplePrep guardrail editor schemas from schemas/config."""
+    count = 0
+    for type_name, filename in CONFIG_GUARDRAIL_TYPES:
+        path = CONFIG_DIR / filename
+        if not path.is_file():
+            print(f"skip missing config schema {path}", file=sys.stderr)
+            continue
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        defs = schema.get("$defs") if isinstance(schema.get("$defs"), dict) else {}
+        for def_name, def_schema in defs.items():
+            if isinstance(def_schema, dict):
+                _seed_object_from_schema(
+                    db,
+                    type_name=def_name,
+                    schema=def_schema,
+                    defs=defs,
+                    root_document=schema,
+                )
+        _seed_object_from_schema(
+            db, type_name=type_name, schema=schema, defs=defs, root_document=schema
+        )
+        count += 1
+        print(f"upserted config data_type:{type_name}")
+    return count
+
+
 def seed_task_types(db) -> Tuple[int, int]:
     from methyl_worker.task_schema_registry import list_task_schema_specs
 
@@ -539,10 +574,11 @@ def main() -> int:
     try:
         n_prim = seed_primitives(db)
         n_dom = seed_domain_types(db)
+        n_cfg = seed_config_types(db)
         n_task, n_bind = seed_task_types(db)
         print(
             f"data_type seed complete primitives={n_prim} domain={n_dom} "
-            f"task_types={n_task} action_binds={n_bind}"
+            f"config={n_cfg} task_types={n_task} action_binds={n_bind}"
         )
     finally:
         db.close()

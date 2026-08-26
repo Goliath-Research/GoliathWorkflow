@@ -134,10 +134,12 @@ Author pipeline studies with four artifacts (no `step_config` in study manifests
 
 - `schemas/config/project_config.schema.json` — study manifest
 - `schemas/config/profile.schema.json` — pipeline profile
-- `schemas/config/site_manifest.schema.json` — site manifest
-- `schemas/config/study_action_config_overlay.schema.json` — Studies → Guardrails (next run) editor (bind to **effective** values; persist the sparse diff)
+- `schemas/config/site_manifest.schema.json` — site manifest (`actionConfig.alignment_qc` / `extraction_qc` `$ref` the **full** `sample_prep_guardrails` type)
+- `schemas/config/sample_prep_guardrails.schema.json` — Platform → Site Guardrails (full published window; no sample paths)
+- `schemas/config/sample_prep_guardrails_overlay.schema.json` — Platform → Profile / Procedure Guardrails (sparse overlay)
+- `schemas/config/study_action_config_overlay.schema.json` — Studies → Guardrails (next run) (`schema_id` alias of the overlay type; bind to **effective** values; persist the sparse diff)
 
-Open each JSON type with the matching schema from the dropdown. Tool tuning belongs in **profile** `actionConfig`, not in the study manifest.
+Open each JSON type with the matching schema from the dropdown. Site QC is the **full** guardrail document; profile / procedure / study QC slices are **overlays**. Other tool tuning belongs in **profile** `actionConfig`, not in the study manifest.
 
 Legacy projects with `step_config` can be converted once:
 

@@ -125,7 +125,15 @@
     },
     "actionConfig": {
       "type": "object",
-      "description": "Optional per-action defaults keyed by catalog action_config_key",
+      "description": "Optional per-action defaults keyed by catalog action_config_key. QC slices use the site full-guardrails type; other keys remain free-form.",
+      "properties": {
+        "alignment_qc": {
+          "$ref": "sample_prep_guardrails.schema.json#/properties/alignment_qc"
+        },
+        "extraction_qc": {
+          "$ref": "sample_prep_guardrails.schema.json#/properties/extraction_qc"
+        }
+      },
       "additionalProperties": {
         "type": "object",
         "additionalProperties": true

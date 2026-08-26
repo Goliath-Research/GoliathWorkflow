@@ -373,6 +373,63 @@ objects:
       parameters:
         - { name: study_row_id, type: bigint, direction: in }
       notes: Accepts edited effective document; persists sparse diff; preserves non-guardrail actionConfig keys
+    - name: portal.sp_get_site_guardrails_editor
+      kind: procedure
+      required: true
+      parameters:
+        - { name: site_row_id, type: bigint, direction: in }
+      notes: Full site QC slice; schema_id sample_prep_guardrails
+    - name: portal.sp_set_site_guardrails_editor
+      kind: procedure
+      required: true
+      parameters:
+        - { name: site_row_id, type: bigint, direction: in }
+      notes: Persist full published window; reject partial core/extraction keys
+    - name: portal.sp_get_profile_guardrails_editor
+      kind: procedure
+      required: true
+      parameters:
+        - { name: pipeline_profile_id, type: bigint, direction: in }
+      notes: Effective vs site; schema_id sample_prep_guardrails_overlay
+    - name: portal.sp_set_profile_guardrails_editor
+      kind: procedure
+      required: true
+      parameters:
+        - { name: pipeline_profile_id, type: bigint, direction: in }
+      notes: Sparse overlay vs site; upserts a draft version (does not mutate published in place)
+    - name: portal.sp_get_assay_procedure_guardrails_editor
+      kind: procedure
+      required: true
+      parameters:
+        - { name: assay_procedure_id, type: bigint, direction: in }
+      notes: Effective vs site+profile; schema_id sample_prep_guardrails_overlay
+    - name: portal.sp_set_assay_procedure_guardrails_editor
+      kind: procedure
+      required: true
+      parameters:
+        - { name: assay_procedure_id, type: bigint, direction: in }
+      notes: Sparse overlay vs site+profile; upserts a draft version
+    - name: portal.sp_upsert_pipeline_profile
+      kind: procedure
+      required: true
+      parameters:
+        - { name: name, type: text, direction: in }
+      notes: cfg.cfg_repo_upsert pipeline_profile
+    - name: portal.sp_publish_pipeline_profile
+      kind: procedure
+      required: true
+      parameters:
+        - { name: name, type: text, direction: in }
+    - name: portal.sp_upsert_assay_procedure
+      kind: procedure
+      required: true
+      parameters:
+        - { name: name, type: text, direction: in }
+    - name: portal.sp_publish_assay_procedure
+      kind: procedure
+      required: true
+      parameters:
+        - { name: name, type: text, direction: in }
     - name: portal.sp_get_workflow_instance_header
       kind: procedure
       required: true
