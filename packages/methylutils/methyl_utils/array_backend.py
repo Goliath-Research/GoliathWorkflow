@@ -1,13 +1,15 @@
 """
-Unified NumPy/CuPy array backend for MethylPipeline numeric kernels.
+Unified NumPy / CuPy / Mojo array backend for MethylPipeline numeric kernels.
 
-Prefer GPU when CuPy is available unless METHYL_DISABLE_GPU is set or prefer_gpu=False.
+When ``gpu_backend`` is unset, prefer CuPy if available unless METHYL_DISABLE_GPU
+is set or prefer_gpu=False. Explicit ``gpu_backend=mojo`` uses mojo-align numeric
+kernels (fail-closed; never silent CuPy fallback).
 """
 
 from __future__ import annotations
 
 import os
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Tuple
 
 import numpy as np
 
@@ -18,6 +20,7 @@ ArrayLike = Any
 
 _GPU_MODULE: Optional[ArrayModule] = None
 _CPU_MODULE = np
+_ALLOWED_GPU_BACKENDS = frozenset({"numpy", "cupy", "mojo"})
 
 
 def gpu_disabled_by_env() -> bool:
@@ -55,6 +58,63 @@ def get_array_module(prefer_gpu: Optional[bool] = None) -> Tuple[ArrayModule, bo
         except ImportError:
             return _CPU_MODULE, False
     return _GPU_MODULE, True
+
+
+def normalize_gpu_backend(value: Optional[str]) -> Optional[str]:
+    """Return ``numpy``, ``cupy``, ``mojo``, or ``None`` (inherit / auto)."""
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in {"", "none", "auto"}:
+        return None
+    if text not in _ALLOWED_GPU_BACKENDS:
+        raise ValueError(
+            "gpu_backend must be one of numpy, cupy, mojo "
+            f"(got {value!r})"
+        )
+    return text
+
+
+def resolve_array_backend(
+    prefer_gpu: Optional[bool] = None,
+    gpu_backend: Optional[str] = None,
+) -> Tuple[str, ArrayModule, bool]:
+    """Return ``(backend_name, xp, used_accelerator)``.
+
+    * ``gpu_backend is None`` — current CuPy-or-NumPy auto.
+    * ``numpy`` — host NumPy.
+    * ``cupy`` — CuPy required (fail if missing).
+    * ``mojo`` — mojo-align ``numeric/`` required (fail if missing; no CuPy fallback).
+
+    ``METHYL_DISABLE_GPU`` forces NumPy for every backend.
+    ``prefer_gpu=False`` forces NumPy even when ``gpu_backend`` is set.
+    """
+    name = normalize_gpu_backend(gpu_backend)
+    want = prefer_gpu_default() if prefer_gpu is None else bool(prefer_gpu)
+    if gpu_disabled_by_env() or not want:
+        return "numpy", _CPU_MODULE, False
+    if name is None:
+        xp, used = get_array_module(prefer_gpu=True)
+        return ("cupy" if used else "numpy"), xp, used
+    if name == "numpy":
+        return "numpy", _CPU_MODULE, False
+    if name == "cupy":
+        try:
+            import cupy as cp  # type: ignore
+
+            if not cp.is_available():
+                raise RuntimeError(
+                    "gpu_backend=cupy but CuPy reports no CUDA device"
+                )
+        except ImportError as exc:
+            raise RuntimeError("gpu_backend=cupy but CuPy is not installed") from exc
+        global _GPU_MODULE
+        _GPU_MODULE = cp
+        return "cupy", cp, True
+    from .mojo_numeric import require_mojo_numeric
+
+    require_mojo_numeric()
+    return "mojo", _CPU_MODULE, True
 
 
 def to_cpu(x: ArrayLike) -> np.ndarray:
@@ -181,6 +241,8 @@ __all__ = [
     "gpu_disabled_by_env",
     "prefer_gpu_default",
     "get_array_module",
+    "normalize_gpu_backend",
+    "resolve_array_backend",
     "to_cpu",
     "to_device",
     "cdf_linear_interp_batch",

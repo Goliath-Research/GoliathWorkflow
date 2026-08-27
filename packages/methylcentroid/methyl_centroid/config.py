@@ -47,7 +47,18 @@ class MethylCentroidConfig(BaseModel):
     )
     use_gpu: bool = Field(
         default=True,
-        description="Enable GPU acceleration when available"
+        description=(
+            "Prefer an accelerator when the selected gpu_backend can use one. "
+            "Operator-set per profile/site."
+        ),
+    )
+    gpu_backend: Optional[str] = Field(
+        default=None,
+        description=(
+            "Numeric array backend: numpy, cupy (NVIDIA CUDA), or mojo "
+            "(mojo-align numeric DeviceContext). Unset keeps CuPy-or-NumPy auto. "
+            "Operator-set per profile/site; do not encode a package default."
+        ),
     )
     max_sample_workers: Optional[int] = Field(
         default=None,
@@ -116,6 +127,13 @@ class MethylCentroidConfig(BaseModel):
                 "read from its metadata. Remove the \"samples\" key from JSON and put paths in add_samples."
             )
         return data
+
+    @field_validator("gpu_backend")
+    @classmethod
+    def validate_gpu_backend(cls, v):
+        from methyl_utils.array_backend import normalize_gpu_backend
+
+        return normalize_gpu_backend(v)
 
     @field_validator('ctx')
     @classmethod

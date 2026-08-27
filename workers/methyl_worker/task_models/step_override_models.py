@@ -27,6 +27,13 @@ class CentroidBaseConfigOverride(SampleCohortOverride):
 
     min_coverage: Optional[int] = Field(default=None, ge=1)
     use_gpu: Optional[bool] = None
+    gpu_backend: Optional[str] = Field(
+        default=None,
+        description=(
+            "Numeric array backend: numpy, cupy, or mojo. Unset keeps CuPy-or-NumPy auto. "
+            "Operator-set per site/profile."
+        ),
+    )
     max_sample_workers: Optional[int] = Field(default=None, ge=1)
     verbose: Optional[bool] = None
     cap_coverage: Optional[bool] = None

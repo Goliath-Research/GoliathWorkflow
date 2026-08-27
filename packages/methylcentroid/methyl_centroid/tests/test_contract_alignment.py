@@ -156,6 +156,24 @@ def test_config_rejects_non_positive_binned_stats_bins():
         )
 
 
+def test_config_accepts_gpu_backend_choices():
+    kwargs = dict(
+        laboratory="lab",
+        disease="disease",
+        group="group",
+        batch="batch",
+        chrom="1",
+        ctx="CG",
+        output_dir="/tmp/out",
+    )
+    assert MethylCentroidConfig(**kwargs).gpu_backend is None
+    assert MethylCentroidConfig(**kwargs, gpu_backend="numpy").gpu_backend == "numpy"
+    assert MethylCentroidConfig(**kwargs, gpu_backend="CUPY").gpu_backend == "cupy"
+    assert MethylCentroidConfig(**kwargs, gpu_backend="mojo").gpu_backend == "mojo"
+    with pytest.raises(ValidationError, match="gpu_backend"):
+        MethylCentroidConfig(**kwargs, gpu_backend="opencl")
+
+
 def test_config_rejects_removed_samples_field():
     with pytest.raises(ValidationError, match="samples"):
         MethylCentroidConfig(

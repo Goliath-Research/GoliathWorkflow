@@ -352,6 +352,57 @@ def test_binned_stats_h5_schema_save_and_load():
 # --------------------------------------------------------------------------- #
 # GPU path smoke test (only runs if CuPy available)
 # --------------------------------------------------------------------------- #
+def _centroid_arrays(centroid):
+    return {
+        "pos": np.asarray(centroid.pos),
+        "N": np.asarray(centroid.N),
+        "Sx": np.asarray(centroid.Sx),
+        "Sx2": np.asarray(centroid.Sx2),
+        "Sm": np.asarray(centroid.Sm),
+        "Su": np.asarray(centroid.Su),
+        "bins": np.asarray(centroid.binned_stats["bin_counts"]),
+    }
+
+
+def test_numpy_vs_explicit_numpy_backend():
+    paths = [
+        create_temp_sample([100, 200], [8, 2], [2, 8], [0, 0]),
+        create_temp_sample([100, 300], [4, 6], [6, 4], [0, 1]),
+    ]
+    a = build_centroid(paths, min_coverage=1, use_gpu=False)
+    b = build_centroid(paths, min_coverage=1, use_gpu=True, gpu_backend="numpy")
+    for key, left in _centroid_arrays(a).items():
+        np.testing.assert_allclose(left, _centroid_arrays(b)[key], rtol=1e-6, atol=1e-6)
+
+
+def test_mojo_backend_matches_numpy():
+    from methyl_utils.mojo_numeric import mojo_numeric_available
+
+    if not mojo_numeric_available():
+        pytest.skip("mojo-align numeric/ not on this host")
+    paths = [
+        create_temp_sample([100, 200], [8, 2], [2, 8], [0, 0]),
+        create_temp_sample([100, 300], [4, 6], [6, 4], [0, 1]),
+    ]
+    cpu = build_centroid(paths, min_coverage=1, use_gpu=False)
+    mojo = build_centroid(paths, min_coverage=1, use_gpu=True, gpu_backend="mojo")
+    assert mojo._metadata.get("gpu_backend") == "mojo"
+    for key, left in _centroid_arrays(cpu).items():
+        np.testing.assert_allclose(left, _centroid_arrays(mojo)[key], rtol=1e-6, atol=1e-6)
+
+
+@pytest.mark.skipif(not HAS_GPU, reason="CuPy not available")
+def test_cupy_backend_matches_numpy():
+    paths = [
+        create_temp_sample([100, 200], [8, 2], [2, 8], [0, 0]),
+        create_temp_sample([100, 300], [4, 6], [6, 4], [0, 1]),
+    ]
+    cpu = build_centroid(paths, min_coverage=1, use_gpu=False)
+    gpu = build_centroid(paths, min_coverage=1, use_gpu=True, gpu_backend="cupy")
+    for key, left in _centroid_arrays(cpu).items():
+        np.testing.assert_allclose(left, _centroid_arrays(gpu)[key], rtol=1e-5, atol=1e-5)
+
+
 @pytest.mark.skipif(not HAS_GPU, reason="CuPy not available")
 def test_gpu_path_works():
     positions = [10, 20, 30]

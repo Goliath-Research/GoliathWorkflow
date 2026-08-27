@@ -148,6 +148,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`archive-methylgrapher-mojo.plan.md`](archive-methylgrapher-mojo.plan.md) | _(pending ADO)_ | Former methylGrapher-mojo tree removed; MOJO_ALIGN_* contract | `rename-contract`, `mojo-align-paths`, `mp-image-runner`, `archive-old-repo`, `mp-docs` |
 | [`typed-handler-basemodel.plan.md`](typed-handler-basemodel.plan.md) | _(pending ADO)_ | Typed in-process handler inputs | `dispatcher-coerce`, `annotate-handlers`, `typed-field-access`, `scaffold-docs` |
 | [`sample-prep-durability.plan.md`](sample-prep-durability.plan.md) | _(pending ADO)_ | SamplePrep durability (FOREACH drain, exclusive GPU, /work share, trim FASTQ, sampleDestination, extract manifest) | `foreach-drain`, `claim-exclusive`, `work-share`, `work-share-writes`, `trim-resolve`, `sample-destination`, `extract-manifest`, `tests-docs-plan`, `archive-reject-reason`, `resume-66` |
+| [`portable-gpu-numeric-backend.plan.md`](portable-gpu-numeric-backend.plan.md) | _(pending ADO)_ | Portable GPU numeric backend (CuPy + Mojo) | `promote-plan`, `inventory-doc`, `backend-contract`, `mojo-centroid-kernels`, `wire-centroid-builder`, `parity-tests` |
 
 Create each **User Story** under its Feature in Azure DevOps Boards. Copy the story title from the plan `todos[].content` field (seed prefixes `[todo-id]`). Mark stories **Closed** when the corresponding code is merged; close the Feature when all child stories are done.
 

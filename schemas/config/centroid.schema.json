@@ -97,6 +97,19 @@
       "title": "Disease",
       "type": "string"
     },
+    "gpu_backend": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Numeric array backend: numpy, cupy (NVIDIA CUDA), or mojo (mojo-align numeric DeviceContext). Unset keeps CuPy-or-NumPy auto. Operator-set per profile/site; do not encode a package default.",
+      "title": "Gpu Backend"
+    },
     "group": {
       "description": "Sample group identifier (e.g., 'cancer', 'control')",
       "title": "Group",
@@ -157,7 +170,7 @@
     },
     "use_gpu": {
       "default": true,
-      "description": "Enable GPU acceleration when available",
+      "description": "Prefer an accelerator when the selected gpu_backend can use one. Operator-set per profile/site.",
       "title": "Use Gpu",
       "type": "boolean"
     },

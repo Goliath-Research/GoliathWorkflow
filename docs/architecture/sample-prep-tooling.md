@@ -2,14 +2,14 @@
 
 How MethylPipeline SamplePrep relates to **mojo-align**, **MethylExtractor**, and **NVIDIA Clara Parabricks**.
 
-For the operator engine matrix see [Alignment engines](../usage/alignment-engines.md). For the full analysis and backlog see [cross-repo-tool-analysis plan](../plans/cross-repo-tool-analysis.plan.md) (AB#703).
+For the operator engine matrix see [Alignment engines](../usage/alignment-engines.md). For the full analysis and backlog see [cross-repo-tool-analysis plan](../plans/cross-repo-tool-analysis.plan.md) (AB#703). Post-align science GPU (centroid / methylutils) is a **separate** backend from Align DeviceContext — see [Portable GPU numeric](portable-gpu-numeric.md).
 
 ## Roles
 
 | Component | Role |
 |-----------|------|
 | **MethylPipeline** | Orchestrator: DomainProgram branching, workers, `methylalignmentqc` / `methylextractionqc`, `/work` contracts |
-| **mojo-align** | Canonical Mojo monorepo (`gpu-common`, `fq2bam-meth`, `giraffe`, `methylgrapher`) baked into `epimethyl/methylgrapher:1.70-mojo-*` |
+| **mojo-align** | Canonical Mojo monorepo (`gpu-common`, `fq2bam-meth`, `giraffe`, `methylgrapher`, `numeric`) baked into `epimethyl/methylgrapher:1.70-mojo-*` |
 | **MethylExtractor** | MethylDackel fork: BAM → per-chrom HDF5 + extraction JSON (linear / stock pangenome) |
 | **Clara Parabricks** | Explicit linear / stock-pangenome engines; optional Picard `collectmultiplemetrics` |
 

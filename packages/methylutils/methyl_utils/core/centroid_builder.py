@@ -8,8 +8,8 @@ from typing import Optional, Dict, Any, Union, List
 import numpy as np
 import pandas as pd
 
-# GPU support via unified array backend
-from ..array_backend import get_array_module, prefer_gpu_default
+# GPU support via unified array backend (numpy | cupy | mojo)
+from ..array_backend import resolve_array_backend
 
 try:
     import cupy as cp
@@ -41,19 +41,27 @@ class MethylCentroidBuilder:
         chunk_size: int = 100_000_000,
         metadata: Optional[Dict[str, Any]] = None,
         binned_stats_bins: int = 20,
+        gpu_backend: Optional[str] = None,
     ):
         if int(binned_stats_bins) < 1:
             raise ValueError(
                 f"binned_stats_bins must be >= 1 for ECDF centroids, got {binned_stats_bins}"
             )
         self.min_coverage = min_coverage
-        self.xp, self.use_gpu = get_array_module(prefer_gpu=use_gpu)
+        self.gpu_backend, self.xp, self.use_gpu = resolve_array_backend(
+            prefer_gpu=use_gpu, gpu_backend=gpu_backend
+        )
         self.metadata = metadata or {}
         self.binned_stats_bins = int(binned_stats_bins)
         self.bin_edges = np.linspace(0.0, 1.0, binned_stats_bins + 1, dtype=np.float64)
         self.residualize_apply = None
 
-        logger.info(f"MethylCentroidBuilder initialized → GPU: {self.use_gpu}, binned_stats_bins={binned_stats_bins}")
+        logger.info(
+            "MethylCentroidBuilder initialized → backend=%s GPU=%s binned_stats_bins=%s",
+            self.gpu_backend,
+            self.use_gpu,
+            binned_stats_bins,
+        )
 
         self.pos: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
         self.mC_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
@@ -72,7 +80,7 @@ class MethylCentroidBuilder:
 
     def release_gpu(self) -> None:
         """Release GPU array references so memory can be freed."""
-        if not self.use_gpu or not HAS_GPU:
+        if self.gpu_backend != "cupy" or not HAS_GPU:
             return
         for attr in ["pos", "mC_sum", "uC_sum", "Sc2", "Swx2", "N", "Sx", "Sx2", "tnc", "bin_counts"]:
             if hasattr(self, attr):
@@ -115,8 +123,8 @@ class MethylCentroidBuilder:
             # Access tnc from DataFrame directly
             tnc = sample._df["tnc"].values.astype(np.uint8)
 
-            # Move to GPU if needed
-            if self.use_gpu:
+            # Move to CuPy if needed (Mojo stages on host NumPy)
+            if self.gpu_backend == "cupy":
                 pos = self.xp.asarray(pos)
                 mC = self.xp.asarray(mC)
                 uC = self.xp.asarray(uC)
@@ -124,12 +132,18 @@ class MethylCentroidBuilder:
 
             # Find insertion points. Cap pos to current max so searchsorted never returns self.size
             # (CuPy can OOB internally when the return value equals the array length).
-            max_pos = self.pos[self.size - 1]
-            pos_capped = self.xp.minimum(pos, max_pos)
-            idx = self.xp.searchsorted(self.pos[: self.size], pos_capped)
-            # idx is now in [0, self.size-1]; positions with pos > max_pos are new
-            is_new = (pos > max_pos) | (self.pos[idx] != pos)
-            n_new = int(is_new.sum())
+            if self.gpu_backend == "mojo":
+                from .. import mojo_numeric
+
+                pos, is_new, n_new = mojo_numeric.merge_centroid_positions(
+                    np.asarray(self.pos), self.size, np.asarray(pos)
+                )
+            else:
+                max_pos = self.pos[self.size - 1]
+                pos_capped = self.xp.minimum(pos, max_pos)
+                idx = self.xp.searchsorted(self.pos[: self.size], pos_capped)
+                is_new = (pos > max_pos) | (self.pos[idx] != pos)
+                n_new = int(is_new.sum())
 
             if n_new > 0:
                 needed = self.size + n_new
@@ -175,13 +189,17 @@ class MethylCentroidBuilder:
             # Use explicit Python int so the check is reliable on all backends (e.g. CuPy).
             size_int = int(self.size)
             oob_any = self.xp.any(final_idx >= size_int)
-            if self.use_gpu:
+            if self.gpu_backend == "cupy":
                 oob_any = bool(cp.asnumpy(oob_any))
             else:
                 oob_any = bool(oob_any)
             if oob_any:
                 valid = final_idx < size_int
-                n_skip = int(cp.asnumpy((~valid).sum()) if self.use_gpu else (~valid).sum())
+                n_skip = int(
+                    cp.asnumpy((~valid).sum())
+                    if self.gpu_backend == "cupy"
+                    else (~valid).sum()
+                )
                 logger.warning(
                     "Builder: %d sample position(s) not in builder after merge (skipping)",
                     n_skip,
@@ -203,7 +221,11 @@ class MethylCentroidBuilder:
                 self.xp.float64(0.0)
             ).astype(self.xp.float32)
             if self.residualize_apply is not None:
-                to_np = (lambda a: cp.asnumpy(a) if self.use_gpu else np.asarray(a))
+                to_np = (
+                    lambda a: cp.asnumpy(a)
+                    if self.gpu_backend == "cupy"
+                    else np.asarray(a)
+                )
                 pos_np = np.asarray(to_np(pos), dtype=np.uint32)
                 mean_np = np.asarray(to_np(mean), dtype=np.float64)
                 if pos_np.shape != mean_np.shape:
@@ -225,20 +247,43 @@ class MethylCentroidBuilder:
             ).astype(self.xp.float32)
             c_sq = (mC + uC).astype(self.xp.uint32)
 
-            self.mC_sum[final_idx] += mC
-            self.uC_sum[final_idx] += uC
-            self.Sc2[final_idx] += (c_sq.astype(self.xp.uint64) ** 2).astype(self.xp.uint32)
-            self.Swx2[final_idx] += swx2_inc
-            self.N[final_idx] += 1
-            self.Sx[final_idx] += mean
-            self.Sx2[final_idx] += mean ** 2
-            bin_edges_xp = self.xp.asarray(self.bin_edges)
-            if self.binned_stats_bins > 1:
-                bin_idx = self.xp.digitize(mean.astype(self.xp.float64), bin_edges_xp[1:-1])
-                bin_idx = self.xp.clip(bin_idx, 0, self.binned_stats_bins - 1).astype(self.xp.intp)
+            ones = self.xp.ones(len(mean), dtype=self.xp.uint32)
+            sc2_inc = (c_sq.astype(self.xp.uint64) ** 2).astype(self.xp.uint32)
+            sx2_inc = mean ** 2
+            if self.gpu_backend == "mojo":
+                from .. import mojo_numeric
+
+                fi = np.asarray(final_idx)
+                mojo_numeric.scatter_add_u32(self.mC_sum, fi, np.asarray(mC, dtype=np.uint32))
+                mojo_numeric.scatter_add_u32(self.uC_sum, fi, np.asarray(uC, dtype=np.uint32))
+                mojo_numeric.scatter_add_u32(self.Sc2, fi, np.asarray(sc2_inc, dtype=np.uint32))
+                mojo_numeric.scatter_add_f32(self.Swx2, fi, np.asarray(swx2_inc, dtype=np.float32))
+                mojo_numeric.scatter_add_u32(self.N, fi, np.asarray(ones, dtype=np.uint32))
+                mojo_numeric.scatter_add_f32(self.Sx, fi, np.asarray(mean, dtype=np.float32))
+                mojo_numeric.scatter_add_f32(self.Sx2, fi, np.asarray(sx2_inc, dtype=np.float32))
+                bin_idx = mojo_numeric.digitize_bins(
+                    np.asarray(mean, dtype=np.float32), self.bin_edges
+                )
+                mojo_numeric.bin_histogram_add(self.bin_counts, fi, bin_idx)
             else:
-                bin_idx = self.xp.zeros(len(mean), dtype=self.xp.intp)
-            self.xp.add.at(self.bin_counts, (final_idx, bin_idx), 1)
+                self.mC_sum[final_idx] += mC
+                self.uC_sum[final_idx] += uC
+                self.Sc2[final_idx] += sc2_inc
+                self.Swx2[final_idx] += swx2_inc
+                self.N[final_idx] += ones
+                self.Sx[final_idx] += mean
+                self.Sx2[final_idx] += sx2_inc
+                bin_edges_xp = self.xp.asarray(self.bin_edges)
+                if self.binned_stats_bins > 1:
+                    bin_idx = self.xp.digitize(
+                        mean.astype(self.xp.float64), bin_edges_xp[1:-1]
+                    )
+                    bin_idx = self.xp.clip(
+                        bin_idx, 0, self.binned_stats_bins - 1
+                    ).astype(self.xp.intp)
+                else:
+                    bin_idx = self.xp.zeros(len(mean), dtype=self.xp.intp)
+                self.xp.add.at(self.bin_counts, (final_idx, bin_idx), 1)
             self.samples_processed += 1
             if self.samples_processed % 50 == 0:
                 logger.info(
@@ -254,7 +299,7 @@ class MethylCentroidBuilder:
         """Return MethylCentroid with pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 and binned_stats."""
         if self.size == 0:
             raise ValueError("No data accumulated")
-        to_cpu = cp.asnumpy if self.use_gpu else lambda x: x
+        to_cpu = cp.asnumpy if self.gpu_backend == "cupy" else np.asarray
         pos = to_cpu(self.pos[: self.size])
         mC_sum = to_cpu(self.mC_sum[: self.size])
         uC_sum = to_cpu(self.uC_sum[: self.size])
@@ -286,6 +331,7 @@ class MethylCentroidBuilder:
             "positions_after_filter": len(df),
             "min_coverage": self.min_coverage,
             "gpu_acceleration": self.use_gpu,
+            "gpu_backend": self.gpu_backend,
             "binned_stats_bins": self.binned_stats_bins,
         }
         centroid = MethylCentroid(df, final_metadata)
@@ -303,12 +349,14 @@ def build_centroid(
     use_gpu: bool = True,
     metadata: Optional[Dict[str, Any]] = None,
     binned_stats_bins: int = 20,
+    gpu_backend: Optional[str] = None,
 ) -> MethylCentroid:
     builder = MethylCentroidBuilder(
         min_coverage=min_coverage,
         use_gpu=use_gpu,
         metadata=metadata,
         binned_stats_bins=binned_stats_bins,
+        gpu_backend=gpu_backend,
     )
     for path in sample_paths:
         builder.add_sample(path)

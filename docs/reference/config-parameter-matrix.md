@@ -83,7 +83,7 @@ Parameters resolve into **`resolvedConfig`** on each workflow task (Phase 4). Se
 
 | Section | Config model | Resolver / runner |
 |---------|--------------|-------------------|
-| `centroid` | `packages/methylcentroid/methyl_centroid/config.py` | `methyl_centroid/project_resolver.py` |
+| `centroid` | `packages/methylcentroid/methyl_centroid/config.py` | `methyl_centroid/project_resolver.py` (`use_gpu`, optional `gpu_backend`: numpy\|cupy\|mojo; see [portable-gpu-numeric](../architecture/portable-gpu-numeric.md)) |
 | `detection` | `packages/methyldetector/methyl_detector/models/config.py` | `methyldetector/.../project_resolver.py` |
 | `classifier` | `packages/methylclassifier/methyl_classifier/models/config_schema.py` | `methyl_classifier/project_resolver.py` |
 | `predictor` | `packages/methylpredictor/methyl_predictor/models/config.py` | `methyl_predictor/project_resolver.py` |

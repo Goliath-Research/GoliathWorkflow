@@ -13,6 +13,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Orchestration paths](orchestration-paths.md) | local, gateway, legacy CLI matrix |
 | [Pipeline stages](pipeline-stages.md) | sample prep through validation stage DAG |
 | [SamplePrep tooling](sample-prep-tooling.md) | mojo-align / MethylExtractor / Clara roles; alignment vs extraction QC |
+| [Portable GPU numeric](portable-gpu-numeric.md) | CuPy vs Mojo numeric backend for centroid / methylutils (not Align) |
 | [End-to-end workflow — DNA methylation](end-to-end-workflow.md) | Ingest → SamplePrep (QC/trim/extract) → MC → DeConv/info measures → model → holdouts (Mermaid) |
 | [Config propagation — methylation](config-propagation-methylation.md) | Bake → SamplePrep → MC snapshot → prepare_freeze path rebind → holdout; buffy vs cfDNA checklist |
 | [End-to-end workflow — RNA-Seq](end-to-end-workflow-rnaseq.md) | Ingest → quantify (rna_fq2bam/kallisto) → RNA QC → expression.h5 → DE gene panel + tabular classification (Mermaid) |

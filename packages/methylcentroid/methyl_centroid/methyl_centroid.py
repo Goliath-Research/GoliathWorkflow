@@ -63,6 +63,7 @@ def _create_centroid_builder(
     binned_stats_bins: int = 20,
     chunk_size: Optional[int] = None,
     metadata: Optional[Dict] = None,
+    gpu_backend: Optional[str] = None,
 ):
     """Create the ECDF centroid builder with an explicit positive bin count."""
     from methyl_utils.core.centroid_builder import MethylCentroidBuilder
@@ -71,7 +72,11 @@ def _create_centroid_builder(
         raise ValueError(
             f"binned_stats_bins must be >= 1 for ECDF centroids, got {binned_stats_bins}"
         )
-    kwargs: Dict = {"min_coverage": min_coverage, "use_gpu": use_gpu}
+    kwargs: Dict = {
+        "min_coverage": min_coverage,
+        "use_gpu": use_gpu,
+        "gpu_backend": gpu_backend,
+    }
     if chunk_size is not None:
         kwargs["chunk_size"] = chunk_size
     if metadata is not None:
@@ -249,6 +254,7 @@ class MethylCentroid:
         cap_coverage_n_cap_iqr_multiplier: float = 1.5,
         cap_coverage_n_cap_max_positions: int = 100_000,
         residualize_coef_dir: Optional[str] = None,
+        gpu_backend: Optional[str] = None,
     ):
         from contextlib import contextmanager
         import logging
@@ -400,18 +406,33 @@ class MethylCentroid:
         self.centroid: Optional[Path] = None
 
         # Detect GPU availability (honors METHYL_DISABLE_GPU) and respect explicit user choice
+        from methyl_utils.array_backend import (
+            gpu_disabled_by_env,
+            normalize_gpu_backend,
+        )
+
         gpu_available = prefer_gpu_default()
         self.logger.info(f"GPU available: {gpu_available}")
 
         self._gpu_enabled = True if use_gpu is None else bool(use_gpu)
+        self.gpu_backend = normalize_gpu_backend(gpu_backend)
         if not self._gpu_enabled:
             self.logger.info("GPU explicitly disabled by configuration; forcing CPU mode")
 
-        # For large human genomes, prioritize GPU unless disabled or unavailable
-        self.use_gpu = gpu_available and self._gpu_enabled
+        if self.gpu_backend == "mojo":
+            self.use_gpu = self._gpu_enabled and not gpu_disabled_by_env()
+        elif self.gpu_backend == "numpy":
+            self.use_gpu = False
+        elif self.gpu_backend == "cupy":
+            if not gpu_available:
+                raise RuntimeError("gpu_backend=cupy but CuPy/CUDA is not available")
+            self.use_gpu = self._gpu_enabled
+        else:
+            self.use_gpu = gpu_available and self._gpu_enabled
         if self.use_gpu:
             self.logger.info(
-                "Using GPU acceleration for optimal performance with large genomic datasets"
+                "Using GPU acceleration backend=%s",
+                self.gpu_backend or "auto",
             )
         else:
             self.logger.warning("GPU disabled or unavailable; using CPU processing")
@@ -657,6 +678,7 @@ class MethylCentroid:
             max_sample_workers=config.max_sample_workers,
             verbose=verbose_value,
             use_gpu=config.use_gpu,
+            gpu_backend=getattr(config, "gpu_backend", None),
             # Metadata fields
             laboratory=config.laboratory,
             disease=config.disease,
@@ -689,6 +711,7 @@ class MethylCentroid:
             "remove_samples": self._original_remove_samples,
             "min_coverage": self.min_coverage,
             "use_gpu": self._gpu_enabled,
+            "gpu_backend": getattr(self, "gpu_backend", None),
             "max_sample_workers": self.max_sample_workers,
             # Metadata fields
             "laboratory": self.laboratory,
@@ -1911,6 +1934,7 @@ class MethylCentroid:
         return _apply
 
     def _new_centroid_builder(self, *args, **kwargs):
+        kwargs.setdefault("gpu_backend", getattr(self, "gpu_backend", None))
         builder = _create_centroid_builder(*args, **kwargs)
         fn = self._get_residualize_apply()
         if fn is not None:
@@ -1925,6 +1949,25 @@ class MethylCentroid:
         memory is fragmented this can fail before per-sample fallback logic runs.
         """
         bins = int(getattr(self, "binned_stats_bins", 20))
+
+        if getattr(self, "gpu_backend", None) == "mojo":
+            chunk_size = {
+                "CG": 50_000_000,
+                "CHG": 25_000_000,
+                "CHH": 10_000_000,
+            }.get(self.ctx, 50_000_000)
+            self.logger.info(
+                "Initialized Mojo streaming builder with chunk_size=%s for %s-%s",
+                f"{chunk_size:,}",
+                self.chrom,
+                self.ctx,
+            )
+            return self._new_centroid_builder(
+                self._min_coverage,
+                True,
+                binned_stats_bins=bins,
+                chunk_size=chunk_size,
+            )
 
         if self.use_gpu:
             primary_chunk = self._derive_streaming_gpu_chunk_size(bins)

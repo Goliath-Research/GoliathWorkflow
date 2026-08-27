@@ -7,7 +7,12 @@ import os
 import numpy as np
 import pytest
 
-from methyl_utils.array_backend import get_array_module, prefer_gpu_default
+from methyl_utils.array_backend import (
+    get_array_module,
+    prefer_gpu_default,
+    resolve_array_backend,
+)
+from methyl_utils.mojo_numeric import mojo_numeric_available
 from methyl_utils.core.distribution_views import ECDFView
 from methyl_utils.ecdf_classifier import ECDFClassifier
 from methyl_utils.statistical_tests import (
@@ -96,6 +101,24 @@ def test_ecdf_classifier_scoring_stable():
     log1, log2, _ = clf.compute_log_pdf_matrices(X)
     assert np.all(np.isfinite(log1))
     assert np.all(np.isfinite(log2))
+
+
+def test_mojo_scatter_matches_numpy_add_at():
+    if not mojo_numeric_available():
+        pytest.skip("mojo-align numeric/ not on this host")
+    from methyl_utils import mojo_numeric
+
+    acc = np.zeros(5, dtype=np.uint32)
+    idx = np.array([0, 0, 3], dtype=np.intp)
+    vals = np.array([2, 3, 4], dtype=np.uint32)
+    expect = np.zeros(5, dtype=np.uint32)
+    np.add.at(expect, idx, vals)
+    mojo_numeric.scatter_add_u32(acc, idx, vals)
+    np.testing.assert_array_equal(acc, expect)
+    name, xp, used = resolve_array_backend(prefer_gpu=True, gpu_backend="mojo")
+    assert name == "mojo"
+    assert xp is np
+    assert used is True
 
 
 def test_get_array_module_respects_disable_env():
