@@ -1964,7 +1964,7 @@ class MethylCentroid:
             )
             return self._new_centroid_builder(
                 self._min_coverage,
-                True,
+                self.use_gpu,
                 binned_stats_bins=bins,
                 chunk_size=chunk_size,
             )

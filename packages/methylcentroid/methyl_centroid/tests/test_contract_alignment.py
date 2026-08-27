@@ -174,6 +174,32 @@ def test_config_accepts_gpu_backend_choices():
         MethylCentroidConfig(**kwargs, gpu_backend="opencl")
 
 
+def test_streaming_builder_mojo_respects_use_gpu_false(monkeypatch, tmp_path):
+    """gpu_backend=mojo must not force prefer_gpu=True when use_gpu=False."""
+
+    def boom():
+        raise RuntimeError("require_mojo_numeric should not run when use_gpu=False")
+
+    monkeypatch.setattr(
+        "methyl_utils.mojo_numeric.require_mojo_numeric", boom
+    )
+    mc = MethylCentroid(
+        laboratory="lab",
+        disease="disease",
+        group="group",
+        batch="batch",
+        chrom="1",
+        ctx="CG",
+        output_dir=tmp_path,
+        use_gpu=False,
+        gpu_backend="mojo",
+    )
+    assert mc.use_gpu is False
+    builder = mc._create_streaming_builder()
+    assert builder.use_gpu is False
+    assert builder.gpu_backend == "numpy"
+
+
 def test_config_rejects_removed_samples_field():
     with pytest.raises(ValidationError, match="samples"):
         MethylCentroidConfig(
