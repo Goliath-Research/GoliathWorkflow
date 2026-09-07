@@ -46,10 +46,15 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS ix_cfg_ap_analyte_id ON cfg.assay_procedure (analyte_id);
 
--- Soft: portal.Samples exists on Azure SQL; optional on PG parity DBs.
+-- Soft: portal.Samples exists as a table on Azure SQL; on PG it is often a view.
 DO $$
 BEGIN
-  IF to_regclass('portal.samples') IS NOT NULL THEN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'portal' AND c.relname = 'samples' AND c.relkind = 'r'
+  ) THEN
     IF NOT EXISTS (
       SELECT 1 FROM information_schema.columns
       WHERE table_schema = 'portal' AND table_name = 'samples' AND column_name = 'analyte_id'
