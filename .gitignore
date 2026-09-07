@@ -162,3 +162,4 @@ migrate_work_layout.manifest.json
 workers/docker/methylgrapher/engine/
 workers/docker/methylgrapher/src/
 workers/docker/methylgrapher/mojo-env/
+.neon
