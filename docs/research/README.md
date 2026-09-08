@@ -12,6 +12,7 @@ Informal background research used during pipeline design (analyte choice, MCED l
 | [Prostate_Cancer_Application_Deep_Dive.md](Prostate_Cancer_Application_Deep_Dive.md) | Application synthesis: buffy/plasma WGBS, EM-Seq GRAIL-style gatekeeper, alignment compare gate, informME/deconv, physician/payer validation story. Operator/researcher options: [usage ch.25](../usage/25-prostate-cancer-pack.md) |
 | [Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps.md](Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps.md) | Wong et al. 2026 (npj Precis Oncol): targeted EM-Seq + MHB/MHL mCRPC survival vs shipped `cfdna_emseq_targeted` — what blocks a repeat |
 | [moffitt_partnership_opportunity_brief.md](moffitt_partnership_opportunity_brief.md) | Moffitt partnership BD brief (updated for native MHL + Cox / Wong method class) |
+| [GoliathOmics Gaps.md](GoliathOmics Gaps.md) | Completeness vs Wang/Moffitt techniques: cfDNA MHL, clinico-genomic scores, exosomal miRNA/protein, long-read ASM |
 | [Gemini_on_Cancer_Detection.md](Gemini_on_Cancer_Detection.md) | MCED competitors, multiomics platforms, buffy-coat as CHIP filter |
 | [Grok_on_Gemini_conclusions.md](Grok_on_Gemini_conclusions.md) | Verification of Gemini MCED landscape note; performance and regulatory caveats |
 | [methylit.md](methylit.md) | MethylIT (R 0.3.2.8 + Python methylit 0.4.2): theory, estimators, source cross-checks, critiques, empirical agenda |
