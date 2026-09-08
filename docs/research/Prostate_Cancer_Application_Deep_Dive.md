@@ -2,7 +2,7 @@
 
 **Status:** research / application synthesis (not an operator runbook).  
 **Audience:** scientists, physicians, and insurance / medical-director readers who need to understand **why** MethylPipeline’s analyte, assay, and validation choices matter for prostate cancer.  
-**Follow-on operator surface:** [Methylation application packs](../usage/24-methylation-application-packs.md) (Alzheimer-style pack pattern); a dedicated `docs/usage/25-prostate-cancer-pack.md` is **not** in this note.
+**Follow-on operator surface:** [Prostate cancer options catalog (ch.25)](../usage/25-prostate-cancer-pack.md) — what to set (assay, alignment, extraction, tissue progression, SaMD ladder). Pattern: [Methylation application packs](../usage/24-methylation-application-packs.md).
 
 **Related notes**
 
@@ -14,6 +14,7 @@
 | [ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md) | Operator analyte config |
 | [validation-evidence-index.md](../regulatory/validation-evidence-index.md) | EV-PCA-* feasibility packages |
 | [SaMD study lifecycle](../usage/18-samd-study-lifecycle.md) | Research → holdout → pivotal ladder |
+| [Prostate cancer options catalog (ch.25)](../usage/25-prostate-cancer-pack.md) | Operator/researcher: what to set (procedures, tissue progression, commands) |
 
 ---
 

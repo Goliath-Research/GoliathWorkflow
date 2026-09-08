@@ -33,7 +33,8 @@ For statistical background, use [`docs/theory/`](../theory/index.md). For compil
 - **Fast path (stage execution):** [Orchestration ch.04](04-orchestration-workflow-run.md) → `methyl-workflow-run`; stage detail in ch.05–09.
 - **Guided tutorial (healthy vs. cancer stages):** Chapter `16` — end-to-end walkthrough; [profile catalog in ch.16](16-tutorial-healthy-vs-cancer-stages.md#step-4-pick-a-profile).
 - **SaMD study ladder (research → holdouts → pivotal):** Chapter `18` — [`18-samd-study-lifecycle.md`](18-samd-study-lifecycle.md); scaffold with `methyl-study-init`.
-- **Application packs (config on a process):** Chapter `24` — pattern + checklist; instances in ch.21 (Alzheimer) and ch.23 (plant abiotic stress).
+- **Application packs (config on a process):** Chapter `24` — pattern + checklist; instances in ch.21 (Alzheimer), ch.23 (plant abiotic stress), and [ch.25 (prostate cancer options)](25-prostate-cancer-pack.md).
+- **Prostate cancer (research + diagnostic options):** Chapter `25` — [`25-prostate-cancer-pack.md`](25-prostate-cancer-pack.md); physician/payer narrative in the [application deep-dive](../research/Prostate_Cancer_Application_Deep_Dive.md).
 - **Hyperparameter versioning (CAAS):** `17-content-addressed-action-store.md` (Part V; follows the tutorial).
 - **Daily operations:** `10-artifacts-and-qa-checks.md` through `12-command-cookbook.md`.
 - **Scaling MC across machines:** Chapter `13` — shared `/work` storage and queue subcommands.

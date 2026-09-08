@@ -9,6 +9,7 @@ This chapter is the generic pattern. Worked instances:
 |----------|------|-------|
 | Alzheimer cfDNA (Control → MCI → AD) | Disease application | [ch.21](21-alzheimer-cfdna-pack.md) |
 | Plant abiotic stress (Arabidopsis + crop sites) | Trait application | [ch.23](23-plant-abiotic-stress-pack.md) |
+| Prostate cancer (buffy / plasma / EM-Seq / tissue) | Disease application (multi-path catalog) | [ch.25](25-prostate-cancer-pack.md) |
 
 ```mermaid
 flowchart TB
@@ -20,10 +21,12 @@ flowchart TB
   subgraph apps [Application packs on methylation]
     AD[Alzheimer cfDNA]
     PLANT[Plant abiotic stress]
+    PCA[Prostate cancer]
     FUTURE[Future indication or trait]
   end
   METH --> AD
   METH --> PLANT
+  METH --> PCA
   METH --> FUTURE
 ```
 
@@ -36,7 +39,7 @@ flowchart TB
 |--|------------------|--------------------------|----------------------|
 | What it adds | Omics modality: DomainPrograms, typed actions, QC | Library protocol + SamplePrep/lifecycle pointers + science defaults (aligner, informME, deconv, FeatureCuts) | Indication/trait: cohorts, partitions, disease/trait overlay, enrichment preset |
 | Typical change | New aligner / feature contract | New `*.procedure.json` (rarely a thin program fork) | New `project_*.json` + `context_*.json` |
-| Examples | Methylation WGBS, [RNA-Seq](20-rnaseq-process-pack.md), [proteomics](22-proteomics-process-pack.md) | `buffy_wgbs_pangenome_gene_fc`, `cfdna_wgbs_plasma`, `cfdna_emseq_targeted` | Alzheimer cfDNA, plant drought stress |
+| Examples | Methylation WGBS, [RNA-Seq](20-rnaseq-process-pack.md), [proteomics](22-proteomics-process-pack.md) | `buffy_wgbs_pangenome_gene_fc`, `cfdna_wgbs_plasma`, `cfdna_emseq_targeted` | Alzheimer cfDNA, plant drought stress, [prostate cancer](25-prostate-cancer-pack.md) |
 | Operator surface | `regulatory.primary_modality` | `pipelineProcedure` | Same modality + procedure + overlay / analyte |
 
 Informal subtypes (**disease application**, **trait application**) are fine in prose;

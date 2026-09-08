@@ -65,7 +65,7 @@ Creates:
   configs/README.md
 ```
 
-Add `--modality rnaseq` for an RNA-Seq study (see [ch.20](20-rnaseq-process-pack.md)); the default is `methylation`. Config overlays on an existing process are **application packs** — see the generic pattern in [ch.24](24-methylation-application-packs.md). Worked methylation instances: [Alzheimer cfDNA](21-alzheimer-cfdna-pack.md) (disease — staged Control -> MCI -> AD, cfDNA, `neuro-core`) and [Plant abiotic stress](23-plant-abiotic-stress-pack.md) (trait — Arabidopsis Control vs Drought, `plant_tissue`, CG/CHG/CHH).
+Add `--modality rnaseq` for an RNA-Seq study (see [ch.20](20-rnaseq-process-pack.md)); the default is `methylation`. Config overlays on an existing process are **application packs** — see the generic pattern in [ch.24](24-methylation-application-packs.md). Worked methylation instances: [Alzheimer cfDNA](21-alzheimer-cfdna-pack.md) (disease — staged Control -> MCI -> AD, cfDNA, `neuro-core`), [Plant abiotic stress](23-plant-abiotic-stress-pack.md) (trait — Arabidopsis Control vs Drought, `plant_tissue`, CG/CHG/CHH), and [prostate cancer options](25-prostate-cancer-pack.md) (multi-path catalog).
 
 Fill CSVs with sample IDs (patient-disjoint). Assign holdouts **early**:
 
