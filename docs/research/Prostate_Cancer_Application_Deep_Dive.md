@@ -15,6 +15,7 @@
 | [validation-evidence-index.md](../regulatory/validation-evidence-index.md) | EV-PCA-* feasibility packages |
 | [SaMD study lifecycle](../usage/18-samd-study-lifecycle.md) | Research → holdout → pivotal ladder |
 | [Prostate cancer options catalog (ch.25)](../usage/25-prostate-cancer-pack.md) | Operator/researcher: what to set (procedures, tissue progression, commands) |
+| [moffitt_partnership_opportunity_brief.md](moffitt_partnership_opportunity_brief.md) | Moffitt Wong/Wang MHL+OS methods now shipped as a parallel procedure |
 
 ---
 
@@ -61,6 +62,7 @@ Present four options as a **decision table**, not a premature single winner.
 | **2. Plasma ~30× WGBS** | cfDNA, genome-wide + fragmentomics | Tumor-shed discovery; MCED-adjacent research | Early-detection research when TF allows; production only after SaMD ladder | TF-aware design; not “more buffy depth” | `cfdna_wgbs_plasma` |
 | **3. Paired buffy + plasma** | Same subject, both tubes | Plasma = tumor-oriented signal; buffy = host / hematopoietic background | Best when logistics allow (CHIP-analogue / leukocyte confounding control) | Separate manifests or matched IDs | Both procedures, matched cohorts |
 | **4. Plasma EM-Seq + hybrid capture** | cfDNA, targeted panel | Pre-biopsy **gatekeeper** geometry (inch-wide / mile-deep) | Elevated PSA / secondary markers → defer vs proceed to biopsy *after* pivotal evidence | Locked `target_panel_bed`; extreme on-target depth (~2–5k×), not genome-wide depth | `cfdna_emseq_targeted` |
+| **5. Plasma EM-Seq MHL + survival** | Same chemistry as 4; haplotype blocks | **mCRPC OS prognosis** (Wong/Moffitt method class) | Oncology follow-up / nomogram research — **not** a GG≥2 gatekeeper | `{chrom}-CG.mhap.h5` + `survival_path`; native MHB/MHL + Cox | `cfdna_emseq_mhl_survival` |
 
 ### Biological roles (options 1–3)
 
@@ -74,6 +76,8 @@ Buffy-only shallow WGBS is a poor fit for a **pre-biopsy csPCa (GG≥2) rule-out
 ### Option 4 — EM-Seq gatekeeper vs GRAIL (shared biology, different geometry)
 
 The wet-lab and clinical framing in [Prostate Cancer Detection.md](Prostate Cancer Detection.md) recommends **Enzymatic Methyl-Seq (EM-Seq) + custom hybridization capture** for a prostate gatekeeper. The shipped procedure is [`cfdna_emseq_targeted`](../../workflow_engine/domain/profiles/procedures/cfdna_emseq_targeted.procedure.json): operator-supplied panel BED, elevated `min_cov`, SamplePrep via `sample_prep_emseq`, **no** genome-wide DMP hunt, **no** cell deconvolution by default.
+
+**Option 5** is the same wet-lab geometry with a **different science path**: native MHB/MHL + Cox overall survival (`cfdna_emseq_mhl_survival`). That is the Moffitt / Wong 2026 method class, not FeatureCuts. See [moffitt_partnership_opportunity_brief.md](moffitt_partnership_opportunity_brief.md).
 
 | Dimension | GRAIL Galleri (MCED) | Prostate EM-Seq gatekeeper (this option) |
 |-----------|----------------------|------------------------------------------|
