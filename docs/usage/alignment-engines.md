@@ -19,6 +19,8 @@ Workers consume **`resolvedConfig`** only (Universal Action Input Contract). Tun
 
 Site materialization (`METHYL_SITE_CONFIG` / `methyl-cfg`) supplies genome and image pins; profiles/procedures select `alignmentMode`.
 
+Linear `engine=mojo` can write Bismark-style `XM:Z` / `XG:Z` when `actionConfig.parabricks.write_methylation_tags` is true (`METHYLGRAPHER_WRITE_METH_TAGS=1`). MethylExtractor and native MHL prefer those tags and fall back to sequence+`XG` when they are absent (Clara `fq2bam_meth` today). Default off except on `cfdna_emseq_mhl_survival`. See [workers/docs/parabricks.md](../../workers/docs/parabricks.md).
+
 ## Failure policy
 
 - On known NVIDIA/AMD fleets, DeviceContext failure for `pangenome_wgbs` is **fail-closed** — it does **not** silently switch to Clara Parabricks.

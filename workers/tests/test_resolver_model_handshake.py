@@ -42,6 +42,7 @@ SLICE_MODELS: dict[str, str] = {
     "derived_measures": "methyl_derived_measures.config:DerivedMeasuresStepConfig",
     "cell_deconvolution": "methyl_deconv.config:CellDeconvStepConfig",
     "info_measures": "methyl_infotheory.config:InfoTheoryStepConfig",
+    "mhb_mhl": "methyl_mhl.config:MhbMhlStepConfig",
 }
 
 

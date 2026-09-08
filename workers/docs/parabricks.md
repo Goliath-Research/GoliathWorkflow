@@ -31,9 +31,12 @@ Prefer DB-backed `actionConfig.parabricks` (not host env for science knobs):
   "engine": "mojo",
   "align_device": "auto",
   "image": "epimethyl/methylgrapher:1.70-mojo-rocm",
-  "bwa_threads": 32
+  "bwa_threads": 32,
+  "write_methylation_tags": true
 }
 ```
+
+`write_methylation_tags` is a Mojo-only env (`METHYLGRAPHER_WRITE_METH_TAGS=1`) that annotates the BAM with Bismark-style `XM:Z` / `XG:Z` after align. Native MHL / MethylExtractor prefer those tags and fall back to sequence+`XG` when they are absent (Clara `fq2bam_meth` today). Default off except on the `cfdna_emseq_mhl_survival` procedure.
 
 Clara rollback:
 

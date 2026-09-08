@@ -50,6 +50,7 @@ class MethylExtractConfig:
     split: bool
     read_level: bool
     tile_size: Optional[int]
+    mhap: bool = False
     target_panel_bed: Optional[Path] = None
     chrom_parallel: Optional[int] = None
     max_rss_gb: Optional[int] = None
@@ -277,6 +278,7 @@ def resolve_methyl_extract_config(
 
     extractor_bin = str(step_cfg.get("extractor_bin") or "MethylExtractor").strip()
     read_level, tile_size = _resolve_read_level(step_cfg)
+    mhap = _resolve_mhap(step_cfg)
 
     panel_raw = (
         step_cfg.get("target_panel_bed")
@@ -312,6 +314,7 @@ def resolve_methyl_extract_config(
         split=bool(step_cfg.get("split", True)),
         read_level=read_level,
         tile_size=tile_size,
+        mhap=mhap,
         target_panel_bed=target_panel_bed,
         chrom_parallel=int(step_cfg["chrom_parallel"]) if step_cfg.get("chrom_parallel") is not None else None,
         max_rss_gb=int(step_cfg["max_rss_gb"]) if step_cfg.get("max_rss_gb") is not None else None,
@@ -333,6 +336,17 @@ def _resolve_read_level(step_cfg: Mapping[str, Any]) -> tuple[bool, Optional[int
         enabled = str(raw).strip().lower() not in {"0", "false", "no"}
         return enabled, int(tile_size) if tile_size is not None else None
     return False, int(tile_size) if tile_size is not None else None
+
+
+def _resolve_mhap(step_cfg: Mapping[str, Any]) -> bool:
+    raw = step_cfg.get("mhap")
+    if isinstance(raw, dict):
+        return bool(raw.get("enabled", False))
+    if isinstance(raw, bool):
+        return raw
+    if raw is not None:
+        return str(raw).strip().lower() not in {"0", "false", "no"}
+    return False
 
 
 def expected_pattern_h5_files(
@@ -788,6 +802,15 @@ def build_methyl_extractor_command(cfg: MethylExtractConfig, paths: MethylExtrac
                 "emitting marginal H5 only (upgrade MethylExtractor for patterns)",
                 bin_path,
             )
+    if cfg.mhap:
+        if _extractor_supports_flag(bin_path, "--mhap"):
+            cmd.append("--mhap")
+        else:
+            logger.warning(
+                "methyl_extract.mhap requested but %s has no --mhap; "
+                "upgrade MethylExtractor for haplotype sidecars",
+                bin_path,
+            )
     cmd.append(f"--output-dir={paths.sample_dir}")
     cmd.append(str(paths.bam_path))
     # With --output-dir set, MethylExtractor treats the next positional as ref.fa only
@@ -922,7 +945,7 @@ def run_methyl_extract(
         h5_files = sorted(
             p.name
             for p in cfg.sample_dir.glob("*-*.h5")
-            if not p.name.endswith(".patterns.h5")
+            if not p.name.endswith(".patterns.h5") and not p.name.endswith(".mhap.h5")
         )
     if not h5_files:
         raise RuntimeError(f"MethylExtractor did not produce HDF5 files under {cfg.sample_dir}")

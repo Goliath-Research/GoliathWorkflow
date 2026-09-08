@@ -74,6 +74,13 @@ from .core.read_level_io import (
     write_read_level_patterns,
 )
 
+from .core.mhap_io import (
+    MhapStore,
+    discover_mhap_files,
+    load_mhap_store,
+    write_mhap_store,
+)
+
 # Legacy exports from old methyl_sample.py (for backward compatibility during migration)
 # Legacy imports - these are now defined directly below
 # try:

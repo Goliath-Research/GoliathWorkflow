@@ -1,5 +1,26 @@
 {
   "$defs": {
+    "MethylExtractMhapConfig": {
+      "additionalProperties": true,
+      "description": "Per-read haplotype sidecar knobs under actionConfig.methyl_extract.mhap.",
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Emit {chrom}-CG.mhap.h5 haplotype sidecars. Operator-set per site/profile.",
+          "title": "Enabled"
+        }
+      },
+      "title": "MethylExtractMhapConfig",
+      "type": "object"
+    },
     "MethylExtractReadLevelConfig": {
       "additionalProperties": true,
       "description": "Read-level pattern sidecar knobs under actionConfig.methyl_extract.read_level.",
@@ -129,6 +150,22 @@
       "default": null,
       "description": "Peak RSS gate in GiB for chrom-parallel (--max-rss-gb). Operator-set per site.",
       "title": "Max Rss Gb"
+    },
+    "mhap": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/$defs/MethylExtractMhapConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Emit {chrom}-CG.mhap.h5 per-read haplotype sidecars in the same extract pass. Operator-set per site/profile/procedure.",
+      "title": "Mhap"
     },
     "min_cov": {
       "anyOf": [

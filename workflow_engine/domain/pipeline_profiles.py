@@ -27,7 +27,7 @@ _SAMD_RESEARCH_MODES: Dict[str, str] = {
     "mc_dmp_gene_fc": "dual_fc",
 }
 
-_RESEARCH_MODE_IDS = frozenset(_SAMD_RESEARCH_MODES.values())
+_RESEARCH_MODE_IDS = frozenset(_SAMD_RESEARCH_MODES.values()) | {"mhl_survival"}
 
 # Profiles that fold into samd_research (cfg rows should be retired on sync).
 _DEPRECATED_PROFILE_NAMES = frozenset(

@@ -728,12 +728,43 @@ class GenerativeBackendProfile(BaseModel):
     params: GenerativeBackendParams = Field(default_factory=GenerativeBackendParams)
 
 
+class CoxBackendParams(BackendSharedParams):
+    model_config = ConfigDict(extra="forbid")
+    mhl_matrix_path: Optional[str] = Field(
+        default=None,
+        description="Path to mhl_matrix.csv (samples × blocks). Operator-set per procedure.",
+    )
+    clinical_columns: Optional[List[str]] = Field(
+        default=None,
+        description="Optional lab columns from the survival sidecar (psa, alp, ldh, predicted_ctdna_fraction).",
+    )
+    time_auc_horizons: Optional[List[float]] = Field(
+        default=None,
+        description="Horizons for time-dependent AUC. Operator-set; no coded Wong years.",
+    )
+    write_nomogram: Optional[bool] = Field(
+        default=None,
+        description="Write nomogram.json (coefficients + mean risk). Operator-set.",
+    )
+    nested_lrt: Optional[bool] = Field(
+        default=None,
+        description="Report nested LRT of MHL+labs vs labs-only. Operator-set.",
+    )
+
+
+class CoxBackendProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = Field(default=False)
+    params: CoxBackendParams = Field(default_factory=CoxBackendParams)
+
+
 class BackendProfilesConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ecdf: EcdfBackendProfile = Field(default_factory=EcdfBackendProfile)
     tabular_sklearn: TabularBackendProfile = Field(default_factory=TabularBackendProfile)
     generative_hybrid: GenerativeBackendProfile = Field(default_factory=GenerativeBackendProfile)
+    cox: CoxBackendProfile = Field(default_factory=CoxBackendProfile)
 
 
 class ValidationPartitionContract(BaseModel):
@@ -1634,7 +1665,7 @@ class MonteCarloConfig(BaseModel):
     def _require_tabular_methods(self) -> "MonteCarloConfig":
         if not self.get_enabled_backends():
             raise ValueError("At least one backend profile must have enabled=true.")
-        if self.model_backend not in {"ecdf", "tabular_sklearn", "generative_hybrid"}:
+        if self.model_backend not in {"ecdf", "tabular_sklearn", "generative_hybrid", "cox"}:
             self.model_backend = self.get_enabled_backends()[0]
         if self.model_backend not in self.get_enabled_backends():
             self.model_backend = self.get_enabled_backends()[0]
@@ -1650,11 +1681,13 @@ class MonteCarloConfig(BaseModel):
             enabled.append("tabular_sklearn")
         if self.backend_profiles.generative_hybrid.enabled:
             enabled.append("generative_hybrid")
+        if self.backend_profiles.cox.enabled:
+            enabled.append("cox")
         return enabled
 
     def get_backend_params(
         self, backend_name: str
-    ) -> Union[EcdfBackendParams, TabularBackendParams, GenerativeBackendParams]:
+    ) -> Union[EcdfBackendParams, TabularBackendParams, GenerativeBackendParams, CoxBackendParams]:
         backend = str(backend_name).strip().lower()
         if backend == "ecdf":
             return self.backend_profiles.ecdf.params
@@ -1662,11 +1695,15 @@ class MonteCarloConfig(BaseModel):
             return self.backend_profiles.tabular_sklearn.params
         if backend == "generative_hybrid":
             return self.backend_profiles.generative_hybrid.params
+        if backend in {"cox", "survival"}:
+            return self.backend_profiles.cox.params
         raise ValueError(f"Unknown backend: {backend_name}")
 
     def with_backend_selection(self, backend_name: str) -> "MonteCarloConfig":
         backend = str(backend_name).strip().lower()
-        if backend not in {"ecdf", "tabular_sklearn", "generative_hybrid"}:
+        if backend == "survival":
+            backend = "cox"
+        if backend not in {"ecdf", "tabular_sklearn", "generative_hybrid", "cox"}:
             raise ValueError(f"Unknown backend: {backend_name}")
         return self.model_copy(update={"model_backend": backend})
 
@@ -1715,8 +1752,10 @@ class MonteCarloConfig(BaseModel):
     @field_validator("model_backend")
     @classmethod
     def _validate_model_backend(cls, value: str) -> str:
-        allowed = {"ecdf", "tabular_sklearn", "generative_hybrid"}
+        allowed = {"ecdf", "tabular_sklearn", "generative_hybrid", "cox"}
         normalized = str(value).strip().lower()
+        if normalized == "survival":
+            normalized = "cox"
         if normalized not in allowed:
             raise ValueError(f"model_backend must be one of {sorted(allowed)}")
         return normalized

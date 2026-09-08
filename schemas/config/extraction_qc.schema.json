@@ -27,6 +27,65 @@
           "default": 10.0,
           "title": "Min Cpg Weighted Mean Coverage",
           "type": "number"
+        },
+        "min_on_target_fraction": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum fraction of extracted CG sites inside target_panel_bed. Operator-set.",
+          "title": "Min On Target Fraction"
+        },
+        "min_on_target_mean_coverage": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum mean coverage of on-target CG sites. Operator-set.",
+          "title": "Min On Target Mean Coverage"
+        },
+        "min_pos_control_methylation": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum mean methylation in positive-control BED. Operator-set.",
+          "title": "Min Pos Control Methylation"
+        },
+        "max_neg_control_methylation": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum mean methylation in negative-control BED. Operator-set.",
+          "title": "Max Neg Control Methylation"
         }
       },
       "title": "ExtractionQCGuardrailConfig",
@@ -52,6 +111,45 @@
       },
       "title": "Sample Paths",
       "type": "array"
+    },
+    "target_panel_bed": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Capture panel BED for on-target QC. Operator-set per site/procedure.",
+      "title": "Target Panel Bed"
+    },
+    "pos_control_bed": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Positive-control intervals (expected high methylation).",
+      "title": "Pos Control Bed"
+    },
+    "neg_control_bed": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Negative-control intervals (expected near-zero methylation).",
+      "title": "Neg Control Bed"
     }
   },
   "title": "ExtractionQCConfig",

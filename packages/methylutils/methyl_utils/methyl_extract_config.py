@@ -26,6 +26,17 @@ class MethylExtractReadLevelConfig(BaseModel):
     )
 
 
+class MethylExtractMhapConfig(BaseModel):
+    """Per-read haplotype sidecar knobs under actionConfig.methyl_extract.mhap."""
+
+    model_config = ConfigDict(extra="allow")
+
+    enabled: Optional[bool] = Field(
+        default=None,
+        description="Emit {chrom}-CG.mhap.h5 haplotype sidecars. Operator-set per site/profile.",
+    )
+
+
 class MethylExtractStepConfig(BaseModel):
     """Settings under actionConfig.methyl_extract / resolvedConfig for sample.methyl_extract.
 
@@ -120,4 +131,11 @@ class MethylExtractStepConfig(BaseModel):
     target_panel_bed: Optional[str] = Field(
         default=None,
         description="Optional BED to restrict extract (EM-Seq / hybrid-capture).",
+    )
+    mhap: Optional[Union[bool, MethylExtractMhapConfig]] = Field(
+        default=None,
+        description=(
+            "Emit {chrom}-CG.mhap.h5 per-read haplotype sidecars in the same extract pass. "
+            "Operator-set per site/profile/procedure."
+        ),
     )

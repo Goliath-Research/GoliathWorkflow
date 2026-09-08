@@ -225,6 +225,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="InfoTheoryStepConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="mhb_mhl",
+        module="methyl_mhl.config",
+        class_name="MhbMhlStepConfig",
+        filename="mhb_mhl.schema.json",
+        title="MhbMhlStepConfig",
+    ),
+    ConfigSchemaSpec(
         schema_id="centroid",
         module="methyl_centroid.config",
         class_name="MethylCentroidConfig",

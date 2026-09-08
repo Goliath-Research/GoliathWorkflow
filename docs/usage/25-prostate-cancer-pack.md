@@ -74,6 +74,7 @@ All default to `pipelineProfile: samd_research` and `researchMode: gene_fc`.
 | `buffy_wgbs_mvalue_residual_gene_fc` | `buffy_coat` | `pangenome_wgbs` | `study_validation_lifecycle_residual` | Confounder-adjusted host DMPs (Ω ALR + smoking / age / BMI / CRP) | Default buffy path; residualization is opt-in |
 | `cfdna_wgbs_plasma` | `cfdna` | `linear` / `wgbs_linear` | `study_validation_lifecycle_no_deconv` | Plasma discovery + fragmentomics | Buffy host biology; EM-Seq gatekeeper geometry |
 | `cfdna_emseq_targeted` | `cfdna` | `linear` / `emseq_targeted` | no_deconv + `sample_prep_emseq` | Locked panel, elevated `min_cov`, no genome-wide DMP hunt | Genome-wide discovery; missing `target_panel_bed` |
+| `cfdna_emseq_mhl_survival` | `cfdna` | `linear` / `emseq_targeted` | `study_validation_mhl_survival` + `sample_prep_emseq` | Wong-style MHB/MHL + Cox OS (operator `target_panel_bed` + `survival_path`) | FeatureCuts/ECDF classification; missing haplotype sidecars |
 
 **Tumor tissue — no shipped procedure.** The catalog analyte
 [`tissue.analyte.json`](../../workflow_engine/domain/analytes/tissue.analyte.json)
@@ -399,6 +400,6 @@ if you add those later.
 - Analyte biology: [BuffyCoat vs cfDNA](../research/BuffyCoat_vs_cfDNA_for_Cancer_Detection.md), [ANALYTE_PROFILES](../ANALYTE_PROFILES.md)
 - Gatekeeper clinical SOW: [Prostate Cancer Detection](../research/Prostate%20Cancer%20Detection.md)
 - Fitness vs that SOW: [Prostate_Cancer_Detection_MethylPipeline_Fitness](../research/Prostate_Cancer_Detection_MethylPipeline_Fitness.md)
-- Wong et al. 2026 EM-Seq mCRPC prognosis (MHB/MHL + OS nomogram) vs our gaps: [Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps](../research/Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps.md)
+- Wong et al. 2026 EM-Seq mCRPC prognosis (MHB/MHL + OS nomogram): use procedure `cfdna_emseq_mhl_survival` + study `survival_path`. Gap note (implemented / remaining): [Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps](../research/Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps.md)
 - Tutorial (healthy vs stages): [ch.16](16-tutorial-healthy-vs-cancer-stages.md)
 - Command cookbook: [ch.12](12-command-cookbook.md)

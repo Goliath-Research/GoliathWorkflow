@@ -393,6 +393,40 @@
       "tool": "MethylInfoTheory"
     },
     {
+      "action_config_key": "mhb_mhl",
+      "action_name": "pipeline.mhb_mhl",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-mhl",
+      "category": "modeling",
+      "cli_tool": "methyl-mhl",
+      "context_vars": [],
+      "control": {
+        "can_continue": false,
+        "can_pause": false,
+        "can_stop": true
+      },
+      "default_node_type": "ACTION",
+      "description": "Native MHB discovery and methylation haplotype load (MHL) from haplotype sidecars.",
+      "execution_mode": "cli",
+      "idempotency_enabled": true,
+      "input_schema_ref": "schemas/tasks/pipeline_mhb_mhl.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_mhb_mhl.output.schema.json",
+      "schema_id": "pipeline.mhb_mhl",
+      "tool": "MethylMhl"
+    },
+    {
       "action_config_key": "gene_selection",
       "action_name": "pipeline.gene_select",
       "argv_map": {

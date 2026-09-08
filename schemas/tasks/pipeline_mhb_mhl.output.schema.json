@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action_name": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null},
+    "artifacts": {"items": {"type": "object"}, "title": "Artifacts", "type": "array"},
+    "capability": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null},
+    "exit_code": {"default": 0, "type": "integer"},
+    "mhb_bed": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null},
+    "mhb_qc": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null},
+    "mhl_matrix": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null},
+    "n_blocks": {"anyOf": [{"type": "integer"}, {"type": "null"}], "default": null},
+    "n_samples": {"anyOf": [{"type": "integer"}, {"type": "null"}], "default": null},
+    "output_dir": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null},
+    "result_code": {"default": 0, "type": "integer"},
+    "schema_version": {"const": "1.0", "default": "1.0", "type": "string"},
+    "status": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null},
+    "tool": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": null}
+  },
+  "title": "MhbMhlTaskOutput",
+  "type": "object"
+}

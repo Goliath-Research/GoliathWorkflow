@@ -62,6 +62,7 @@ def evaluate_guardrails(
     *,
     config: ExtractionQCGuardrailConfig,
     expected_chromosomes: Iterable[str],
+    panel_metrics: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     summary = manifest.get("summary") or {}
     per_chromosome = manifest.get("per_chromosome") or {}
@@ -230,6 +231,44 @@ def evaluate_guardrails(
                 "A very high discard fraction with acceptable coverage signals a systematic "
                 "problem (wrong reference, contamination, or mis-set filters)."
             ),
+        )
+
+    panel = panel_metrics or {}
+    if config.min_on_target_fraction is not None:
+        frac = panel.get("on_target_fraction")
+        passed = frac is not None and float(frac) >= config.min_on_target_fraction
+        results["on_target_fraction"] = _metric(
+            value=frac,
+            normal_range=f">= {config.min_on_target_fraction}",
+            passed=passed,
+            message="Fraction of extracted CG sites inside target_panel_bed.",
+        )
+    if config.min_on_target_mean_coverage is not None:
+        cov = panel.get("on_target_mean_coverage")
+        passed = cov is not None and float(cov) >= config.min_on_target_mean_coverage
+        results["on_target_mean_coverage"] = _metric(
+            value=cov,
+            normal_range=f">= {config.min_on_target_mean_coverage}",
+            passed=passed,
+            message="Mean coverage of CG sites inside the capture panel.",
+        )
+    if config.min_pos_control_methylation is not None:
+        val = panel.get("pos_control_mean_methylation")
+        passed = val is not None and float(val) >= config.min_pos_control_methylation
+        results["pos_control_mean_methylation"] = _metric(
+            value=val,
+            normal_range=f">= {config.min_pos_control_methylation}",
+            passed=passed,
+            message="Positive-control interval methylation (EM-Seq conversion/capture sanity).",
+        )
+    if config.max_neg_control_methylation is not None:
+        val = panel.get("neg_control_mean_methylation")
+        passed = val is not None and float(val) <= config.max_neg_control_methylation
+        results["neg_control_mean_methylation"] = _metric(
+            value=val,
+            normal_range=f"<= {config.max_neg_control_methylation}",
+            passed=passed,
+            message="Negative-control interval methylation (EM-Seq conversion/capture sanity).",
         )
 
     overall_pass = all(bool(item.get("pass")) for item in results.values())

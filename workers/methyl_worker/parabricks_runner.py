@@ -45,6 +45,7 @@ class ParabricksConfig:
     cleanup_tmp: bool
     engine: str = "parabricks"  # parabricks | mojo
     align_device: str = "auto"
+    write_methylation_tags: bool = False
 
 
 @dataclass(frozen=True)
@@ -266,6 +267,9 @@ def resolve_parabricks_config(
         "no",
     }
     cleanup_tmp = _pick_bool(payload, step_cfg, "cleanupTmp", "cleanup_tmp", cleanup_default)
+    write_methylation_tags = _pick_bool(
+        payload, step_cfg, "writeMethylationTags", "write_methylation_tags", False
+    )
 
     return ParabricksConfig(
         image=image,
@@ -275,6 +279,7 @@ def resolve_parabricks_config(
         cleanup_tmp=cleanup_tmp,
         engine=engine,
         align_device=align_device,
+        write_methylation_tags=write_methylation_tags,
     )
 
 
@@ -388,6 +393,8 @@ def _build_docker_command(
             f"METHYLGRAPHER_ALIGN_DEVICE={cfg.align_device}",
             "-e",
             f"METHYLGRAPHER_GIRAFFE_DEVICE={cfg.align_device}",
+            "-e",
+            f"METHYLGRAPHER_WRITE_METH_TAGS={'1' if cfg.write_methylation_tags else '0'}",
             "-v",
             f"{paths.sample_dir.resolve()}:/workdir",
             "-v",

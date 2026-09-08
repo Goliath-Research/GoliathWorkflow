@@ -4,7 +4,7 @@
 **Source:** Wong J. et al. *Plasma cell-free DNA methylation-based prognosis in metastatic castrate-resistant prostate cancer.* npj Precision Oncology (2026) 10:29. [doi:10.1038/s41698-025-01232-w](https://doi.org/10.1038/s41698-025-01232-w). Local copy: [`41698_2025_Article_1232.pdf`](41698_2025_Article_1232.pdf).  
 **Related:** [usage ch.25](../usage/25-prostate-cancer-pack.md) (EM-Seq procedure), [informME integration](methylpipeline_informme_integration.md), [Prostate Cancer Detection fitness](Prostate_Cancer_Detection_MethylPipeline_Fitness.md) (different paper: pre-biopsy gatekeeper SOW).  
 **Date:** 2026-09-07  
-**Verdict:** SamplePrep can ingest the **same chemistry**. The **published experiment cannot be repeated** until MHB/MHL and time-to-event modeling exist.
+**Verdict (updated):** A **parallel** product path now exists: `cfdna_emseq_mhl_survival` + `researchMode: mhl_survival` (native MHB/MHL + Cox). The original `cfdna_emseq_targeted` + FeatureCuts path is unchanged. Remaining gaps are operator assets (panel BED, survival sidecar, control BEDs) and optional GREAT / ctdna.org.
 
 This note is not a clinical critique of Wong et al. It lists **omissions in MethylPipeline** that would make a product run **incapable of reproducing their analysis** on equivalent FASTQs, panel BED, and clinical follow-up.
 
@@ -130,16 +130,19 @@ Disease-agnostic rule still applies: do **not** hardcode ALOX5 / HIC1 / CDKN2A /
 
 ---
 
-## Minimum to become capable of a repeat
+## Implemented vs remaining
 
-Disease-agnostic extensions (no prostate-only Python):
-
-1. **MHB + MHL** from EM-Seq BAMs: turn `read_level` on for the EM-Seq procedure; implement or wrap mHapSuite; **prove BAM-tag compatibility** or add a Bismark-tag align path.
-2. **Time-to-event** validation: OS, censoring, Cox, KM, time-dependent AUC — not FeatureCuts BA as the only model-MC objective.
-3. **Multi-modal survival covariates**: labs + ctDNA-fraction predictor (external or in-house), then a nomogram/report artifact.
-4. **Capture QC**: on-target fraction, panel depth histogram, positive/negative control methylation.
-
-Until (1) and (2) exist, the product can sequence Wong-like libraries and still be **incapable of repeating the published experiment**.
+| Item | Status |
+|------|--------|
+| Native MHB discovery + MHL (`pipeline.mhb_mhl`, `packages/methylmhl`) | **Shipped** — discovery or locked BED; Wong formula lengths 1–`mhl_max_length` |
+| Per-read haplotype sidecar (`--mhap` → `{chrom}-CG.mhap.h5`) | **Shipped** — same extract pass; contract in [`mhap_store_contract.md`](../reference/mhap_store_contract.md) |
+| Mojo XM/XG tags + extract prefers tags / sequence+XG fallback | **Shipped** — `write_methylation_tags` / `METHYLGRAPHER_WRITE_METH_TAGS` |
+| Cox / KM / time-AUC / optional nomogram (`backend_profiles.cox`) | **Shipped** — study `survival_path` sidecar |
+| Capture / control-region QC | **Shipped** — optional `extraction_qc` panel BEDs + guardrails |
+| Procedure + mode | **Shipped** — `cfdna_emseq_mhl_survival` / `mhl_survival` |
+| GREAT as a required node | Remaining (optional later) |
+| In-process ctdna.org | Remaining — operator column on the survival sidecar is enough |
+| Hardcoded Wong 15-MHB gene list | Intentionally out of scope |
 
 ---
 

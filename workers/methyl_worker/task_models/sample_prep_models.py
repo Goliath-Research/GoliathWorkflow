@@ -93,6 +93,14 @@ class ParabricksStepConfig(BaseModel):
             "(else image or epimethyl/methylgrapher:1.70-mojo)."
         ),
     )
+    write_methylation_tags: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When true, MojoFq2bamMeth writes XM:Z/XG:Z methylation tags "
+            "(METHYLGRAPHER_WRITE_METH_TAGS). Operator-set per procedure/profile. "
+            "Clara fq2bam_meth uses sequence+XG fallback when tags are absent."
+        ),
+    )
 
 
 class ParabricksFq2bamTaskInput(BaseModel):

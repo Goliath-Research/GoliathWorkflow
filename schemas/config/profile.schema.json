@@ -78,7 +78,8 @@
               "dmp_fc",
               "gene_enricher",
               "gene_fc",
-              "dual_fc"
+              "dual_fc",
+              "mhl_survival"
             ]
           },
           "uniqueItems": true

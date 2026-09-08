@@ -6,6 +6,7 @@ import json
 
 from methyl_worker.extract_runner import (
     MethylExtractConfig,
+    _resolve_mhap,
     _resolve_read_level,
     build_methyl_extractor_command,
     expected_pattern_h5_files,
@@ -16,6 +17,13 @@ def test_resolve_read_level_dict():
     enabled, tile = _resolve_read_level({"read_level": {"enabled": True, "tile_size": 6}})
     assert enabled is True
     assert tile == 6
+
+
+def test_resolve_mhap_dict_and_bool():
+    assert _resolve_mhap({"mhap": {"enabled": True}}) is True
+    assert _resolve_mhap({"mhap": {"enabled": False}}) is False
+    assert _resolve_mhap({"mhap": True}) is True
+    assert _resolve_mhap({}) is False
 
 
 def test_build_command_includes_read_level_flags(tmp_path):
@@ -58,6 +66,44 @@ def test_build_command_includes_read_level_flags(tmp_path):
     cmd = build_methyl_extractor_command(cfg, paths)
     assert "--read-level" in cmd
     assert "--tile-size=4" in cmd
+
+
+def test_build_command_includes_mhap_when_supported(tmp_path, monkeypatch):
+    fake_bin = tmp_path / "MethylExtractor.exe"
+    fake_bin.write_text("stub\n", encoding="utf-8")
+    from methyl_worker import extract_runner as er
+
+    monkeypatch.setattr(er, "_extractor_supports_flag", lambda _bin, flag: flag == "--mhap")
+    cfg = MethylExtractConfig(
+        sample_id="s1",
+        sample_dir=tmp_path,
+        project_path=tmp_path / "p.json",
+        chromosomes=("1",),
+        extract_contexts=("CG",),
+        reference_fasta=tmp_path / "ref.fa",
+        chrom_mapping=tmp_path / "map.json",
+        extractor_bin=str(fake_bin),
+        threads=None,
+        min_mapq=None,
+        min_phred=None,
+        min_cov=None,
+        cap_cov=None,
+        compression=None,
+        chunk_size=None,
+        output_format="hdf5",
+        split=True,
+        read_level=False,
+        tile_size=None,
+        mhap=True,
+    )
+    paths = er.MethylExtractPaths(
+        sample_dir=tmp_path,
+        sample_id="s1",
+        bam_path=tmp_path / "s1.bam",
+        log_path=tmp_path / "s1.log",
+    )
+    cmd = er.build_methyl_extractor_command(cfg, paths)
+    assert "--mhap" in cmd
 
 
 def test_build_command_omits_read_level_when_unsupported(tmp_path):

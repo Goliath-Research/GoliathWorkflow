@@ -336,8 +336,27 @@ def build_model_backend_steps(
     run_predictor_fn: Callable[[Path, Optional[Path]], tuple[int, str, str]],
 ) -> List[TrainerStep]:
     backend = (config.model_backend if config is not None else "ecdf").strip().lower()
+    if backend == "survival":
+        backend = "cox"
     feature_mode = (config.feature_mode if config is not None else "raw_dmp").strip().lower()
     feature_family_set = _normalized_feature_family_set(config)
+    if backend == "cox":
+        model_dir = _classifier_output_dir(project_json, predictor_output_dir)
+
+        def _run_cox() -> tuple[int, str, str]:
+            try:
+                from .survival_backend import run_survival_model
+
+                metrics = run_survival_model(
+                    project_json=project_json,
+                    output_dir=model_dir,
+                    config=config,
+                )
+                return 0, json.dumps(metrics), ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        return [("cox-survival", _run_cox)]
     if backend == "tabular_sklearn":
         model_dir = _classifier_output_dir(project_json, predictor_output_dir)
 

@@ -10,6 +10,7 @@ informME, deconvolution, and FeatureCuts knobs.
 | `buffy_wgbs_linear_gene_fc` | `buffy_coat` | `sample_prep` (linear) | `study_validation_lifecycle` | Faster / cheaper linear baseline |
 | `cfdna_wgbs_plasma` | `cfdna` | `sample_prep` | `study_validation_lifecycle_no_deconv` | Fragmentomics; no cell deconv |
 | `cfdna_emseq_targeted` | `cfdna` | `sample_prep_emseq` | `study_validation_lifecycle_no_deconv` | BED panel + high min_cov |
+| `cfdna_emseq_mhl_survival` | `cfdna` | `sample_prep_emseq` | `study_validation_mhl_survival` | Native MHB/MHL + Cox; `researchMode: mhl_survival`; does not replace gene_fc |
 | `plant_wgbs_gene_fc` | `plant_tissue` | `sample_prep` | `plant_stress_study_lifecycle` | Trait applications |
 
 Merge order (highest wins first): **instance → procedure → profile/mode → analyte → site**.

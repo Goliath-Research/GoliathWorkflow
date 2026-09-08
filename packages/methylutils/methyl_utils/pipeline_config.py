@@ -309,6 +309,14 @@ class ProjectConfig(BaseModel):
         default=None,
         description="Cohort partition CSV paths for validation governance (development_train, locked_test, …).",
     )
+    survival_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional CSV sidecar for time-to-event modeling: sample_id, time, event, "
+            "and optional psa/alp/ldh/predicted_ctdna_fraction. Operator-supplied; "
+            "no in-process ctdna.org call."
+        ),
+    )
     progression_order: Optional[Literal["from_stages", "from_comparisons", "explicit"]] = Field(
         default=None,
         description="How to order disease stages for progression synthesis. Default: from_stages when nested stages exist.",

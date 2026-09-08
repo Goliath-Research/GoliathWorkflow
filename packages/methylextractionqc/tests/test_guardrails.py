@@ -183,6 +183,28 @@ def test_process_sample_extraction_qc_writes_json(tmp_path: Path) -> None:
     assert payload["metadata"]["schema_name"] == "methylpipeline.extraction_qc"
 
 
+def test_evaluate_guardrails_skips_panel_when_thresholds_unset() -> None:
+    report = evaluate_guardrails(
+        _manifest_fixture(),
+        config=ExtractionQCGuardrailConfig(),
+        expected_chromosomes=["1", "2", "21", "X"],
+        panel_metrics={"on_target_fraction": 0.1},
+    )
+    assert report["overall_pass"] is True
+    assert "on_target_fraction" not in report["metrics"]
+
+
+def test_evaluate_guardrails_panel_on_target_fails() -> None:
+    report = evaluate_guardrails(
+        _manifest_fixture(),
+        config=ExtractionQCGuardrailConfig(min_on_target_fraction=0.8),
+        expected_chromosomes=["1", "2", "21", "X"],
+        panel_metrics={"on_target_fraction": 0.2, "on_target_mean_coverage": 40.0},
+    )
+    assert report["overall_pass"] is False
+    assert report["metrics"]["on_target_fraction"]["pass"] is False
+
+
 def test_process_sample_extraction_qc_requires_manifest(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()

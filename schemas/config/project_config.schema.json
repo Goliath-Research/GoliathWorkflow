@@ -501,6 +501,19 @@
       "description": "Base directory to resolve sample names. When set, group sample_paths that point to files can list only sample folder names (one per line or single-column CSV); each is resolved to this path.",
       "title": "Samples Base Path"
     },
+    "survival_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional CSV sidecar for time-to-event modeling: sample_id, time, event, and optional psa/alp/ldh/predicted_ctdna_fraction. Operator-supplied; no in-process ctdna.org call.",
+      "title": "Survival Path"
+    },
     "validation_partitions": {
       "anyOf": [
         {

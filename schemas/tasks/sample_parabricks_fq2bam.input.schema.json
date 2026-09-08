@@ -118,6 +118,19 @@
           "default": null,
           "description": "Linear GRCh38 FASTA path. Usually from site reference_genome.fasta.",
           "title": "Reference Fasta"
+        },
+        "write_methylation_tags": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When true, MojoFq2bamMeth writes XM:Z/XG:Z methylation tags (METHYLGRAPHER_WRITE_METH_TAGS). Operator-set per procedure/profile. Clara fq2bam_meth uses sequence+XG fallback when tags are absent.",
+          "title": "Write Methylation Tags"
         }
       },
       "title": "ParabricksStepConfig",

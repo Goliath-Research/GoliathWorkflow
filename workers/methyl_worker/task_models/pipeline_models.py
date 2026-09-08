@@ -191,6 +191,26 @@ class InfoMeasuresTaskOutput(ActionOutputBase):
     status: Optional[str] = None
 
 
+class MhbMhlTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str
+    project: Optional[str] = None
+    projectPath: Optional[str] = None
+    outputDir: Optional[str] = None
+    stepOverride: Optional[Dict[str, Any]] = None
+
+
+class MhbMhlTaskOutput(ActionOutputBase):
+    output_dir: Optional[str] = None
+    mhl_matrix: Optional[str] = None
+    mhb_bed: Optional[str] = None
+    mhb_qc: Optional[str] = None
+    n_samples: Optional[int] = None
+    n_blocks: Optional[int] = None
+    status: Optional[str] = None
+
+
 class EnricherTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

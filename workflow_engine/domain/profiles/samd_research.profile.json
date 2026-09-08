@@ -11,7 +11,8 @@
       "dmp_fc",
       "gene_enricher",
       "gene_fc",
-      "dual_fc"
+      "dual_fc",
+      "mhl_survival"
     ]
   },
   "dmp_modeling_mode": "featurecuts",

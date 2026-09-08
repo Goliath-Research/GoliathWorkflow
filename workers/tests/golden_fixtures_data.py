@@ -41,6 +41,7 @@ GOLDEN_INPUTS: Dict[str, Dict[str, Any]] = {
         "projectPath": "/work/p/project.json",
     },
     "pipeline.info_measures": {"tool": "MethylInfoTheory", "projectPath": "/work/p/project.json"},
+    "pipeline.mhb_mhl": {"tool": "MethylMhl", "projectPath": "/work/p/project.json"},
     "context.resolve_project": {"tool": "ContextResolveProject", "projectPath": "/work/p/project.json"},
     "sample.parabricks_giraffe": {
         "tool": "ParabricksGiraffe",
@@ -319,6 +320,14 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
         "n_samples": 10,
         "n_columns": 20,
         "n_jsd_windows": 5,
+    },
+    "pipeline.mhb_mhl": {
+        "status": "ok",
+        "output_dir": "/work/p/mhb_mhl",
+        "mhl_matrix": "/work/p/mhb_mhl/mhl_matrix.csv",
+        "mhb_bed": "/work/p/mhb_mhl/mhb.bed",
+        "n_samples": 4,
+        "n_blocks": 3,
     },
     "context.resolve_project": {
         "status": "ok",

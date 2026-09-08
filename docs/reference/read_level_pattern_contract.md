@@ -11,8 +11,11 @@ methylation patterns** over fixed-size CpG tiles.
 |----------|---------|---------|
 | Marginal counts (unchanged) | `{chrom}-{ctx}.h5` | `1-CG.h5` |
 | Read-level patterns (new) | `{chrom}-{ctx}.patterns.h5` | `1-CG.patterns.h5` |
+| Per-read haplotypes (MHL) | `{chrom}-CG.mhap.h5` | `1-CG.mhap.h5` |
 
 Both files live in the sample directory (`/work/samples/{sample_id}/`).
+Fixed-k tile histograms **cannot** produce Wong/Guo MHL; that path uses the
+separate [mhap store contract](mhap_store_contract.md).
 
 ## HDF5 layout
 

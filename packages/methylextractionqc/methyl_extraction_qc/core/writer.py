@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from ..guardrails import evaluate_guardrails
 from ..manifest import load_extraction_manifest, manifest_path
 from ..models.config import ExtractionQCConfig, ExtractionQCGuardrailConfig
+from .panel_qc import compute_panel_qc
 
 
 def extraction_qc_output_path(sample_dir: Path, sample_id: str) -> Path:
@@ -32,11 +33,13 @@ def build_extraction_qc_payload(
     manifest: Dict[str, Any],
     guardrail_config: ExtractionQCGuardrailConfig,
     expected_chromosomes: list[str],
+    panel_metrics: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     guardrails = evaluate_guardrails(
         manifest,
         config=guardrail_config,
         expected_chromosomes=expected_chromosomes,
+        panel_metrics=panel_metrics,
     )
     metadata = manifest.get("metadata") or {}
     return {
@@ -52,6 +55,7 @@ def build_extraction_qc_payload(
             "contexts_extracted": metadata.get("contexts_extracted"),
         },
         "summary": manifest.get("summary") or {},
+        "panel_qc": panel_metrics or {},
         "guardrails": {
             **guardrails["metrics"],
             "overall_pass": guardrails["overall_pass"],
@@ -68,11 +72,18 @@ def process_sample_extraction_qc(
     sample_path = Path(sample_dir)
     cfg = config or ExtractionQCConfig()
     manifest = load_extraction_manifest(sample_path, sample_id)
+    panel_metrics = compute_panel_qc(
+        sample_path,
+        target_panel_bed=cfg.target_panel_bed,
+        pos_control_bed=cfg.pos_control_bed,
+        neg_control_bed=cfg.neg_control_bed,
+    )
     payload = build_extraction_qc_payload(
         sample_id=sample_id,
         sample_dir=sample_path,
         manifest=manifest,
         guardrail_config=cfg.guardrails,
         expected_chromosomes=cfg.expected_chromosomes,
+        panel_metrics=panel_metrics,
     )
     return write_extraction_qc_json(payload, extraction_qc_output_path(sample_path, sample_id))

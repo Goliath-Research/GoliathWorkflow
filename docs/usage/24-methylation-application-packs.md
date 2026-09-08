@@ -57,6 +57,7 @@ Committed under
 | `buffy_wgbs_linear_gene_fc` | `buffy_coat` | Linear WGBS baseline via **explicit** Clara Parabricks (or MojoFq2bamMeth); same science knobs |
 | `cfdna_wgbs_plasma` | `cfdna` | Linear WGBS + fragmentomics (analyte merge), gene FeatureCuts, **no** cell deconv lifecycle |
 | `cfdna_emseq_targeted` | `cfdna` | `libraryProtocol: emseq_targeted`, `sample_prep_emseq`, panel BED + elevated `min_cov`, no deconv |
+| `cfdna_emseq_mhl_survival` | `cfdna` | Same SamplePrep; `researchMode: mhl_survival`; `pipeline.mhb_mhl` + Cox (not FeatureCuts/ECDF) |
 | `plant_wgbs_gene_fc` | `plant_tissue` | Linear WGBS, gene FeatureCuts, plant lifecycle (no blood deconv) |
 
 ```bash
@@ -80,6 +81,13 @@ Prefer the procedure’s `lifecycleProgram` / `samplePrepProgram` hints (especia
 **EM-Seq note.** Set `actionConfig.methyl_extract.target_panel_bed` to an operator-
 supplied panel BED (cancer-specific panels belong in the application pack or study,
 not in Python). Extract restricts the BAM with `samtools view -L` before MethylExtractor.
+
+**EM-Seq MHL + survival** is a parallel procedure (`cfdna_emseq_mhl_survival`,
+`researchMode: mhl_survival`). It keeps the same SamplePrep, emits `{chrom}-CG.mhap.h5`
+haplotype sidecars, runs `pipeline.mhb_mhl`, and models overall survival with the Cox
+backend. It does **not** replace `cfdna_emseq_targeted` + gene FeatureCuts. Study
+manifests need `survival_path` (CSV: `sample_id`, `time`, `event`, optional labs).
+Haplotype contract: [mhap_store_contract.md](../reference/mhap_store_contract.md).
 
 ## Required artifacts (application pack)
 

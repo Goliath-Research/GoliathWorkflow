@@ -70,6 +70,7 @@ pythonpath = [
     "packages/methylderivedmeasures",
     "packages/methyldeconv",
     "packages/methylinfotheory",
+    "packages/methylmhl",
     "workers",
     "workflow_engine",
     "workflow_engine/local",

@@ -25,6 +25,7 @@ from ..task_models.pipeline_models import (
     GeneSelectTaskOutput,
     InfoMeasuresTaskOutput,
     MapperTaskOutput,
+    MhbMhlTaskOutput,
     ResidualizeFitTaskOutput,
 )
 
@@ -95,6 +96,13 @@ def collector_confounder_scores(_entry: ActionCatalogEntry) -> ArtifactCollector
 def collector_info_measures(_entry: ActionCatalogEntry) -> ArtifactCollector:
     return ManifestFirstCollector(
         output_model=InfoMeasuresTaskOutput,
+        resolve_output_dir=_output_dir,
+    )
+
+
+def collector_mhb_mhl(_entry: ActionCatalogEntry) -> ArtifactCollector:
+    return ManifestFirstCollector(
+        output_model=MhbMhlTaskOutput,
         resolve_output_dir=_output_dir,
     )
 

@@ -88,6 +88,7 @@ def ensure_providers_loaded() -> None:
         gene_select,
         info_measures,
         mapper,
+        mhb_mhl,
         methylation_confounder_scores,
         residualize_fit,
     )
