@@ -10,8 +10,8 @@
  * Markdown is converted with the `marked` CLI via npx (no repo dependency).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const MERMAID_ESM =
@@ -45,30 +45,19 @@ function parseArgs(argv) {
   return { input, output, title };
 }
 
-function npxCliJs() {
-  const cli = join(
-    dirname(process.execPath),
-    "node_modules",
-    "npm",
-    "bin",
-    "npx-cli.js",
-  );
-  if (!existsSync(cli)) {
-    throw new Error(`npx-cli.js not found next to node at ${cli}`);
-  }
-  return cli;
-}
-
 function markdownToHtml(input) {
   const tmp = mkdtempSync(resolve(tmpdir(), "md2html-"));
   const bodyPath = resolve(tmp, "body.html");
   try {
+    // Resolve `npx` from PATH. Windows Node cannot spawn `.cmd` shims without a
+    // shell (EINVAL); argv is still passed as an array, not a concatenated string.
     execFileSync(
-      process.execPath,
-      [npxCliJs(), "--yes", "marked", "--gfm", "-i", input, "-o", bodyPath],
+      "npx",
+      ["--yes", "marked", "--gfm", "-i", input, "-o", bodyPath],
       {
         stdio: ["ignore", "ignore", "inherit"],
         windowsHide: true,
+        shell: process.platform === "win32",
       },
     );
     return readFileSync(bodyPath, "utf8");
