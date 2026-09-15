@@ -15,7 +15,7 @@
 | [validation-evidence-index.md](../regulatory/validation-evidence-index.md) | EV-PCA-* feasibility packages |
 | [SaMD study lifecycle](../usage/18-samd-study-lifecycle.md) | Research → holdout → pivotal ladder |
 | [Prostate cancer options catalog (ch.25)](../usage/25-prostate-cancer-pack.md) | Operator/researcher: what to set (procedures, tissue progression, commands) |
-| [moffitt_partnership_opportunity_brief.md](moffitt_partnership_opportunity_brief.md) | Moffitt Wong/Wang MHL+OS methods now shipped as a parallel procedure |
+| [moffitt_partnership_opportunity_brief.md](moffitt_partnership_opportunity_brief.md) | Florida community-access brief; Wong/Wang MHL+OS as a published method class on GoliathOmics |
 
 ---
 

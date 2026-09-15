@@ -1,20 +1,22 @@
-# Executive Opportunity Brief: Academic–Industrial Partnership & Community Access
+# Executive Opportunity Brief: Florida Community-Access Partnership
 
-**Target Institution:** H. Lee Moffitt Cancer Center & Research Institute  
-**Target Stakeholders:** Office of Innovation, Computational Oncology, Early Detection / Pathology, Sponsored Research  
-**Presenting Organization:** Goliath Research Inc.  
-**Product Platform:** **GoliathOmics** (Powered by *GoliathWorkflow*, *mojo-align*, and *MethylExtractor*)  
-**Architecture Pillar:** 100% Free & Open Toolchain Foundation (PostgreSQL Single Database · Zero Delphi/Azure SQL Lock-In)  
-**Initiative:** Community-Access Non-Profit Software Partnership & Joint Florida/Federal Grant Strategy  
-**Date:** September 8, 2026  
-**Update:** Native support for Moffitt-published EM-Seq **MHB/MHL + overall-survival** methods (`cfdna_emseq_mhl_survival`), parallel to FeatureCuts detection.  
+**Presenting organization:** Goliath Research Inc. (Winter Haven, FL)  
+**Product platform:** **GoliathOmics** (powered by *GoliathWorkflow*, *mojo-align*, and *MethylExtractor*)  
+**Architecture pillar:** 100% free & open toolchain (PostgreSQL · zero Delphi / Azure SQL lock-in)  
+**Initiative:** Statewide community-access software partnership & joint Florida/federal grant strategy  
+**Intended partners:** UF Health Cancer Center (HiPerGator), Sylvester Comprehensive Cancer Center (Pegasus), AdventHealth (Winter Haven → Orlando TRI) as clinical/equity arm  
+**Not the lead IT partner:** Moffitt’s commercial OCI–NVIDIA–Deloitte shared fabric (see internal [florida-hub-partnership-assessment.md](florida-hub-partnership-assessment.md))  
+**Date:** September 15, 2026  
+**Science note:** Native EM-Seq **MHB/MHL + overall-survival** (`cfdna_emseq_mhl_survival`) implements the *published* Wong/Wang 2026 method class; that is not a Moffitt enterprise deployment.
 
 ---
 
 ## 1. Executive Summary & Strategic Vision
 
 ### The Mission
-Goliath Research Inc. is establishing a strategic partnership with the **H. Lee Moffitt Cancer Center & Research Institute** to transition our enterprise-grade cancer multiomics platform, **GoliathOmics**, into an open, community-accessible resource. By uniting Goliath’s high-performance computational platform with Moffitt’s world-class clinical oncology leadership, patient cohorts, and NCI-designated comprehensive research infrastructure, this partnership will accelerate the translation of early cancer detection biomarkers from laboratory discoveries into clinically validated, regulatory-grade diagnostic tools.
+Goliath Research Inc., based in **Winter Haven**, is offering **GoliathOmics** as an open, community-accessible multiomics platform so that **grant dollars buy sequencing and care, not software seats**. The goal is statewide access at the lowest possible cost—especially in Polk / Heartland counties that sit between NCI centers but do not share Tampa’s enterprise cloud budget.
+
+We seek **academic HPC hosts** that already paid for GPUs (UF HiPerGator, Sylvester Pegasus) and a **local clinical arm** (AdventHealth Winter Haven → Orlando Translational Research Institute). We are **not** proposing to replace Moffitt’s OCI–NVIDIA–Deloitte fabric, ThinkHub tumor boards, or digital-pathology stack.
 
 ### The Problem in Cancer Genomics & Early Detection
 Modern oncology diagnostics increasingly require combining multiple genomic modalities—liquid biopsy cell-free DNA (cfDNA) methylation, whole-genome bisulfite sequencing (WGBS), enzymatic methylation sequencing (EM-Seq), RNA-Seq transcriptomics, and mass-spectrometry proteomics. However, clinical translation is severely hindered by three universal bottlenecks:
@@ -35,7 +37,7 @@ Modern oncology diagnostics increasingly require combining multiple genomic moda
 
 ```mermaid
 flowchart TB
-    subgraph Client_Layer["Clinical & Research Users (Moffitt & Florida Community)"]
+    subgraph Client_Layer["Clinical & Research Users (Florida HPC + community hospitals)"]
         UI["EpiPortal Web Interface · REST API Services · CLI Administration"]
     end
 
@@ -64,7 +66,7 @@ flowchart TB
     subgraph Compute_Hardware["High-Performance Execution Layer"]
         MA["<b>mojo-align</b><br/>GPU Pangenome & Linear Aligner<br/><i>(NVIDIA CUDA & AMD ROCm)</i>"]
         ME["<b>MethylExtractor</b><br/>High-Throughput C Extractor<br/><i>(Coordinate Clip & Zstd HDF5)</i>"]
-        WORKERS["Stateless GPU/CPU Workers<br/><i>(Moffitt Cloud / On-Premise BYOC)</i>"]
+        WORKERS["Stateless GPU/CPU Workers<br/><i>(HiPerGator · Pegasus · hospital BYOC)</i>"]
     end
 
     UI --> GoliathOmics_Platform
@@ -78,8 +80,8 @@ flowchart TB
 
 ### 1. PostgreSQL Unification: Zero License Fees, Maximum Data Sovereignty
 * **Single Database Architecture:** GoliathWorkflow consolidates all system schemas (`cfg` configuration registry, `wf` workflow orchestration, worker leases, node executions, and audit records) exclusively onto **PostgreSQL**.
-* **Elimination of Azure SQL:** By retiring Microsoft Azure SQL, Moffitt is completely freed from proprietary cloud-database lock-in and high monthly managed-database licensing fees.
-* **True Deployment Agnosticism (BYOC):** PostgreSQL runs identically whether deployed on Moffitt’s local bare-metal Linux servers, an on-premise Kubernetes cluster, or inside Moffitt’s private cloud environment (AWS RDS PostgreSQL, Azure Database for PostgreSQL, or Google Cloud SQL). Sensitive clinical sequencing data remains strictly within Moffitt's institutional boundary.
+* **Elimination of Azure SQL:** By retiring Microsoft Azure SQL, partners are freed from proprietary cloud-database lock-in and high monthly managed-database licensing fees.
+* **True Deployment Agnosticism (BYOC):** PostgreSQL runs identically on UF HiPerGator or Sylvester Pegasus partitions, a community-hospital Linux GPU, or any cloud (AWS, GCP, Azure, OCI). Sensitive clinical sequencing data remains inside the **host institution’s** boundary—we do not require a new commercial AI tenancy.
 
 ### 2. Elimination of Delphi: 100% Modern, Open-Source Codebase
 * **Zero Delphi Legacy:** Any historical Delphi dependencies have been completely removed.
@@ -137,7 +139,7 @@ flowchart LR
    * `cfdna_wgbs_plasma`: Plasma cfDNA whole-genome bisulfite sequencing with integrated fragmentomics.
    * `buffy_wgbs_pangenome_gene_fc`: Peripheral blood buffy coat WGBS using pangenome graph alignment and Houseman/HiTIMED immune cell deconvolution.
    * `cfdna_emseq_targeted`: Targeted deep enzymatic capture (2,000×–5,000× depth) using operator-supplied BED panels and coverage capping — **gene FeatureCuts / ECDF classification**.
-   * `cfdna_emseq_mhl_survival`: Same EM-Seq SamplePrep; native methylation-haplotype-block (MHB) discovery or locked BED, Guo/Wong **methylation haplotype load (MHL)**, and **Cox / KM / time-AUC** (optional nomogram). Does **not** replace FeatureCuts; it is the method class in Wong et al., *npj Precis Oncol* (2026) 10:29 (Wang laboratory, Moffitt).
+   * `cfdna_emseq_mhl_survival`: Same EM-Seq SamplePrep; native methylation-haplotype-block (MHB) discovery or locked BED, Guo/Wong **methylation haplotype load (MHL)**, and **Cox / KM / time-AUC** (optional nomogram). Does **not** replace FeatureCuts; it is the method class in Wong et al., *npj Precis Oncol* (2026) 10:29 (published from the Wang laboratory). Open implementation for any Florida PI—not a Moffitt IT integration.
 3. **Application Packs (Clinical Indications & Disease Overlays):** Lightweight configuration overlays applying clinical cohorts, stage hierarchies, and regulatory settings for specific diseases (e.g., Prostate Cancer Gatekeeper, **mCRPC overall-survival prognosis**, Alzheimer cfDNA, Pan-Cancer Early Detection) with **zero code changes**.
 
 ---
@@ -186,28 +188,28 @@ Early-stage cancer detection in peripheral blood (cfDNA) operates at the biologi
 * **Fragmentomics Integration:** Integrates fragment length profiles, end-motif frequencies, and copy-number variation alongside methylation signals to boost sensitivity in ultra-low ctDNA regimes.
 * **EM-Seq & Targeted Deep Hybrid Capture:** Natively supports high-depth enzymatic methylation capture protocols (2,000×–5,000× depth), applying panel-specific BED filtering and coverage capping to optimize diagnostic yield.
 
-### Method-level alignment with Moffitt (Wong / Wang 2026)
+### Method-level alignment with published Wong / Wang 2026 science
 
-Moffitt’s published plasma cfDNA mCRPC work is **haplotype-block MHL + time-to-event modeling**, not mean-methylation FeatureCuts. GoliathOmics now runs that **method class** as a first-class procedure so a collaboration can use Moffitt’s science on Goliath’s engine without forcing a classifier bake-off.
+The published plasma cfDNA mCRPC work is **haplotype-block MHL + time-to-event modeling**, not mean-methylation FeatureCuts. GoliathOmics runs that **method class** as a first-class procedure so Florida PIs can use the paper’s science on an open engine without a classifier bake-off and **without** joining Moffitt’s commercial cloud.
 
 | Wong et al. 2026 step | GoliathOmics today |
 | :--- | :--- |
 | EM-Seq + Twist capture BAM | Linear align (Parabricks `fq2bam_meth` or `mojo-align`); methylation BAM tags; operator `target_panel_bed` |
 | mHapSuite haplotypes | Same extract pass: `{chrom}-CG.mhap.h5` (native store; not a mHapSuite wrap) |
-| MHBDiscovery (window 3, \(r^2>0.3\), \(p<0.05\)) | `pipeline.mhb_mhl` with those defaults, or a **locked** Moffitt MHB BED |
+| MHBDiscovery (window 3, \(r^2>0.3\), \(p<0.05\)) | `pipeline.mhb_mhl` with those defaults, or a **locked** operator MHB BED |
 | MHL lengths 1–10; ≥3 CpGs; median reads >50 | Native MHL (`mhl_max_length` 10); same filter knobs |
 | Cox PH, KM, time-dependent ROC, nomogram | `backend_profiles.cox` + study `survival_path` (time, event, optional PSA/ALP/LDH/ctDNA) |
 | Nested test vs labs / predicted ctDNA | Optional nested LRT when those columns are on the sidecar |
 
-**What Moffitt still supplies (not hardcoded in product):** capture panel BED and control regions, OS/labs dictionary, optional locked 15-MHB gene list. GREAT and an in-process ctdna.org API remain optional follow-ons. InformME entropy tiles and HiTIMED tumor fraction are **not** substitutes for MHL or the paper’s clinical ctDNA predictor.
+**What a collaborating lab still supplies (not hardcoded in product):** capture panel BED and control regions, OS/labs dictionary, optional locked 15-MHB gene list. GREAT and an in-process ctdna.org API remain optional follow-ons. InformME entropy tiles and HiTIMED tumor fraction are **not** substitutes for MHL or the paper’s clinical ctDNA predictor.
 
-This path does **not** claim a rerun of the published 96-patient nomogram. It means a joint pilot can compare native MHL/Cox to Moffitt’s mHapSuite+R on a shared subset.
+This path does **not** claim a rerun of the published 96-patient nomogram. A UF or Sylvester pilot can compare native MHL/Cox to mHapSuite+R on a shared subset.
 
 ### Prostate & Solid Tumor "Gatekeeper" Paradigms
-A prime translational target for Moffitt and Goliath is the development of non-invasive **"gatekeeper" rule-out diagnostics** to spare patients from unnecessary invasive biopsies:
+A prime translational target for **Central Florida community sites and academic HPC partners** is non-invasive **"gatekeeper" rule-out diagnostics** to spare patients from unnecessary invasive biopsies:
 * **High Negative Predictive Value (NPV ≥ 95%):** Configured to optimize lower confidence bounds (LCB) for NPV in intended-use screening populations, separating indolent conditions (e.g., Gleason Grade 1 / 3+3) from clinically significant disease (Gleason Grade ≥ 2 / 3+4).
 * **Disease Progression & Staged Modeling:** Built-in disease progression actions trace trajectory shifts across pre-malignant, early-stage, and metastatic phenotypes rather than simplistic binary distinctions.
-* **Prognosis vs detection (keep the labels distinct):** Gatekeeper NPV (FeatureCuts on `cfdna_emseq_targeted`) and mCRPC overall-survival nomograms (MHL on `cfdna_emseq_mhl_survival`) are **separate intended uses**. A Moffitt partnership can run both; they must not be scored as if they were the same study.
+* **Prognosis vs detection (keep the labels distinct):** Gatekeeper NPV (FeatureCuts on `cfdna_emseq_targeted`) and mCRPC overall-survival nomograms (MHL on `cfdna_emseq_mhl_survival`) are **separate intended uses**. Partners can run both; they must not be scored as if they were the same study.
 
 ---
 
@@ -244,57 +246,54 @@ flowchart TD
 
 ## 7. Strategic Alignment & Joint Funding Roadmap
 
-Collaborating with Moffitt Cancer Center creates an unbeatable partnership: **Moffitt** serves as the clinical lead, healthcare provider, and biobank sponsor, while **Goliath Research** serves as the computational engine and non-profit technology provider deploying **GoliathOmics**.
+**UF or Sylvester** is the grant-eligible cancer-institute lead and HPC host. **Goliath Research (Winter Haven)** is the technology co-investigator. **AdventHealth (Winter Haven / Orlando TRI)** is the Polk–Central Florida clinical and community-access arm. Compute runs as **BYOC on HiPerGator or Pegasus** (or a small hospital GPU)—not as a new commercial AI tenancy.
+
+Mayo Florida (GCP enterprise) and Moffitt (OCI enterprise) are **not** lead IT partners; see [florida-hub-partnership-assessment.md](florida-hub-partnership-assessment.md).
 
 ### Funding Target 1: Florida Cancer Innovation Fund (FCIF) — FY 2026–2027 (Immediate Priority)
 * **Funding Available:** ~$70 Million total state appropriation; up to **$2,000,000** per award for a 12-month project.
 * **Upcoming Deadlines:** **Period 2: October 22, 2026**; Period 3: December 18, 2026.
 * **Target Categories:** *Rapid Translation Grant* or *High-Impact Pilot Grant* (Novel Technologies for Diagnosis).
 * **Strategic Positioning:**
-  * **Lead Applicant:** Moffitt Cancer Center (eligible licensed Florida cancer institute).
-  * **Co-Applicant / Subcontractor:** Goliath Research Inc. (Florida biomedical research/technology entity).
-  * **Project Concept:** *"Rapid Clinical Translation of an AI-Powered, Pangenome-Aware Liquid Biopsy Platform for Early Multi-Cancer Detection in Underserved Florida Populations"* — with an explicit **mCRPC MHL+OS concordance arm** using Moffitt’s published method class on GoliathOmics (not a FeatureCuts substitute for that arm).
-  * **Zero Software Licensing Overhead:** Because GoliathOmics uses **PostgreSQL and 100% free open-source tools**, 100% of the $2M request is allocated to high-impact clinical personnel, patient cohort sequencing, and direct cloud compute—dramatically boosting application scoring.
-  * **Measurable 12-Month Deliverables:** Complete GoliathOmics cloud/on-prem deployment at Moffitt; process a 500–1,000 patient retrospective cfDNA cohort across diverse demographics; establish a locked clinical model with Wilson CI performance metrics; publish validation results.
+  * **Lead Applicant:** UF Health Cancer Center **or** Sylvester Comprehensive Cancer Center (licensed Florida cancer institute; HPC already in place).
+  * **Technology co-investigator:** Goliath Research Inc. (Winter Haven).
+  * **Clinical / equity arm:** AdventHealth Winter Haven and Orlando TRI (Polk / Heartland access).
+  * **Project Concept:** *"Open-toolchain, pangenome-aware liquid biopsy for underserved Central Florida populations, hosted on academic HPC."* Optional published-method arm: MHL+OS concordance (`cfdna_emseq_mhl_survival`) as science, not as a FeatureCuts substitute.
+  * **Zero Software Licensing Overhead:** PostgreSQL and open tools so the request funds personnel, sequencing, and HPC queue time—not seats or OCI markup.
+  * **Measurable 12-Month Deliverables:** Deploy GoliathOmics on HiPerGator or Pegasus; process a Polk/Central Florida retrospective cfDNA or WGBS set via AdventHealth; establish locked research metrics with Wilson CIs; document $0 software licenses.
 
 ### Funding Target 2: Bankhead-Coley Cancer Research Program (FY 2026–2027)
 * **Funding Available:** $600,000 to $1,500,000 over 36–48 months.
 * **Target Mechanism:** *Technology Transfer Feasibility* or *Discovery Science*.
-* **Focus:** Deepening clinical validation of specific early-detection markers (e.g., localized prostate cancer rule-out or lung cancer liquid biopsy) using Moffitt’s prospective biobank.
+* **Focus:** Deepening clinical validation of early-detection markers (e.g., localized prostate cancer rule-out or lung cancer liquid biopsy) using UF/Sylvester science cores and AdventHealth residual or prospective samples.
 
 ### Funding Target 3: Federal NIH / NCI Mechanisms (Parallel Pipeline)
-* **NIH/NCI Academic–Industrial Partnerships (PAR-25-338):** Explicitly funds translation of diagnostic software between an industrial technology developer and an NCI Comprehensive Cancer Center.
-* **NCI Informatics Technology for Cancer Research (ITCR U01/U24):** Funds cancer informatics platforms that serve the national research community under open-access models.
-* **SBA SBIR / STTR Fast-Track (Phase I/II):** Non-dilutive commercialization and clinical validation funding (up to $2.4M).
+* **NCI Informatics Technology for Cancer Research (ITCR U01/U24):** Open-access informatics platforms—natural fit for UF or Sylvester as academic home.
+* **NIH/NCI Academic–Industrial Partnerships (PAR-25-338):** Only if the academic lead is UF or Sylvester (not an OCI/GCP enterprise tenancy).
+* **SBA SBIR / STTR Fast-Track (Phase I/II):** Non-dilutive validation funding (up to $2.4M).
 
 ---
 
 ## 8. Proposed Collaboration & Governance Model
 
-To maximize competitiveness for Florida state grants and community benefit, Goliath Research proposes a transparent, collaborative operating model:
-
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                               COLLABORATION FRAMEWORK                                  │
-├──────────────────────────────────────────┬─────────────────────────────────────────────┤
-│ Moffitt Cancer Center                    │ Goliath Research Inc.                       │
-│ • Lead Institutional Applicant / Co-PI   │ • Technology & Engineering Co-Investigator  │
-│ • Patient Cohort Access & Biobank Data   │ • Full GoliathOmics Deployment & Support    │
-│ • Clinical Protocol & IRB Governance     │ • High-Performance Cloud/GPU Architecture   │
-│ • Clinical Performance Interpretation    │ • Automated SaMD Evidence & Audit Packaging │
-└──────────────────────────────────────────┴─────────────────────────────────────────────┘
+├─────────────────────────────┬──────────────────────────────┬───────────────────────────┤
+│ UF or Sylvester             │ Goliath Research (Winter     │ AdventHealth Winter Haven │
+│                             │ Haven)                       │ / Orlando TRI             │
+│ • FCIF-eligible lead / PI   │ • Technology co-investigator │ • Polk / Heartland access │
+│ • HiPerGator or Pegasus GPU │ • GoliathOmics deploy &      │ • Residual / community    │
+│ • Science cores, IRB home   │   SaMD evidence packaging    │   cohorts, local IRB      │
+└─────────────────────────────┴──────────────────────────────┴───────────────────────────┘
                                            │
                                            ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                                COMMUNITY BENEFIT                                       │
-│ • 100% Free Toolchain Foundation: Powered by open-source PostgreSQL, Python, Mojo,     │
-│   and C with ZERO proprietary software seat or database licenses.                      │
-│ • Non-Profit Software Access: GoliathOmics deployed at no software license cost for   │
-│   Moffitt investigators and Florida health partners.                                   │
-│ • Data Sovereignty & HIPAA: All clinical genomic data remains strictly within         │
-│   Moffitt's secure firewall / private cloud boundary (BYOC architecture).              │
-│ • Intellectual Property: Moffitt retains full ownership of clinical discoveries,      │
-│   biomarker panels, and novel clinical IP; Goliath retains underlying core software IP.│
+│ • 100% free toolchain: PostgreSQL, Python, Mojo, C — ZERO software seat licenses.      │
+│ • Compute on academic HPC or hospital BYOC — not a new commercial AI tenancy.          │
+│ • Data sovereignty: PHI stays in the host institution firewall.                        │
+│ • IP: partners own clinical discoveries and panels; Goliath retains core software IP.  │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -302,27 +301,27 @@ To maximize competitiveness for Florida state grants and community benefit, Goli
 
 ## 9. Immediate Next Steps & Action Checklist
 
-1. **Partnership Alignment Meeting (Target: Within 5 Days):**
-   * Meet with Moffitt’s **Office of Innovation**, **Computational Oncology faculty**, and **Sponsored Research Office**.
-   * Deliver live demonstration of **GoliathOmics** executing multiomics workflows on its unified **PostgreSQL** backend.
-2. **Execute Letter of Intent (LOI) / Memorandum of Understanding (MOU):**
-   * Formalize collaborative intent, IRB data pathway, and grant submission structure.
-   * Designate Moffitt Corresponding Principal Investigator (PI).
-3. **Assemble Florida Cancer Innovation Fund (Period 2) Application:**
+1. **Track A — grant-eligible HPC (this month, before FCIF Period 2):**
+   * UF Bioinformatics / computational biology shared resource: HiPerGator queue pilot (20–50 de-identified samples; wall-clock vs nf-core/Bismark).
+   * Sylvester Cancer Epigenetics / Precision Medicine: same pilot on Pegasus; pangenome + cfDNA story for South Florida diversity.
+2. **Track B — local clinical access:**
+   * AdventHealth Winter Haven and Orlando TRI: residual plasma, Polk equity narrative, community screening overlay.
+3. **LOI / MOU:**
+   * Name **UF or Sylvester** as corresponding PI / lead applicant; Goliath as technology co-I; AdventHealth as clinical site. Do not designate Moffitt Innovation as lead.
+4. **Florida Cancer Innovation Fund (Period 2):**
    * **Deadline:** October 22, 2026.
-   * Highlight the **100% free toolchain / zero license fee** advantage in the budget justification.
-   * Draft Specific Aims (12-month milestones, measurable clinical endpoints, Florida community impact).
-   * Prepare joint budget narrative ($1.5M–$2.0M range).
-4. **System Staging & Preliminary Data Run:**
-   * Stage the containerized GoliathOmics runtime bundle (`Dockerfile.mojo`, `MethylExtractor`, `GoliathWorkflow` with PostgreSQL) on Moffitt’s cluster or designated cloud environment.
-   * Run pilot verification on existing de-identified control vs. cancer samples to establish baseline preliminary data for the application.
-   * **MHL concordance subset (Computational Oncology / Wang lab):** exchange a hg38 capture BED + OS sidecar for a small sample set; run `cfdna_emseq_mhl_survival` and compare MHB/MHL matrices and Cox fits to mHapSuite.
+   * Budget justification: **$0 software licenses**; HPC queue time + sequencing + Heartland access.
+   * Specific aims: deploy on academic HPC; Polk/Central Florida cohort; locked research metrics.
+5. **System staging:**
+   * Runtime bundle on HiPerGator or Pegasus (Slurm-friendly workers), not an OCI tenancy.
+   * Optional MHL concordance with a Florida PI using public/published methods (`cfdna_emseq_mhl_survival`)—not contingent on Moffitt enterprise IT.
 
 ---
 
 ### Contact Information
 
 **Goliath Research Inc.**  
+Winter Haven, Florida  
 *Leadership & Technology Team*  
 Email: partnerships@goliathresearch.com  
 Web: [goliathresearch.com](https://goliathresearch.com)  

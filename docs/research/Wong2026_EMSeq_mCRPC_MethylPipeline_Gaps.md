@@ -2,7 +2,7 @@
 
 **Status:** research / design note (not operator runbook).  
 **Source:** Wong J. et al. *Plasma cell-free DNA methylation-based prognosis in metastatic castrate-resistant prostate cancer.* npj Precision Oncology (2026) 10:29. [doi:10.1038/s41698-025-01232-w](https://doi.org/10.1038/s41698-025-01232-w). Local copy: [`41698_2025_Article_1232.pdf`](41698_2025_Article_1232.pdf).  
-**Related:** [Moffitt partnership brief](moffitt_partnership_opportunity_brief.md), [usage ch.25](../usage/25-prostate-cancer-pack.md) (EM-Seq procedure), [informME integration](methylpipeline_informme_integration.md), [Prostate Cancer Detection fitness](Prostate_Cancer_Detection_MethylPipeline_Fitness.md) (different paper: pre-biopsy gatekeeper SOW).  
+**Related:** [Florida community-access brief](moffitt_partnership_opportunity_brief.md), [usage ch.25](../usage/25-prostate-cancer-pack.md) (EM-Seq procedure), [informME integration](methylpipeline_informme_integration.md), [Prostate Cancer Detection fitness](Prostate_Cancer_Detection_MethylPipeline_Fitness.md) (different paper: pre-biopsy gatekeeper SOW).  
 **Date:** 2026-09-07  
 **Verdict (updated):** A **parallel** product path now exists: `cfdna_emseq_mhl_survival` + `researchMode: mhl_survival` (native MHB/MHL + Cox). The original `cfdna_emseq_targeted` + FeatureCuts path is unchanged. Remaining gaps are operator assets (panel BED, survival sidecar, control BEDs) and optional GREAT / ctdna.org.
 
