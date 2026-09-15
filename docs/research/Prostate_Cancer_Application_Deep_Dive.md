@@ -15,7 +15,7 @@
 | [validation-evidence-index.md](../regulatory/validation-evidence-index.md) | EV-PCA-* feasibility packages |
 | [SaMD study lifecycle](../usage/18-samd-study-lifecycle.md) | Research → holdout → pivotal ladder |
 | [Prostate cancer options catalog (ch.25)](../usage/25-prostate-cancer-pack.md) | Operator/researcher: what to set (procedures, tissue progression, commands) |
-| [moffitt_partnership_opportunity_brief.md](moffitt_partnership_opportunity_brief.md) | Florida community-access brief; Wong/Wang MHL+OS as a published method class on GoliathOmics |
+| [florida-community-access-partnership-brief.md](florida-community-access-partnership-brief.md) | Florida community-access brief; Wong/Wang MHL+OS as a published method class on GoliathOmics |
 
 ---
 
@@ -77,7 +77,7 @@ Buffy-only shallow WGBS is a poor fit for a **pre-biopsy csPCa (GG≥2) rule-out
 
 The wet-lab and clinical framing in [Prostate Cancer Detection.md](Prostate Cancer Detection.md) recommends **Enzymatic Methyl-Seq (EM-Seq) + custom hybridization capture** for a prostate gatekeeper. The shipped procedure is [`cfdna_emseq_targeted`](../../workflow_engine/domain/profiles/procedures/cfdna_emseq_targeted.procedure.json): operator-supplied panel BED, elevated `min_cov`, SamplePrep via `sample_prep_emseq`, **no** genome-wide DMP hunt, **no** cell deconvolution by default.
 
-**Option 5** is the same wet-lab geometry with a **different science path**: native MHB/MHL + Cox overall survival (`cfdna_emseq_mhl_survival`). That is the Moffitt / Wong 2026 method class, not FeatureCuts. See [moffitt_partnership_opportunity_brief.md](moffitt_partnership_opportunity_brief.md).
+**Option 5** is the same wet-lab geometry with a **different science path**: native MHB/MHL + Cox overall survival (`cfdna_emseq_mhl_survival`). That is the Moffitt / Wong 2026 method class, not FeatureCuts. See [florida-community-access-partnership-brief.md](florida-community-access-partnership-brief.md).
 
 | Dimension | GRAIL Galleri (MCED) | Prostate EM-Seq gatekeeper (this option) |
 |-----------|----------------------|------------------------------------------|

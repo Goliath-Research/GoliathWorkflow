@@ -11,7 +11,7 @@ Informal background research used during pipeline design (analyte choice, MCED l
 | [Prostate_Cancer_Detection_MethylPipeline_Fitness.md](Prostate_Cancer_Detection_MethylPipeline_Fitness.md) | Fitness analysis of that note vs MethylPipeline (adopt-with-caveats; extensions) |
 | [Prostate_Cancer_Application_Deep_Dive.md](Prostate_Cancer_Application_Deep_Dive.md) | Application synthesis: buffy/plasma WGBS, EM-Seq GRAIL-style gatekeeper, alignment compare gate, informME/deconv, physician/payer validation story. Operator/researcher options: [usage ch.25](../usage/25-prostate-cancer-pack.md) |
 | [Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps.md](Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps.md) | Wong et al. 2026 (npj Precis Oncol): targeted EM-Seq + MHB/MHL mCRPC survival vs shipped `cfdna_emseq_targeted` — what blocks a repeat |
-| [moffitt_partnership_opportunity_brief.md](moffitt_partnership_opportunity_brief.md) | External Florida community-access brief (UF/Sylvester HPC + AdventHealth; not Moffitt OCI) |
+| [florida-community-access-partnership-brief.md](florida-community-access-partnership-brief.md) | External Florida community-access brief (UF/Sylvester HPC + AdventHealth; not Moffitt OCI) |
 | [florida-hub-partnership-assessment.md](florida-hub-partnership-assessment.md) | **Internal:** why Moffitt is the wrong IT partner; Winter Haven hub; UF / Sylvester / AdventHealth targeting |
 | [GoliathOmics Gaps.md](GoliathOmics Gaps.md) | Completeness vs Wang/Moffitt techniques: cfDNA MHL, clinico-genomic scores, exosomal miRNA/protein, long-read ASM |
 | [Gemini_on_Cancer_Detection.md](Gemini_on_Cancer_Detection.md) | MCED competitors, multiomics platforms, buffy-coat as CHIP filter |

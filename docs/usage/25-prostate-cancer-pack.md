@@ -400,6 +400,6 @@ if you add those later.
 - Analyte biology: [BuffyCoat vs cfDNA](../research/BuffyCoat_vs_cfDNA_for_Cancer_Detection.md), [ANALYTE_PROFILES](../ANALYTE_PROFILES.md)
 - Gatekeeper clinical SOW: [Prostate Cancer Detection](../research/Prostate%20Cancer%20Detection.md)
 - Fitness vs that SOW: [Prostate_Cancer_Detection_MethylPipeline_Fitness](../research/Prostate_Cancer_Detection_MethylPipeline_Fitness.md)
-- Wong et al. 2026 EM-Seq mCRPC prognosis (MHB/MHL + OS nomogram): use procedure `cfdna_emseq_mhl_survival` + study `survival_path`. Gap note (implemented / remaining): [Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps](../research/Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps.md). Florida community-access framing: [partnership brief](../research/moffitt_partnership_opportunity_brief.md)
+- Wong et al. 2026 EM-Seq mCRPC prognosis (MHB/MHL + OS nomogram): use procedure `cfdna_emseq_mhl_survival` + study `survival_path`. Gap note (implemented / remaining): [Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps](../research/Wong2026_EMSeq_mCRPC_MethylPipeline_Gaps.md). Florida community-access framing: [partnership brief](../research/florida-community-access-partnership-brief.md)
 - Tutorial (healthy vs stages): [ch.16](16-tutorial-healthy-vs-cancer-stages.md)
 - Command cookbook: [ch.12](12-command-cookbook.md)

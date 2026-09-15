@@ -4,7 +4,7 @@
 **Date:** 2026-09-15  
 **Audience:** Goliath Research leadership.  
 **Home:** Winter Haven, FL (Polk / Heartland).  
-**External proposal this note retargets:** [florida partnership brief](moffitt_partnership_opportunity_brief.md) (filename kept for existing links).  
+**External proposal this note retargets:** [florida-community-access-partnership-brief.md](florida-community-access-partnership-brief.md).  
 **Related:** [GoliathOmics Gaps.md](GoliathOmics Gaps.md) (Wang/Moffitt *methods* completeness — science, not BD).
 
 ---
