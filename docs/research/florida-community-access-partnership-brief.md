@@ -2,7 +2,7 @@
 
 **Presenting organization:** Goliath Research Inc. (Winter Haven, FL)  
 **Product platform:** **GoliathOmics** (powered by *GoliathWorkflow*, *mojo-align*, and *MethylExtractor*)  
-**Architecture pillar:** 100% free & open toolchain (PostgreSQL · zero Delphi / Azure SQL lock-in)  
+**Architecture pillar:** 100% free & open-source toolchain (PostgreSQL and auditable open languages)  
 **Initiative:** Statewide community-access software partnership & joint Florida/federal grant strategy  
 **Intended partners:** UF Health Cancer Center (HiPerGator), Sylvester Comprehensive Cancer Center (Pegasus), AdventHealth (Winter Haven → Orlando TRI) as clinical/equity arm  
 **Not the lead IT partner:** Moffitt’s commercial OCI–NVIDIA–Deloitte shared fabric (see internal [florida-hub-partnership-assessment.md](florida-hub-partnership-assessment.md))  
@@ -21,17 +21,17 @@ We seek **academic HPC hosts** that already paid for GPUs (UF HiPerGator, Sylves
 ### The Problem in Cancer Genomics & Early Detection
 Modern oncology diagnostics increasingly require combining multiple genomic modalities—liquid biopsy cell-free DNA (cfDNA) methylation, whole-genome bisulfite sequencing (WGBS), enzymatic methylation sequencing (EM-Seq), RNA-Seq transcriptomics, and mass-spectrometry proteomics. However, clinical translation is severely hindered by three universal bottlenecks:
 1. **Computational Inefficiency & Modality Sprawl:** Each omics assay traditionally requires a bespoke software stack, multiplying compute costs and fragmenting bioinformatics workflows across disconnected pipelines.
-2. **Proprietary Software Lock-In & Budget Drain:** Commercial diagnostic platforms often saddle academic medical centers with expensive proprietary database licenses (e.g., Microsoft Azure SQL) and legacy compiled runtimes (e.g., Embarcadero Delphi), diverting grant dollars away from clinical sequencing.
+2. **Proprietary Software Lock-In & Budget Drain:** Commercial diagnostic platforms often saddle academic medical centers with expensive proprietary database licenses and closed-source runtimes, diverting grant dollars away from clinical sequencing.
 3. **Methodological Artifacts & Data Leakage:** Paired-end read-overlap double counting, reference bias in linear genome alignment, and accidental mixing of training and holdout patients ("data leakage") lead to irreproducible biomarker claims.
 4. **The "FDA Chasm":** Academic discoveries frequently stall because research pipelines lack the auditability, configuration locking, patient-partition enforcement, and traceability needed for CLIA validation and FDA Software as a Medical Device (SaMD) regulatory clearance.
 
 ### The Solution: GoliathOmics with a 100% Free Toolchain Foundation
-**GoliathOmics** is an enterprise-grade, regulatory-ready platform designed for comprehensive genomics and multiomics diagnostic development. Built on an uncompromised **free and open-source toolchain foundation**, GoliathOmics has **completely eliminated proprietary database and language lock-in**:
-* **PostgreSQL as the Single, Unified Database:** All database operations (configuration, task scheduling, leases, audit logs) have transitioned exclusively to open-source **PostgreSQL**, completely retiring Microsoft Azure SQL. This guarantees zero recurring database license fees and enables effortless deployment on bare-metal institutional HPC clusters, private servers, or any cloud (AWS, GCP, Azure).
-* **Modern Open Language Stack (Zero Delphi):** Legacy Delphi components have been entirely eliminated. The platform is written strictly in modern, auditable, open-source languages: **Python**, **Mojo**, native **C / HTSlib**, and **TypeScript**.
+**GoliathOmics** is an enterprise-grade, regulatory-ready platform designed for comprehensive genomics and multiomics diagnostic development. It is built entirely on a **free and open-source toolchain**:
+* **PostgreSQL as the Single, Unified Database:** All database operations (configuration, task scheduling, leases, audit logs) run on open-source **PostgreSQL**. There are no recurring database license fees. The same engine deploys on bare-metal institutional HPC clusters, private servers, or any cloud (AWS, GCP, Azure).
+* **Open Language Stack:** The platform is written in modern, auditable, open-source languages: **Python**, **Mojo**, native **C / HTSlib**, and **TypeScript**.
 * **Packs Architecture for "Anything Genomics":** Couples generalized genomics services with modular **Process Packs** (DNA Methylation, RNA-Seq, Proteomics, Variant Calling) on a unified modeling plane.
 * **Backend Database & Orchestration Engine (`GoliathWorkflow`):** The distributed execution engine managing DomainProgram compilation, task queues, lease recovery, Content-Addressed Action Store (CAAS) caching, and SaMD claim gates over PostgreSQL.
-* **Proprietary Hardware Accelerators:** 
+* **Open-source hardware accelerators:**
   * **`mojo-align`**: Native-Mojo multi-GPU alignment engine delivering unprecedented speed and pangenome graph alignment (eliminating reference bias across diverse Florida populations) on NVIDIA CUDA and AMD ROCm.
   * **`MethylExtractor`**: High-throughput C-optimized cytosine methylation extractor with coordinate-based paired-end mate clipping to eliminate double-counting artifacts, writing high-density chunked Zstd HDF5 storage.
 
@@ -54,7 +54,7 @@ flowchart TB
         Packs --> FEAT_SEAM
     end
 
-    subgraph Backend_Engine["<b>GoliathWorkflow</b> Engine · Single PostgreSQL Database (Zero Azure SQL / Zero Delphi)"]
+    subgraph Backend_Engine["<b>GoliathWorkflow</b> Engine · Open-Source PostgreSQL"]
         direction LR
         DB[("<b>PostgreSQL Single DB</b><br/><code>cfg</code> & <code>wf</code> Schemas<br/><i>(Free · Open-Source · Portable)</i>")]
         GW_ENG["Distributed Gateway & Scheduler<br/>DomainProgram Compiler"]
@@ -78,13 +78,12 @@ flowchart TB
 
 ## 2. Core Architectural Pillars: Free Toolchain & Zero Vendor Lock-In
 
-### 1. PostgreSQL Unification: Zero License Fees, Maximum Data Sovereignty
+### 1. PostgreSQL: Zero License Fees, Maximum Data Sovereignty
 * **Single Database Architecture:** GoliathWorkflow consolidates all system schemas (`cfg` configuration registry, `wf` workflow orchestration, worker leases, node executions, and audit records) exclusively onto **PostgreSQL**.
-* **Elimination of Azure SQL:** By retiring Microsoft Azure SQL, partners are freed from proprietary cloud-database lock-in and high monthly managed-database licensing fees.
+* **No proprietary database licenses:** Partners are not billed for commercial database seats; PostgreSQL is free to run at any scale the institution already operates.
 * **True Deployment Agnosticism (BYOC):** PostgreSQL runs identically on UF HiPerGator or Sylvester Pegasus partitions, a community-hospital Linux GPU, or any cloud (AWS, GCP, Azure, OCI). Sensitive clinical sequencing data remains inside the **host institution’s** boundary—we do not require a new commercial AI tenancy.
 
-### 2. Elimination of Delphi: 100% Modern, Open-Source Codebase
-* **Zero Delphi Legacy:** Any historical Delphi dependencies have been completely removed.
+### 2. Open-Source Codebase
 * **Auditability & Community Maintenance:** The entire codebase is implemented in open, transparent, and reproducible languages:
   * **Python:** Clean Pydantic data schemas, statistical validation, and orchestration compiler.
   * **Mojo:** Next-generation systems programming language for GPU kernels and pangenome graph alignment.
@@ -149,7 +148,7 @@ flowchart LR
 | Product / Component | Architectural Layer | Primary Technology | Key Differentiators | Clinical & Operational Impact |
 | :--- | :--- | :--- | :--- | :--- |
 | **`GoliathOmics`** | **Clinical & Scientific Platform Layer** | TypeScript, Python, OpenAPI, Pydantic | • Modular Packs Architecture (Methylation, RNA-Seq, Proteomics)<br/>• Unified multiomics `samples × features` modeling seam<br/>• General-purpose genomics services with automated clinical reporting | • Eliminates modality sprawl; unifies multiomics under one roof<br/>• Deploys new cancer indications via config overlays in hours |
-| **`GoliathWorkflow`** | **Backend Database & Engine** | **Single PostgreSQL Database** (`cfg` & `wf`), REST Gateway | • **100% Free / Open-source toolchain (Zero Azure SQL / Zero Delphi)**<br/>• Four-layer configuration hierarchy (Site → Profile → Study → Program)<br/>• Monte Carlo stability selection & biological FeatureCuts<br/>• Content-Addressed Action Store (CAAS) for zero-redundancy compute<br/>• Built-in FDA SaMD evidence ladder with code-enforced claim gates | • Zero database license fees; runs on any cloud or local HPC<br/>• Enforces strict reproducibility and zero data leakage<br/>• Slashes compute costs via CAAS caching across large cohorts<br/>• Auto-assembles FDA 510(k)/De Novo submission scaffolds |
+| **`GoliathWorkflow`** | **Backend Database & Engine** | **Single PostgreSQL Database** (`cfg` & `wf`), REST Gateway | • **100% free / open-source toolchain**<br/>• Four-layer configuration hierarchy (Site → Profile → Study → Program)<br/>• Monte Carlo stability selection & biological FeatureCuts<br/>• Content-Addressed Action Store (CAAS) for zero-redundancy compute<br/>• Built-in FDA SaMD evidence ladder with code-enforced claim gates | • Zero database license fees; runs on any cloud or local HPC<br/>• Enforces strict reproducibility and zero data leakage<br/>• Slashes compute costs via CAAS caching across large cohorts<br/>• Auto-assembles FDA 510(k)/De Novo submission scaffolds |
 | **`mojo-align`** | **Hardware-Accelerated Alignment** | Modular **Mojo**, CUDA/ROCm DeviceContext, SIMD | • Dual-graph pangenome WGBS (`MojoGiraffe` C2T ∥ G2A)<br/>• Linear WGBS `fq2bam-meth` matching/beating Clara Parabricks<br/>• Zero-dialect portability across NVIDIA CUDA & AMD ROCm | • Eliminates reference bias across diverse Florida demographics<br/>• Slashes alignment wall-clock time and cloud GPU costs by >60% |
 | **`MethylExtractor`** | **High-Throughput Extraction & QC** | Native **C / HTSlib**, OpenMP, HDF5, Zstd | • Coordinate-based overlapping read pair clipping<br/>• Compact 12-byte on-disk record with Zstd chunking<br/>• Native extraction manifests & context QC sidecars | • Completely removes artificial double-counting in paired-end WGBS<br/>• Slashes storage footprint by >70% compared to bedGraph/TSV |
 
@@ -172,7 +171,7 @@ Methylation calling from bisulfite BAM files is notoriously vulnerable to techni
 ### Deep Dive 3: `GoliathWorkflow` — SaMD-Ready Distributed Workflow & Database Engine
 `GoliathWorkflow` serves as the robust backend database and execution plane for GoliathOmics, built from inception around software as a medical device (SaMD) principles:
 
-* **Single PostgreSQL Database Engine:** Eliminates the complexity and cost of multi-database setups or commercial Azure SQL instances, providing rock-solid ACID transactions, advisory locking, and clean schema migrations.
+* **Single PostgreSQL Database Engine:** One open-source database for configuration and orchestration, with rock-solid ACID transactions, advisory locking, and clean schema migrations.
 * **DomainProgram Intermediate Representation (IR):** Workflows are declared as structured JSON graphs supporting typed actions, loops (`foreach`), branching (`if/then/else`), multi-way dispatch (`switch`), and concurrent branch execution.
 * **Strict Four-Layer Configuration Hierarchy:** Configuration is resolved across Site, Profile, Study Manifest, and Program layers. Tunable clinical parameters are declared strictly in configuration schemas—**never hardcoded as constants**.
 * **Monte Carlo Stability Selection & Biological FeatureCuts:** Rather than selecting biomarkers from a single overfit training split, the engine runs Monte Carlo resampling cross-validation, computing recurrence frequencies and biological relevance (Storey FDR, STRING PPI, Enrichr pathways) to isolate invariant, stable biomarker signatures.
