@@ -256,7 +256,6 @@ nav:
 not_in_nav: |
   architecture/documentation-audit*.md
   architecture/integrity-and-design-review*.md
-  architecture/portal-UI.md
   architecture/worker-security-review.md
   architecture/worker-transport-decision.md
   deployment/buffy_gene_tier_a_cross_vm.md

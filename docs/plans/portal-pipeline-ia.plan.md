@@ -253,7 +253,7 @@ RBAC matrix in the IA stays, but each Admin screen lists **who can open it** (pl
 - Cross-link `portal_study_lifecycle.md`, `end-to-end-workflow.md`, `pipeline-stages.md`, `config-registry.md`, `workflow-idempotency-retry-lease.md`, usage ch.11.
 - Revise **EpiPortal build priority**: (1) Study pipeline workspace + **monitor/failure/retry**, (2) Admin RBAC façade, (3) Contracts + entitled process-pack catalogs, (4) wire already-shipped ops/fleet procs, (5) instance pause/cancel + config snapshot.
 
-Keep [`portal-UI.md`](../architecture/portal-UI.md) as the stable pointer.
+Keep [`portal-ia.md`](../architecture/portal-ia.md) as the architecture page for Study catalog pickers and process packs.
 
 ### 2. SQL contracts (MSSQL + PG twins + `db_objects.yaml`)
 
