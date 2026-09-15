@@ -10,28 +10,33 @@
  * Markdown is converted with the `marked` CLI via npx (no repo dependency).
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const MERMAID_ESM =
   "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+
+const USAGE =
+  "Usage: node scripts/md_to_standalone_html.mjs <input.md> [output.html] [--title <title>]";
 
 function parseArgs(argv) {
   const positional = [];
   let title = null;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--title") {
-      title = argv[i + 1];
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith("-")) {
+        throw new Error(`${USAGE}\n--title requires a value`);
+      }
+      title = value;
       i += 1;
     } else {
       positional.push(argv[i]);
     }
   }
   if (positional.length < 1) {
-    throw new Error(
-      "Usage: node scripts/md_to_standalone_html.mjs <input.md> [output.html] [--title <title>]",
-    );
+    throw new Error(USAGE);
   }
   const input = resolve(positional[0]);
   const output = positional[1]
@@ -40,18 +45,45 @@ function parseArgs(argv) {
   return { input, output, title };
 }
 
+function npxCliJs() {
+  const cli = join(
+    dirname(process.execPath),
+    "node_modules",
+    "npm",
+    "bin",
+    "npx-cli.js",
+  );
+  if (!existsSync(cli)) {
+    throw new Error(`npx-cli.js not found next to node at ${cli}`);
+  }
+  return cli;
+}
+
 function markdownToHtml(input) {
   const tmp = mkdtempSync(resolve(tmpdir(), "md2html-"));
   const bodyPath = resolve(tmp, "body.html");
   try {
-    execFileSync("npx", ["--yes", "marked", "--gfm", "-i", input, "-o", bodyPath], {
-      stdio: ["ignore", "ignore", "inherit"],
-      shell: true,
-    });
+    execFileSync(
+      process.execPath,
+      [npxCliJs(), "--yes", "marked", "--gfm", "-i", input, "-o", bodyPath],
+      {
+        stdio: ["ignore", "ignore", "inherit"],
+        windowsHide: true,
+      },
+    );
     return readFileSync(bodyPath, "utf8");
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /** Mermaid reads element textContent, so escaped entities decode correctly. */
@@ -79,7 +111,7 @@ function documentShell({ title, body }) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
+<title>${escapeHtml(title)}</title>
 <style>
   :root {
     --ink: #0f172a;
