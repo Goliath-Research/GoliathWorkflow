@@ -74,7 +74,7 @@ flowchart LR
 
 ```bash
 source .venv/bin/activate
-export METHYL_CFG_STORE=/work/epimethyl/cfg-store
+export METHYL_CFG_STORE=/work/goliath/cfg-store
 export PYTHONPATH=workflow_engine:$PYTHONPATH
 
 methyl-cfg import-fs --repo-root . --work-root /work
@@ -91,14 +91,14 @@ methyl-cfg expand-endpoint lab-aws --prefix plasma/S1/
 methyl-cfg publish-program SamplePrepPipeline --work-root /work
 methyl-cfg scaffold-action demo.echo --define --capability demo   # git stubs; then sync-actions
 methyl-cfg sync-library-presets   # enrichment library presets → cfg (kind enrichment_library_preset)
-# Genomes inventory (epimethyl/genomes → /work/genomes); pins from site reference_selection
+# Genomes inventory (goliath/genomes → /work/genomes); pins from site reference_selection
 methyl-cfg provision-assets --selected-only --site default --work-root /work --dry-run
 methyl-cfg provision-assets --name linear-grch38-ensembl-116 --version 1 --work-root /work --dry-run
 ```
 
-**Canonical genomes tree** (QNAP + `/work`): `linear/GRCh38/ensembl-116/` (default pin; 114 remains published), `annotation/gencode/v50/` (default; v49 remains), `pangenome/GRCh38/d9/1.70/`. Site `reference_selection` pins active versions; `cfg.storage_endpoint` `epimethyl-genomes` (`prefixBase: genomes/`) + `cfg.reference_asset` recipes drive `s3_sync` provision. Phase 0 helper: `scripts/provision_selected_genomes.sh`. Operator upload/provision map: [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md). `cfg.cfg_repo_link_site_asset` is the **only** writer of `cfg.site_reference_asset`. Asset seed does not fill the grid. Construction callers: [`cfg_site_reference_assets_seed.sql`](../../workflow_engine/sql_mssql/cfg_site_reference_assets_seed.sql) (after `cfg.site default@1` exists) and `methyl-cfg link-site-assets --deploy-db` (bootstrap after `import-fs`).
+**Canonical genomes tree** (QNAP + `/work`): `linear/GRCh38/ensembl-116/` (default pin; 114 remains published), `annotation/gencode/v50/` (default; v49 remains), `pangenome/GRCh38/d9/1.70/`. Site `reference_selection` pins active versions; `cfg.storage_endpoint` `goliath-genomes` (`prefixBase: genomes/`) + `cfg.reference_asset` recipes drive `s3_sync` provision. Phase 0 helper: `scripts/provision_selected_genomes.sh`. Operator upload/provision map: [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md). `cfg.cfg_repo_link_site_asset` is the **only** writer of `cfg.site_reference_asset`. Asset seed does not fill the grid. Construction callers: [`cfg_site_reference_assets_seed.sql`](../../workflow_engine/sql_mssql/cfg_site_reference_assets_seed.sql) (after `cfg.site default@1` exists) and `methyl-cfg link-site-assets --deploy-db` (bootstrap after `import-fs`).
 
-`METHYL_CFG_STORE` defaults to `/work/epimethyl/cfg-store` (file-backed stand-in that mirrors `cfg.*` tables). Production DDL: `workflow_engine/sql_{pg,mssql}/cfg_*.sql` (wired into `deploy_azure.sh`).
+`METHYL_CFG_STORE` defaults to `/work/goliath/cfg-store` (file-backed stand-in that mirrors `cfg.*` tables). Production DDL: `workflow_engine/sql_{pg,mssql}/cfg_*.sql` (wired into `deploy_azure.sh`).
 
 ## Enrichment library presets
 
@@ -116,7 +116,7 @@ Presets are config, not workflow nodes, so they are **not** seeded into `wf.work
 
 **Production source of truth:** Azure SQL `cfg.storage_endpoint` + `cfg.credential`, authored only by **lab admins** / **infrastructure admins** via EpiPortal (`portal.sp_*` upsert/publish). Secrets are **not** authored with `methyl-cfg` in production (CLI remains for **dev / CI / bootstrap** only).
 
-File-store bootstrap: `import-fs` loads endpoint + reference_asset fixtures but **not** credentials. Use the placeholder shape in [`workflow_engine/domain/fixtures/credentials/epimethyl-archive-keys.example.json`](../../workflow_engine/domain/fixtures/credentials/epimethyl-archive-keys.example.json) (`methyl-cfg upsert credential …` after replacing `REPLACE_WITH_*`), or env keys with `scripts/sync_genomes_to_s3.sh`.
+File-store bootstrap: `import-fs` loads endpoint + reference_asset fixtures but **not** credentials. Use the placeholder shape in [`workflow_engine/domain/fixtures/credentials/goliath-archive-keys.example.json`](../../workflow_engine/domain/fixtures/credentials/goliath-archive-keys.example.json) (`methyl-cfg upsert credential …` after replacing `REPLACE_WITH_*`), or env keys with `scripts/sync_genomes_to_s3.sh`.
 
 See [`schemas/domain/storage_location.schema.json`](../../schemas/domain/storage_location.schema.json):
 

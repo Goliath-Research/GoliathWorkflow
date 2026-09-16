@@ -63,7 +63,7 @@ flowchart TB
 | **Portal SQL** (`portal.sp_*`) | Middle-tier orchestration; starts instances; **preregisters worker IPs** |
 | **Gateway** (`methyl-gateway`) | Worker-only REST (`poll` / `submit` / `enroll`) — no catalog admin HTTP |
 | **Workers** (`methyl-worker`) | Execute capabilities (Parabricks, methyl-qc, detector, …); Arc Connected |
-| **`/work` storage** | Shared FASTQs, BAMs, HDF5, MC outputs, `/work/epimethyl` release |
+| **`/work` storage** | Shared FASTQs, BAMs, HDF5, MC outputs, `/work/goliath` release |
 
 The portal does **not** call the gateway. Catalog and DomainProgram deploy use **direct DB** scripts on a privileged host. Workers enroll and claim over HTTPS with a token; production gateways set `GATEWAY_REQUIRE_ARC_ATTEST=1`.
 
@@ -83,7 +83,7 @@ Use this ordered checklist once per environment (detail: [production-platform.md
 
 Both backends implement the same **`wf`** schema contract. Choose one primary backend per environment; CI and local dev often use PostgreSQL.
 
-### PostgreSQL (schema twin / CI; canonical DB `epimethyl`)
+### PostgreSQL (schema twin / CI; canonical DB `goliath`)
 
 | Step | Command / doc |
 |------|----------------|
@@ -96,7 +96,7 @@ Both backends implement the same **`wf`** schema contract. Choose one primary ba
 export BACKEND_DB=postgres
 export POSTGRES_HOST=your-server.postgres.database.azure.com
 export POSTGRES_PORT=5432
-export POSTGRES_DB=epimethyl
+export POSTGRES_DB=goliath
 export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 ./workflow_engine/sql_pg/deploy_azure.sh

@@ -17,7 +17,7 @@ todos:
     content: Retarget download_rna_reference_grch38.sh to 116/v50 and Clara 4.7.0-1; rebuild STAR under star/ensembl-116 and kallisto gencode.v50.*
     status: completed
   - id: upload-qnap
-    content: aws s3 sync complete linear/116, annotation/v50, and rna trees to s3://epimethyl/genomes/; leave 114/v49 and HPRC graphs in place; ls-verify
+    content: aws s3 sync complete linear/116, annotation/v50, and rna trees to s3://goliath/genomes/; leave 114/v49 and HPRC graphs in place; ls-verify
     status: completed
   - id: cfg-fixtures-sql
     content: Add linear-grch38-ensembl-116 and gencode-v50 fixtures (+ optional RNA recipes); seed PG+MSSQL; relink default@1 reference_genome/annotation_gtf (keep 114/v49 assets published)
@@ -47,7 +47,7 @@ flowchart LR
   work --> rna[download_rna_reference_grch38]
   clara --> pack[complete_linear_pack]
   mojo --> pack
-  pack --> qnap["s3://epimethyl/genomes"]
+  pack --> qnap["s3://goliath/genomes"]
   rna --> qnap
   qnap --> cfg[reference_asset_plus_site_link]
   cfg --> workers["/work provision"]
@@ -59,11 +59,11 @@ Follow [`docs/deployment/reference-inventory-qnap.md`](../deployment/reference-i
 
 | Asset | Local dest | QNAP prefix |
 |-------|------------|-------------|
-| `linear-grch38-ensembl-116@1` (new default) | `/work/genomes/linear/GRCh38/ensembl-116/` | `s3://epimethyl/genomes/linear/GRCh38/ensembl-116/` |
-| `gencode-v50@1` (new default) | `/work/genomes/annotation/gencode/v50/` | `s3://epimethyl/genomes/annotation/gencode/v50/` |
+| `linear-grch38-ensembl-116@1` (new default) | `/work/genomes/linear/GRCh38/ensembl-116/` | `s3://goliath/genomes/linear/GRCh38/ensembl-116/` |
+| `gencode-v50@1` (new default) | `/work/genomes/annotation/gencode/v50/` | `s3://goliath/genomes/annotation/gencode/v50/` |
 | Keep `linear-grch38-ensembl-114@1` / `gencode-v49@1` | unchanged | unchanged |
 | Keep HPRC `d9` / `d9-bs` 1.70 | unchanged (~43 GB graphs **not** rebuilt) | unchanged |
-| RNA (out of band for site roles; still uploaded) | `/work/genomes/rna/GRCh38/star/ensembl-116/` + `kallisto/gencode.v50.*` | `s3://epimethyl/genomes/rna/...` |
+| RNA (out of band for site roles; still uploaded) | `/work/genomes/rna/GRCh38/star/ensembl-116/` + `kallisto/gencode.v50.*` | `s3://goliath/genomes/rna/...` |
 
 **Linear pack must be complete before upload** (same rule as 114):
 

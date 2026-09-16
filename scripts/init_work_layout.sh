@@ -9,7 +9,7 @@
 # Worker-readable (0755, not other-writable):
 #   genomes/   — reference inventory (ops / provision-assets write)
 #   site/      — materialized site manifest
-#   epimethyl/ — releases, venvs, env, docker data-root (promote host writes)
+#   goliath/ — releases, venvs, env, docker data-root (promote host writes)
 #
 # Creates missing roots only. Does not recurse into existing trees.
 #
@@ -57,7 +57,7 @@ WRITABLE_MODE=0777
 READONLY_MODE=0755
 
 WRITABLE_DIRS=(samples projects cache)
-READONLY_DIRS=(genomes site epimethyl)
+READONLY_DIRS=(genomes site goliath)
 
 ensure_dir() {
   local path="$1"

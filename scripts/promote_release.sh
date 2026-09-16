@@ -8,7 +8,7 @@ usage() {
 Usage: scripts/promote_release.sh [options]
 
 Options:
-  --root PATH           GoliathOmics root (default: /work/epimethyl)
+  --root PATH           GoliathOmics root (default: /work/goliath)
   --release DIR         Release directory (default: <root>/releases/<version> or --version)
   --version VER         Release version (alternative to --release)
   --arch KEY            aarch64 or amd64 (default: detect)
@@ -26,7 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=detect_platform.sh
 source "$SCRIPT_DIR/detect_platform.sh"
 
-ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+ROOT="${GOLIATH_ROOT:-/work/goliath}"
 RELEASE_DIR=""
 VERSION=""
 ARCH=""
@@ -76,7 +76,7 @@ require_release_version "$MANIFEST_VERSION" "manifest version" || exit 1
 TARBALL_NAME="$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m['artifacts']['$ARCH']['methyl_extractor'])")"
 EXPECTED_SHA="$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m.get('artifacts',{}).get('$ARCH',{}).get('sha256',''))")"
 TARBALL_PATH="$RELEASE_DIR/$TARBALL_NAME"
-DOCKER_ROOT="$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m.get('docker_data_root','/work/epimethyl/docker'))")"
+DOCKER_ROOT="$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m.get('docker_data_root','/work/goliath/docker'))")"
 PARABRICKS_IMAGE="$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m.get('parabricks_image',''))")"
 RELEASE_VERSION="$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m.get('version',''))")"
 
@@ -119,7 +119,7 @@ pull_parabricks() {
   [[ -x "$gpu_script" ]] || gpu_script="$SCRIPT_DIR/setup_gpu_node.sh"
   export METHYL_PARABRICKS_IMAGE="$PARABRICKS_IMAGE"
   bash "$gpu_script" \
-    --docker-data-root "${DOCKER_ROOT:-/work/epimethyl/docker}" \
+    --docker-data-root "${DOCKER_ROOT:-/work/goliath/docker}" \
     --env-dir "$ROOT/env" \
     --pull-parabricks \
     --skip-docker

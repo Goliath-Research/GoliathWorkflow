@@ -640,7 +640,7 @@
   },
   "postgres": {
     "backend": "postgres",
-    "database": "epimethyl",
+    "database": "goliath",
     "captured_at_utc": "2026-08-16T18:15:16.530401+00:00",
     "tables": {
       "Contract": [

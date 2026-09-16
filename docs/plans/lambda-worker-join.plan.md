@@ -2,7 +2,7 @@
 name: Lambda worker join
 overview: Make Lambda GPU join easy/safe/fast by separating QNAP shared content (CI promote + genomes/samples), human-gated Azure Arc approval, and a join-only local install+enroll script—then wire that into cloud-init.
 
-> **Status: IMPLEMENTED.** Runbook: [`docs/deployment/lambda_worker_join.md`](../deployment/lambda_worker_join.md). Scripts: `preflight_worker_join.sh`, join-mode `provision_worker_node.sh` (`--prepare-only` / `--finish-enroll`), Docker install path in `bootstrap_epimethyl.sh`, Terraform `worker-common` prepare-only cloud-init.
+> **Status: IMPLEMENTED.** Runbook: [`docs/deployment/lambda_worker_join.md`](../deployment/lambda_worker_join.md). Scripts: `preflight_worker_join.sh`, join-mode `provision_worker_node.sh` (`--prepare-only` / `--finish-enroll`), Docker install path in `bootstrap_goliath.sh`, Terraform `worker-common` prepare-only cloud-init.
 
 azure_devops:
   type: Feature
@@ -20,7 +20,7 @@ todos:
     content: "Harden provision_worker_node.sh for join-only default: local Docker/CTK/host tools, skip-promote, staged Arc, portal enroll, systemd"
     status: completed
   - id: bootstrap-docker-path
-    content: Adjust bootstrap_epimethyl.sh so node join installs Docker/CTK locally while Parabricks layers stay on shared /work/epimethyl/docker
+    content: Adjust bootstrap_goliath.sh so node join installs Docker/CTK locally while Parabricks layers stay on shared /work/goliath/docker
     status: completed
   - id: arc-staged
     content: Support Arc as a separate approved step (prepare-without-arc vs finish-after-arc) so human approval is not inside a long opaque install
@@ -41,9 +41,9 @@ Three stores, not one:
 
 | Store | Holds | Who writes | Workers use it for |
 |-------|-------|------------|--------------------|
-| **Azure DevOps / Artifacts** | MethylPipeline wheels + runtime-bundle, MethylExtractor arch tarballs, assemble/deploy pipelines | CI on tag + manual assemble/deploy | Source of the **release** that gets promoted to QNAP |
-| **myQNAPStorage → `/work`** | `epimethyl/` (current release, venvs, extractor, shared Docker data-root), `genomes/`, `samples/`, `site/`, projects | Deploy pipeline / ops / provision-assets | Day-2 runtime (no git on workers) |
-| **NGC (not Azure)** | Clara Parabricks container layers | One promote host with NGC login → `/work/epimethyl/docker` | GPU SamplePrep linear/Giraffe paths |
+| **GitHub Packages / Releases** | MethylPipeline wheels + runtime-bundle, MethylExtractor arch tarballs, assemble/deploy workflows | CI on tag + manual assemble/deploy | Source of the **release** that gets promoted to QNAP |
+| **myQNAPStorage → `/work`** | `goliath/` (current release, venvs, extractor, shared Docker data-root), `genomes/`, `samples/`, `site/`, projects | Deploy pipeline / ops / provision-assets | Day-2 runtime (no git on workers) |
+| **NGC (not Azure)** | Clara Parabricks container layers | One promote host with NGC login → `/work/goliath/docker` | GPU SamplePrep linear/Giraffe paths |
 
 Azure Arc is **governance + attest** (inventory, policy, `X-Arc-Resource-Id`), **not** where we store containers or release bits, and **not** the enroll API.
 
@@ -58,10 +58,10 @@ flowchart LR
     Gw[Gateway TLS]
   end
   subgraph qnap [myQNAPStorage via /work]
-    Rel["/work/epimethyl/current"]
+    Rel["/work/goliath/current"]
     Gen["/work/genomes"]
     Sam["/work/samples"]
-    Dock["/work/epimethyl/docker"]
+    Dock["/work/goliath/docker"]
   end
   subgraph ngc [NVIDIA NGC]
     Pb[Parabricks image]
@@ -90,9 +90,9 @@ flowchart LR
 
 ### A. Cluster bootstrap (once) — not on every VM
 
-1. Mount QNAP paths: `/work/epimethyl`, `/work/genomes`, `/work/samples`, `/work/site`.
-2. GoliathOmics-Release-Assemble + Deploy → `/work/epimethyl/current/manifest.json`.
-3. One Parabricks pull into `/work/epimethyl/docker` (NGC; first arch).
+1. Mount QNAP paths: `/work/goliath`, `/work/genomes`, `/work/samples`, `/work/site`.
+2. GoliathOmics-Release-Assemble + Deploy → `/work/goliath/current/manifest.json`.
+3. One Parabricks pull into `/work/goliath/docker` (NGC; first arch).
 4. Genomes/site: Phase 0.
 
 ### B. Per worker
@@ -110,12 +110,12 @@ flowchart LR
 | [`docs/deployment/lambda_worker_join.md`](../deployment/lambda_worker_join.md) | Mental model + A/B checklist |
 | [`scripts/preflight_worker_join.sh`](../../scripts/preflight_worker_join.sh) | Fail-closed QNAP join checks |
 | [`scripts/provision_worker_node.sh`](../../scripts/provision_worker_node.sh) | `--join-mode join\|first`, `--prepare-only`, `--finish-enroll` |
-| [`scripts/bootstrap_epimethyl.sh`](../../scripts/bootstrap_epimethyl.sh) | Install Docker/CTK on join; Parabricks pull stays cluster-once |
+| [`scripts/bootstrap_goliath.sh`](../../scripts/bootstrap_goliath.sh) | Install Docker/CTK on join; Parabricks pull stays cluster-once |
 | [`deploy/terraform/modules/worker-common/main.tf`](../../deploy/terraform/modules/worker-common/main.tf) | Seed → `/opt/methyl`; default prepare-only; no Key Vault worker token |
 
 ## Decision: do **not** containerize MethylPipeline / MethylExtractor (like mojo)
 
-Keep CI artifacts — MP wheels + per-arch native MethylExtractor — on shared `/work/epimethyl`. Containers remain for GPU/tool side-cars (Parabricks/NGC, mojo-align, DIA-NN, etc.).
+Keep CI artifacts — MP wheels + per-arch native MethylExtractor — on shared `/work/goliath`. Containers remain for GPU/tool side-cars (Parabricks/NGC, mojo-align, DIA-NN, etc.).
 
 ## Out of scope
 

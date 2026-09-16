@@ -41,7 +41,7 @@ PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
 [[ -x "$PYTHON_BIN" ]] || PYTHON_BIN=python3
 
 # Prefer runtime-bundle fixtures when present (no-git workers / operators).
-RUNTIME_DOMAIN="${METHYL_RUNTIME_ROOT:-${EPIMETHYL_ROOT:-/work/epimethyl}/current/runtime-bundle}/domain"
+RUNTIME_DOMAIN="${METHYL_RUNTIME_ROOT:-${GOLIATH_ROOT:-/work/goliath}/current/runtime-bundle}/domain"
 if [[ -d "$RUNTIME_DOMAIN/fixtures" ]]; then
   DOMAIN_ROOT="$RUNTIME_DOMAIN"
 else
@@ -49,8 +49,8 @@ else
 fi
 
 COMPILE="$REPO_ROOT/scripts/compile_workflow_program.py"
-OUT_ROOT="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}/compiled/mc"
-VERSIONS_OUT="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}/workflow_versions_mc.json"
+OUT_ROOT="${GOLIATH_ENV_DIR:-/work/goliath/env}/compiled/mc"
+VERSIONS_OUT="${GOLIATH_ENV_DIR:-/work/goliath/env}/workflow_versions_mc.json"
 
 PROGRAMS=(
   "fixtures/mc_stability.program.json"

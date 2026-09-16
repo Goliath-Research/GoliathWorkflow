@@ -100,7 +100,7 @@ bash scripts/register_worker.sh \
   --cluster gpu-west \
   --key "$(hostname -s)" \
   --require-arc \
-  --env-file /work/epimethyl/env/worker.env
+  --env-file /work/goliath/env/worker.env
 ```
 
 Manual Arc resource id override (DB path / client header source):

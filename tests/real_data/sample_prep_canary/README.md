@@ -12,7 +12,7 @@ the pangenome inventory tree — not lab `fastqStorage`.
 | Individual | HG00621 (HPRC) |
 | Layout | paired-end Bisulfite-Seq |
 | Local root | `/work/genomes/pangenome/canary/gse261315/SRR28293403/` |
-| QNAP / S3 | `s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/` |
+| QNAP / S3 | `s3://goliath/genomes/pangenome/canary/gse261315/SRR28293403/` |
 
 See [`provenance.json`](provenance.json) and [`registry.example.json`](registry.example.json).
 

@@ -10,8 +10,8 @@ Usage: scripts/setup_gpu_node.sh [options]
 
 Options:
   --pull-parabricks       Pull METHYL_PARABRICKS_IMAGE after setup (release promote, not node join)
-  --docker-data-root PATH Set Docker data-root to shared storage (e.g. /work/epimethyl/docker)
-  --env-dir PATH          Write parabricks.env (default: /work/epimethyl/env)
+  --docker-data-root PATH Set Docker data-root to shared storage (e.g. /work/goliath/docker)
+  --env-dir PATH          Write parabricks.env (default: /work/goliath/env)
   --skip-docker           Skip Docker / NVIDIA toolkit install (verify only)
   -h, --help              Show this help
 
@@ -37,7 +37,7 @@ source "$SCRIPT_DIR/detect_platform.sh"
 PULL_PARABRICKS=0
 SKIP_DOCKER=0
 DOCKER_DATA_ROOT=""
-ENV_DIR="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}"
+ENV_DIR="${GOLIATH_ENV_DIR:-/work/goliath/env}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

@@ -2,8 +2,8 @@
 # Run the full pytest regression suite with machine-readable outputs for CI.
 #
 # Emits:
-#   test-results/junit.xml       -> PublishTestResults@2 (JUnit)
-#   coverage/coverage.xml        -> PublishCodeCoverageResults@2 (Cobertura)
+#   test-results/junit.xml       -> GitHub Actions artifact (JUnit)
+#   coverage/coverage.xml        -> GitHub Actions artifact (Cobertura)
 #   coverage/html/               -> browsable HTML coverage report
 #
 # Policy: coverage is MEASURED and REPORTED only. There is deliberately no

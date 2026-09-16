@@ -19,7 +19,7 @@ coverage is measured, and what evidence each run produces.
 Canonical operational references:
 
 - Pipeline registration and stages: [`../../ci/README.md`](../../ci/README.md)
-- PR pipeline definition: [`../../ci/azure-pipelines-pr.yml`](../../ci/azure-pipelines-pr.yml)
+- PR pipeline definition: [`../../.github/workflows/pr.yml`](../../.github/workflows/pr.yml)
 - CI test runner: [`../../scripts/run_tests_ci.sh`](../../scripts/run_tests_ci.sh)
 - Test configuration: [`../../pyproject.toml`](../../pyproject.toml) (`[tool.pytest.ini_options]`, `[tool.coverage.*]`)
 
@@ -30,8 +30,7 @@ The pull-request pipeline runs the entire pytest suite across the monorepo
 a regression gate, in addition to the documentation, diagram, schema-boundary,
 and release-packaging guards that already existed.
 
-- A failing test fails the pull request (`PublishTestResults@2` with
-  `failTaskOnFailedTests: true`).
+- A failing test fails the pull request (pytest non-zero exit; JUnit uploaded as a workflow artifact).
 - The suite is invoked through
   [`../../scripts/run_tests_ci.sh`](../../scripts/run_tests_ci.sh), which produces
   machine-readable results and coverage artifacts.
@@ -86,8 +85,8 @@ targeted pipelines.
 
 Coverage is collected with `pytest-cov` using the source roots declared in
 [`../../pyproject.toml`](../../pyproject.toml) (`packages/`, `workers/`,
-`workflow_engine/`). The CI runner emits a Cobertura report published via
-`PublishCodeCoverageResults@2`.
+`workflow_engine/`). The CI runner emits a Cobertura report uploaded as a
+workflow artifact.
 
 Current posture is **measure-and-report only**: there is no build-failing
 `--cov-fail-under` threshold yet. The intent is to:
@@ -145,7 +144,7 @@ as a two-tier strategy:
 | Tier | Data | Runs on |
 |------|------|---------|
 | Committed fixture | small, real-format, non-PHI H5 under `tests/real_data/fixtures/` | hosted PR CI + local |
-| Designated `/work` samples | full samples/groups declared in the site manifest `testing` block or `METHYL_TEST_DATA_CONFIG` | self-hosted `production-work-agents` ([`../../ci/azure-pipelines-real-data.yml`](../../ci/azure-pipelines-real-data.yml)) |
+| Designated `/work` samples | full samples/groups declared in the site manifest `testing` block or `METHYL_TEST_DATA_CONFIG` | self-hosted `production-work-agents` ([`../../.github/workflows/real-data.yml`](../../.github/workflows/real-data.yml)) |
 
 Reference samples must be **non-PHI** (public/consented sources). Each sample's
 provenance - source, consent basis, and producing MethylExtractor release - is

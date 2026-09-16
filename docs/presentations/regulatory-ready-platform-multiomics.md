@@ -1,6 +1,6 @@
 ---
 marp: true
-theme: epimethyl-sales
+theme: goliath-sales
 paginate: true
 size: 16:9
 html: true
@@ -149,7 +149,7 @@ flowchart TB
 | Engine knobs | `actionConfig.methylgrapher_wgbs` → task `resolvedConfig` |
 | Runtime | **Native-Mojo** — one DeviceContext impl on **NVIDIA CUDA** and **AMD HIP** |
 | Backends | `gpu_giraffe` / `mojo_giraffe` (canonical); `cpu_vg` only for unknown GPU vendors / parity |
-| Image | `epimethyl/methylgrapher:1.70-mojo-cuda` or `:1.70-mojo-rocm` |
+| Image | `goliath/methylgrapher:1.70-mojo-cuda` or `:1.70-mojo-rocm` |
 | QC path | Mode-aware methyl_qc (provenance/GAF/BAM + shared guardrails); Mojo QC BAM + conversion-rate when enabled |
 | Clara Parabricks | **Explicit** `alignmentMode: linear\|pangenome` only — never an automatic Mojo failure path |
 

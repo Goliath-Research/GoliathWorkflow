@@ -12,7 +12,7 @@ Site `/work/site/methyl_site.json` pins:
 "actionConfig": {
   "methylgrapher_wgbs": {
     "engine": "mojo",
-    "image": "epimethyl/methylgrapher:1.70-mojo",
+    "image": "goliath/methylgrapher:1.70-mojo",
     "threads": 64
   }
 }
@@ -40,7 +40,7 @@ Procedure git packs keep `engine` unset / python-compatible until multi-site sci
    - Linear vs pangenome_wgbs acceptance thresholds remain the science gate; mode-aware QC unblocks SamplePrep soft-fail.
 
 4. **Image / deploy** — **PASS (local)**
-   - `scripts/build_mojo_align_image.sh` + `smoke_64k.sh epimethyl/methylgrapher:1.70-mojo` (image id `423d4da877f5` on this host; push/digest pin when publishing to registry).
+   - `scripts/build_mojo_align_image.sh` + `smoke_64k.sh goliath/methylgrapher:1.70-mojo` (image id `423d4da877f5` on this host; push/digest pin when publishing to registry).
    - Keep `:1.70` python image as one-release rollback (`engine: python`).
 
 5. **Thread cap**
@@ -53,11 +53,11 @@ Procedure git packs keep `engine` unset / python-compatible until multi-site sci
 "actionConfig": {
   "methylgrapher_wgbs": {
     "engine": "mojo",
-    "image": "epimethyl/methylgrapher:1.70-mojo"
+    "image": "goliath/methylgrapher:1.70-mojo"
   }
 }
 ```
 
-**Rollback (one release):** set `engine: python` and `image: epimethyl/methylgrapher:1.70`. Inside the mojo image, set `METHYLGRAPHER_MCALL_ENGINE=python` on the worker/container (honored by [`methylGrapher.mojo.sh`](../../workers/docker/methylgrapher/methylGrapher.mojo.sh) before launching Mojo) to force the patched Python `engine.cli` path without changing the image tag.
+**Rollback (one release):** set `engine: python` and `image: goliath/methylgrapher:1.70`. Inside the mojo image, set `METHYLGRAPHER_MCALL_ENGINE=python` on the worker/container (honored by [`methylGrapher.mojo.sh`](../../workers/docker/methylgrapher/methylGrapher.mojo.sh) before launching Mojo) to force the patched Python `engine.cli` path without changing the image tag.
 
 Do **not** change procedure defaults in git until science + multi-site perf signs off; document the flip in the procedure README and production runbook in the same change.

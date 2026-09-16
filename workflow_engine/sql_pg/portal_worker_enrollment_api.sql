@@ -8,8 +8,8 @@ ALTER TABLE wf.cluster
 CREATE OR REPLACE FUNCTION portal.sp_upsert_cluster(
   p_cluster_key text,
   p_name text DEFAULT NULL,
-  p_shared_storage_uri text DEFAULT '/work/epimethyl',
-  p_worker_mount_path text DEFAULT '/work/epimethyl',
+  p_shared_storage_uri text DEFAULT '/work/goliath',
+  p_worker_mount_path text DEFAULT '/work/goliath',
   p_allowed_source_cidrs jsonb DEFAULT NULL,
   p_status text DEFAULT 'ACTIVE'
 )

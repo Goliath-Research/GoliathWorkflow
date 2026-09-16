@@ -19,4 +19,4 @@ todos:
 
 # Sync /work/genomes to myQNAPcloud
 
-Use [`scripts/sync_genomes_to_s3.sh`](../../scripts/sync_genomes_to_s3.sh). Destination: `s3://epimethyl/genomes/` at `https://s3.us-east-1.myqnapcloud.io`. Not rsync — S3 Access Key / Secret Key only.
+Use [`scripts/sync_genomes_to_s3.sh`](../../scripts/sync_genomes_to_s3.sh). Destination: `s3://goliath/genomes/` at `https://s3.us-east-1.myqnapcloud.io`. Not rsync — S3 Access Key / Secret Key only.

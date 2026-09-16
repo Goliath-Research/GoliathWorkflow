@@ -64,9 +64,9 @@ Primary code: `/home/ubuntu/mojo-align` (`methylgrapher/`)
 - Native `alignment_to_methylation`, GFA `Dict` lookup, `parallelize()`, gzip helpers
 - `MethylCall` CLI routes to native path (`METHYLGRAPHER_MCALL_ENGINE=python` rollback)
 - Toy + DS20M subset `graph.methyl` parity OK; RSS ~15 GiB vs ~22 GiB python
-- Image `epimethyl/methylgrapher:1.70-mojo` rebuilt with Mojo runtime + `src/`
+- Image `goliath/methylgrapher:1.70-mojo` rebuilt with Mojo runtime + `src/`
 - Site `actionConfig.methylgrapher_wgbs.engine=mojo`, `image=:1.70-mojo`, `threads=64`
-- Rollback: `engine=python` + `epimethyl/methylgrapher:1.70` (see production runbook + cutover gate)
+- Rollback: `engine=python` + `goliath/methylgrapher:1.70` (see production runbook + cutover gate)
 
 ### Follow-on (former out-of-scope, now landed)
 

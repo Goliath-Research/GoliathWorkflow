@@ -24,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 PROJECT_PATH="$REPO_ROOT/workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG_smoke.json"
-VERSIONS_FILE="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}/workflow_versions.json"
+VERSIONS_FILE="${GOLIATH_ENV_DIR:-/work/goliath/env}/workflow_versions.json"
 POLL=5
 TIMEOUT=600
 
@@ -101,15 +101,15 @@ prep_body = {
     "workflow_version_id": int(sample_prep_vid),
     "primaryAnalyte": "buffy_coat",
     "isCfdna": False,
-    "referenceFasta": "/work/epimethyl/data/reference.fa",
+    "referenceFasta": "/work/goliath/data/reference.fa",
     "fastqStorage": {
         "type": "file",
-        "basePath": "/work/epimethyl/runs/smoke/fastq",
+        "basePath": "/work/goliath/runs/smoke/fastq",
     },
     "samples": [
         {
             "sampleId": "smoke-1",
-            "sampleDir": "/work/epimethyl/runs/smoke/samples/smoke-1",
+            "sampleDir": "/work/goliath/runs/smoke/samples/smoke-1",
             "fastqPrefix": "smoke-1/",
         }
     ],

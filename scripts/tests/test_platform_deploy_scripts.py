@@ -58,7 +58,7 @@ def test_bootstrap_is_privileged_host_only() -> None:
     assert "sync_cfg_profiles_and_action_catalog.py" in text
     assert "sync-library-presets" in text
     assert "deploy_process_pack_catalog.sh" in text
-    assert "POSTGRES_DB:-${PGDATABASE:-epimethyl}" in text or "epimethyl" in text
+    assert "POSTGRES_DB:-${PGDATABASE:-goliath}" in text or "goliath" in text
 
 
 def test_provision_worker_auto_detects_join_mode() -> None:
@@ -103,8 +103,8 @@ def test_gateway_provision_has_no_work_share() -> None:
     assert "Does not mount or write /work" in text
     assert "parabricks" not in text.lower()
     unit = (REPO_ROOT / "deploy/systemd/methyl-gateway.service").read_text(encoding="utf-8")
-    assert "__EPIMETHYL_ROOT__" in unit
-    assert "/work/epimethyl" not in unit
+    assert "__GOLIATH_ROOT__" in unit
+    assert "/work/goliath" not in unit
 
 
 def test_write_worker_env_omits_placeholder_api_base() -> None:
@@ -129,7 +129,7 @@ def test_preflight_allows_missing_samples_when_current_optional(
     tmp_path: Path,
 ) -> None:
     work = tmp_path / "work"
-    root = work / "epimethyl"
+    root = work / "goliath"
     root.mkdir(parents=True)
     proc = subprocess.run(
         [

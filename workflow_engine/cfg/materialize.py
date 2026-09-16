@@ -22,7 +22,7 @@ def materialize_paths(
 ) -> Dict[str, Path]:
     work_root = Path(work_root)
     bundle = runtime_bundle_domain or (
-        work_root / "epimethyl" / "current" / "runtime-bundle" / "domain"
+        work_root / "goliath" / "current" / "runtime-bundle" / "domain"
     )
     return {
         "site": work_root / "site" / "methyl_site.json",

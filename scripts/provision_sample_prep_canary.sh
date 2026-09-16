@@ -5,7 +5,7 @@
 # Canonical local + QNAP location (same relative tree as graph assets):
 #
 #   /work/genomes/pangenome/canary/gse261315/SRR28293403/{full,subset}/
-#   s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/{full,subset}/
+#   s3://goliath/genomes/pangenome/canary/gse261315/SRR28293403/{full,subset}/
 #
 # Downloads the public SRA run once, materializes a deterministic paired-read
 # subset, checksums both tiers, and stages under that pangenome tree. Mirror to
@@ -31,7 +31,7 @@ Options:
 Canonical layout (pangenome project provenance):
   /work/genomes/pangenome/canary/gse261315/SRR28293403/full/
   /work/genomes/pangenome/canary/gse261315/SRR28293403/subset/
-  s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/...
+  s3://goliath/genomes/pangenome/canary/gse261315/SRR28293403/...
 
 Requires (for a full provision):
   - prefetch / fasterq-dump (SRA Toolkit) OR existing *_1.fastq.gz / *_2.fastq.gz
@@ -78,7 +78,7 @@ echo "  run=${RUN_ACC} geo=${GEO_SAMPLE} subset_pairs=${SUBSET_PAIRS}"
 echo "  work_dir=${WORK_DIR}"
 echo "  stage_root=${STAGE_ROOT}"
 echo "  local: ${STAGE_ROOT}/${FULL_PREFIX}/"
-echo "  qnap:  s3://epimethyl/genomes/pangenome/${FULL_PREFIX}/"
+echo "  qnap:  s3://goliath/genomes/pangenome/${FULL_PREFIX}/"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   cat <<EOF

@@ -9,15 +9,15 @@ Usage: scripts/install_release.sh [options]
 
 Options:
   --release-dir PATH   Release directory with wheels/ and requirements-worker.lock
-  --venv PATH          Target virtualenv (default: /work/epimethyl/venv-<arch>)
+  --venv PATH          Target virtualenv (default: /work/goliath/venv-<arch>)
   --python BIN         Python interpreter for venv creation (default: python3.12)
-  --index-url URL      Optional PyPI/Azure Artifacts index (Phase 2)
+  --index-url URL      Optional PyPI index (GitHub Packages pypi-goliath)
   --recreate-venv      Remove existing venv before install
   -h, --help           Show this help
 
 Examples:
-  scripts/install_release.sh --release-dir /work/epimethyl/releases/2026.6.1 --venv /work/epimethyl/venv-aarch64
-  scripts/install_release.sh --release-dir /work/epimethyl/current --index-url "https://pkgs.dev.azure.com/.../pypi/simple/"
+  scripts/install_release.sh --release-dir /work/goliath/releases/2026.6.1 --venv /work/goliath/venv-aarch64
+  scripts/install_release.sh --release-dir /work/goliath/current --index-url "https://pypi.pkg.github.com/Goliath-Research/simple/"
 EOF
 }
 
@@ -47,8 +47,8 @@ info() { echo "[INFO] $*"; }
 die() { echo "[ERROR] $*" >&2; exit 1; }
 
 ARCH_KEY="$(platform_arch_key "$(detect_uname_arch)")"
-RELEASE_DIR="${RELEASE_DIR:-/work/epimethyl/current}"
-VENV_DIR="${VENV_DIR:-/work/epimethyl/venv-${ARCH_KEY}}"
+RELEASE_DIR="${RELEASE_DIR:-/work/goliath/current}"
+VENV_DIR="${VENV_DIR:-/work/goliath/venv-${ARCH_KEY}}"
 
 [[ -d "$RELEASE_DIR" ]] || die "Release directory not found: $RELEASE_DIR"
 
@@ -86,7 +86,7 @@ fi
 
 info "Installing from $LOCK_FILE into $VENV_DIR"
 if [[ -z "$INDEX_URL" ]]; then
-  # Local wheels cover epimethyl packages only; third-party deps need PyPI or an index mirror.
+  # Local wheels cover goliath packages only; third-party deps need PyPI or an index mirror.
   pip install --find-links "$WHEELS_DIR" "${PIP_ARGS[@]}"
 else
   pip install "${PIP_ARGS[@]}"

@@ -30,7 +30,7 @@ docker compose -f /home/ubuntu/Work/cuda/docker-compose.yml config
 
 ### 2. Container Not Found Error
 
-**Error**: "Container not found" or "epimethyl container not running"
+**Error**: "Container not found" or "goliath container not running"
 
 **Solution**:
 ```bash
@@ -39,7 +39,7 @@ cd /home/ubuntu/Work/cuda
 docker-compose up -d
 
 # Verify it's running
-docker ps | grep epimethyl
+docker ps | grep goliath
 ```
 
 ### 3. Permission Denied Errors
@@ -61,10 +61,10 @@ docker ps | grep epimethyl
 **Solution**:
 ```bash
 # Install MethylUtils packages in the container
-docker exec epimethyl /home/ubuntu/Work/cuda/setup_methyl_packages.sh
+docker exec goliath /home/ubuntu/Work/cuda/setup_methyl_packages.sh
 
 # Test the installation
-docker exec epimethyl python -c "from methyl_utils.gpu_detection import print_gpu_status; print_gpu_status()"
+docker exec goliath python -c "from methyl_utils.gpu_detection import print_gpu_status; print_gpu_status()"
 ```
 
 ### 5. Python Environment Issues
@@ -74,10 +74,10 @@ docker exec epimethyl python -c "from methyl_utils.gpu_detection import print_gp
 **Solution**:
 ```bash
 # Check Python path in container
-docker exec epimethyl which python
+docker exec goliath which python
 
 # Install MethylDetector dependencies
-docker exec epimethyl bash -c "cd /path/to/project && poetry install --with dev"
+docker exec goliath bash -c "cd /path/to/project && poetry install --with dev"
 ```
 
 ## Configuration Methods
@@ -107,7 +107,7 @@ docker exec epimethyl bash -c "cd /path/to/project && poetry install --with dev"
 ./.devcontainer/switch-devcontainer-config.sh
 
 # Check container status
-docker ps | grep epimethyl
+docker ps | grep goliath
 
 # Check Docker Compose config
 docker compose -f /home/ubuntu/Work/cuda/docker-compose.yml config
@@ -141,7 +141,7 @@ If nothing works, follow these steps:
 
 5. **If still failing, try manual attachment**:
    - In Cursor: "Remote-Containers: Attach to Running Container"
-   - Select `epimethyl` container
+   - Select `goliath` container
    - Choose the project folder as workspace
 
 ## Still Having Issues?
@@ -150,7 +150,7 @@ If none of the above solutions work:
 
 1. **Check the logs**: Look at Cursor's output panel for detailed error messages
 2. **Try VS Code instead**: The devcontainer configuration should work in VS Code as well
-3. **Use the container directly**: Access the container via `docker exec -it epimethyl bash`
+3. **Use the container directly**: Access the container via `docker exec -it goliath bash`
 4. **Check system resources**: Ensure you have enough memory and disk space
 
 ## File Structure Reference

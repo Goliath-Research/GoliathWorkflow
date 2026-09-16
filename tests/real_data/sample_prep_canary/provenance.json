@@ -47,7 +47,7 @@
   ],
   "storage_layout": {
     "local_root": "/work/genomes/pangenome",
-    "qnap_prefix": "s3://epimethyl/genomes/pangenome/",
+    "qnap_prefix": "s3://goliath/genomes/pangenome/",
     "full_prefix": "canary/gse261315/SRR28293403/full/",
     "subset_prefix": "canary/gse261315/SRR28293403/subset/",
     "r1_name": "SRR28293403_1.fastq.gz",

@@ -38,6 +38,6 @@ See the original plan body in the Cursor plan history. Deliverables:
 | inventory-doc | [`docs/deployment/reference-inventory-qnap.md`](../deployment/reference-inventory-qnap.md) + cross-links |
 | pin-to-prefix | [`workflow_engine/cfg/reference_selection.py`](../../workflow_engine/cfg/reference_selection.py) matches pin path → `inventoryPrefix` |
 | sql-parity | [`sql_mssql/migrations/20260721_…`](../../workflow_engine/sql_mssql/migrations/20260721_site_reference_asset_deconv_roles.sql); README/AGENTS clarifications |
-| cred-example | [`fixtures/credentials/epimethyl-archive-keys.example.json`](../../workflow_engine/domain/fixtures/credentials/) |
+| cred-example | [`fixtures/credentials/goliath-archive-keys.example.json`](../../workflow_engine/domain/fixtures/credentials/) |
 | verify-genomes | [`scripts/verify_work_layout.sh`](../../scripts/verify_work_layout.sh) |
 | legacy-hygiene | Instance examples under `/work/projects/…`; `sql_mssql/deprecated/README.md`; dual site `_docs` |

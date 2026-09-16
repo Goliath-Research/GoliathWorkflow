@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class GPUTaskRunner:
-    def __init__(self, container_name: str = "epimethyl", 
+    def __init__(self, container_name: str = "goliath", 
                  working_dir: str = "/home/ubuntu/MethylCentroid",
                  compose_file: str = "/home/ubuntu/Work/cuda/docker-compose.yml"):
         self.container_name = container_name
@@ -151,7 +151,7 @@ class GPUTaskRunner:
 def main():
     parser = argparse.ArgumentParser(description="GPU Task Runner with Memory Management")
     parser.add_argument("--config", required=True, help="JSON config file with task definitions")
-    parser.add_argument("--container", default="epimethyl", help="Container name")
+    parser.add_argument("--container", default="goliath", help="Container name")
     parser.add_argument("--no-restart", action="store_true", help="Disable container restarts")
     
     args = parser.parse_args()

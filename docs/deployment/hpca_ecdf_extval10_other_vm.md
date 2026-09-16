@@ -16,7 +16,7 @@ post-model are re-run. Companion plan:
 - Driver script:
   `/work/projects/prostate-cancer/configs/run_H_PCa_good_ecdf_covariates_extval10_model.sh`
 - `validation_model_mc.program.json` present under
-  `/work/epimethyl/current/runtime-bundle/domain/fixtures/`
+  `/work/goliath/current/runtime-bundle/domain/fixtures/`
   (copied from the repo fixture if the release bundle lacked it).
 
 ## Environment on the other VM
@@ -26,7 +26,7 @@ Prefer the **repo `.venv`** for `methyl-workflow-run` if the release
 `192-222-50-58`). Keep `METHYL_PROFILE_DIR` pointed at the runtime-bundle profiles.
 
 ```bash
-export METHYL_PROFILE_DIR=/work/epimethyl/current/runtime-bundle/domain/profiles
+export METHYL_PROFILE_DIR=/work/goliath/current/runtime-bundle/domain/profiles
 cd /home/ubuntu/MethylPipeline   # or this host's checkout
 source .venv/bin/activate
 ```

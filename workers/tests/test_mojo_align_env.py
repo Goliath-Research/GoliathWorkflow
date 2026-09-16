@@ -15,5 +15,5 @@ def test_image_pin_falls_back(monkeypatch):
     from methyl_worker.mojo_align_env import image_pin
 
     monkeypatch.delenv("METHYL_MOJO_ALIGN_IMAGE", raising=False)
-    monkeypatch.setenv("METHYL_METHYLGRAPHER_MOJO_IMAGE", "epimethyl/methylgrapher:legacy")
-    assert image_pin() == "epimethyl/methylgrapher:legacy"
+    monkeypatch.setenv("METHYL_METHYLGRAPHER_MOJO_IMAGE", "goliath/methylgrapher:legacy")
+    assert image_pin() == "goliath/methylgrapher:legacy"

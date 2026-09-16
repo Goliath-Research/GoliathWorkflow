@@ -151,5 +151,5 @@ def test_materialize_analyte(tmp_path: Path):
     out = materialize_store(store, work, kinds=["analyte"])
     written = " ".join(out.get("written") or [])
     assert "analyte:cfdna@" in written
-    path = work / "epimethyl" / "current" / "runtime-bundle" / "domain" / "analytes" / "cfdna.analyte.json"
+    path = work / "goliath" / "current" / "runtime-bundle" / "domain" / "analytes" / "cfdna.analyte.json"
     assert path.is_file()

@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-export PGHOST="${PGHOST:-epimethyl.postgres.database.azure.com}"
+export PGHOST="${PGHOST:-goliath.postgres.database.azure.com}"
 export PGPORT="${PGPORT:-5432}"
 export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-postgres}}"
 export PGSSLMODE="${PGSSLMODE:-require}"

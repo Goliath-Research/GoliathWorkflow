@@ -2,7 +2,7 @@
 
 ## ✅ Docker Access Fixed!
 
-The Docker permissions have been successfully configured. You can now use Cursor with the epimethyl container.
+The Docker permissions have been successfully configured. You can now use Cursor with the goliath container.
 
 ## Next Steps
 
@@ -59,7 +59,7 @@ make test
 If you encounter any issues:
 
 1. **Test Docker access**: `./.devcontainer/test-docker-access.sh`
-2. **Check container status**: `docker ps | grep epimethyl`
+2. **Check container status**: `docker ps | grep goliath`
 3. **Restart container**: `cd /home/ubuntu/Work/cuda && docker-compose restart`
 4. **See detailed guide**: `DOCKER_PERMISSIONS_GUIDE.modeler`
 

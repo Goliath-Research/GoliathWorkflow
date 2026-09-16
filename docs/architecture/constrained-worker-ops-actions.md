@@ -29,8 +29,8 @@ Abort uses `fail_task` with error code `4099` (`WORKER_STOPPED`).
 | Action | Capability | Behavior | Limits |
 |--------|------------|----------|--------|
 | `worker.env_get` | `worker.ops` | Return allowlisted env values | Deny `*_TOKEN`, `*_PASSWORD`, `AZURE_SQL_*` |
-| `worker.env_set` | `worker.ops` | Set allowlisted non-secret deploy keys (or write `/work/epimethyl/env/overrides/`) | No arbitrary export; restart-safe |
-| `worker.fs_list` | `worker.ops` | List under allowlisted roots | `/work/cache`, `/work/genomes`, `/work/epimethyl/images`, sample-scoped paths; no `..` |
+| `worker.env_set` | `worker.ops` | Set allowlisted non-secret deploy keys (or write `/work/goliath/env/overrides/`) | No arbitrary export; restart-safe |
+| `worker.fs_list` | `worker.ops` | List under allowlisted roots | `/work/cache`, `/work/genomes`, `/work/goliath/images`, sample-scoped paths; no `..` |
 | `workflow.fs-stat` | existing | Prefer extending this for read-only probes | Read-only |
 
 ## Security checklist

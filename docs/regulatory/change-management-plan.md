@@ -134,7 +134,7 @@ The standard production release path is:
 3. Run release assembly with explicit component version pins.
 4. Generate a release manifest with checksums.
 5. Deploy through the gated production pipeline.
-6. Promote to `/work/epimethyl/current`.
+6. Promote to `/work/goliath/current`.
 7. Restart or roll workers according to the runbook.
 
 Rollback promotes a previous release bundle and restarts workers. A rollback

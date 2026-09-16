@@ -10,7 +10,7 @@ Usage: scripts/preflight_worker_join.sh [options]
 Checks that shared /work is usable for a join-only worker provision.
 
 Options:
-  --root PATH           GoliathOmics root (default: /work/epimethyl)
+  --root PATH           GoliathOmics root (default: /work/goliath)
   --work PATH           Parent /work mount (default: dirname of --root, usually /work)
   --require-current     Require <root>/current/manifest.json (default: on)
   --allow-missing-current  Do not require current/manifest.json
@@ -24,7 +24,7 @@ Exit 0 on success. Prints a clear next step when the release is missing.
 EOF
 }
 
-ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+ROOT="${GOLIATH_ROOT:-/work/goliath}"
 WORK=""
 REQUIRE_CURRENT=1
 GPU=0
@@ -86,8 +86,8 @@ if [[ "$REQUIRE_CURRENT" -eq 1 ]]; then
 
 Next step (cluster bootstrap — not on this worker):
   1. Run GoliathOmics-Release-Assemble + approved GoliathOmics-Release-Deploy
-  2. Confirm /work/epimethyl/current/manifest.json exists on QNAP
-  3. Pull Parabricks once into /work/epimethyl/docker on a promote host (NGC)
+  2. Confirm /work/goliath/current/manifest.json exists on QNAP
+  3. Pull Parabricks once into /work/goliath/docker on a promote host (NGC)
   4. Re-run this preflight, then provision_worker_node.sh --join-mode join
 
 See docs/deployment/lambda_worker_join.md

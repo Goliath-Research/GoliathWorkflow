@@ -110,7 +110,7 @@ Mapping still uses converted `seq`; only tags change.
 
 ### 4. Deploy overlay + worker sync
 
-Overlay: `/work/epimethyl/images/mojo-align-overlay/` (includes `giraffe_gpu_map_kernels.mojo`, `quartet_map.py`).
+Overlay: `/work/goliath/images/mojo-align-overlay/` (includes `giraffe_gpu_map_kernels.mojo`, `quartet_map.py`).
 
 Worker mounts: [`add_mojo_src_overlay_mounts`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py) mounts stream_map / GPU kernels / mapper / quartet_map.
 
@@ -120,7 +120,7 @@ Existing GAFs cannot be repaired in place (`os:Z` already lost original). For Fe
 
 1. Force Mojo re-Align (overlay emit) → named-coords → MethylCall extract
 2. Assert `graph.methyl` has `met > 0` and chr1 H5 `mC_sum > 0`
-3. Re-run `compare_golden_feb_cg.py` → refresh [`MOJO_VS_FEB_CLARA_CG_PARITY.md`](/work/epimethyl/images/MOJO_VS_FEB_CLARA_CG_PARITY.md)
+3. Re-run `compare_golden_feb_cg.py` → refresh [`MOJO_VS_FEB_CLARA_CG_PARITY.md`](/work/goliath/images/MOJO_VS_FEB_CLARA_CG_PARITY.md)
 
 Start with **one** sample (74758) before the other two.
 

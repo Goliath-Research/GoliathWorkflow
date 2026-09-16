@@ -2,7 +2,7 @@
 
 Capability remains `sample.parabricks_fq2bam` / `parabricks.fq2bam`. Switch with **explicit** `actionConfig.parabricks.engine` (`parabricks` = Clara, `mojo` = MojoFq2bamMeth) — never an automatic consequence of `pangenome_wgbs` Mojo failure. See [`mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md).
 
-**Production default (linear `engine=mojo`):** FM-index (`METHYLGRAPHER_LINEAR_ENGINE=fm`) on Clara's `${REF}.bwameth.c2t` BWA index, native BGZF BAM, GPU sort + markdup. The frozen k-mer path (`engine=parity`) is a science fallback, not the operator default. Engine contract: sibling mojo-align [`fq2bam-meth/docs/LINEAR_ENGINES.md`](https://dev.azure.com/EpiMethyl/Development/_git/mojo-align?path=/fq2bam-meth/docs/LINEAR_ENGINES.md). QC metrics remain `metrics_source: samtools+placeholders` until Picard enrichment — placeholders are not Clara-equivalent hard fails (see [sample-prep-tooling.md](../architecture/sample-prep-tooling.md)).
+**Production default (linear `engine=mojo`):** FM-index (`METHYLGRAPHER_LINEAR_ENGINE=fm`) on Clara's `${REF}.bwameth.c2t` BWA index, native BGZF BAM, GPU sort + markdup. The frozen k-mer path (`engine=parity`) is a science fallback, not the operator default. Engine contract: sibling mojo-align [`fq2bam-meth/docs/LINEAR_ENGINES.md`](https://github.com/Goliath-Research/mojo-align/blob/main/fq2bam-meth/docs/LINEAR_ENGINES.md). QC metrics remain `metrics_source: samtools+placeholders` until Picard enrichment — placeholders are not Clara-equivalent hard fails (see [sample-prep-tooling.md](../architecture/sample-prep-tooling.md)).
 
 ## Downstream consumers (must match)
 

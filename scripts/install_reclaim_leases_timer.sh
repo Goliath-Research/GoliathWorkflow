@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=detect_platform.sh
 source "$SCRIPT_DIR/detect_platform.sh"
 
-ROOT="${EPIMETHYL_ROOT:-/opt/methyl-gateway}"
+ROOT="${GOLIATH_ROOT:-/opt/methyl-gateway}"
 ARCH=""
 RUNTIME=""
 NO_START=0
@@ -75,8 +75,8 @@ if [[ ! -x "$VENV/bin/methyl-reclaim-leases" ]]; then
   echo "WARN: $VENV/bin/methyl-reclaim-leases not found; install/upgrade methyl-gateway wheel first" >&2
 fi
 
-sed -e "s|__EPIMETHYL_ROOT__|$ROOT|g" \
-    -e "s|__EPIMETHYL_VENV__|$VENV|g" \
+sed -e "s|__GOLIATH_ROOT__|$ROOT|g" \
+    -e "s|__GOLIATH_VENV__|$VENV|g" \
     "$SVC_SRC" >"/etc/systemd/system/methyl-reclaim-leases.service"
 cp -f "$TIMER_SRC" "/etc/systemd/system/methyl-reclaim-leases.timer"
 

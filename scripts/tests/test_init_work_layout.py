@@ -37,7 +37,7 @@ def test_init_work_layout_creates_access_modes(tmp_path: Path) -> None:
         assert path.is_dir(), name
         assert _mode(path) == 0o777, f"{name} mode {oct(_mode(path))}"
 
-    for name in ("genomes", "site", "epimethyl"):
+    for name in ("genomes", "site", "goliath"):
         path = work / name
         assert path.is_dir(), name
         assert _mode(path) == 0o755, f"{name} mode {oct(_mode(path))}"

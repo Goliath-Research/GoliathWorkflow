@@ -197,15 +197,15 @@ def test_orphan_gpu_matcher_covers_mojo_giraffe() -> None:
     from methyl_worker.methylgrapher_wgbs_runner import _is_orphan_gpu_container
 
     assert _is_orphan_gpu_container(
-        "epimethyl/methylgrapher:1.70-mojo",
+        "goliath/methylgrapher:1.70-mojo",
         '"methylGrapher" "MojoGiraffe" -gbz /x',
     )
     assert _is_orphan_gpu_container(
-        "epimethyl/methylgrapher:1.70-mojo",
+        "goliath/methylgrapher:1.70-mojo",
         '"methylGrapher" "Align" -t 64',
     )
     assert not _is_orphan_gpu_container(
-        "epimethyl/methylgrapher:1.70-mojo",
+        "goliath/methylgrapher:1.70-mojo",
         '"methylGrapher" "MethylCall" -t 8',
     )
     assert not _is_orphan_gpu_container("postgres:17", "Align")
@@ -728,7 +728,7 @@ def test_mojo_engine_skips_thread_cap_and_defaults_image(tmp_path: Path) -> None
         bundle=bundle, work_dir=tmp_path / "work", index_prefix=str(tmp_path / "hprc-d9-bs")
     )
     assert cmd[cmd.index("-t") + 1] == "64"
-    assert _resolve_image(bundle) == "epimethyl/methylgrapher:1.70-mojo"
+    assert _resolve_image(bundle) == "goliath/methylgrapher:1.70-mojo"
 
 
 def test_step_config_accepts_engine_mojo() -> None:

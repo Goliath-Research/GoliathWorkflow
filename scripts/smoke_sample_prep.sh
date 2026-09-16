@@ -47,7 +47,7 @@ if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
   PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
 fi
 
-VERSIONS_FILE="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}/workflow_versions.json"
+VERSIONS_FILE="${GOLIATH_ENV_DIR:-/work/goliath/env}/workflow_versions.json"
 if [[ ! -f "$VERSIONS_FILE" ]]; then
   VERSIONS_FILE="$REPO_ROOT/.smoke/workflow_versions.json"
 fi

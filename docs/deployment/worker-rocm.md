@@ -21,12 +21,12 @@ Load on each ROCm worker (NFS tar pattern same as CUDA `:1.70-mojo`).
     "align_engine": "gpu_giraffe",
     "align_device": "auto",
     "giraffe_device": "auto",
-    "image": "epimethyl/methylgrapher:1.70-mojo-rocm"
+    "image": "goliath/methylgrapher:1.70-mojo-rocm"
   },
   "parabricks": {
     "engine": "mojo",
     "align_device": "auto",
-    "image": "epimethyl/methylgrapher:1.70-mojo-rocm",
+    "image": "goliath/methylgrapher:1.70-mojo-rocm",
     "bwa_threads": 32
   }
 }

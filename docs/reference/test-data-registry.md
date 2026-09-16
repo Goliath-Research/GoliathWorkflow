@@ -115,7 +115,7 @@ METHYL_SITE_CONFIG=/work/site/methyl_site.json \
   .venv/bin/python -m pytest -m real_data -rs -v
 ```
 
-CI: [`ci/azure-pipelines-real-data.yml`](../../ci/azure-pipelines-real-data.yml)
+CI: [`.github/workflows/real-data.yml`](../../.github/workflows/real-data.yml)
 runs `-m real_data` on `production-work-agents`.
 
 ## Designating a sample (operator checklist)
@@ -152,8 +152,8 @@ and `pangenome_wgbs`.
 - Provision: `scripts/provision_sample_prep_canary.sh` stages under
   `/work/genomes/pangenome/canary/...` (HPRC/methylGrapher provenance); mirror with
   `scripts/sync_genomes_to_s3.sh --only pangenome/canary` →
-  `s3://epimethyl/genomes/pangenome/canary/...`.
-- Execute: `scripts/smoke_sample_prep_real.sh` / [`ci/azure-pipelines-sample-prep-canary.yml`](../../ci/azure-pipelines-sample-prep-canary.yml).
+  `s3://goliath/genomes/pangenome/canary/...`.
+- Execute: `scripts/smoke_sample_prep_real.sh` / [`.github/workflows/sample-prep-canary.yml`](../../.github/workflows/sample-prep-canary.yml).
 - Validation helpers: `methyl_utils.testing.sample_prep_canary`.
 
 Do **not** put production FASTQ paths into golden fixtures or catalog unit tests.

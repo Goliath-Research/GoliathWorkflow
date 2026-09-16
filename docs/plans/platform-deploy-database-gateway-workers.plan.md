@@ -99,7 +99,7 @@ Folders (do not invent new names): [`workflow_engine/sql_mssql/`](../../workflow
 | Backend | Schema entrypoint | Notes |
 |---------|-------------------|--------|
 | Azure SQL (production portal) | [`sql_mssql/deploy_azure.sh`](../../workflow_engine/sql_mssql/deploy_azure.sh) | After base `MethylPipeline.sql` when greenfield |
-| PostgreSQL (`epimethyl`) | [`sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh) | Schema twin / CI; default `PGDATABASE=epimethyl` |
+| PostgreSQL (`goliath`) | [`sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh) | Schema twin / CI; default `PGDATABASE=goliath` |
 
 **Keep them synchronized.** Every new table, proc, seed SQL, or `cfg_*` object is added to **both** trees and listed in **both** `deploy_azure.sh` arrays. Drift is a deploy bug. Existing gates: [`workflow_engine/contract/db_objects.yaml`](../../workflow_engine/contract/db_objects.yaml), [`validate_contract.py`](../../workflow_engine/contract/validate_contract.py), [`.github/workflows/db-parity.yml`](../../.github/workflows/db-parity.yml), [`scripts/check_sql_deploy_twins.py`](../../scripts/check_sql_deploy_twins.py). Widen the contract when `cfg` / process-pack objects are required at greenfield, not only `wf`.
 
@@ -124,13 +124,13 @@ First GPU worker creates this tree; every later worker mounts the same share. Mo
 | `/work/samples/` | read/write all workers | Sample archive |
 | `/work/projects/`, `/work/cache/` | read/write | Study outputs, mapper caches |
 | `/work/genomes/`, `/work/site/` | read for workers; ops/first-seed write | References, site manifest |
-| `/work/epimethyl/` | read for workers after seed | `current` release, `venv-<arch>`, extractor, `docker/` Parabricks layers, `env/worker.env` |
+| `/work/goliath/` | read for workers after seed | `current` release, `venv-<arch>`, extractor, `docker/` Parabricks layers, `env/worker.env` |
 
 Gateway does **not** read or write this tree.
 
 ## Gateway VM (local disk only)
 
-[`deploy/systemd/methyl-gateway.service`](../../deploy/systemd/methyl-gateway.service) uses `__EPIMETHYL_ROOT__` placeholders. Installers default to `/opt/methyl-gateway` and refuse a `--root` under `/work`.
+[`deploy/systemd/methyl-gateway.service`](../../deploy/systemd/methyl-gateway.service) uses `__GOLIATH_ROOT__` placeholders. Installers default to `/opt/methyl-gateway` and refuse a `--root` under `/work`.
 
 Install on the gateway host (no QNAP mount): [`scripts/provision_gateway_node.sh`](../../scripts/provision_gateway_node.sh).
 
@@ -140,15 +140,15 @@ Install on the gateway host (no QNAP mount): [`scripts/provision_gateway_node.sh
 4. Certs at `/etc/ssl/methyl-gateway/`; [`setup_gateway_nginx.sh`](../../scripts/setup_gateway_nginx.sh) `--hostname <fqdn>`. NSG: 443 from workers/VPN; 8080 localhost only.
 5. `https://<fqdn>/v1/health` must be 200.
 
-Workers set `WORKER_API_BASE=https://<gateway-fqdn>/v1`. They still run from `/work/epimethyl/venv-<arch>`.
+Workers set `WORKER_API_BASE=https://<gateway-fqdn>/v1`. They still run from `/work/goliath/venv-<arch>`.
 
 ## First GPU worker — all shared `/work`
 
-When `/work/epimethyl/current/manifest.json` is missing (`--join-mode auto` or `first`):
+When `/work/goliath/current/manifest.json` is missing (`--join-mode auto` or `first`):
 
-1. [`init_work_layout.sh`](../../scripts/init_work_layout.sh) — samples/projects/cache writable; genomes/site/epimethyl worker-readable
-2. [`promote_release.sh`](../../scripts/promote_release.sh) / [`install_release.sh`](../../scripts/install_release.sh) — `/work/epimethyl/current`, `venv-<arch>`, extractor
-3. One Parabricks pull into `/work/epimethyl/docker`
+1. [`init_work_layout.sh`](../../scripts/init_work_layout.sh) — samples/projects/cache writable; genomes/site/goliath worker-readable
+2. [`promote_release.sh`](../../scripts/promote_release.sh) / [`install_release.sh`](../../scripts/install_release.sh) — `/work/goliath/current`, `venv-<arch>`, extractor
+3. One Parabricks pull into `/work/goliath/docker`
 4. [`write_worker_env.sh`](../../scripts/write_worker_env.sh)
 5. If still missing: genomes/site bytes onto `/work/genomes` and `/work/site` — download only
 
@@ -169,7 +169,7 @@ export WORKER_API_BASE=https://<gateway-fqdn>/v1
 methyl-worker enroll --api-base "$WORKER_API_BASE" --cluster "$CLUSTER" --key "$(hostname -s)"
 ```
 
-- Python from `/work/epimethyl/venv-${ARCH}`
+- Python from `/work/goliath/venv-${ARCH}`
 - Writes `/etc/methyl/worker-token`
 - Fail closed on missing API, missing venv, or HTTP 403
 - No SQL fallback (`METHYL_ALLOW_WORKER_SQL=1` is lab-only)
@@ -177,7 +177,7 @@ methyl-worker enroll --api-base "$WORKER_API_BASE" --cluster "$CLUSTER" --key "$
 ## Every GPU — VM-local
 
 - [`setup_host.sh`](../../scripts/setup_host.sh) `--system-deps --no-venv --gpu`
-- Local Docker + NVIDIA CTK, data-root `/work/epimethyl/docker` (joiners skip pull)
+- Local Docker + NVIDIA CTK, data-root `/work/goliath/docker` (joiners skip pull)
 - [`install_worker_systemd.sh`](../../scripts/install_worker_systemd.sh) after token exists
 
 ## Out of scope

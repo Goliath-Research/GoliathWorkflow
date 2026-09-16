@@ -88,11 +88,11 @@ Update [`GIRAFFE_SPEC.md`](/home/ubuntu/mojo-align/giraffe/docs/GIRAFFE_SPEC.md)
 
 ## Phase C — Image, site bake, fleet (MethylPipeline)
 
-1. Rebuild `:1.70-mojo` via [`scripts/build_mojo_align_image.sh`](/home/ubuntu/MethylPipeline/scripts/build_mojo_align_image.sh); write NFS tar + update [`/work/epimethyl/images/methylgrapher-1.70-mojo.image_id`](/work/epimethyl/images/methylgrapher-1.70-mojo.image_id) (document both config + OCI manifest digests to avoid sister confusion).
-2. Harden [`enable_fleet_mojo_align.sh`](/work/epimethyl/images/enable_fleet_mojo_align.sh) expected-id check to accept config **or** OCI manifest digest from the tar.
+1. Rebuild `:1.70-mojo` via [`scripts/build_mojo_align_image.sh`](/home/ubuntu/MethylPipeline/scripts/build_mojo_align_image.sh); write NFS tar + update [`/work/goliath/images/methylgrapher-1.70-mojo.image_id`](/work/goliath/images/methylgrapher-1.70-mojo.image_id) (document both config + OCI manifest digests to avoid sister confusion).
+2. Harden [`enable_fleet_mojo_align.sh`](/work/goliath/images/enable_fleet_mojo_align.sh) expected-id check to accept config **or** OCI manifest digest from the tar.
 3. Confirm C2T/G2A dense packs under `/work/cache/mojo_segments/` (already ~145M nodes); rebuild only if stream mapper needs pack format changes.
 4. Site `actionConfig.methylgrapher_wgbs`: keep `align_engine=gpu_giraffe`, `gpu_giraffe_fallback=mojo`, image pin to new digest; `METHYLGRAPHER_GPU_REQUIRE` already baked in runner.
-5. Sisters: `bash /work/epimethyl/images/enable_fleet_mojo_align.sh` after digest lands (no SQL restore on sisters).
+5. Sisters: `bash /work/goliath/images/enable_fleet_mojo_align.sh` after digest lands (no SQL restore on sisters).
 
 ## Phase D — Science + wall gates (block cutover)
 

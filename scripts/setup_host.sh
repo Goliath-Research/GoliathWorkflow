@@ -22,7 +22,7 @@ Notes:
   - This script is intended for host installs (not inside Docker).
   - --no-venv is the per-VM join path: install samtools/bedtools/fastp (+ NVRTC)
     then stop. Do not pip into Debian system Python (breaks on distro wheel/pip).
-  - Shared venv lives under /work/epimethyl/venv-<arch>/ (promote / bootstrap).
+  - Shared venv lives under /work/goliath/venv-<arch>/ (promote / bootstrap).
   - Without --no-venv, Python deps come from requirements-pipeline.txt (+ GPU file).
   - If Python headers/build tools are missing, hdbscan is installed only
     when a prebuilt wheel is available; otherwise it is skipped with a warning.
@@ -279,7 +279,7 @@ if [ "$NO_VENV" -eq 1 ]; then
     fi
   fi
   info "Host OS packages done (--no-venv: skipping pip / editable installs)."
-  info "Python worker env: /work/epimethyl/venv-<arch>/ (not system site-packages)."
+  info "Python worker env: /work/goliath/venv-<arch>/ (not system site-packages)."
   exit 0
 fi
 

@@ -8,8 +8,8 @@ Canonical SamplePrep contract: [`docs/implementation/sample-preparation-flow.md`
 
 | `actionConfig.methylgrapher_wgbs.engine` | Image (typical) | Notes |
 |-----------------------------------------|-----------------|-------|
-| `mojo` (**canonical**) | `epimethyl/methylgrapher:1.70-mojo-cuda` or `:1.70-mojo-rocm` | native-Mojo Align / MethylCall / MergeCpG; same userspace binary; host runtime + tag select NVIDIA vs AMD |
-| `python` (dev/parity rollback) | `epimethyl/methylgrapher:1.70` | Stock methylGrapher 0.2.0 + GAF-header patch |
+| `mojo` (**canonical**) | `goliath/methylgrapher:1.70-mojo-cuda` or `:1.70-mojo-rocm` | native-Mojo Align / MethylCall / MergeCpG; same userspace binary; host runtime + tag select NVIDIA vs AMD |
+| `python` (dev/parity rollback) | `goliath/methylgrapher:1.70` | Stock methylGrapher 0.2.0 + GAF-header patch |
 
 Build Mojo image: `scripts/build_mojo_align_image.sh` (requires `MOJO_ALIGN_ROOT` pointing at **mojo-align**, or auto-detect of sibling `../mojo-align`, and a prior vg bake from `build_methylgrapher_image.sh`). Set `MOJO_ALIGN_GPU_VARIANT=cuda|rocm` for the twin tags. Plan: [`docs/plans/archive-methylgrapher-mojo.plan.md`](../../../docs/plans/archive-methylgrapher-mojo.plan.md).
 
@@ -62,9 +62,9 @@ bash workers/docker/methylgrapher/smoke_64k.sh   # on a real 64K host
 
 ```bash
 # NVIDIA
-export METHYL_METHYLGRAPHER_IMAGE=epimethyl/methylgrapher:1.70-mojo-cuda
+export METHYL_METHYLGRAPHER_IMAGE=goliath/methylgrapher:1.70-mojo-cuda
 # AMD
-# export METHYL_METHYLGRAPHER_IMAGE=epimethyl/methylgrapher:1.70-mojo-rocm
+# export METHYL_METHYLGRAPHER_IMAGE=goliath/methylgrapher:1.70-mojo-rocm
 ./scripts/ensure_methylgrapher_image.sh
 ```
 

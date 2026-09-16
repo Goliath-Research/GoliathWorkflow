@@ -8,7 +8,7 @@ plus provision from myQNAPcloud — see ``docs/deployment/reference-inventory-qn
 
 Azure SQL is the production database (populated, in use). PostgreSQL typically has
 the same schema/procedures but empty wf action tables. Canonical PG database is
-``epimethyl`` (not the stale ``postgres`` database on the same server). This script:
+``goliath`` (not the stale ``postgres`` database on the same server). This script:
 
   1. Seeds action catalog + JSON schemas from the **git repo** (current catalog).
   2. Optionally copies workflow **definitions** (def/version/node/edge/bindings) from
@@ -21,7 +21,7 @@ Usage:
   source .venv/bin/activate
 
   # Catalog only (POSTGRES_* required)
-  export POSTGRES_HOST=... POSTGRES_DB=epimethyl POSTGRES_USER=dba POSTGRES_PASSWORD='...'
+  export POSTGRES_HOST=... POSTGRES_DB=goliath POSTGRES_USER=dba POSTGRES_PASSWORD='...'
   export PGSSLMODE=require
   python scripts/populate_postgres_reference_data.py
 

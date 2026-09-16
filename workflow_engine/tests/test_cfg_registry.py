@@ -42,14 +42,14 @@ def test_import_profiles_and_programs(store: FileConfigStore) -> None:
     assert programs
     assert any(p.name == "samd_research" for p in profiles) or len(profiles) >= 1
     endpoint_names = {r.name for r in store.list("storage_endpoint", published_only=True)}
-    assert "epimethyl-archive" in endpoint_names
-    assert "epimethyl-fastq" in endpoint_names
-    assert "epimethyl-genomes" in endpoint_names
+    assert "goliath-archive" in endpoint_names
+    assert "goliath-fastq" in endpoint_names
+    assert "goliath-genomes" in endpoint_names
     profiles_storage = store.list("storage_profile", published_only=True)
-    assert any(p.name == "epimethyl-samples" for p in profiles_storage)
-    pairing = next(p for p in profiles_storage if p.name == "epimethyl-samples")
-    assert pairing.document["fastqStorageEndpoint"] == "epimethyl-fastq"
-    assert pairing.document["sampleStorageEndpoint"] == "epimethyl-archive"
+    assert any(p.name == "goliath-samples" for p in profiles_storage)
+    pairing = next(p for p in profiles_storage if p.name == "goliath-samples")
+    assert pairing.document["fastqStorageEndpoint"] == "goliath-fastq"
+    assert pairing.document["sampleStorageEndpoint"] == "goliath-archive"
 
 
 def test_roundtrip_materialize_site_and_profile(store: FileConfigStore, tmp_path: Path) -> None:
@@ -65,7 +65,7 @@ def test_roundtrip_materialize_site_and_profile(store: FileConfigStore, tmp_path
         status="published",
     )
     work = tmp_path / "work"
-    bundle = work / "epimethyl" / "current" / "runtime-bundle" / "domain"
+    bundle = work / "goliath" / "current" / "runtime-bundle" / "domain"
     result = materialize_store(store, work, runtime_bundle_domain=bundle)
     assert (work / "site" / "methyl_site.json").is_file()
     loaded = json.loads((work / "site" / "methyl_site.json").read_text())
@@ -133,7 +133,7 @@ def test_expand_azure_key_vault_emits_ref_without_keys(store: FileConfigStore) -
         secret={
             "authMode": "azure_key_vault",
             "vaultUrl": "https://kv.vault.azure.net/",
-            "secretName": "epimethyl-s3",
+            "secretName": "goliath-s3",
             "accessKeyId": "SHOULD_NOT_LEAK",
             "secretAccessKey": "SHOULD_NOT_LEAK",
         },
@@ -144,7 +144,7 @@ def test_expand_azure_key_vault_emits_ref_without_keys(store: FileConfigStore) -
         "qnap",
         {
             "type": "s3",
-            "bucket": "epimethyl",
+            "bucket": "goliath",
             "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
             "region": "us-east-1",
         },
@@ -156,7 +156,7 @@ def test_expand_azure_key_vault_emits_ref_without_keys(store: FileConfigStore) -
     assert creds["authMode"] == "azure_key_vault"
     assert "accessKeyId" not in creds
     assert "secretAccessKey" not in creds
-    assert creds["secretName"] == "epimethyl-s3"
+    assert creds["secretName"] == "goliath-s3"
     assert creds["vaultUrl"] == "https://kv.vault.azure.net/"
 
 
@@ -361,7 +361,7 @@ def test_study_membership_materializes_csv(
     assert "BC-P-001" in pca.read_text()
 
     # Full materialize path also syncs project JSON
-    bundle = work / "epimethyl" / "current" / "runtime-bundle" / "domain"
+    bundle = work / "goliath" / "current" / "runtime-bundle" / "domain"
     materialize_store(store, work, runtime_bundle_domain=bundle)
     proj = json.loads(
         (

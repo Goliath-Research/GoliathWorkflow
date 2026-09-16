@@ -35,7 +35,7 @@ See [mojo-align `giraffe/docs/PHASE0_GH200_ALIGN.md`](../../../mojo-align/giraff
 | Layer | Change |
 |-------|--------|
 | mojo-align | `methylgrapher/engine/align_backends.py`, Mojo `methylgrapher/src/align.mojo`, Align CLI `-align_engine` |
-| Image | `epimethyl/methylgrapher:1.70-mojo` rebuilt |
+| Image | `goliath/methylgrapher:1.70-mojo` rebuilt |
 | Worker | `align_engine` on `MethylGrapherWgbsStepConfig` / bundle; Docker `-e METHYLGRAPHER_ALIGN_ENGINE` |
 | Capability | GH200 workers advertise `methylgrapher.wgbs_gpu_align` when GPU present |
 | Site default | Keep `align_engine` unset/`cpu_vg` until operator full-sample gate |
@@ -45,7 +45,7 @@ See [mojo-align `giraffe/docs/PHASE0_GH200_ALIGN.md`](../../../mojo-align/giraff
 ```json
 "align_engine": "cpu_vg",
 "engine": "mojo",
-"image": "epimethyl/methylgrapher:1.70-mojo",
+"image": "goliath/methylgrapher:1.70-mojo",
 "threads": 64
 ```
 

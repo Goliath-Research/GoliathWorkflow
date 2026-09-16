@@ -43,10 +43,10 @@ See the implementation in:
 | `METHYLGRAPHER_MOJO_*` | `MOJO_ALIGN_*` |
 | `METHYL_METHYLGRAPHER_MOJO_IMAGE` | `METHYL_MOJO_ALIGN_IMAGE` |
 | `/opt/methylgrapher-mojo` | `/opt/mojo-align` |
-| `/work/epimethyl/images/methylgrapher-mojo-overlay` | `/work/epimethyl/images/mojo-align-overlay` |
+| `/work/goliath/images/methylgrapher-mojo-overlay` | `/work/goliath/images/mojo-align-overlay` |
 | `scripts/build_methylgrapher_mojo_image.sh` | `scripts/build_mojo_align_image.sh` (wrapper removed) |
 
-CLI `methylGrapher` and image name `epimethyl/methylgrapher:1.70-mojo-*` are unchanged. Deprecated env names are dual-read for one release; they are not a path to a second git tree.
+CLI `methylGrapher` and image name `goliath/methylgrapher:1.70-mojo-*` are unchanged. Deprecated env names are dual-read for one release; they are not a path to a second git tree.
 
 ## Former git repository
 

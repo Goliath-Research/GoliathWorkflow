@@ -14,7 +14,7 @@ from pydantic import TypeAdapter
 
 from .sample_storage import SampleStorageDefaults
 
-DEFAULT_ARCHIVE_PROFILE_KEY = "epimethyl-samples"
+DEFAULT_ARCHIVE_PROFILE_KEY = "goliath-samples"
 DEFAULT_STORAGE_KEY = DEFAULT_ARCHIVE_PROFILE_KEY
 
 _SAMPLE_DEFAULTS_ADAPTER = TypeAdapter(SampleStorageDefaults)

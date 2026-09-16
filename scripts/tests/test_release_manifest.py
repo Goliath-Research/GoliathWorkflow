@@ -1,4 +1,4 @@
-"""Validate epimethyl release manifest schema and helper script contracts."""
+"""Validate goliath release manifest schema and helper script contracts."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_PATH = REPO_ROOT / "schemas/deployment/epimethyl_release_manifest.schema.json"
+SCHEMA_PATH = REPO_ROOT / "schemas/deployment/goliath_release_manifest.schema.json"
 
 
 def _required_manifest_fields() -> set[str]:
@@ -24,7 +24,7 @@ def test_manifest_schema_accepts_build_release_stub() -> None:
         "python": "3.12",
         "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
         "parabricks_image_digest": "",
-        "docker_data_root": "/work/epimethyl/docker",
+        "docker_data_root": "/work/goliath/docker",
         "min_driver_version": "",
         "requirements_lock": "requirements-worker.lock",
         "runtime_bundle": "runtime-bundle",
@@ -54,7 +54,7 @@ def test_manifest_schema_accepts_components_block() -> None:
         },
         "python": "3.12",
         "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
-        "docker_data_root": "/work/epimethyl/docker",
+        "docker_data_root": "/work/goliath/docker",
         "requirements_lock": "requirements-worker.lock",
         "artifacts": {
             "aarch64": {
@@ -84,7 +84,7 @@ def test_assemble_release_local_smoke(tmp_path: Path) -> None:
                 "version": "2026.6.1",
                 "python": "3.12",
                 "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
-                "docker_data_root": "/work/epimethyl/docker",
+                "docker_data_root": "/work/goliath/docker",
                 "requirements_lock": "requirements-worker.lock",
                 "artifacts": {
                     "aarch64": {"methyl_extractor": "methyl-extractor-linux-aarch64.tar.gz", "sha256": ""},
@@ -167,7 +167,7 @@ def test_release_scripts_pass_bash_syntax_check() -> None:
         "install_release.sh",
         "write_worker_env.sh",
         "package_methyl_extractor.sh",
-        "bootstrap_epimethyl.sh",
+        "bootstrap_goliath.sh",
         "init_work_layout.sh",
         "verify_work_layout.sh",
         "preflight_worker_join.sh",
@@ -183,7 +183,7 @@ def test_release_scripts_pass_bash_syntax_check() -> None:
 
 
 def test_bootstrap_docker_data_root_default_only_in_release_mode() -> None:
-    text = (REPO_ROOT / "scripts/bootstrap_epimethyl.sh").read_text(encoding="utf-8")
+    text = (REPO_ROOT / "scripts/bootstrap_goliath.sh").read_text(encoding="utf-8")
     default_line = 'DOCKER_DATA_ROOT="${DOCKER_DATA_ROOT:-$ROOT/docker}"'
     release_marker = 'if [[ -n "$RELEASE_DIR" ]]; then'
     pre_release = text.split(release_marker, 1)[0]
@@ -244,14 +244,14 @@ def test_build_release_rejects_invalid_version() -> None:
 
 
 def test_write_worker_env_from_manifest(tmp_path: Path) -> None:
-    root = tmp_path / "epimethyl"
+    root = tmp_path / "goliath"
     release = root / "releases" / "2026.6.1"
     release.mkdir(parents=True)
     manifest = {
         "version": "2026.6.1",
         "python": "3.12",
         "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
-        "docker_data_root": "/work/epimethyl/docker",
+        "docker_data_root": "/work/goliath/docker",
         "requirements_lock": "requirements-worker.lock",
         "artifacts": {
             "aarch64": {
@@ -288,7 +288,7 @@ def test_write_worker_env_from_manifest(tmp_path: Path) -> None:
     )
 
     worker_env = (root / "env/worker.env").read_text(encoding="utf-8")
-    assert "EPIMETHYL_RELEASE=2026.6.1" in worker_env
+    assert "GOLIATH_RELEASE=2026.6.1" in worker_env
     assert "WORKER_API_BASE=http://test/v1" in worker_env
     assert "TMPDIR=/var/tmp/methyl-samtools" in worker_env
     assert "METHYL_SAMPLE_CAAS_ENABLED=0" in worker_env
@@ -297,14 +297,14 @@ def test_write_worker_env_from_manifest(tmp_path: Path) -> None:
 
 
 def test_write_worker_env_omits_api_base_when_unset(tmp_path: Path) -> None:
-    root = tmp_path / "epimethyl"
+    root = tmp_path / "goliath"
     release = root / "releases" / "2026.6.1"
     release.mkdir(parents=True)
     manifest = {
         "version": "2026.6.1",
         "python": "3.12",
         "parabricks_image": "",
-        "docker_data_root": "/work/epimethyl/docker",
+        "docker_data_root": "/work/goliath/docker",
         "requirements_lock": "requirements-worker.lock",
         "artifacts": {
             "aarch64": {"methyl_extractor": "x.tar.gz", "sha256": ""},
@@ -342,14 +342,14 @@ def test_write_worker_env_omits_api_base_when_unset(tmp_path: Path) -> None:
 
 
 def test_write_worker_env_preserves_existing_api_base_on_promote(tmp_path: Path) -> None:
-    root = tmp_path / "epimethyl"
+    root = tmp_path / "goliath"
     release = root / "releases" / "2026.6.2"
     release.mkdir(parents=True)
     manifest = {
         "version": "2026.6.2",
         "python": "3.12",
         "parabricks_image": "",
-        "docker_data_root": "/work/epimethyl/docker",
+        "docker_data_root": "/work/goliath/docker",
         "requirements_lock": "requirements-worker.lock",
         "artifacts": {
             "aarch64": {"methyl_extractor": "x.tar.gz", "sha256": ""},
@@ -362,7 +362,7 @@ def test_write_worker_env_preserves_existing_api_base_on_promote(tmp_path: Path)
     env_dir = root / "env"
     env_dir.mkdir()
     (env_dir / "worker.env").write_text(
-        "EPIMETHYL_ROOT=/work/epimethyl\nWORKER_API_BASE=https://gw.prod.example/v1\n",
+        "GOLIATH_ROOT=/work/goliath\nWORKER_API_BASE=https://gw.prod.example/v1\n",
         encoding="utf-8",
     )
     env = {
@@ -388,4 +388,4 @@ def test_write_worker_env_preserves_existing_api_base_on_promote(tmp_path: Path)
     )
     worker_env = (env_dir / "worker.env").read_text(encoding="utf-8")
     assert "WORKER_API_BASE=https://gw.prod.example/v1" in worker_env
-    assert "EPIMETHYL_RELEASE=2026.6.2" in worker_env
+    assert "GOLIATH_RELEASE=2026.6.2" in worker_env

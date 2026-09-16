@@ -41,8 +41,8 @@ Neither change encodes prostate/Buffy disease logic. Neither changes DB contract
 
 ## Intended ops model
 
-- **Promote** the two package capabilities with the next MethylPipeline release (runtime-bundle + release venv under `/work/epimethyl/current`).
-- **Run experiments only via** `/work` JSON + release `methyl-hyperparam-search` / `methyl-validation`, with DomainPrograms from `/work/epimethyl/current/runtime-bundle/`.
+- **Promote** the two package capabilities with the next MethylPipeline release (runtime-bundle + release venv under `/work/goliath/current`).
+- **Run experiments only via** `/work` JSON + release `methyl-hyperparam-search` / `methyl-validation`, with DomainPrograms from `/work/goliath/current/runtime-bundle/`.
 - **Do not** add study-specific Python, profile names, or schema migrations for Tier-A grids.
 
 ## Delivered follow-ups

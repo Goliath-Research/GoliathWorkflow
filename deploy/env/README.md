@@ -1,12 +1,12 @@
 # Environment templates (`deploy/env/`)
 
-Committed examples for production `/work/epimethyl/env/`. Copy and edit on the cluster; **do not commit secrets**.
+Committed examples for production `/work/goliath/env/`. Copy and edit on the cluster; **do not commit secrets**.
 
 | Template | Target on cluster | Consumers |
 |----------|-------------------|-----------|
 | `gateway.mssql.env.example` | `/opt/methyl-gateway/env/gateway.env` (gateway VM local disk) | `methyl-gateway`, privileged-host `bootstrap_distributed_workers.sh` |
 | `gateway.postgres.env.example` | same | same |
-| `worker.env.example` | `/work/epimethyl/env/worker.env` | `methyl-worker` systemd units |
+| `worker.env.example` | `/work/goliath/env/worker.env` | `methyl-worker` systemd units |
 
 ## Database variables
 

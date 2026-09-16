@@ -66,7 +66,7 @@ Terraform state (use write-only/ephemeral variables where supported).
 | Worker credentials on VM | `/etc/methyl/worker-token` mode 600 |
 
 Terraform modules **do not** embed worker tokens in state. `worker-common` cloud-init
-extracts a **scripts seed** tarball to `/opt/methyl`, preflights QNAP `/work/epimethyl/current`,
+extracts a **scripts seed** tarball to `/opt/methyl`, preflights QNAP `/work/goliath/current`,
 and runs **join-only prepare** by default (`--prepare-only`). Portal prereg + Arc approval +
 `--finish-enroll` remain operator steps — see [lambda_worker_join.md](lambda_worker_join.md).
 
@@ -100,14 +100,14 @@ CoreWeave **CKS** is Kubernetes-native — not a VM+bash model.
 | Component | Approach |
 |-----------|----------|
 | Cluster | Terraform VPC + CKS cluster + GPU node pool |
-| Worker | Container image from epimethyl release + `methyl-worker` entrypoint |
+| Worker | Container image from goliath release + `methyl-worker` entrypoint |
 | Token | Kubernetes Secret mounted read-only; sync from Key Vault via CSI |
 | Governance | Arc-enabled Kubernetes extension |
 | Deploy | Helm chart (`charts/methyl-worker`) — **not yet in repo** |
 
 Steps to implement later:
 
-1. Publish `methyl-worker` container image (CUDA base + epimethyl venv).
+1. Publish `methyl-worker` container image (CUDA base + goliath venv).
 2. Helm chart: Deployment, ServiceAccount, Secret, GPU `nodeSelector`, liveness via `/workers/authenticate`.
 3. Terraform module `worker-coreweave-cks` wrapping cluster + Helm release.
 

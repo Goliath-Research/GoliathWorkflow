@@ -238,7 +238,7 @@ Both databases are **reachable via MCP** in the current environment. Use MCP for
 
 | Role | Azure SQL | PostgreSQL |
 |------|-----------|------------|
-| MCP server | `user-azure-sql-dev` — `mcp_execute_query`, `mcp_paginated_query`, `mcp_discover_tables`, … | Operator PostgreSQL MCP (e.g. `epimethyl` / `postgres_dba` profile) |
+| MCP server | `user-azure-sql-dev` — `mcp_execute_query`, `mcp_paginated_query`, `mcp_discover_tables`, … | Operator PostgreSQL MCP (e.g. `goliath` / `postgres_dba` profile) |
 | Bulk catalog seed | [`seed_action_catalog.py`](../../workflow_engine/sql_mssql/seed_action_catalog.py) with `BACKEND_DB=mssql`, or `POST /v1/admin/catalog/seed` | Same script with `--dsn` / `POSTGRES_*`, or gateway admin seed |
 | Bulk workflow deploy | `POST /v1/workflows/definitions` / `check_pipeline.py --deploy` | Same gateway path (dialect-agnostic) |
 | Post-deploy verify | MCP `mcp_execute_query` | MCP SQL execute (parity queries below) |

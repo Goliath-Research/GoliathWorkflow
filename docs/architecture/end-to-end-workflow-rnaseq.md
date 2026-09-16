@@ -236,12 +236,12 @@ Example (production-style paths):
 ```bash
 # 1) Sample prep (STAR by default; set quant_mode=kallisto in the profile to switch)
 methyl-workflow-run \
-  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/sample_prep_rnaseq.program.json \
+  --program /work/goliath/current/runtime-bundle/domain/fixtures/sample_prep_rnaseq.program.json \
   --context '{"projectPath":"/work/projects/my-rna-study/configs/project_Healthy_vs_Disease.json","pipelineProfile":"rnaseq_research"}'
 
 # 2) Study modeling
 methyl-workflow-run \
-  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/rnaseq_study_lifecycle.program.json \
+  --program /work/goliath/current/runtime-bundle/domain/fixtures/rnaseq_study_lifecycle.program.json \
   --context '{"projectPath":"/work/projects/my-rna-study/configs/project_Healthy_vs_Disease.json","pipelineProfile":"rnaseq_research","rnaDeOutputDir":"/work/projects/my-rna-study/RnaSeq/rna_de"}' \
   --parallel-workers 1 -v
 ```

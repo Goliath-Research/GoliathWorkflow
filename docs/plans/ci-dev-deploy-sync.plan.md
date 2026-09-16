@@ -20,7 +20,7 @@ todos:
     content: "Add scripts/check_package_install_contract.py — dist names match path-dep keys, packages.list topological order, every pyproject readme exists, every path dep is listed before dependents"
     status: completed
   - id: catalog-fixture-contract
-    content: "Extend golden/schema/catalog drift so new catalog actions fail PR until schemas/tasks + golden I/O exist; wire into pre-commit + azure-pipelines-pr"
+    content: "Extend golden/schema/catalog drift so new catalog actions fail PR until schemas/tasks + golden I/O exist; wire into pre-commit + GitHub Actions PR"
     status: completed
   - id: local-mirrors-ci
     content: "Make scripts/run_tests_ci.sh (or a scripts/ci_preflight.sh) the single local command that mirrors the deployment/PR install+guard+pytest path; document in ci/README.md"
@@ -96,11 +96,11 @@ If a companion can drift, a check must fail **before** merge — preferably on t
 ```mermaid
 flowchart TD
   dev[Developer_change] --> pc[pre-commit_same_scripts_as_CI]
-  pc --> pr[PR_pipeline_azure-pipelines-pr]
+  pc --> pr[PR_workflow_pr]
   pr --> guards[Doc_diagram_install_catalog_schema_guards]
   guards --> unit[Full_pytest_plus_coverage]
   unit --> release[Release_assemble_deploy_pipelines]
-  release --> work["/work/epimethyl current runtime-bundle"]
+  release --> work["/work/goliath current runtime-bundle"]
 ```
 
 1. **Pre-commit** — cheap sync contracts only (seconds–low minutes).

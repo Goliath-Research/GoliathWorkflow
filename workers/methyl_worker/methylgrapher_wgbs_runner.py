@@ -290,7 +290,7 @@ def resolve_wgbs_bundle_from_resolved(
 # for HPRC-scale graphs that doubles RAM. Cap MethylCall threads for engine=python.
 # engine=mojo forces gfa_worker_num=1, so this cap is not applied.
 _METHYLCALL_THREAD_CAP = 16
-_DEFAULT_MOJO_IMAGE = "epimethyl/methylgrapher:1.70-mojo"
+_DEFAULT_MOJO_IMAGE = "goliath/methylgrapher:1.70-mojo"
 
 
 def resolve_index_prefix(bundle: MethylGrapherWgbsBundle) -> str:
@@ -1168,7 +1168,7 @@ def _mojo_named_coords_paths() -> Tuple[Path, Path]:
     """Return (translate_script, pythonpath_root) for GBZ→GFA GAF rewrite.
 
     Resolves only via ``MOJO_ALIGN_ROOT``, overlay env, in-image
-    ``/opt/mojo-align``, and ``/work/epimethyl/images/*`` mounts.
+    ``/opt/mojo-align``, and ``/work/goliath/images/*`` mounts.
     Hardcoded developer home paths are not consulted.
     """
     overlay = mojo_align_overlay_dir()
@@ -1202,10 +1202,10 @@ def _mojo_named_coords_paths() -> Tuple[Path, Path]:
             ),
             (
                 Path(
-                    "/work/epimethyl/images/mojo_named_coords/scripts/"
+                    "/work/goliath/images/mojo_named_coords/scripts/"
                     "translate_mojo_gaf_named_coords.py"
                 ),
-                Path("/work/epimethyl/images/mojo_named_coords"),
+                Path("/work/goliath/images/mojo_named_coords"),
             ),
         ]
     )

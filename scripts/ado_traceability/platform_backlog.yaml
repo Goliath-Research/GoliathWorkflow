@@ -1,4 +1,4 @@
-organization: https://dev.azure.com/EpiMethyl
+organization: https://github.com/Goliath-Research
 project: Development
 epic:
   title: MethylPipeline platform
@@ -32,7 +32,7 @@ features:
   - scripts/install_release.sh
   stories:
   - id: define-layout
-    title: Document /work/epimethyl/releases/<ver>/ layout + manifest.json schema in docs/deployment/production_release.md
+    title: Document /work/goliath/releases/<ver>/ layout + manifest.json schema in docs/deployment/production_release.md
     state: Closed
   - id: extractor-ci
     title: 'MethylExtractor Azure pipeline: per-arch build, tarball, publish to shared storage then Artifacts'
@@ -47,7 +47,7 @@ features:
     title: 'Runbook: driver + shared Docker data-root + NVIDIA toolkit + Parabricks pin matrix per arch'
     state: Closed
   - id: docker-shared
-    title: 'Extend setup_gpu_node.sh: --docker-data-root /work/epimethyl/docker, single-node pull during
+    title: 'Extend setup_gpu_node.sh: --docker-data-root /work/goliath/docker, single-node pull during
       release promote'
     state: Closed
   - id: worker-provision
@@ -62,20 +62,19 @@ features:
   state: Closed
   overview: Move artifact builds fully into Azure DevOps with independent repo versioning (MethylExtractor
     and MethylPipeline each publish on their own tags), then add a gated release-assembly + promote pipeline
-    that composes a worker release bundle and deploys to `/work/epimethyl` after manual approval.
+    that composes a worker release bundle and deploys to `/work/goliath` after manual approval.
   code_anchors:
   - docs/deployment/production_release.md
-  - ci/azure-pipelines-release-arm64.yml
-  - ci/azure-pipelines-release-x64.yml
-  - ci/azure-pipelines-pr.yml
+  - MethylExtractor/.github/workflows/release.yml
+  - MethylExtractor/.github/workflows/build.yml
+  - .github/workflows/pr.yml
   - scripts/package_methyl_extractor.sh
   - scripts/detect_platform.sh
-  - ci/azure-pipelines-release.yml
+  - .github/workflows/release.yml
   - scripts/assemble_release.sh
-  - schemas/deployment/epimethyl_release_manifest.schema.json
-  - ci/azure-pipelines-release-assemble.yml
-  - ci/azure-pipelines-release-deploy.yml
-  - ci/azure-pipelines-release-*.yml
+  - schemas/deployment/goliath_release_manifest.schema.json
+  - .github/workflows/release-assemble.yml
+  - .github/workflows/release-deploy.yml
   stories:
   - id: me-release-ci
     title: Register MethylExtractor release + PR pipelines; enable Universal Package publish per arch;
@@ -90,11 +89,11 @@ features:
       by version pin
     state: Closed
   - id: assemble-pipeline
-    title: 'Add ci/azure-pipelines-release-assemble.yml (manual params: releaseVersion, methylPipelineVersion,
+    title: 'Add .github/workflows/release-assemble.yml (manual params: releaseVersion, methylPipelineVersion,
       methylExtractorVersion)'
     state: Closed
   - id: deploy-pipeline
-    title: Add ci/azure-pipelines-release-deploy.yml with production-work environment approval + self-hosted
+    title: Add .github/workflows/release-deploy.yml with production-work environment approval + self-hosted
       agent promote_release.sh
     state: Closed
   - id: docs-ci-cd
@@ -586,7 +585,7 @@ features:
       SVG
     state: Closed
   - id: ci-freshness
-    title: Add scripts/check_doc_freshness.sh + test for stale tokens; wire into ci/azure-pipelines-pr.yml
+    title: Add scripts/check_doc_freshness.sh + test for stale tokens; wire into .github/workflows/pr.yml
     state: Closed
   - id: ci-quarto
     title: Add guarded 'quarto render docs/theory docs/usage --to html' step to CI
@@ -758,7 +757,7 @@ features:
       no new NodeTypes
     state: Closed
   - id: sync-runtime-bundle-samd
-    title: Rsync samd profiles/modes + generic fixtures + pipeline_profiles.py into /work/epimethyl/current/runtime-bundle/domain;
+    title: Rsync samd profiles/modes + generic fixtures + pipeline_profiles.py into /work/goliath/current/runtime-bundle/domain;
       verify files present
     state: Closed
   - id: fix-mode-path-resolution
@@ -987,7 +986,7 @@ features:
     testing as a first-class regulatory control alongside Traceability, Validation, Deployment, and Change
     Management.
   code_anchors:
-  - ci/azure-pipelines-pr.yml
+  - .github/workflows/pr.yml
   - scripts/tests
   - packages/methylcentroid/methyl_centroid/tests
   - packages/methylutils/methyl_utils/tests
@@ -1013,7 +1012,7 @@ features:
       methylfragmentomics, methylgeneselect, methyldiseaseprogression, methyldomain).
     state: Closed
   - id: azure-pipeline
-    title: Extend ci/azure-pipelines-pr.yml with a full-suite regression + coverage step and PublishTestResults@2
+    title: Extend .github/workflows/pr.yml with a full-suite regression + coverage step and PublishTestResults@2
       / PublishCodeCoverageResults@2.
     state: Closed
   - id: ci-readme

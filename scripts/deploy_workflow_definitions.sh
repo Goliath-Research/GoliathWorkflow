@@ -8,8 +8,8 @@ usage() {
 Usage: scripts/deploy_workflow_definitions.sh [options]
 
 Options:
-  --output-dir PATH    Write compiled specs (default: /work/epimethyl/env/compiled)
-  --versions-out PATH  workflow_version_id map (default: /work/epimethyl/env/workflow_versions.json)
+  --output-dir PATH    Write compiled specs (default: /work/goliath/env/compiled)
+  --versions-out PATH  workflow_version_id map (default: /work/goliath/env/workflow_versions.json)
   --dry-run            Compile only; do not deploy
   -h, --help           Show this help
 
@@ -20,8 +20,8 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-OUTPUT_DIR="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}/compiled"
-VERSIONS_OUT="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}/workflow_versions.json"
+OUTPUT_DIR="${GOLIATH_ENV_DIR:-/work/goliath/env}/compiled"
+VERSIONS_OUT="${GOLIATH_ENV_DIR:-/work/goliath/env}/workflow_versions.json"
 DRY_RUN=0
 
 while [[ $# -gt 0 ]]; do
@@ -40,7 +40,7 @@ if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
   PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
 fi
 
-RUNTIME_DOMAIN="${METHYL_RUNTIME_ROOT:-${EPIMETHYL_ROOT:-/work/epimethyl}/current/runtime-bundle}/domain"
+RUNTIME_DOMAIN="${METHYL_RUNTIME_ROOT:-${GOLIATH_ROOT:-/work/goliath}/current/runtime-bundle}/domain"
 REPO_FIXTURES="$REPO_ROOT/workflow_engine/domain/fixtures"
 if [[ -f "$RUNTIME_DOMAIN/fixtures/sample_prep.program.json" ]]; then
   FIXTURES="$RUNTIME_DOMAIN/fixtures"

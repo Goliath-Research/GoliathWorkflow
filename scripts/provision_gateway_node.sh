@@ -32,7 +32,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=detect_platform.sh
 source "$SCRIPT_DIR/detect_platform.sh"
 
-ROOT="${EPIMETHYL_ROOT:-/opt/methyl-gateway}"
+ROOT="${GOLIATH_ROOT:-/opt/methyl-gateway}"
 RELEASE_DIR=""
 ARCH=""
 HOSTNAME_ARG="${GATEWAY_HOSTNAME:-}"

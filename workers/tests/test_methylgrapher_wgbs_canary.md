@@ -28,7 +28,7 @@ bash scripts/smoke_sample_prep_real.sh --tier subset
 bash scripts/smoke_sample_prep_real.sh --tier full
 ```
 
-ADO: [`ci/azure-pipelines-sample-prep-canary.yml`](../../ci/azure-pipelines-sample-prep-canary.yml)
+GitHub Actions: [`.github/workflows/sample-prep-canary.yml`](../../.github/workflows/sample-prep-canary.yml)
 (manual or monthly subset schedule on `production-work-agents`).
 
 Reports (JSON + JUnit + Markdown) land under the `--report-dir` / run-root `reports/`

@@ -155,9 +155,9 @@ Copy this template for each reviewed study/model.
 
 | Evidence Package | Product Release | Study / Claim | Status | Primary Result Location |
 |------------------|-----------------|---------------|--------|-------------------------|
-| EV-PCA-PLASMA-2026-06 | `/work/epimethyl/current` manifest `2026.06.1` | Plasma healthy vs PCa (cfDNA); **feasibility only** | draft — engineering/feasibility | `/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/` |
-| EV-PCA-HGOOD-2026-06 | `/work/epimethyl/current` manifest `2026.06.1` | H_PCa_good buffy; **feasibility only** | draft — engineering/feasibility | `/work/projects/prostate-cancer/H_PCa_good/` |
-| EV-PCA-BUFFY-2026-07 | `/work/epimethyl/current` manifest `2026.06.1` | Buffy healthy vs PCa; **feasibility only** | draft — incomplete model chain | `/work/projects/prostate-cancer/Buffy_healthy_vs_PCa/` |
+| EV-PCA-PLASMA-2026-06 | `/work/goliath/current` manifest `2026.06.1` | Plasma healthy vs PCa (cfDNA); **feasibility only** | draft — engineering/feasibility | `/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/` |
+| EV-PCA-HGOOD-2026-06 | `/work/goliath/current` manifest `2026.06.1` | H_PCa_good buffy; **feasibility only** | draft — engineering/feasibility | `/work/projects/prostate-cancer/H_PCa_good/` |
+| EV-PCA-BUFFY-2026-07 | `/work/goliath/current` manifest `2026.06.1` | Buffy healthy vs PCa; **feasibility only** | draft — incomplete model chain | `/work/projects/prostate-cancer/Buffy_healthy_vs_PCa/` |
 
 > **Claim boundary:** All three packages are **feasibility / expanded-development engineering evidence**.
 > Study manifests have `regulatory.stage: feasibility`, **no** `validation_partitions`, and
@@ -181,8 +181,8 @@ Copy this template for each reviewed study/model.
 
 ### Software and Release
 
-- MethylPipeline release bundle: `/work/epimethyl/current/` (manifest version `2026.06.1`)
-- Release `manifest.json` path: `/work/epimethyl/current/manifest.json`
+- MethylPipeline release bundle: `/work/goliath/current/` (manifest version `2026.06.1`)
+- Release `manifest.json` path: `/work/goliath/current/manifest.json`
 - Release manifest SHA256: TBD (operator to record at package approval)
 - Git tag / commit: TBD
 - CI run / JUnit / coverage: TBD

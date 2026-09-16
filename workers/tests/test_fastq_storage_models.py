@@ -31,17 +31,17 @@ def test_merge_file_storage() -> None:
 
 def test_merge_s3_vault_credentials() -> None:
     defaults = S3FastqStorageDefaults(
-        bucket="epimethyl",
+        bucket="goliath",
         endpointUrl="https://s3.us-east-1.myqnapcloud.io",
         credentials={
             "authMode": "azure_key_vault",
             "vaultUrl": "https://kv.vault.azure.net/",
-            "secretName": "epimethyl-s3",
+            "secretName": "goliath-s3",
         },
     )
     source = merge_fastq_source(defaults, "S1")
     assert source.credentials.authMode == "azure_key_vault"
-    assert source.credentials.secretName == "epimethyl-s3"
+    assert source.credentials.secretName == "goliath-s3"
 
 
 def test_merge_s3_storage() -> None:
@@ -59,7 +59,7 @@ def test_dump_storage_model_reveals_explicit_keys() -> None:
     from methyl_domain.h5_storage import S3H5StorageDefaults
 
     model = S3H5StorageDefaults(
-        bucket="epimethyl",
+        bucket="goliath",
         prefixBase="samples/",
         credentials=S3ExplicitKeysCredentials(
             accessKeyId="AKIA",
@@ -95,19 +95,19 @@ def test_fastq_source_discriminator() -> None:
 
 _EXPANDED_S3 = {
     "type": "s3",
-    "bucket": "epimethyl",
+    "bucket": "goliath",
     "region": "us-east-1",
     "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
     "scope": "archive",
     "prefixBase": "samples/",
-    "credentialName": "epimethyl-archive-keys",
+    "credentialName": "goliath-archive-keys",
     "credentialVersion": "1",
     "contentHash": "abc123",
     "credentials": {
         "authMode": "explicit_keys",
         "accessKeyId": "AKIA",
         "secretAccessKey": "secret",
-        "credentialName": "epimethyl-archive-keys",
+        "credentialName": "goliath-archive-keys",
         "credentialVersion": "1",
         "contentHash": "abc123",
     },
@@ -119,7 +119,7 @@ def test_expanded_storage_defaults_accept_change_tokens() -> None:
 
     defaults = TypeAdapter(FastqStorageDefaults).validate_python(_EXPANDED_S3)
     assert defaults.contentHash == "abc123"
-    assert defaults.credentialName == "epimethyl-archive-keys"
+    assert defaults.credentialName == "goliath-archive-keys"
     assert defaults.scope == "archive"
     assert defaults.credentials.contentHash == "abc123"
 
@@ -132,7 +132,7 @@ def test_merge_propagates_change_tokens() -> None:
     defaults = TypeAdapter(FastqStorageDefaults).validate_python(_EXPANDED_S3)
     source = merge_fastq_source(defaults, "S1")
     assert source.contentHash == "abc123"
-    assert source.credentialName == "epimethyl-archive-keys"
+    assert source.credentialName == "goliath-archive-keys"
     assert source.scope == "archive"
     assert source.prefix == "S1/"
 
@@ -166,9 +166,9 @@ def test_expanded_source_and_destination_validate() -> None:
         ).S3SampleStorageDefaults.model_validate(
             {
                 "type": "s3",
-                "bucket": "epimethyl",
+                "bucket": "goliath",
                 "prefixBase": "samples/",
-                "credentialName": "epimethyl-archive-keys",
+                "credentialName": "goliath-archive-keys",
                 "contentHash": "abc123",
                 "credentials": _EXPANDED_S3["credentials"],
             }

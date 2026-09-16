@@ -102,7 +102,7 @@ def test_import_reference_asset_fixtures(store: FileConfigStore) -> None:
     assert "rna-grch38-star-ensembl-116" in names
     assert "rna-grch38-kallisto-gencode-v50" in names
     assert "pangenome-grch38-d9-1.70" in names
-    assert "epimethyl-genomes" in {
+    assert "goliath-genomes" in {
         r.name for r in store.list("storage_endpoint", published_only=True)
     }
     assert any("reference_asset:" in x for x in result["imported"])
@@ -111,7 +111,7 @@ def test_import_reference_asset_fixtures(store: FileConfigStore) -> None:
 def test_provision_s3_sync_dry_run(store: FileConfigStore, tmp_path: Path) -> None:
     store.upsert(
         "credential",
-        "epimethyl-archive-keys",
+        "goliath-archive-keys",
         {
             "authMode": "explicit_keys",
             "accessKeyId": "AKIATEST",
@@ -123,16 +123,16 @@ def test_provision_s3_sync_dry_run(store: FileConfigStore, tmp_path: Path) -> No
     )
     store.upsert(
         "storage_endpoint",
-        "epimethyl-genomes",
+        "goliath-genomes",
         {
             "type": "s3",
-            "bucket": "epimethyl",
+            "bucket": "goliath",
             "region": "us-east-1",
             "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
             "prefixBase": "genomes/",
         },
         status="published",
-        extra={"provider": "s3", "credentialName": "epimethyl-archive-keys"},
+        extra={"provider": "s3", "credentialName": "goliath-archive-keys"},
     )
     store.upsert(
         "reference_asset",
@@ -145,7 +145,7 @@ def test_provision_s3_sync_dry_run(store: FileConfigStore, tmp_path: Path) -> No
                     {"op": "mkdir"},
                     {
                         "op": "s3_sync",
-                        "storageEndpoint": "epimethyl-genomes",
+                        "storageEndpoint": "goliath-genomes",
                         "key": "linear/GRCh38/ensembl-114/",
                     },
                 ]
@@ -171,7 +171,7 @@ def test_s3_sync_step_prefix_no_prefixbase_not_doubled(
 
     store.upsert(
         "credential",
-        "epimethyl-archive-keys",
+        "goliath-archive-keys",
         {
             "authMode": "explicit_keys",
             "accessKeyId": "AKIATEST",
@@ -187,12 +187,12 @@ def test_s3_sync_step_prefix_no_prefixbase_not_doubled(
         "bare-bucket",
         {
             "type": "s3",
-            "bucket": "epimethyl",
+            "bucket": "goliath",
             "region": "us-east-1",
             "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
         },
         status="published",
-        extra={"provider": "s3", "credentialName": "epimethyl-archive-keys"},
+        extra={"provider": "s3", "credentialName": "goliath-archive-keys"},
     )
     store.upsert(
         "reference_asset",
@@ -223,7 +223,7 @@ def test_s3_sync_step_prefix_no_prefixbase_not_doubled(
 
     provision_asset(store, "bare-asset", work_root=tmp_path / "work", dry_run=False)
 
-    assert captured["uri"] == "s3://epimethyl/linear/GRCh38/ensembl-114/"
+    assert captured["uri"] == "s3://goliath/linear/GRCh38/ensembl-114/"
 
 
 def test_selected_asset_names_matches_inventory_prefix() -> None:
@@ -315,7 +315,7 @@ def test_provision_selected_from_site(store: FileConfigStore, tmp_path: Path) ->
     (src / "marker.txt").write_text("ok")
     store.upsert(
         "storage_endpoint",
-        "epimethyl-genomes",
+        "goliath-genomes",
         {"type": "file", "basePath": str(tmp_path / "src")},
         status="published",
         version="1",
@@ -341,7 +341,7 @@ def test_provision_selected_from_site(store: FileConfigStore, tmp_path: Path) ->
                         {"op": "mkdir"},
                         {
                             "op": "download",
-                            "storageEndpoint": "epimethyl-genomes",
+                            "storageEndpoint": "goliath-genomes",
                             "key": key,
                             "dest": Path(dest_rel).name,
                         },

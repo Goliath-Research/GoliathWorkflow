@@ -2,7 +2,7 @@
 # 64K-page ARM64 smoke for the methylGrapher worker image (python or mojo).
 set -euo pipefail
 
-IMAGE="${1:-${METHYL_METHYLGRAPHER_IMAGE:-epimethyl/methylgrapher:1.70}}"
+IMAGE="${1:-${METHYL_METHYLGRAPHER_IMAGE:-goliath/methylgrapher:1.70}}"
 
 echo "== host page size =="
 getconf PAGE_SIZE || true

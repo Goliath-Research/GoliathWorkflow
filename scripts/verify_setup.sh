@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 RUNTIME_MODE=0
-EPIMETHYL_ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+GOLIATH_ROOT="${GOLIATH_ROOT:-/work/goliath}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -22,7 +22,7 @@ usage() {
 Usage: scripts/verify_setup.sh [options]
 
 Options:
-  --runtime-bundle   Verify promoted release under EPIMETHYL_ROOT (default: /work/epimethyl)
+  --runtime-bundle   Verify promoted release under GOLIATH_ROOT (default: /work/goliath)
   -h, --help
 EOF
 }
@@ -65,13 +65,13 @@ echo "============================================="
 echo ""
 
 if [[ "$RUNTIME_MODE" -eq 1 ]]; then
-  echo "Mode: runtime-bundle ($EPIMETHYL_ROOT)"
-  CURRENT="$EPIMETHYL_ROOT/current"
+  echo "Mode: runtime-bundle ($GOLIATH_ROOT)"
+  CURRENT="$GOLIATH_ROOT/current"
   RUNTIME="$CURRENT/runtime-bundle"
   # shellcheck source=detect_platform.sh
   source "$SCRIPT_DIR/detect_platform.sh"
   ARCH="$(platform_arch_key "$(detect_uname_arch)")"
-  VENV="$EPIMETHYL_ROOT/venv-${ARCH}"
+  VENV="$GOLIATH_ROOT/venv-${ARCH}"
 
   require_dir "$CURRENT" "current release symlink/dir"
   require_dir "$RUNTIME" "runtime-bundle"

@@ -5,8 +5,8 @@
   "workspaceFolder": "/workspace",
   "shutdownAction": "none",
   
-  // Configure the container to use the epimethyl container
-  "containerName": "epimethyl",
+  // Configure the container to use the goliath container
+  "containerName": "goliath",
   
   // Mount additional volumes for development
   "mounts": [
@@ -37,7 +37,7 @@
   "postCreateCommand": "bash -c 'cd /workspace && poetry install --with dev && echo \"Development environment ready!\"'",
   
   // Pre-create command to ensure Docker permissions and container
-  "initializeCommand": "bash -c 'if ! docker ps >/dev/null 2>&1; then echo \"Docker not accessible. Please run: ./.devcontainer/fix-docker-permissions.sh\"; exit 1; fi && if ! docker ps | grep -q epimethyl; then echo \"epimethyl container not running. Please run: cd /home/ubuntu/Work/cuda && docker-compose up -d\"; exit 1; fi'",
+  "initializeCommand": "bash -c 'if ! docker ps >/dev/null 2>&1; then echo \"Docker not accessible. Please run: ./.devcontainer/fix-docker-permissions.sh\"; exit 1; fi && if ! docker ps | grep -q goliath; then echo \"goliath container not running. Please run: cd /home/ubuntu/Work/cuda && docker-compose up -d\"; exit 1; fi'",
   
   // Configure VS Code/Cursor extensions
   "customizations": {

@@ -85,11 +85,11 @@ if [[ "$RUN_DEPLOY" == "1" ]]; then
   echo "--- deploy workflow definitions ---"
   set -a
   # shellcheck disable=SC1091
-  source /work/epimethyl/env/gateway.env
+  source /work/goliath/env/gateway.env
   set +a
-  cd /work/epimethyl/repos/MethylPipeline
+  cd /work/goliath/repos/MethylPipeline
   ./scripts/deploy_workflow_definitions.sh
-  cat /work/epimethyl/env/workflow_versions.json
+  cat /work/goliath/env/workflow_versions.json
 fi
 REMOTE
 }

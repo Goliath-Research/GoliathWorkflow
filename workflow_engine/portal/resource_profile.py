@@ -9,7 +9,7 @@ from typing import Any, Optional, Protocol
 
 from methyl_domain.platform_storage import profile_json_to_h5_storage_dict
 
-DEFAULT_ARCHIVE_PROFILE_KEY = "epimethyl-samples"
+DEFAULT_ARCHIVE_PROFILE_KEY = "goliath-samples"
 
 _CFG_DIR = Path(__file__).resolve().parents[1] / "cfg"
 if str(_CFG_DIR) not in sys.path:

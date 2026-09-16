@@ -34,7 +34,7 @@ methyl-workflow-run \
   --parallel-workers 1
 ```
 
-In production, point `--program` and `--context-file` at the promoted runtime bundle, e.g. `/work/epimethyl/current/runtime-bundle/domain/...` (see [Deployment and distributed workflow](14-deployment-and-distributed-workflow.md)).
+In production, point `--program` and `--context-file` at the promoted runtime bundle, e.g. `/work/goliath/current/runtime-bundle/domain/...` (see [Deployment and distributed workflow](14-deployment-and-distributed-workflow.md)).
 
 ## Programs by scope
 
@@ -69,7 +69,7 @@ bash scripts/workflow_presets.sh list
 bash scripts/workflow_presets.sh show lifecycle
 ```
 
-Set `METHYL_RUNTIME_ROOT=/work/epimethyl/current/runtime-bundle` on production workers to resolve bundle paths.
+Set `METHYL_RUNTIME_ROOT=/work/goliath/current/runtime-bundle` on production workers to resolve bundle paths.
 
 ## Legacy `methyl-validation` (when it still appears)
 

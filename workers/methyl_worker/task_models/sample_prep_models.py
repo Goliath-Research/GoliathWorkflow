@@ -66,7 +66,7 @@ class ParabricksStepConfig(BaseModel):
         default=None,
         description=(
             "Docker image for Align. Clara NGC tag when engine=parabricks; "
-            "epimethyl/methylgrapher:1.70-mojo-cuda|rocm when engine=mojo."
+            "goliath/methylgrapher:1.70-mojo-cuda|rocm when engine=mojo."
         ),
     )
     bwa_threads: Optional[int] = Field(
@@ -90,7 +90,7 @@ class ParabricksStepConfig(BaseModel):
         default=None,
         description=(
             "Optional override image when engine=mojo "
-            "(else image or epimethyl/methylgrapher:1.70-mojo)."
+            "(else image or goliath/methylgrapher:1.70-mojo)."
         ),
     )
     write_methylation_tags: Optional[bool] = Field(

@@ -1,6 +1,6 @@
 {
   "name": "MethylDetector Development Environment",
-  "image": "epimethyl",
+  "image": "goliath",
   "workspaceFolder": "/workspace",
   "shutdownAction": "none",
   

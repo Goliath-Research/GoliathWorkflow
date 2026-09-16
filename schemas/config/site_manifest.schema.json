@@ -6,7 +6,7 @@
   "properties": {
     "reference_selection": {
       "type": "object",
-      "description": "Pinned inventory paths under /work/genomes (and epimethyl/genomes/). Inventory may hold many versions; only these pins are active. Operators set this at site/cfg — not Python defaults.",
+      "description": "Pinned inventory paths under /work/genomes (and goliath/genomes/). Inventory may hold many versions; only these pins are active. Operators set this at site/cfg — not Python defaults.",
       "properties": {
         "linear": {
           "type": "string",

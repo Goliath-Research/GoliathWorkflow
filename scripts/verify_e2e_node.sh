@@ -7,8 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=detect_platform.sh
 source "$SCRIPT_DIR/detect_platform.sh"
 
-ENV_FILE="${EPIMETHYL_ENV_FILE:-/work/epimethyl/env/worker.env}"
-EPIMETHYL_ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+ENV_FILE="${GOLIATH_ENV_FILE:-/work/goliath/env/worker.env}"
+GOLIATH_ROOT="${GOLIATH_ROOT:-/work/goliath}"
 ARCH="$(platform_arch_key "$(detect_uname_arch)")"
 
 if [[ -f "$ENV_FILE" ]]; then
@@ -18,12 +18,12 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-if [[ -f "$EPIMETHYL_ROOT/venv-${ARCH}/bin/activate" ]]; then
+if [[ -f "$GOLIATH_ROOT/venv-${ARCH}/bin/activate" ]]; then
   # shellcheck disable=SC1091
-  source "$EPIMETHYL_ROOT/venv-${ARCH}/bin/activate"
-elif [[ -f "$EPIMETHYL_ROOT/venv/bin/activate" ]]; then
+  source "$GOLIATH_ROOT/venv-${ARCH}/bin/activate"
+elif [[ -f "$GOLIATH_ROOT/venv/bin/activate" ]]; then
   # shellcheck disable=SC1091
-  source "$EPIMETHYL_ROOT/venv/bin/activate"
+  source "$GOLIATH_ROOT/venv/bin/activate"
 elif [[ -f "$SCRIPT_DIR/../.venv/bin/activate" ]]; then
   # shellcheck disable=SC1091
   source "$SCRIPT_DIR/../.venv/bin/activate"
@@ -48,9 +48,9 @@ run_check() {
 }
 
 VERIFY_SETUP_ARGS=()
-if [[ -d "$EPIMETHYL_ROOT/current/runtime-bundle" ]]; then
+if [[ -d "$GOLIATH_ROOT/current/runtime-bundle" ]]; then
   VERIFY_SETUP_ARGS=(--runtime-bundle)
-  export EPIMETHYL_ROOT
+  export GOLIATH_ROOT
 fi
 run_check "verify_setup" bash "$SCRIPT_DIR/verify_setup.sh" "${VERIFY_SETUP_ARGS[@]}"
 

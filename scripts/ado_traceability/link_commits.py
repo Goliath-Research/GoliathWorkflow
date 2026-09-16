@@ -32,7 +32,7 @@ DEFAULT_MANIFEST = HERE / "platform_backlog.yaml"
 DEFAULT_STATE = HERE / "seed_state.json"
 DEFAULT_LINK_STATE = HERE / "link_state.json"
 
-ORG = "https://dev.azure.com/EpiMethyl"
+ORG = "https://github.com/Goliath-Research"
 PROJECT = "Development"
 ADO_RESOURCE = "499b84ac-1321-427f-aa17-267ca6975798"  # Azure DevOps first-party app
 

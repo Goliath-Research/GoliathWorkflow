@@ -54,7 +54,7 @@ def publish_program(
     spec = compiled.workflow.model_dump(mode="json")
 
     # Persist compiled artifact under store extra + work env
-    compiled_dir = work_root / "epimethyl" / "env" / "compiled"
+    compiled_dir = work_root / "goliath" / "env" / "compiled"
     compiled_dir.mkdir(parents=True, exist_ok=True)
     compiled_path = compiled_dir / f"{name}.compiled.json"
     compiled_path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")

@@ -5,7 +5,7 @@ They document the shape for local/dev bootstrap.
 
 ```bash
 # Copy, replace REPLACE_WITH_* placeholders, then upsert:
-cp workflow_engine/domain/fixtures/credentials/epimethyl-archive-keys.example.json /tmp/keys.json
+cp workflow_engine/domain/fixtures/credentials/goliath-archive-keys.example.json /tmp/keys.json
 # edit /tmp/keys.json
 methyl-cfg upsert credential --file /tmp/keys.json --publish --provider s3
 ```

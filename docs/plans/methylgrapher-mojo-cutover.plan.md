@@ -86,7 +86,7 @@ Port / patch MethylCall: cs/os/rc/bq tags, indels, node.replacement, pair filter
 ## Phase 3 — MethylPipeline dual-ship
 
 - `MethylGrapherWgbsStepConfig.engine`: `"python"|"mojo"` (default `python`).
-- Image tag `epimethyl/methylgrapher:1.70-mojo`.
+- Image tag `goliath/methylgrapher:1.70-mojo`.
 - Smoke + canary with `engine=mojo`.
 
 ## Phase 4 — Cutover

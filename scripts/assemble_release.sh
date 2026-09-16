@@ -12,15 +12,15 @@ Options:
   --methyl-pipeline-version VER  MethylPipeline release version (SemVer)
   --methyl-extractor-version VER MethylExtractor Universal Package version (SemVer)
   --methyl-pipeline-dir PATH  Local MethylPipeline release tree (wheels/, runtime-bundle/, lockfile)
-  --output DIR                Output bundle directory (default: /work/epimethyl/releases/<release-version>)
-  --skip-methyl-extractor-download  Skip az download (tarballs already in output)
-  --organization URL          Azure DevOps org (default: https://dev.azure.com/EpiMethyl)
-  --project NAME              Azure DevOps project (default: Development)
-  --feed NAME                 MethylExtractor feed (default: methyl-extractor)
+  --output DIR                Output bundle directory (default: /work/goliath/releases/<release-version>)
+  --skip-methyl-extractor-download  Skip GitHub download (tarballs already in output)
+  --organization URL          GitHub org URL (default: https://github.com/Goliath-Research)
+  --project NAME              GitHub org slug (default: Goliath-Research)
+  --feed NAME                 Ignored (GitHub Releases); kept for compatibility
   -h, --help                  Show this help
 
 Requires methyl-pipeline-dir from MethylPipeline CI artifact (methyl-pipeline-release-<ver>).
-Downloads MethylExtractor tarballs from Azure Artifacts unless skipped.
+Downloads MethylExtractor tarballs from GitHub Releases unless skipped.
 
 Example:
   scripts/assemble_release.sh \
@@ -28,7 +28,7 @@ Example:
     --methyl-pipeline-version 2026.6.1 \
     --methyl-extractor-version 2026.5.2 \
     --methyl-pipeline-dir /tmp/mp-release \
-    --output /work/epimethyl/releases/2026.6.1
+    --output /work/goliath/releases/2026.6.1
 EOF
 }
 
@@ -42,8 +42,8 @@ ME_VERSION=""
 MP_DIR=""
 OUTPUT=""
 SKIP_ME_DL=0
-ORG="${AZURE_DEVOPS_ORG:-https://dev.azure.com/EpiMethyl}"
-PROJECT="${AZURE_DEVOPS_PROJECT:-Development}"
+ORG="${GITHUB_ORG:-https://github.com/Goliath-Research}"
+PROJECT="${GITHUB_PROJECT:-Goliath-Research}"
 FEED="${METHYL_EXTRACTOR_FEED:-methyl-extractor}"
 
 while [[ $# -gt 0 ]]; do
@@ -77,7 +77,7 @@ require_release_version "$RELEASE_VERSION" "--release-version" || exit 1
 require_release_version "$MP_VERSION" "--methyl-pipeline-version" || exit 1
 require_release_version "$ME_VERSION" "--methyl-extractor-version" || exit 1
 
-OUTPUT="${OUTPUT:-/work/epimethyl/releases/$RELEASE_VERSION}"
+OUTPUT="${OUTPUT:-/work/goliath/releases/$RELEASE_VERSION}"
 mkdir -p "$OUTPUT"
 
 info "Assembling release bundle $RELEASE_VERSION"
@@ -144,7 +144,7 @@ manifest = {
     "python": base.get("python", "3.12"),
     "parabricks_image": base.get("parabricks_image", ""),
     "parabricks_image_digest": base.get("parabricks_image_digest", ""),
-    "docker_data_root": base.get("docker_data_root", "/work/epimethyl/docker"),
+    "docker_data_root": base.get("docker_data_root", "/work/goliath/docker"),
     "min_driver_version": base.get("min_driver_version", ""),
     "requirements_lock": base.get("requirements_lock", "requirements-worker.lock"),
     "runtime_bundle": base.get("runtime_bundle", "runtime-bundle"),

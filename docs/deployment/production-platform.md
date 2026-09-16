@@ -41,7 +41,7 @@ flowchart TB
     SQL[(cfg + wf + portal)]
   end
   subgraph shared ["/work storage only"]
-    Rel["/work/epimethyl/current"]
+    Rel["/work/goliath/current"]
   end
   subgraph arcGov [Arc governance not DB API]
     ArcAgent[Arc agent + policy]
@@ -78,7 +78,7 @@ flowchart TB
 | Portal preregistration | Each worker’s **public IP** + cluster + key in the portal UI (backed by `portal.sp_upsert_worker_enrollment`) before enroll |
 | Gateway enroll | `methyl-worker enroll` → OpenAPI → `wf.sp_worker_enroll`; writes `/etc/methyl/worker-token` — **no** `AZURE_SQL_*` / `POSTGRES_*` on workers |
 | Arc required | Every worker is an Azure Arc **Connected** machine in the company subscription; gateway sets `GATEWAY_REQUIRE_ARC_ATTEST=1` |
-| No git on workers | Runtime is `/work/epimethyl/current` only |
+| No git on workers | Runtime is `/work/goliath/current` only |
 
 Dev/bootstrap may still use direct-DB `register_worker.sh` on a **trusted** host. That path is forbidden on production GPU VMs (Lambda, Nebius, Azure workers alike).
 
@@ -97,15 +97,15 @@ bash scripts/init_work_layout.sh --work /work
 |------|---------------|------|
 | `/work/samples/` | writable by every worker (and Docker-as-root children) | `0777` + default ACL |
 | `/work/projects/`, `/work/cache/` | writable (study outputs, mapper caches) | `0777` + default ACL |
-| `/work/genomes/`, `/work/site/`, `/work/epimethyl/` | read-only for workers; ops / promote / provision write | `0755` |
+| `/work/genomes/`, `/work/site/`, `/work/goliath/` | read-only for workers; ops / promote / provision write | `0755` |
 
-`bootstrap_epimethyl.sh` and `bootstrap_distributed_workers.sh` call this after the mount exists. The script does **not** recurse into existing trees. `verify_work_layout.sh` fails if `/work/samples` is not other-writable.
+`bootstrap_goliath.sh` and `bootstrap_distributed_workers.sh` call this after the mount exists. The script does **not** recurse into existing trees. `verify_work_layout.sh` fails if `/work/samples` is not other-writable.
 
 3. Install site manifest: `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`), including **`reference_selection`** pins and concrete paths (see [`site_grch38.example.json`](../../tools/methyl-config-editor/configs/site_grch38.example.json)).
 4. Provision **selected** genomes under `/work/genomes/` from company storage when local pins are incomplete:
 
 ```
-epimethyl/genomes/          # myQNAPcloud (same bucket as samples/)
+goliath/genomes/          # myQNAPcloud (same bucket as samples/)
   linear/GRCh38/ensembl-116/
   annotation/gencode/v50/
   pangenome/GRCh38/d9/1.70/
@@ -122,7 +122,7 @@ scripts/provision_selected_genomes.sh --dry-run
 scripts/sync_genomes_to_s3.sh --download       # full inventory mirror
 ```
 
-Site pins (not “latest in bucket”) decide which versions workers use. Portal wires `samples/` via `epimethyl-archive`; genomes use sibling endpoint `epimethyl-genomes` (`prefixBase: genomes/`) plus `cfg.reference_asset` recipes (`methyl-cfg provision-assets --selected-only`). **Upload map and Phase 0 checklist:** [reference-inventory-qnap.md](reference-inventory-qnap.md). Also: [production_runbook.md](production_runbook.md), [config-registry.md](../architecture/config-registry.md).
+Site pins (not “latest in bucket”) decide which versions workers use. Portal wires `samples/` via `goliath-archive`; genomes use sibling endpoint `goliath-genomes` (`prefixBase: genomes/`) plus `cfg.reference_asset` recipes (`methyl-cfg provision-assets --selected-only`). **Upload map and Phase 0 checklist:** [reference-inventory-qnap.md](reference-inventory-qnap.md). Also: [production_runbook.md](production_runbook.md), [config-registry.md](../architecture/config-registry.md).
 
 ---
 
@@ -131,7 +131,7 @@ Site pins (not “latest in bucket”) decide which versions workers use. Portal
 GPU workers consume a **promoted release** on `/work`, not a git checkout. The gateway installs wheels onto **its own disk** (`/opt/methyl-gateway`) and does not mount this tree.
 
 ```
-/work/epimethyl/
+/work/goliath/
   current -> releases/<ver>/
   releases/<ver>/          # manifest, wheels, runtime-bundle, extractor tarballs
   venv-aarch64/ | venv-amd64/
@@ -144,9 +144,9 @@ GPU workers consume a **promoted release** on `/work`, not a git checkout. The g
 |------|---------------------|
 | Tag + build components | MethylExtractor + MethylPipeline ADO release pipelines (`v*` tags) |
 | Assemble | `GoliathOmics-Release-Assemble` or `bash scripts/assemble_release.sh …` |
-| Promote | `GoliathOmics-Release-Deploy` or `bash scripts/promote_release.sh --root /work/epimethyl --release … --arch <arch> --pull-parabricks` |
+| Promote | `GoliathOmics-Release-Deploy` or `bash scripts/promote_release.sh --root /work/goliath --release … --arch <arch> --pull-parabricks` |
 
-Promote (first arch) pulls **NVIDIA Clara Parabricks** into `/work/epimethyl/docker` (NGC login required on the promote host). Subsequent arches use `--skip-docker-pull`.
+Promote (first arch) pulls **NVIDIA Clara Parabricks** into `/work/goliath/docker` (NGC login required on the promote host). Subsequent arches use `--skip-docker-pull`.
 
 Details: [production_release.md](production_release.md), [platform_matrix.md](platform_matrix.md).
 
@@ -162,8 +162,8 @@ Schema entrypoints are twins (every new object lands in **both** trees):
 # Azure SQL (production portal)
 ./workflow_engine/sql_mssql/deploy_azure.sh
 
-# PostgreSQL schema twin (canonical DB name: epimethyl)
-export PGDATABASE=epimethyl
+# PostgreSQL schema twin (canonical DB name: goliath)
+export PGDATABASE=goliath
 ./workflow_engine/sql_pg/deploy_azure.sh
 ```
 
@@ -267,13 +267,13 @@ In the **EpiPortal UI**, preregister this VM’s **public IP**, `cluster_key`, a
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
 # First GPU (no current/manifest yet) — pass the assembled release:
 sudo bash /path/to/runtime-bundle/scripts/provision_worker_node.sh \
-  --gpu --join-mode first --release-dir /work/epimethyl/releases/<ver> \
+  --gpu --join-mode first --release-dir /work/goliath/releases/<ver> \
   --enroll-worker --enable-systemd --cluster gpu-west
 
 # Later GPUs:
-bash /work/epimethyl/current/runtime-bundle/scripts/preflight_worker_join.sh \
+bash /work/goliath/current/runtime-bundle/scripts/preflight_worker_join.sh \
   --gpu --require-api --require-current
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
+sudo bash /work/goliath/current/runtime-bundle/scripts/provision_worker_node.sh \
   --gpu --join-mode join --enroll-worker --enable-systemd --cluster gpu-west
 ```
 
@@ -284,14 +284,14 @@ Joiners never re-promote or re-pull Parabricks. Direct-DB `--register-worker` is
 ```bash
 export AZ_SUBSCRIPTION_ID=… AZ_RESOURCE_GROUP=… AZURE_TENANT_ID=…
 
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_arc_agent.sh \
+sudo bash /work/goliath/current/runtime-bundle/scripts/install_arc_agent.sh \
   --subscription-id "$AZ_SUBSCRIPTION_ID" \
   --resource-group "$AZ_RESOURCE_GROUP" \
   --tenant-id "$AZURE_TENANT_ID" \
   --tags "cluster_key=gpu-west,environment=prod,phi=true,hipaa=true" \
   --with-ama
 
-bash /work/epimethyl/current/runtime-bundle/scripts/verify_arc_prereqs.sh
+bash /work/goliath/current/runtime-bundle/scripts/verify_arc_prereqs.sh
 # Status must be Connected; writes /etc/methyl/arc.env (ARC_RESOURCE_ID)
 ```
 
@@ -302,7 +302,7 @@ Uses `azcmagent` plus Azure CLI (`az`) for Connected Machine resource id / AMA e
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
 
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
+sudo bash /work/goliath/current/runtime-bundle/scripts/provision_worker_node.sh \
   --gpu --join-mode join --finish-enroll --require-arc \
   --enroll-worker --enable-systemd --detect-capabilities \
   --cluster gpu-west
@@ -323,10 +323,10 @@ sudo bash …/provision_worker_node.sh \
 |--------------|-------------------|------------|
 | NVIDIA driver | `nvidia-smi` / [gpu_worker_runbook.md](gpu_worker_runbook.md) | Parabricks, GPU centroids |
 | Host tools (per VM, not `/work`) | `install_host_tools_gpu_vm.sh` / `setup_host.sh --system-deps --gpu` + `verify_host_tools.sh` | bedtools (mapper), samtools (WGBS BAM + flagstat), fastp (trim), NVRTC; optional `TMPDIR` on local disk for samtools spill |
-| Docker + NVIDIA Container Toolkit | `setup_gpu_node.sh --docker-data-root /work/epimethyl/docker` | Clara Parabricks container |
-| Parabricks image | Shared layers under `/work/epimethyl/docker`; `env/parabricks.env` | `sample.parabricks_fq2bam` / giraffe |
-| MethylExtractor | `/work/epimethyl/methyl-extractor-<arch>/` | `sample.methyl_extract` |
-| Python worker venv | `/work/epimethyl/venv-<arch>/` | all `methyl-*` / worker handlers |
+| Docker + NVIDIA Container Toolkit | `setup_gpu_node.sh --docker-data-root /work/goliath/docker` | Clara Parabricks container |
+| Parabricks image | Shared layers under `/work/goliath/docker`; `env/parabricks.env` | `sample.parabricks_fq2bam` / giraffe |
+| MethylExtractor | `/work/goliath/methyl-extractor-<arch>/` | `sample.methyl_extract` |
+| Python worker venv | `/work/goliath/venv-<arch>/` | all `methyl-*` / worker handlers |
 | Enroll token | `/etc/methyl/worker-token` (mode 600) | claim/submit |
 | systemd | `methyl-worker.service` (`After=azure-arc-agent`) | long-running poll |
 
@@ -334,10 +334,10 @@ Preflight:
 
 ```bash
 set -a
-source /work/epimethyl/env/worker.env
-source /work/epimethyl/env/parabricks.env
+source /work/goliath/env/worker.env
+source /work/goliath/env/parabricks.env
 set +a
-bash /work/epimethyl/current/runtime-bundle/scripts/verify_e2e_node.sh
+bash /work/goliath/current/runtime-bundle/scripts/verify_e2e_node.sh
 ```
 
 ### 4.6 Enroll-only (node already provisioned)
@@ -411,7 +411,7 @@ These may touch SQL with credentials on a **trusted** host or CI. They are **not
 - [ ] Privileged host: `sql_mssql`/`sql_pg` twins deployed + Python populate
 - [ ] Gateway health 200 on `https://<fqdn>/v1/health` (local disk; **no** `/work` mount); admin seed routes 404
 - [ ] `GATEWAY_REQUIRE_ARC_ATTEST=1` on gateway
-- [ ] `/work/epimethyl/current/manifest.json` present on **GPU workers** (first worker seeds the share)
+- [ ] `/work/goliath/current/manifest.json` present on **GPU workers** (first worker seeds the share)
 - [ ] Each worker: Arc **Connected**, portal IP row, `/etc/methyl/worker-token`, systemd active
 - [ ] `verify_e2e_node.sh` passes (Parabricks + MethylExtractor + `venv-<arch>`)
 - [ ] Smoke: `scripts/smoke_sample_prep.sh` / `smoke_study_lifecycle.sh` (or portal study)

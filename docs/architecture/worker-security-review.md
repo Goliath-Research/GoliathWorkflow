@@ -26,7 +26,7 @@
 | **Authentication** | `worker_id` + SHA2_256 token hash | Same + per-VM token file (600), Key Vault bootstrap | P0 |
 | **Authorization (dispatch)** | Poll `capability` param only; `wf.worker.capabilities` ignored | **Capabilities authoritative** at `sp_worker_request_task`; poll param narrows only | P0 |
 | **Attestation** | `GATEWAY_REQUIRE_ARC_ATTEST` exists; worker did not send header | Worker sends `X-Arc-Resource-Id` from `/etc/methyl/arc.env` | P1 |
-| **Secrets** | `WORKER_TOKEN` in shared `/work/epimethyl/env/worker.env` | `/etc/methyl/worker-token` (root 600) + KV rotation via `wf.worker_token.expires_at_utc` | P0 |
+| **Secrets** | `WORKER_TOKEN` in shared `/work/goliath/env/worker.env` | `/etc/methyl/worker-token` (root 600) + KV rotation via `wf.worker_token.expires_at_utc` | P0 |
 | **Integrity** | Release bundle on shared storage | Cloud-init checksum verify before install (IaC) | P1 |
 | **Audit** | `wf.worker.last_seen_at_utc`, action manifests on `/work` | Arc → Defender/Sentinel; gateway access logs | P1 |
 | **Execute-time guard** | GPU tasks fail late in Docker/CLI | `handlers.py` rejects GPU-required actions without hardware | P2 |

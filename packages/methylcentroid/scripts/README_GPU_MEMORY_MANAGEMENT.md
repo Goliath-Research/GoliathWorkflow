@@ -171,13 +171,13 @@ heavy_tasks = [task for task in tasks if task["estimated_memory_gb"] >= 2]
 nvidia-smi
 
 # Monitor memory in container
-docker exec epimethyl python scripts/gpu_memory_utils.py --action info
+docker exec goliath python scripts/gpu_memory_utils.py --action info
 
 # Clean up memory
-docker exec epimethyl python scripts/gpu_memory_utils.py --action cleanup --aggressive
+docker exec goliath python scripts/gpu_memory_utils.py --action cleanup --aggressive
 
 # Monitor during task execution
-docker exec epimethyl python scripts/gpu_memory_manager.py --action monitor --command "python -m methyl_centroid.centroid_cli --config packages/methylcentroid/configs/bc-cancer_config.json"
+docker exec goliath python scripts/gpu_memory_manager.py --action monitor --command "python -m methyl_centroid.centroid_cli --config packages/methylcentroid/configs/bc-cancer_config.json"
 ```
 
 ## Performance Impact
@@ -194,7 +194,7 @@ The memory management utilities are designed to work with your existing MethylCe
 
 ```bash
 # Instead of:
-docker exec -w /home/ubuntu/MethylCentroid epimethyl python -m methyl_centroid.centroid_cli --config packages/methylcentroid/configs/bc-cancer_config.json
+docker exec -w /home/ubuntu/MethylCentroid goliath python -m methyl_centroid.centroid_cli --config packages/methylcentroid/configs/bc-cancer_config.json
 
 # Use:
 python scripts/gpu_task_runner.py --config scripts/task_queue_example.json

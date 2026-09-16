@@ -3,7 +3,7 @@
 This path is selected by **explicit** `alignmentMode: linear` (or stock `pangenome` for Giraffe) — never as an automatic fallback when `pangenome_wgbs` native-Mojo fails. Sample prep alignment (`sample.parabricks_fq2bam`) runs **either**:
 
 1. **NVIDIA Clara Parabricks `fq2bam_meth`** (`actionConfig.parabricks.engine=parabricks`) — NGC Docker, CUDA only  
-2. **MojoFq2bamMeth** (`engine=mojo`) — `epimethyl/methylgrapher:1.70-mojo{,-cuda,-rocm}`, portable `align_device=auto|nvidia|amd` (`cpu` only for unknown GPU vendors)
+2. **MojoFq2bamMeth** (`engine=mojo`) — `goliath/methylgrapher:1.70-mojo{,-cuda,-rocm}`, portable `align_device=auto|nvidia|amd` (`cpu` only for unknown GPU vendors)
 
 Implementation: [`methyl_worker/parabricks_runner.py`](../methyl_worker/parabricks_runner.py). Dual-Align strategy: [`docs/architecture/mojo-multi-gpu-dual-align.md`](../../docs/architecture/mojo-multi-gpu-dual-align.md). For WGBS pangenome see [`workers/docker/methylgrapher/README.md`](../docker/methylgrapher/README.md).
 
@@ -19,7 +19,7 @@ Implementation: [`methyl_worker/parabricks_runner.py`](../methyl_worker/parabric
 ### Mojo (`engine=mojo`)
 
 - CUDA **or** ROCm host (or CPU-only with `align_device=cpu`)
-- mojo-align image (`epimethyl/methylgrapher:1.70-mojo-*`) with `bwa` + `samtools` (see Dockerfile.mojo)
+- mojo-align image (`goliath/methylgrapher:1.70-mojo-*`) with `bwa` + `samtools` (see Dockerfile.mojo)
 - ROCm: see [`docs/deployment/worker-rocm.md`](../../docs/deployment/worker-rocm.md)
 
 ## Configuration (site / profile → resolvedConfig)
@@ -30,7 +30,7 @@ Prefer DB-backed `actionConfig.parabricks` (not host env for science knobs):
 "parabricks": {
   "engine": "mojo",
   "align_device": "auto",
-  "image": "epimethyl/methylgrapher:1.70-mojo-rocm",
+  "image": "goliath/methylgrapher:1.70-mojo-rocm",
   "bwa_threads": 32,
   "write_methylation_tags": true
 }

@@ -10,7 +10,7 @@ Usage:
 
   # Both backends (writes JSON + markdown under workflow_engine/contract/)
   export AZURE_SQL_SERVER=... AZURE_SQL_DB=MethylPipeline AZURE_SQL_USER=... AZURE_SQL_PASSWORD=...
-  export POSTGRES_HOST=epimethyl.postgres.database.azure.com POSTGRES_DB=epimethyl \\
+  export POSTGRES_HOST=goliath.postgres.database.azure.com POSTGRES_DB=goliath \\
          POSTGRES_USER=dba POSTGRES_PASSWORD='...' PGSSLMODE=require
   python scripts/db_schema_inventory.py
 
@@ -112,7 +112,7 @@ def _pg_connect():
     database = (
         os.environ.get("POSTGRES_DB")
         or os.environ.get("PGDATABASE")
-        or "epimethyl"
+        or "goliath"
     )
     user = os.environ.get("POSTGRES_USER") or os.environ.get("PGUSER", "")
     password = os.environ.get("POSTGRES_PASSWORD") or os.environ.get("PGPASSWORD", "")
@@ -408,7 +408,7 @@ def write_outputs(payload: Dict[str, Any]) -> Tuple[Path, Path]:
         lines.append("")
         lines.append(
             "> Note: the Azure PG database named `postgres` is a stale older "
-            "wf-only deploy. Canonical parity target is **`epimethyl`**."
+            "wf-only deploy. Canonical parity target is **`goliath`**."
         )
         lines.append("")
     if gaps:

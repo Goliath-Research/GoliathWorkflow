@@ -25,6 +25,6 @@ Companion to [`native-mojo-align-hotpath.plan.md`](native-mojo-align-hotpath.pla
 
 ## Kill / hold (ops)
 
-- `/work/epimethyl/images/URGENT_KILL_HOST_MOJO.md`
-- `/work/epimethyl/images/fleet-kill-host-mojo-align.sh`
+- `/work/goliath/images/URGENT_KILL_HOST_MOJO.md`
+- `/work/goliath/images/fleet-kill-host-mojo-align.sh`
 - Workers 1–4: Align caps stripped; `desired_state=STOPPING` until gates pass.

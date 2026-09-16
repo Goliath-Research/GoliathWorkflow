@@ -1,0 +1,131 @@
+name: PR
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+
+jobs:
+  pr:
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: "3.12"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Install pytest
+        run: python -m pip install -U pip pytest pytest-cov
+
+      - name: Documentation link guard
+        run: bash scripts/check_doc_links.sh
+
+      - name: Windows-compatible path guard
+        run: |
+          python scripts/check_windows_paths.py
+          pytest scripts/tests/test_check_windows_paths.py -q
+
+      - name: Documentation freshness guard
+        run: bash scripts/check_doc_freshness.sh
+
+      - name: Package install and catalog fixture contracts
+        run: |
+          python scripts/check_package_install_contract.py
+          python scripts/check_catalog_fixture_contract.py
+          pytest scripts/tests/test_check_package_install_contract.py scripts/tests/test_check_catalog_fixture_contract.py -q
+
+      - name: Optional Marp diagram asset freshness check
+        continue-on-error: true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+          (cd docs/diagrams && npm ci --no-audit --no-fund)
+          bash scripts/render_diagrams.sh --check
+
+      - name: MkDocs site smoke (strict)
+        run: |
+          python -m pip install -r docs-requirements.txt
+          mkdocs build --strict
+
+      - name: Schema and action catalog drift check
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install -U pip
+          bash scripts/install_packages.sh --with-deps
+          methyl-export-action-catalog --check
+          methyl-export-domain-schemas --check
+
+      - name: Doc freshness and diagram script tests
+        run: pytest scripts/tests/test_check_doc_freshness.py scripts/tests/test_render_diagrams.py -q
+
+      - name: Release script contract tests
+        run: pytest scripts/tests/test_release_manifest.py scripts/tests/test_init_work_layout.py -q
+
+      - name: Guard against step_config in project manifests
+        run: |
+          python scripts/check_no_step_config.py
+          pytest workflow_engine/tests/test_no_step_config_in_projects.py -q
+
+      - name: Terraform fmt and validate (no apply)
+        run: |
+          terraform fmt -check -recursive deploy/terraform
+          cd deploy/terraform/envs/dev && terraform init -backend=false && terraform validate
+
+      - name: Runtime-bundle packaging smoke
+        run: |
+          python -m pip install -U pip build wheel
+          bash scripts/build_release.sh \
+            --version 0.0.0-ci \
+            --output "${{ runner.temp }}/release-smoke" \
+            --skip-wheels
+          test -d "${{ runner.temp }}/release-smoke/runtime-bundle/scripts"
+          test -f "${{ runner.temp }}/release-smoke/manifest.json"
+          bash -n scripts/build_release.sh
+          bash -n scripts/assemble_release.sh
+          bash -n scripts/promote_release.sh
+
+      - name: Host bioinformatics CLIs (samtools, bedtools)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y samtools bedtools
+
+      - name: Build test venv (editable packages + deps)
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install -U pip
+          python -m pip install pytest pytest-cov
+          bash scripts/install_packages.sh --with-deps
+
+      - name: Full pytest suite (regression) + coverage
+        run: |
+          . .venv/bin/activate
+          bash scripts/run_tests_ci.sh
+
+      - name: Spine config-resolution coverage ratchet (branch, fail_under)
+        run: |
+          . .venv/bin/activate
+          bash scripts/run_spine_coverage_ratchet.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-test-results
+          path: |
+            test-results/junit.xml
+            coverage/

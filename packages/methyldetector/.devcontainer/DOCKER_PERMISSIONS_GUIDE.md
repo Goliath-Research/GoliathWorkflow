@@ -1,7 +1,7 @@
 # Docker Permissions Guide for Cursor DevContainer
 
 ## Problem
-Cursor runs as the `ubuntu` user and cannot access Docker without sudo privileges, preventing the devcontainer from connecting to the epimethyl container.
+Cursor runs as the `ubuntu` user and cannot access Docker without sudo privileges, preventing the devcontainer from connecting to the goliath container.
 
 ## Solutions
 
@@ -86,7 +86,7 @@ sudo docker-compose up -d
 
 2. **Connect to the running container**:
    - In Cursor, use "Remote-Containers: Attach to Running Container"
-   - Select the `epimethyl` container
+   - Select the `goliath` container
    - Choose the project folder as the workspace folder
 
 ### Solution 5: Use VS Code Server in Container
@@ -101,7 +101,7 @@ sudo docker-compose up -d
 
 2. **Install VS Code Server in the container**:
 ```bash
-sudo docker exec -it epimethyl bash
+sudo docker exec -it goliath bash
 # Inside the container:
 curl -fsSL https://code-server.dev/install.sh | sh
 code-server --bind-addr 0.0.0.0:8080 --auth none
@@ -120,10 +120,10 @@ After applying any solution, verify it works:
 docker ps
 
 # Test container is running
-docker ps | grep epimethyl
+docker ps | grep goliath
 
 # Test container access
-docker exec epimethyl echo "Container accessible"
+docker exec goliath echo "Container accessible"
 ```
 
 ## Troubleshooting
@@ -134,7 +134,7 @@ docker exec epimethyl echo "Container accessible"
 - Check Docker socket permissions: `ls -la /var/run/docker.sock`
 
 ### "Container not found" errors
-- Ensure the epimethyl container is running: `docker ps | grep epimethyl`
+- Ensure the goliath container is running: `docker ps | grep goliath`
 - Start the container: `cd /home/ubuntu/Work/cuda && docker-compose up -d`
 
 ### Cursor still can't connect
@@ -153,4 +153,4 @@ docker exec epimethyl echo "Container accessible"
 
 - The devcontainer configuration includes a pre-check that will warn you if Docker isn't accessible
 - All solutions maintain the same development environment and functionality
-- The epimethyl container provides the same GPU support and package access regardless of connection method
+- The goliath container provides the same GPU support and package access regardless of connection method

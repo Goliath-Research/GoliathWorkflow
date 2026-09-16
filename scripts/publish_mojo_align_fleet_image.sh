@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Atomically publish epimethyl/methylgrapher:1.70-mojo to NFS for the GH200 fleet.
+# Atomically publish goliath/methylgrapher:1.70-mojo to NFS for the GH200 fleet.
 #
 # Pin files (stale .image_id.oci is what broke sisters before):
 #   methylgrapher-1.70-mojo.image_id      — docker config digest (classic graph driver)
@@ -9,11 +9,11 @@
 #
 # Usage (on 50-58 after build):
 #   bash scripts/publish_mojo_align_fleet_image.sh
-#   METHYL_MOJO_ALIGN_IMAGE=epimethyl/methylgrapher:1.70-mojo \
+#   METHYL_MOJO_ALIGN_IMAGE=goliath/methylgrapher:1.70-mojo \
 #     bash scripts/publish_mojo_align_fleet_image.sh
 #
 # Optional:
-#   METHYL_FLEET_IMAGES_DIR=/work/epimethyl/images
+#   METHYL_FLEET_IMAGES_DIR=/work/goliath/images
 #   METHYL_CLEAR_SISTER_READY=1   # default 1 — drop sister .ready so reload runs
 set -euo pipefail
 
@@ -22,8 +22,8 @@ if [[ -z "${IMAGE}" && -n "${METHYL_METHYLGRAPHER_MOJO_IMAGE:-}" ]]; then
   echo "warning: METHYL_METHYLGRAPHER_MOJO_IMAGE is deprecated; use METHYL_MOJO_ALIGN_IMAGE" >&2
   IMAGE="${METHYL_METHYLGRAPHER_MOJO_IMAGE}"
 fi
-IMAGE="${IMAGE:-epimethyl/methylgrapher:1.70-mojo}"
-IMG_DIR="${METHYL_FLEET_IMAGES_DIR:-/work/epimethyl/images}"
+IMAGE="${IMAGE:-goliath/methylgrapher:1.70-mojo}"
+IMG_DIR="${METHYL_FLEET_IMAGES_DIR:-/work/goliath/images}"
 TAR="${IMG_DIR}/methylgrapher-1.70-mojo.tar"
 ID_FILE="${IMG_DIR}/methylgrapher-1.70-mojo.image_id"
 OCI_FILE="${ID_FILE}.oci"
@@ -119,5 +119,5 @@ else
   log "pin oci:    removed (legacy docker-archive; no manifest digest)"
 fi
 log "reload marker: ${RELOAD_MARKER}"
-log "sisters: bash /work/epimethyl/images/sister_reload_mojo_align.sh"
-log "then on 50-58: python3 /work/epimethyl/images/restore_wgbs_capabilities.py"
+log "sisters: bash /work/goliath/images/sister_reload_mojo_align.sh"
+log "then on 50-58: python3 /work/goliath/images/restore_wgbs_capabilities.py"

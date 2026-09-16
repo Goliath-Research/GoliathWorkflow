@@ -2,7 +2,7 @@
 # Phase 0 helper: ensure site-pinned genomes exist under /work/genomes.
 #
 # Prefer local files when already present. Otherwise sync from
-# epimethyl/genomes/ (myQNAPcloud) via methyl-cfg provision-assets or
+# goliath/genomes/ (myQNAPcloud) via methyl-cfg provision-assets or
 # scripts/sync_genomes_to_s3.sh --download.
 #
 # Usage:
@@ -14,7 +14,7 @@
 # Env:
 #   WORK_ROOT=/work
 #   METHYL_SITE_CONFIG=/work/site/methyl_site.json
-#   METHYL_CFG_STORE=/work/epimethyl/cfg-store
+#   METHYL_CFG_STORE=/work/goliath/cfg-store
 
 set -euo pipefail
 
@@ -29,7 +29,7 @@ usage() {
 Usage: scripts/provision_selected_genomes.sh [--dry-run] [--force-sync]
 
 Verify site-pinned genome paths under WORK_ROOT/genomes. If missing (or
---force-sync), download from epimethyl-genomes via methyl-cfg or aws sync.
+--force-sync), download from goliath-genomes via methyl-cfg or aws sync.
 EOF
 }
 
@@ -88,7 +88,7 @@ if [[ "$FORCE" -eq 0 ]] && check_paths; then
   exit 0
 fi
 
-echo "Provisioning from epimethyl/genomes/ ..."
+echo "Provisioning from goliath/genomes/ ..."
 
 if command -v methyl-cfg >/dev/null 2>&1; then
   STORE_ARGS=()

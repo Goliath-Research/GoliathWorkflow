@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build epimethyl/methylgrapher:1.70-mojo from mojo-align.
+# Build goliath/methylgrapher:1.70-mojo from mojo-align.
 #
 # MOJO_ALIGN_ROOT must point at the mojo-align checkout. When unset,
 # auto-detect uses the sibling ../mojo-align next to this MethylPipeline repo.
@@ -49,9 +49,9 @@ elif [[ -n "${METHYL_METHYLGRAPHER_MOJO_IMAGE:-}" ]]; then
   echo "warning: METHYL_METHYLGRAPHER_MOJO_IMAGE is deprecated; use METHYL_MOJO_ALIGN_IMAGE" >&2
   IMAGE="${METHYL_METHYLGRAPHER_MOJO_IMAGE}"
 elif [[ "${IMAGE_TAG}" == "1.70-mojo" ]]; then
-  IMAGE="epimethyl/methylgrapher:1.70-mojo"
+  IMAGE="goliath/methylgrapher:1.70-mojo"
 else
-  IMAGE="epimethyl/methylgrapher:${IMAGE_TAG}"
+  IMAGE="goliath/methylgrapher:${IMAGE_TAG}"
 fi
 MOJO_ROOT="${MOJO_ALIGN_ROOT:-}"
 if [[ -z "${MOJO_ROOT}" && -n "${METHYLGRAPHER_MOJO_ROOT:-}" ]]; then
@@ -216,8 +216,8 @@ docker build \
 
 # Keep legacy :1.70-mojo as an alias of the CUDA build for existing site pins.
 if [[ "${GPU_VARIANT}" == "cuda" && "${IMAGE}" == *":1.70-mojo-cuda" ]]; then
-  docker tag "${IMAGE}" "epimethyl/methylgrapher:1.70-mojo" || true
-  log "also tagged epimethyl/methylgrapher:1.70-mojo -> ${IMAGE}"
+  docker tag "${IMAGE}" "goliath/methylgrapher:1.70-mojo" || true
+  log "also tagged goliath/methylgrapher:1.70-mojo -> ${IMAGE}"
 fi
 
 log "smoke"
@@ -233,7 +233,7 @@ log "ROCm twin: MOJO_ALIGN_GPU_VARIANT=rocm MOJO_ALIGN_IMAGE_TAG=1.70-mojo-rocm 
 if [[ "${METHYL_PUBLISH_FLEET_IMAGE:-0}" == "1" ]]; then
   PUBLISH_IMAGE="${IMAGE}"
   if [[ "${GPU_VARIANT}" == "cuda" ]]; then
-    PUBLISH_IMAGE="${METHYL_MOJO_ALIGN_IMAGE:-${METHYL_METHYLGRAPHER_MOJO_IMAGE:-epimethyl/methylgrapher:1.70-mojo}}"
+    PUBLISH_IMAGE="${METHYL_MOJO_ALIGN_IMAGE:-${METHYL_METHYLGRAPHER_MOJO_IMAGE:-goliath/methylgrapher:1.70-mojo}}"
   fi
   log "METHYL_PUBLISH_FLEET_IMAGE=1 → publishing ${PUBLISH_IMAGE} to NFS"
   METHYL_MOJO_ALIGN_IMAGE="${PUBLISH_IMAGE}" \

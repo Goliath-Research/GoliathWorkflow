@@ -1,12 +1,12 @@
 # Production study runbook
 
-End-to-end operator checklist for real FASTQ → HDF5 → validation on `/work/epimethyl`.
+End-to-end operator checklist for real FASTQ → HDF5 → validation on `/work/goliath`.
 
 **Platform install (gateway + Arc workers + enroll):** see [production-platform.md](production-platform.md) first. This page focuses on study execution and gateway security detail.
 
 ## Prerequisites
 
-- [ ] Shared storage mounted at `/work/epimethyl` on all worker nodes
+- [ ] Shared storage mounted at `/work/goliath` on all worker nodes
 - [ ] `bash scripts/verify_e2e_node.sh` passes on GPU workers
 - [ ] Workflow REST gateway running on dedicated Linux VM (`methyl-gateway` systemd unit; see `deploy/env/gateway.mssql.env.example` / `gateway.security.env.example`)
 - [ ] Database schema deployed (Azure SQL for production portal)
@@ -16,7 +16,7 @@ End-to-end operator checklist for real FASTQ → HDF5 → validation on `/work/e
 - [ ] Reference FASTA and project JSON on shared storage
 - [ ] Portal middle-tier using Azure SQL `portal.sp_*` (not the worker gateway)
 
-**Reference genomes on myQNAPcloud:** Keep a durable copy of `/work/genomes` (linear + annotation + pangenome) in bucket `epimethyl` for future deployments. Sync with Access Key / Secret Key via S3 (not rsync):
+**Reference genomes on myQNAPcloud:** Keep a durable copy of `/work/genomes` (linear + annotation + pangenome) in bucket `goliath` for future deployments. Sync with Access Key / Secret Key via S3 (not rsync):
 
 ```bash
 export AWS_ACCESS_KEY_ID=...
@@ -27,7 +27,7 @@ scripts/sync_genomes_to_s3.sh
 # or a leaf path: --only pangenome/GRCh38/d9-bs/1.70
 ```
 
-Destination: `s3://epimethyl/genomes/` at `https://s3.us-east-1.myqnapcloud.io`. Full upload map, pin→asset resolution, and Phase 0 provision: [reference-inventory-qnap.md](reference-inventory-qnap.md).
+Destination: `s3://goliath/genomes/` at `https://s3.us-east-1.myqnapcloud.io`. Full upload map, pin→asset resolution, and Phase 0 provision: [reference-inventory-qnap.md](reference-inventory-qnap.md).
 
 ## Stage 1 — SamplePrepPipeline
 
@@ -48,7 +48,7 @@ methyl-study-start sample-prep-start request.json
 # request.json: projectPath, workflow_version_id, fastqStorage, sampleCsvs, ...
 ```
 
-**Ingress vs retention:** `fastqStorage` must point at **laboratory-owned** storage (never inferred from myQNAPcloud). Sample archive (`sampleStorage` / `sampleDestination`; legacy alias `h5Storage`) defaults from `portal.resource_profile` → published `cfg.storage_endpoint` (e.g. `epimethyl-archive`) when omitted. See [portal_resource_profile.md](portal_resource_profile.md).
+**Ingress vs retention:** `fastqStorage` must point at **laboratory-owned** storage (never inferred from myQNAPcloud). Sample archive (`sampleStorage` / `sampleDestination`; legacy alias `h5Storage`) defaults from `portal.resource_profile` → published `cfg.storage_endpoint` (e.g. `goliath-archive`) when omitted. See [portal_resource_profile.md](portal_resource_profile.md).
 
 **Local smoke (stub worker):**
 

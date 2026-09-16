@@ -77,7 +77,7 @@ flowchart LR
 
 Study science lives under `/work/projects/<study>/`; sample archives under `/work/samples/{sample_id}/`. Credentials stay in the `cfg` registry — never under project trees.
 
-**Phase 0 — reference genomes:** Company inventory lives at `s3://epimethyl/genomes/` on myQNAPcloud; site `reference_selection` pins versions; `scripts/provision_selected_genomes.sh` / `methyl-cfg provision-assets --selected-only` sync selected trees to `/work/genomes/`. Upload map and out-of-band assets (plants, RNA, caches): [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md).
+**Phase 0 — reference genomes:** Company inventory lives at `s3://goliath/genomes/` on myQNAPcloud; site `reference_selection` pins versions; `scripts/provision_selected_genomes.sh` / `methyl-cfg provision-assets --selected-only` sync selected trees to `/work/genomes/`. Upload map and out-of-band assets (plants, RNA, caches): [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md).
 
 ---
 
@@ -108,14 +108,14 @@ flowchart TB
     PROJ["/work/projects/{study}/<br/>configs/, data/, MC outputs/"]
     SITE["/work/site/methyl_site.json"]
     GEN["/work/genomes/<br/>linear · annotation · pangenome"]
-    EPI["/work/epimethyl/current/"]
+    EPI["/work/goliath/current/"]
   end
   W2["/work/samples/..."] -->|"group paths in project"| PROJ
   SITE -.-> EPI
   PROJ -->|"projectPath"| EPI
 ```
 
-Reference trees under `/work/genomes/` are provisioned from myQNAPcloud (`epimethyl-genomes`); see [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md).
+Reference trees under `/work/genomes/` are provisioned from myQNAPcloud (`goliath-genomes`); see [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md).
 
 | Location | Config key | Role |
 |----------|------------|------|
@@ -391,12 +391,12 @@ Example (production-style paths):
 ```bash
 # 1) Sample prep (gateway or local engine)
 methyl-workflow-run \
-  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/sample_prep.program.json \
+  --program /work/goliath/current/runtime-bundle/domain/fixtures/sample_prep.program.json \
   --context '{"projectPath":"/work/projects/my-study/configs/project_Healthy_vs_Disease.json"}'
 
 # 2) Study lifecycle
 methyl-workflow-run \
-  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/study_validation_lifecycle.program.json \
+  --program /work/goliath/current/runtime-bundle/domain/fixtures/study_validation_lifecycle.program.json \
   --context '{"projectPath":"/work/projects/my-study/configs/project_Healthy_vs_Disease.json","pipelineProfile":"samd_research"}' \
   --parallel-workers 1 -v
 ```

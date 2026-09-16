@@ -532,7 +532,7 @@ def test_build_mojo_fq2bam_docker_command(tmp_path: Path) -> None:
     ref.parent.mkdir(parents=True)
     ref.write_text(">ref\n")
     cfg = runner.ParabricksConfig(
-        image="epimethyl/methylgrapher:1.70-mojo-rocm",
+        image="goliath/methylgrapher:1.70-mojo-rocm",
         gpu_flags=("--device=/dev/kfd",),
         bwa_threads=8,
         extra_docker_args=(),
@@ -580,7 +580,7 @@ def test_collectmultiplemetrics_ignores_mojo_methylgrapher_resolved_config() -> 
             input_json={
                 "resolvedConfig": {
                     "engine": "mojo",
-                    "image": "epimethyl/methylgrapher:1.70-mojo",
+                    "image": "goliath/methylgrapher:1.70-mojo",
                     "align_engine": "gpu_giraffe",
                 }
             }

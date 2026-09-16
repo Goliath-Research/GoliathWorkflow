@@ -37,13 +37,13 @@ Canonical architecture: [`../architecture/distributed-runtime.md`](../architectu
 
 ## Versioned Release Bundle
 
-Production GPU workers consume versioned releases under `/work/epimethyl`.
+Production GPU workers consume versioned releases under `/work/goliath`.
 Workers do not require a git checkout at runtime.
 
 Release layout:
 
 ```text
-/work/epimethyl/
+/work/goliath/
   current -> releases/<version>
   releases/<version>/
     manifest.json

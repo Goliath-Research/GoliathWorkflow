@@ -16,7 +16,7 @@ methyl-cfg verify-workflow \
   --program workflow_engine/domain/fixtures/sample_prep.program.json
 
 # Also compare compiled ACTION nodes to active wf.workflow_version
-set -a; source /work/epimethyl/env/gateway.env; set +a
+set -a; source /work/goliath/env/gateway.env; set +a
 methyl-cfg verify-workflow --check-db
 ```
 

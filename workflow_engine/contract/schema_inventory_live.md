@@ -3,7 +3,7 @@
 Captured: `2026-08-16T18:44:10.730125+00:00`
 
 Controlled schemas: `wf`, `cfg`, `portal`, `RBAC`, `Meta`, `Contract`, `Onboarding`.
-The `e_portal` schema was dropped (Azure SQL already gone; PostgreSQL `epimethyl` dropped 2026-08-22).
+The `e_portal` schema was dropped (Azure SQL already gone; PostgreSQL `goliath` dropped 2026-08-22).
 
 ## Azure SQL (`MethylPipeline`)
 
@@ -15,7 +15,7 @@ The `e_portal` schema was dropped (Azure SQL already gone; PostgreSQL `epimethyl
 - `Contract`: 6 tables, 4 routines
 - `Onboarding`: 4 tables, 1 routines
 
-## PostgreSQL (`epimethyl`)
+## PostgreSQL (`goliath`)
 
 - `wf`: 30 tables, 82 routines
 - `cfg`: 20 tables, 18 routines
@@ -25,7 +25,7 @@ The `e_portal` schema was dropped (Azure SQL already gone; PostgreSQL `epimethyl
 - `Contract`: 6 tables, 4 routines
 - `Onboarding`: 4 tables, 1 routines
 
-> Note: the Azure PG database named `postgres` is a stale older wf-only deploy. Canonical parity target is **`epimethyl`**.
+> Note: the Azure PG database named `postgres` is a stale older wf-only deploy. Canonical parity target is **`goliath`**.
 
 ## Gaps (MSSQL − PostgreSQL)
 

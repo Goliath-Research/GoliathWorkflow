@@ -122,7 +122,7 @@ Important: `"control_vs_each_disease"` compares **healthy against each stage** �
 
 The profile supplies the science knobs (iterations, thresholds, feature caps). Profiles are **process-agnostic** — study facts stay in your manifest; the profile selects which statistical branch and scope flags run.
 
-All shipped profiles live in `workflow_engine/domain/profiles/*.profile.json` (production: `/work/epimethyl/current/runtime-bundle/domain/profiles/`). Pass one with `--context-file` or set `pipelineProfile` in `--context`.
+All shipped profiles live in `workflow_engine/domain/profiles/*.profile.json` (production: `/work/goliath/current/runtime-bundle/domain/profiles/`). Pass one with `--context-file` or set `pipelineProfile` in `--context`.
 
 ### Quick picks (this tutorial)
 
@@ -216,7 +216,7 @@ python workflow_engine/domain/checks/pca1_5_cg/check_pipeline.py \
   --program workflow_engine/domain/fixtures/mc_stability_smoke.program.json
 ```
 
-In production, point `--program` and `--context-file` at the promoted runtime bundle instead of the repo, e.g. `/work/epimethyl/current/runtime-bundle/domain/...` (see [Deployment and distributed workflow](14-deployment-and-distributed-workflow.md)).
+In production, point `--program` and `--context-file` at the promoted runtime bundle instead of the repo, e.g. `/work/goliath/current/runtime-bundle/domain/...` (see [Deployment and distributed workflow](14-deployment-and-distributed-workflow.md)).
 
 ## Step 6 — Find the outputs
 

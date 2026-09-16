@@ -28,10 +28,10 @@ def test_systemd_units_use_placeholders() -> None:
         "deploy/systemd/methyl-reclaim-leases.service",
     ):
         text = (REPO_ROOT / rel).read_text(encoding="utf-8")
-        assert "__EPIMETHYL_VENV__" in text
+        assert "__GOLIATH_VENV__" in text
         if "methyl-gateway.service" in rel or "methyl-reclaim-leases.service" in rel:
-            assert "__EPIMETHYL_ROOT__" in text
-            assert "/work/epimethyl" not in text
+            assert "__GOLIATH_ROOT__" in text
+            assert "/work/goliath" not in text
     timer = (REPO_ROOT / "deploy/systemd/methyl-reclaim-leases.timer").read_text(
         encoding="utf-8"
     )
@@ -83,7 +83,7 @@ def test_verify_setup_fails_on_missing_canonical_doc(tmp_path: Path) -> None:
 def test_install_worker_systemd_render_no_double_venv() -> None:
     unit = REPO_ROOT / "deploy" / "systemd" / "methyl-worker.service"
     rendered = unit.read_text(encoding="utf-8").replace(
-        "__EPIMETHYL_VENV__", "/work/epimethyl/venv-aarch64"
+        "__GOLIATH_VENV__", "/work/goliath/venv-aarch64"
     )
-    assert "/work/epimethyl//work/epimethyl" not in rendered
+    assert "/work/goliath//work/goliath" not in rendered
     assert "venv-aarch64/bin/methyl-worker" in rendered

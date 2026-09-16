@@ -90,7 +90,7 @@
             }
           ],
           "default": null,
-          "description": "Docker image for Align. Clara NGC tag when engine=parabricks; epimethyl/methylgrapher:1.70-mojo-cuda|rocm when engine=mojo.",
+          "description": "Docker image for Align. Clara NGC tag when engine=parabricks; goliath/methylgrapher:1.70-mojo-cuda|rocm when engine=mojo.",
           "title": "Image"
         },
         "mojo_image": {
@@ -103,7 +103,7 @@
             }
           ],
           "default": null,
-          "description": "Optional override image when engine=mojo (else image or epimethyl/methylgrapher:1.70-mojo).",
+          "description": "Optional override image when engine=mojo (else image or goliath/methylgrapher:1.70-mojo).",
           "title": "Mojo Image"
         },
         "reference_fasta": {

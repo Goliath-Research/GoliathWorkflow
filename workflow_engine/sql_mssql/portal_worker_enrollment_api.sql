@@ -23,8 +23,8 @@ GO
 CREATE OR ALTER PROCEDURE portal.sp_upsert_cluster
     @cluster_key nvarchar(128),
     @name nvarchar(256) = NULL,
-    @shared_storage_uri nvarchar(512) = N'/work/epimethyl',
-    @worker_mount_path nvarchar(512) = N'/work/epimethyl',
+    @shared_storage_uri nvarchar(512) = N'/work/goliath',
+    @worker_mount_path nvarchar(512) = N'/work/goliath',
     @allowed_source_cidrs nvarchar(max) = NULL,
     @status varchar(32) = N'ACTIVE'
 AS
@@ -51,8 +51,8 @@ BEGIN
         VALUES (
             @cluster_key,
             @nm,
-            COALESCE(@shared_storage_uri, N'/work/epimethyl'),
-            COALESCE(@worker_mount_path, N'/work/epimethyl'),
+            COALESCE(@shared_storage_uri, N'/work/goliath'),
+            COALESCE(@worker_mount_path, N'/work/goliath'),
             COALESCE(@status, N'ACTIVE'),
             @allowed_source_cidrs
         );

@@ -110,7 +110,7 @@ MC iteration centroids use `build_cohort_relative_centroid_scope()` with `centro
 | `apply_*_defaults()` | **None found** (good) |
 | Gene FC caps ([caps.py](../../packages/methylgeneselect/methyl_gene_select/caps.py)) | **Compliant** — returns `(None, None)` when unset |
 | `MonteCarloConfig` caps | `stability_gene_featurecuts_max_dmps/max_genes` use `Optional[int] = Field(default=None)` (good); `observed_feature_max_genes: int = Field(default=32)` remains a code default |
-| `DEFAULT_*` constants | Present in deployment/infra paths (`DEFAULT_SITE_PATH`, `DEFAULT_EPIMETHYL_ROOT`) — acceptable. **Science/ops knobs** remain in [gene_disease_enricher.py](../../packages/methylmapper/methyl_mapper/gene_disease_enricher.py) (`DEFAULT_GROK_BATCH_SIZE`, cache TTLs, worker counts) and [methyl_enricher](../../packages/methylenricher/methyl_enricher/) — should migrate to site/profile |
+| `DEFAULT_*` constants | Present in deployment/infra paths (`DEFAULT_SITE_PATH`, `DEFAULT_GOLIATH_ROOT`) — acceptable. **Science/ops knobs** remain in [gene_disease_enricher.py](../../packages/methylmapper/methyl_mapper/gene_disease_enricher.py) (`DEFAULT_GROK_BATCH_SIZE`, cache TTLs, worker counts) and [methyl_enricher](../../packages/methylenricher/methyl_enricher/) — should migrate to site/profile |
 | Study `step_config` | **Rejected at runtime** by `ProjectConfig`; guard script passes on tracked manifests but **tests still use legacy fixtures** |
 
 ### 3. Recent-change coherence (~31 commits)
@@ -208,7 +208,7 @@ None for the currently running Buffy MC path after `--group all` fix.
 |----|---------|----------|----------------|
 | L1 | Pydantic v2 `class Config` deprecation warnings | methylclassifier, methylpredictor, sqlmodel | Migrate to `ConfigDict` |
 | L2 | `methyldomain` test missing required `taskConfig` fields | [test_domain_types.py](../../packages/methyldomain/tests/test_domain_types.py) | Update fixture to match `StratifiedCohortDraw` schema |
-| L3 | CI PR pipeline does not run full pytest | [azure-pipelines-pr.yml](../../ci/azure-pipelines-pr.yml) | Add pytest job (or document intentional omission) |
+| L3 | CI PR pipeline does not run full pytest | [pr.yml](../../.github/workflows/pr.yml) | Add pytest job (or document intentional omission) |
 
 ---
 

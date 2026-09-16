@@ -5,10 +5,10 @@
 # trimmed mojo-env/ from MOJO_ALIGN_ROOT before docker build).
 #
 # Smoke:
-#   bash workers/docker/methylgrapher/smoke_64k.sh epimethyl/methylgrapher:1.70-mojo
+#   bash workers/docker/methylgrapher/smoke_64k.sh goliath/methylgrapher:1.70-mojo
 #
 # Rollback: set actionConfig.methylgrapher_wgbs.engine=python and image
-# epimethyl/methylgrapher:1.70. In-image: METHYLGRAPHER_MCALL_ENGINE=python
+# goliath/methylgrapher:1.70. In-image: METHYLGRAPHER_MCALL_ENGINE=python
 # (methylGrapher.mojo.sh skips Mojo and runs engine.cli).
 
 FROM ubuntu:24.04

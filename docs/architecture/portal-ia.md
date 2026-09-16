@@ -592,14 +592,14 @@ redacted endpoints only.
 
 Workers on a cluster share one filesystem. Convention: mount at `/work`,
 recorded on `wf.cluster.worker_mount_path` / `shared_storage_uri`.
-`portal.sp_upsert_cluster` defaults those fields to `/work/epimethyl` — that
+`portal.sp_upsert_cluster` defaults those fields to `/work/goliath` — that
 is the **promoted release** tree, not the sample scratch and not the QNAP
 archive prefix. The share root is `/work`
 ([production-platform Phase 0](../deployment/production-platform.md)).
 
-This is why `s3://epimethyl/samples/` (sometimes written path-style as
-`/samples/epimethyl`) is **not** a Studies nav leaf. It is a **deployment
-fact** on a published archive endpoint (`epimethyl-archive`), shown here
+This is why `s3://goliath/samples/` (sometimes written path-style as
+`/samples/goliath`) is **not** a Studies nav leaf. It is a **deployment
+fact** on a published archive endpoint (`goliath-archive`), shown here
 next to the cluster mount. Operators still only **select** that published
 redacted endpoint on Study → Storage.
 
@@ -607,15 +607,15 @@ redacted endpoint on Study → Storage.
 | Role                        | Path / URI                                                                                        | Who authors                        | Who uses                                |
 | --------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------- |
 | Cluster share               | `/work` (`worker_mount_path`)                                                                     | System administrator (cluster row) | Every worker on the cluster             |
-| Release / runtime           | `/work/epimethyl/current`                                                                         | Promote pipeline                   | Workers (no git)                        |
+| Release / runtime           | `/work/goliath/current`                                                                         | Promote pipeline                   | Workers (no git)                        |
 | Sample scratch              | `/work/samples/{sample_id}/`                                                                      | `init_work_layout.sh`              | Baked `sampleDir` / `samples_base_path` |
 | Study outputs               | `/work/projects/<study>/`                                                                         | Layout + study upsert              | Operator `projectPath`                  |
 | Genomes / site              | `/work/genomes/`, `/work/site/`                                                                   | Provision + site publish           | Site pins                               |
 | Lab FASTQ ingress           | published `fastqSource`                                                                           | Lab admin                          | Study operator (select)                 |
-| Durable sample / H5 archive | published `sampleDestination` (company example: `s3://epimethyl/samples/` on `epimethyl-archive`) | System administrator               | Study operator (select)                 |
+| Durable sample / H5 archive | published `sampleDestination` (company example: `s3://goliath/samples/` on `goliath-archive`) | System administrator               | Study operator (select)                 |
 
 
-`/work/epimethyl` ≠ `/work/samples` ≠ the archive prefix. Do not hard-code
+`/work/goliath` ≠ `/work/samples` ≠ the archive prefix. Do not hard-code
 any of those strings into Study UI logic. The portal does not SSH; this
 screen shows **declared** cluster + site + endpoint rows
 ([QNAP inventory](../deployment/reference-inventory-qnap.md),
@@ -905,7 +905,7 @@ does not exist; former `e_portal.*` helpers that remain are `portal.*`
 8. Enable Stop from catalog `can_stop`, not role guesswork.
 9. **Affinity is opaque** — show the key.
 10. Retry is operator-gated `FAILED`→`READY` with the same inputs — never a free-form status editor.
-11. **System administrator** sees clusters, workers, **and** the declared `/work` + published-archive map. Do not hide deployment inside Study Storage, and do not put a site prefix (`s3://epimethyl/samples/`) in nav.
+11. **System administrator** sees clusters, workers, **and** the declared `/work` + published-archive map. Do not hide deployment inside Study Storage, and do not put a site prefix (`s3://goliath/samples/`) in nav.
 
 
 

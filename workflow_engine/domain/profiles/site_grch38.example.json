@@ -21,7 +21,7 @@
       "qc_bam_engine": "mojo",
       "qc_bam_fallback": "error",
       "dual_graph_parallel": false,
-      "image": "epimethyl/methylgrapher:1.70-mojo"
+      "image": "goliath/methylgrapher:1.70-mojo"
     },
     "parabricks": {
       "engine": "parabricks",
@@ -172,7 +172,7 @@
       "fastq_storage": {
         "type": "file",
         "basePath": "/work/genomes/pangenome",
-        "endpointRef": "epimethyl-genomes"
+        "endpointRef": "goliath-genomes"
       },
       "full": {
         "prefix": "canary/gse261315/SRR28293403/full/",

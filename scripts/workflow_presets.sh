@@ -16,7 +16,7 @@ Presets collapse --program, --context-file, and --context for common studies.
 
 Environment overrides:
   METHYL_PROJECT_PATH   Study manifest (default: prostate-cancer example paths)
-  METHYL_RUNTIME_ROOT   Use /work/epimethyl/current/runtime-bundle instead of repo paths
+  METHYL_RUNTIME_ROOT   Use /work/goliath/current/runtime-bundle instead of repo paths
 EOF
 }
 

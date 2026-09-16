@@ -106,7 +106,7 @@ methyl-hyperparam-search \
 | Environment | Where | Role |
 |-------------|-------|------|
 | **Development** | Repo checkout + `.venv` | Author/unit-test the driver, objective, and mapper/gene-select fixes; `--dry-run` and smoke grids only. |
-| **Experimentation** | Promoted release venv (`/work/epimethyl/current`) + JSON under `/work` | Run the outer loop; knobs are `base_mc_config.json` / `grid_*.json` / `weights_*.json`; scores gene-FeatureCuts BA from stability-only runs; no `wf`/`cfg` schema changes. |
+| **Experimentation** | Promoted release venv (`/work/goliath/current`) + JSON under `/work` | Run the outer loop; knobs are `base_mc_config.json` / `grid_*.json` / `weights_*.json`; scores gene-FeatureCuts BA from stability-only runs; no `wf`/`cfg` schema changes. |
 | **Production** | DB-backed gateway workflows | Consumes the winning locked config via `resolvedConfig`; the search driver is not on the production task path — only its result is promoted. |
 
 The experimentation environment depends on package capabilities (gene-FeatureCuts BA objective fallback, nullable gene-select caps, mapper discovery-CSV default) being in the promoted release; until then run from a repo checkout that has them.

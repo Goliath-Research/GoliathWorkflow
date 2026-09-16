@@ -23,7 +23,7 @@ Deploy **in order**:
 | 11c | [`wf_action_dispatch_affinity.sql`](wf_action_dispatch_affinity.sql) | Soft affinity columns + 12-arg upsert + `wf_stamp_affinity_key` |
 | 12 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
 | 13 | [`wf_sql_collection_bindings.sql`](wf_sql_collection_bindings.sql) | Collection binding resolution at instance start |
-| 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles + `epimethyl-genomes` endpoint |
+| 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles + `goliath-genomes` endpoint |
 | 15 | [`cfg_reference_assets_seed.sql`](cfg_reference_assets_seed.sql) | Linear / GENCODE / pangenome `cfg.reference_asset` recipes |
 | 15a | [`cfg_site_reference_assets_seed.sql`](cfg_site_reference_assets_seed.sql) | Calls `cfg.cfg_repo_link_site_asset` for `default@1` (stock `pangenome_bundle` only). Re-run or `methyl-cfg link-site-assets --deploy-db` after the site exists. |
 | 16 | [`portal_workflow_api.sql`](portal_workflow_api.sql) | Portal workflow builder + instance lifecycle (`portal.sp_*`) |
@@ -31,7 +31,7 @@ Deploy **in order**:
 
 `deploy_azure.sh` also applies the full `cfg_*` stack (schema, registry tables, relationships, repo/portal APIs) before the portal/genome seeds above. Fresh installs get wide `site_reference_asset.asset_role` values (including `houseman_seed_basis` / `hitimed_hierarchy_basis`) from [`cfg_wf_relationships.sql`](cfg_wf_relationships.sql).
 
-**Existing DB upgrade only** (not in `deploy_azure.sh`): [`migrations/20260721_site_reference_asset_deconv_roles.sql`](migrations/20260721_site_reference_asset_deconv_roles.sql) widens the CHECK; [`migrations/20260822_drop_e_portal.sql`](migrations/20260822_drop_e_portal.sql) drops leftover `e_portal` (already applied on `epimethyl`). MSSQL twin: [`../sql_mssql/migrations/`](../sql_mssql/migrations/).
+**Existing DB upgrade only** (not in `deploy_azure.sh`): [`migrations/20260721_site_reference_asset_deconv_roles.sql`](migrations/20260721_site_reference_asset_deconv_roles.sql) widens the CHECK; [`migrations/20260822_drop_e_portal.sql`](migrations/20260822_drop_e_portal.sql) drops leftover `e_portal` (already applied on `goliath`). MSSQL twin: [`../sql_mssql/migrations/`](../sql_mssql/migrations/).
 
 Genome inventory ops: [`docs/deployment/reference-inventory-qnap.md`](../../docs/deployment/reference-inventory-qnap.md). Note: [`scripts/populate_postgres_reference_data.py`](../../scripts/populate_postgres_reference_data.py) seeds the **action catalog** (and optional workflow defs), **not** `cfg.reference_asset` / genomes.
 
@@ -72,9 +72,9 @@ Use [`deploy_azure.sh`](deploy_azure.sh) from a machine whose IP is allowed in t
 **Native auth (`dba`):**
 
 ```bash
-export PGHOST=epimethyl.postgres.database.azure.com
+export PGHOST=goliath.postgres.database.azure.com
 export PGPORT=5432
-export PGDATABASE=epimethyl
+export PGDATABASE=goliath
 export PGUSER=dba
 export PGPASSWORD='...'          # store in Key Vault / env, not in git
 export PGSSLMODE=require
@@ -82,14 +82,14 @@ export PGSSLMODE=require
 ./workflow_engine/sql_pg/deploy_azure.sh
 ```
 
-Server FQDN from Azure Portal is `<server-name>.postgres.database.azure.com` (here **`epimethyl.postgres.database.azure.com`**). Canonical parity database is **`epimethyl`**. The leftover Azure PG database named **`postgres`** is a stale older wf-only deploy — do not treat it as the twin.
+Server FQDN from Azure Portal is `<server-name>.postgres.database.azure.com` (here **`goliath.postgres.database.azure.com`**). canonical parity database is **`goliath`**. The leftover Azure PG database named **`postgres`** is a stale older wf-only deploy — do not treat it as the twin.
 
 **Microsoft Entra ID:**
 
 ```bash
-export PGHOST=epimethyl.postgres.database.azure.com
+export PGHOST=goliath.postgres.database.azure.com
 export PGPORT=5432
-export PGDATABASE=epimethyl
+export PGDATABASE=goliath
 export PGUSER='you@goliathresearch.com'
 export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
 export PGSSLMODE=require
@@ -101,9 +101,9 @@ export PGSSLMODE=require
 
 ```bash
 export BACKEND_DB=postgres
-export POSTGRES_HOST=epimethyl.postgres.database.azure.com
+export POSTGRES_HOST=goliath.postgres.database.azure.com
 export POSTGRES_PORT=5432
-export POSTGRES_DB=epimethyl
+export POSTGRES_DB=goliath
 export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 ```
@@ -151,11 +151,11 @@ Production OvR at scale uses **DataDrivenPipeline** / **ValidationPipeline** wit
 
 ## Local container
 
-Canonical database name is **`epimethyl`**. CI parity uses `methylpipeline_parity` (see `.github/workflows/db-parity.yml`). Prefer `deploy_azure.sh` over the ad-hoc loop below.
+Canonical database name is **`goliath`**. CI parity uses `methylpipeline_parity` (see `.github/workflows/db-parity.yml`). Prefer `deploy_azure.sh` over the ad-hoc loop below.
 
 ```bash
-docker run -d --name methyl-pg -e POSTGRES_PASSWORD=methyl -e POSTGRES_DB=epimethyl -p 5432:5432 postgres:17
-export PGHOST=localhost PGDATABASE=epimethyl PGUSER=postgres PGPASSWORD=methyl
+docker run -d --name methyl-pg -e POSTGRES_PASSWORD=methyl -e POSTGRES_DB=goliath -p 5432:5432 postgres:17
+export PGHOST=localhost PGDATABASE=goliath PGUSER=postgres PGPASSWORD=methyl
 ./workflow_engine/sql_pg/deploy_azure.sh
 ```
 

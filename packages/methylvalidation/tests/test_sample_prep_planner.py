@@ -358,7 +358,7 @@ def test_prefix_base_on_fastq_storage(tmp_path: Path) -> None:
     project_path = _write_project(tmp_path)
     storage = {
         "type": "s3",
-        "bucket": "epimethyl",
+        "bucket": "goliath",
         "region": "us-east-1",
         "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
         "prefixBase": "samples/",

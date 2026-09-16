@@ -8,7 +8,7 @@ Single navigation page for production operators. Each step links to the canonica
 
 | Step | Action | Deep dive |
 |------|--------|-----------|
-| 1 | Mount shared storage at `/work`, then `scripts/init_work_layout.sh` (`/work/samples` writable; `/work/genomes` and `/work/epimethyl` worker-readable) | [Production platform — Phase 0](production-platform.md#phase-0-shared-storage-and-site) |
+| 1 | Mount shared storage at `/work`, then `scripts/init_work_layout.sh` (`/work/samples` writable; `/work/genomes` and `/work/goliath` worker-readable) | [Production platform — Phase 0](production-platform.md#phase-0-shared-storage-and-site) |
 | 2 | Install site manifest at `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | [Layer model](../architecture/layer-model.md) |
 | 3 | Production DB = Azure SQL (portal); PostgreSQL for parity/CI | [Usage ch.14](../usage/14-deployment-and-distributed-workflow.md) |
 
@@ -28,9 +28,9 @@ See [Lambda worker join](lambda_worker_join.md) (Azure vs QNAP vs NGC vs Arc), [
 
 | Step | Script / pipeline | Deep dive |
 |------|-------------------|-----------|
-| 9 | Tag release build | Azure DevOps `ci/azure-pipelines-release.yml` (`v*`) |
-| 10 | Assemble MP + MethylExtractor | `ci/azure-pipelines-release-assemble.yml` → `scripts/assemble_release.sh` |
-| 11 | Promote to `/work/epimethyl/current` | `ci/azure-pipelines-release-deploy.yml` → `scripts/promote_release.sh` |
+| 9 | Tag release build | GitHub Actions `.github/workflows/release.yml` (`v*`) |
+| 10 | Assemble MP + MethylExtractor | `.github/workflows/release-assemble.yml` → `scripts/assemble_release.sh` |
+| 11 | Promote to `/work/goliath/current` | `.github/workflows/release-deploy.yml` → `scripts/promote_release.sh` |
 | 12 | Post-promote verify | `scripts/verify_setup.sh` (deploy pipeline); optional `scripts/verify_e2e_node.sh` on GPU worker |
 
 See [Production release](production_release.md).
@@ -51,7 +51,7 @@ See [Production release](production_release.md).
 |------|--------|------|
 | Smoke (stub worker) | `WORKER_STUB_EXTERNAL=1 bash scripts/smoke_sample_prep.sh` | After bootstrap |
 | Smoke (lifecycle) | `bash scripts/smoke_study_lifecycle.sh` | After workflow deploy |
-| Nightly CI smoke | `ci/azure-pipelines-smoke.yml` | Scheduled on `production-work-agents` |
+| Nightly CI smoke | `.github/workflows/smoke.yml` | Scheduled on `production-work-agents` |
 | Rollback release | Re-run deploy pipeline with previous `releaseVersion` | [Production release — rollback](production_release.md#rollback) |
 
 ## Script catalog (operator)
@@ -62,14 +62,14 @@ See [Production release](production_release.md).
 | `provision_gateway_node.sh` | Gateway VM local venv + systemd + nginx (no `/work`) |
 | `provision_worker_node.sh` | Auto first/join: seed `/work` then enroll, or host tools then enroll |
 | `assemble_release.sh` | Bundle MethylPipeline + MethylExtractor artifacts |
-| `promote_release.sh` | Flip `/work/epimethyl/current`, refresh venv, worker env |
+| `promote_release.sh` | Flip `/work/goliath/current`, refresh venv, worker env |
 | `deploy_workflow_definitions.sh` | Compile + deploy DomainPrograms via direct DB (`methyl-study-start` / `ops`) |
 | `install_gateway_systemd.sh` | Install arch-aware gateway unit (`venv-<arch>`) |
 | `preflight_worker_join.sh` | QNAP `/work` + `current/manifest` join checks |
 | `register_worker.sh` | Gateway enroll when `WORKER_API_BASE` is set; direct-DB only with `METHYL_ALLOW_WORKER_SQL=1` |
 | `verify_setup.sh` | Release layout + script presence |
 | `verify_e2e_node.sh` | GPU worker verify (Parabricks, HDF5 plugin, venv) |
-| `init_work_layout.sh` | Create `/work` roots; samples/projects/cache `0777`, genomes/site/epimethyl `0755` |
+| `init_work_layout.sh` | Create `/work` roots; samples/projects/cache `0777`, genomes/site/goliath `0755` |
 | `verify_work_layout.sh` | Four-layer path, access modes, and env sanity |
 | `smoke_sample_prep.sh` | End-to-end SamplePrep instance smoke |
 | `smoke_study_lifecycle.sh` | Validation lifecycle smoke |

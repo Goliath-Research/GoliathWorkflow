@@ -33,7 +33,7 @@ except ImportError:  # stale sister: work_share loaded before append_work_text e
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MOJO_IMAGE = "epimethyl/methylgrapher:1.70-mojo"
+DEFAULT_MOJO_IMAGE = "goliath/methylgrapher:1.70-mojo"
 
 
 @dataclass(frozen=True)

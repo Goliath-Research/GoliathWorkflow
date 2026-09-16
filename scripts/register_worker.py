@@ -182,7 +182,7 @@ def _resolve_token_env_file(explicit: Optional[Path]) -> Path:
     secure = os.environ.get("METHYL_WORKER_TOKEN_FILE", "").strip()
     if secure:
         return Path(secure)
-    legacy = Path(os.environ.get("EPIMETHYL_ENV_DIR", "/work/epimethyl/env")) / "worker.env"
+    legacy = Path(os.environ.get("GOLIATH_ENV_DIR", "/work/goliath/env")) / "worker.env"
     if legacy.is_file():
         return legacy
     return DEFAULT_TOKEN_FILE
@@ -191,7 +191,7 @@ def _resolve_token_env_file(explicit: Optional[Path]) -> Path:
 def _write_worker_credentials(env_file: Path, worker_id: int, token: str) -> None:
     """Write credentials to a root-owned 600 file outside shared /work when possible."""
     target = env_file
-    if target.parent == Path("/work/epimethyl/env") or str(target).startswith("/work/"):
+    if target.parent == Path("/work/goliath/env") or str(target).startswith("/work/"):
         target = DEFAULT_TOKEN_FILE
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -262,7 +262,7 @@ def _register_postgres(
                   cluster_key, name, shared_storage_uri, worker_mount_path, status,
                   allowed_source_cidrs, entra_client_id, arc_resource_id
                 )
-                VALUES (%s, %s, '/work/epimethyl', '/work/epimethyl', 'ACTIVE', %s::jsonb, %s, %s)
+                VALUES (%s, %s, '/work/goliath', '/work/goliath', 'ACTIVE', %s::jsonb, %s, %s)
                 ON CONFLICT (cluster_key) DO UPDATE SET
                   name = EXCLUDED.name,
                   shared_storage_uri = EXCLUDED.shared_storage_uri,
@@ -350,15 +350,15 @@ ON target.cluster_key = source.cluster_key
 WHEN MATCHED THEN
   UPDATE SET
     name = N'GoliathOmics cluster',
-    shared_storage_uri = N'/work/epimethyl',
-    worker_mount_path = N'/work/epimethyl',
+    shared_storage_uri = N'/work/goliath',
+    worker_mount_path = N'/work/goliath',
     allowed_source_cidrs = COALESCE({cidrs_val}, target.allowed_source_cidrs),
     entra_client_id = COALESCE({entra_val}, target.entra_client_id),
     arc_resource_id = COALESCE({arc_val}, target.arc_resource_id)
 WHEN NOT MATCHED THEN
   INSERT (cluster_key, name, shared_storage_uri, worker_mount_path, status, allowed_source_cidrs, entra_client_id, arc_resource_id)
   VALUES (
-    source.cluster_key, N'GoliathOmics cluster', N'/work/epimethyl', N'/work/epimethyl', N'ACTIVE',
+    source.cluster_key, N'GoliathOmics cluster', N'/work/goliath', N'/work/goliath', N'ACTIVE',
     {cidrs_val}, {entra_val}, {arc_val}
   );
 
@@ -398,7 +398,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
     )
     parser.add_argument("--key", default="", help="external_worker_key")
-    parser.add_argument("--cluster", default=os.environ.get("CLUSTER_KEY", "epimethyl"))
+    parser.add_argument("--cluster", default=os.environ.get("CLUSTER_KEY", "goliath"))
     parser.add_argument("--capability", action="append", default=[])
     parser.add_argument(
         "--auto-detect",
@@ -413,7 +413,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--env-file",
         default="",
-        help="Credential file (default: /etc/methyl/worker-token or legacy /work/epimethyl/env/worker.env)",
+        help="Credential file (default: /etc/methyl/worker-token or legacy /work/goliath/env/worker.env)",
     )
     parser.add_argument("--token", default="")
     parser.add_argument("--allowed-cidr", action="append", default=[], dest="allowed_cidrs")

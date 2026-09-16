@@ -29,8 +29,8 @@ Optional override: `METHYLPIPELINE_DB` (full DSN). Schema: `WF_SCHEMA` (default 
 Templates: [`deploy/env/gateway.postgres.env.example`](../../deploy/env/gateway.postgres.env.example), [`deploy/env/gateway.mssql.env.example`](../../deploy/env/gateway.mssql.env.example).
 
 ```bash
-set -a && source /work/epimethyl/env/gateway.env && set +a
-source /work/epimethyl/venv-aarch64/bin/activate   # or repo .venv
+set -a && source /work/goliath/env/gateway.env && set +a
+source /work/goliath/venv-aarch64/bin/activate   # or repo .venv
 ```
 
 ## Subcommands

@@ -13,7 +13,7 @@ if [ -f "devcontainer.json" ] && [ -f "devcontainer-simple.json" ]; then
     echo "Current configuration:"
     if grep -q "dockerComposeFile" devcontainer.json; then
         echo "  📋 Docker Compose method (devcontainer.json)"
-    elif grep -q "image.*epimethyl" devcontainer.json; then
+    elif grep -q "image.*goliath" devcontainer.json; then
         echo "  🖼️  Simple image method (devcontainer.json)"
     else
         echo "  ❓ Unknown configuration"

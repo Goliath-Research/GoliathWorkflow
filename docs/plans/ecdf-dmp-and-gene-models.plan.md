@@ -136,7 +136,7 @@ Run:
 ```bash
 source .venv/bin/activate
 methyl-workflow-run \
-  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
+  --program /work/goliath/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
   --context-file /work/projects/prostate-cancer/configs/context_H_PCa_ecdf_gene_covariates.json \
   --parallel-workers 1 -v
 ```

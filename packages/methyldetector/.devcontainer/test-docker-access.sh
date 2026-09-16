@@ -54,19 +54,19 @@ else
     echo "   Error: $(docker ps 2>&1 | head -1)"
 fi
 
-# Test 5: Check if epimethyl container exists
+# Test 5: Check if goliath container exists
 echo ""
-echo "5. Checking for epimethyl container..."
-if docker ps -a | grep -q epimethyl; then
-    echo "   ✅ epimethyl container found"
-    if docker ps | grep -q epimethyl; then
-        echo "   ✅ epimethyl container is running"
+echo "5. Checking for goliath container..."
+if docker ps -a | grep -q goliath; then
+    echo "   ✅ goliath container found"
+    if docker ps | grep -q goliath; then
+        echo "   ✅ goliath container is running"
     else
-        echo "   ⚠️  epimethyl container exists but is not running"
+        echo "   ⚠️  goliath container exists but is not running"
         echo "   Run: cd /home/ubuntu/Work/cuda && docker-compose up -d"
     fi
 else
-    echo "   ❌ epimethyl container not found"
+    echo "   ❌ goliath container not found"
     echo "   Run: cd /home/ubuntu/Work/cuda && docker-compose build && docker-compose up -d"
 fi
 

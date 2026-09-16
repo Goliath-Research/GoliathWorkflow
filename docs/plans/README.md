@@ -1,10 +1,10 @@
 # Implementation plans (Azure DevOps traceability)
 
-Plans in this folder are the **source of truth** for large features. Each plan maps to Azure DevOps work items under Epic **[AB#413 MethylPipeline platform](https://dev.azure.com/EpiMethyl/Development/_workitems/edit/413)**.
+Plans in this folder are the **source of truth** for large features. Each plan maps to Azure DevOps work items under Epic **[AB#413 MethylPipeline platform](https://github.com/Goliath-Research/GoliathWorkflow)**.
 
 **Cursor Plan Mode:** When you finish planning in Cursor, copy the plan here (kebab-case filename, e.g. `my-feature.plan.md`). Do not rely on `~/.cursor/plans/` or `.cursor/plans/` alone — those are not committed unless promoted to this folder. See [`.cursor/rules/plan-mode-docs-plans.mdc`](../../.cursor/rules/plan-mode-docs-plans.mdc).
 
-**Historical backlog:** Epic [#283 MethylPipeline](https://dev.azure.com/EpiMethyl/Development/_workitems/edit/283) (package-era Features such as MethylUtils / MethylCentroid) is retained for history and is **Related** to AB#413. New work goes under AB#413.
+**Historical backlog:** Epic [#283 MethylPipeline](https://github.com/Goliath-Research/GoliathWorkflow) (package-era Features such as MethylUtils / MethylCentroid) is retained for history and is **Related** to AB#413. New work goes under AB#413.
 
 **Seed tooling:** [`scripts/ado_traceability/`](../../scripts/ado_traceability/) — generate manifest, idempotent Boards seed, backfill plan IDs, link commits (`link_commits.py --apply`).
 
@@ -12,12 +12,12 @@ Commits are attached as **Fixed in Commit** artifact links (no git history rewri
 
 ## Work item mapping
 
-Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User Story (one per plan todo)**.
+Hierarchy (Goliath Agile): **Epic (AB#413) → Feature (one per plan) → User Story (one per plan todo)**.
 
 | Plan file | ADO Feature | Title | Child User Stories (todo ids) |
 |-----------|-------------|-------|-------------------------------|
 | [`sql-backend-schema-parity.plan.md`](sql-backend-schema-parity.plan.md) | _(pending ADO)_ | SQL backend schema parity (Azure SQL ↔ PostgreSQL) | `canonical-pg-inventory`, `close-sql-pg-drift`, `extract-mssql-legacy-ddl`, `port-clinical-ddl-pg`, `port-legacy-routines`, `contract-ci-docs` |
-| MethylExtractor [`methylextractor-c-perf.plan.md`](https://dev.azure.com/EpiMethyl/Development/_git/MethylExtractor?path=/docs/plans/methylextractor-c-perf.plan.md) | _(pending ADO)_ | MethylExtractor C throughput (chrom-parallel) | `instrument-timing`, `intra-chrom-io`, `chrom-pool`, `pipeline-config`, `parity-docs` |
+| MethylExtractor [`methylextractor-c-perf.plan.md`](https://github.com/Goliath-Research/MethylExtractor/blob/main/docs/plans/methylextractor-c-perf.plan.md) | _(pending ADO)_ | MethylExtractor C throughput (chrom-parallel) | `instrument-timing`, `intra-chrom-io`, `chrom-pool`, `pipeline-config`, `parity-docs` |
 | [`production-gpu-worker-layout.plan.md`](production-gpu-worker-layout.plan.md) | **AB#414** | Production GPU worker layout | `define-layout`, `extractor-ci`, `pipeline-ci`, `install-release`, `gpu-node-runbook`, `docker-shared`, `worker-provision` |
 | [`platform-deploy-database-gateway-workers.plan.md`](platform-deploy-database-gateway-workers.plan.md) | _(pending ADO)_ | Platform deploy — database twins, gateway, workers | `sync-sql-twins`, `python-entity-seed`, `decouple-gateway-from-work`, `wire-gateway-vm`, `rewrite-provision-flow`, `no-sql-on-gpu`, `shared-seed-first-worker`, `harden-join-path`, `retarget-cluster-docs` |
 | [`devops-ci-cd-release.plan.md`](devops-ci-cd-release.plan.md) | **AB#422** | DevOps CI/CD release pipeline | `me-release-ci`, `mp-release-ci`, `assemble-script`, `assemble-pipeline`, `deploy-pipeline`, `docs-ci-cd` |
@@ -176,7 +176,7 @@ Part of Feature AB#422 (DevOps CI/CD release); Epic AB#413.
 ```
 
 ```
-Document production release layout on /work/epimethyl (AB#415)
+Document production release layout on /work/goliath (AB#415)
 
 Implements production-gpu-worker-layout plan todo define-layout.
 ```

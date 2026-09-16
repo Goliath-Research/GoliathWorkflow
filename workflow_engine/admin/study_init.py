@@ -152,7 +152,7 @@ def write_study(
         store_dir = Path(
             __import__("os").environ.get(
                 "METHYL_CFG_STORE",
-                str(Path("/work/epimethyl/cfg-store")),
+                str(Path("/work/goliath/cfg-store")),
             )
         )
         store = FileConfigStore(store_dir)
@@ -252,7 +252,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--cfg-store",
         type=Path,
         default=None,
-        help="cfg FileConfigStore dir (default: METHYL_CFG_STORE or /work/epimethyl/cfg-store)",
+        help="cfg FileConfigStore dir (default: METHYL_CFG_STORE or /work/goliath/cfg-store)",
     )
     args = parser.parse_args(argv)
 

@@ -29,7 +29,7 @@ WORK_ROOT="${METHYL_WORK_ROOT:-${WORK_ROOT:-/work}}"
 SITE="${METHYL_SITE_CONFIG:-$WORK_ROOT/site/methyl_site.json}"
 check_path "Site manifest" "$SITE" 0
 
-# Access modes: samples/projects/cache must be other-writable; genomes/site/epimethyl must not.
+# Access modes: samples/projects/cache must be other-writable; genomes/site/goliath must not.
 is_other_writable() {
   local perm last
   perm="$(stat -c '%a' "$1" 2>/dev/null || echo 0)"
@@ -65,7 +65,7 @@ check_other_writable() {
 
 # samples is the hard contract (every worker + Docker must create/overwrite).
 # projects/cache share the same init mode but do not fail an existing cluster.
-# genomes/site/epimethyl should not be world-writable.
+# genomes/site/goliath should not be world-writable.
 check_other_writable "Samples root" "$WORK_ROOT/samples" 1
 if [[ -d "$WORK_ROOT/projects" ]] && ! is_other_writable "$WORK_ROOT/projects"; then
   warn "Projects root not other-writable: $WORK_ROOT/projects — run scripts/init_work_layout.sh"
@@ -79,7 +79,7 @@ elif [[ -d "$WORK_ROOT/cache" ]]; then
 fi
 check_other_writable "Genomes root" "$WORK_ROOT/genomes" 0
 check_other_writable "Site root" "$WORK_ROOT/site" 0
-check_other_writable "GoliathOmics root" "$WORK_ROOT/epimethyl" 0
+check_other_writable "GoliathOmics root" "$WORK_ROOT/goliath" 0
 
 # When site exists with reference_selection pins, require pinned genome files
 if [[ -f "$SITE" ]]; then
@@ -127,8 +127,8 @@ PY
 fi
 
 # Runtime bundle (production)
-EPIMETHYL_CURRENT="${EPIMETHYL_CURRENT:-$WORK_ROOT/epimethyl/current}"
-RUNTIME_BUNDLE="$EPIMETHYL_CURRENT/runtime-bundle"
+GOLIATH_CURRENT="${GOLIATH_CURRENT:-$WORK_ROOT/goliath/current}"
+RUNTIME_BUNDLE="$GOLIATH_CURRENT/runtime-bundle"
 check_path "Runtime bundle" "$RUNTIME_BUNDLE" 0
 if [[ -d "$RUNTIME_BUNDLE/domain/profiles" ]]; then
   ok "Profile dir under runtime-bundle"
@@ -151,8 +151,8 @@ if [[ -n "${METHYL_VERIFY_PROJECT_PATH:-}" ]]; then
 fi
 
 # Git checkout on workers is discouraged in production
-if [[ -d /work/epimethyl/repos/MethylPipeline ]]; then
-  warn "Git checkout present at /work/epimethyl/repos/MethylPipeline — production workers should use runtime-bundle only"
+if [[ -d /work/goliath/repos/MethylPipeline ]]; then
+  warn "Git checkout present at /work/goliath/repos/MethylPipeline — production workers should use runtime-bundle only"
 fi
 
 # Venv smoke

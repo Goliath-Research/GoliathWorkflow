@@ -26,7 +26,7 @@ echo "✅ Azure CLI authenticated successfully"
 # Create the repository
 echo "📝 Creating MethylClassifier repository..."
 REPO_RESULT=$(az repos create \
-    --organization https://dev.azure.com/EpiMethyl \
+    --organization https://github.com/Goliath-Research \
     --project Development \
     --name MethylClassifier \
     --open-source true \
@@ -92,7 +92,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "🎉 SUCCESS! MethylClassifier repository is now live!"
     echo ""
-    echo "📍 Repository URL: https://dev.azure.com/EpiMethyl/Development/_git/MethylClassifier"
+    echo "📍 Repository URL: https://github.com/Goliath-Research/Development/_git/MethylClassifier"
     echo "🔗 SSH Clone URL: $REPO_URL"
     echo ""
     echo "📋 Next steps:"

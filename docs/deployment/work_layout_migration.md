@@ -6,7 +6,7 @@ Migrate study science from `/work/<disease>/` to `/work/projects/<disease>/` and
 
 | Path | Role | Worker access |
 |------|------|---------------|
-| `/work/epimethyl/` | Deployed runtime (unchanged) | read-only (`0755`; promote host writes) |
+| `/work/goliath/` | Deployed runtime (unchanged) | read-only (`0755`; promote host writes) |
 | `/work/site/methyl_site.json` | Site manifest — genomes, GTF, caches (`METHYL_SITE_CONFIG`) | read-only (`0755`) |
 | `/work/genomes/` | Shared references (`linear/`, `annotation/`, `pangenome/`) | read-only (`0755`; provision-assets writes) |
 | `/work/cache/` | Mapper / enricher caches | writable (`0777`) |
@@ -15,7 +15,7 @@ Migrate study science from `/work/<disease>/` to `/work/projects/<disease>/` and
 
 Initialize with `scripts/init_work_layout.sh --work /work` (Phase 0). The script sets root modes only; it does not recurse.
 
-Off-cluster durable copy of genomes (myQNAPcloud S3): [`scripts/sync_genomes_to_s3.sh`](../../scripts/sync_genomes_to_s3.sh) → `s3://epimethyl/genomes/`.
+Off-cluster durable copy of genomes (myQNAPcloud S3): [`scripts/sync_genomes_to_s3.sh`](../../scripts/sync_genomes_to_s3.sh) → `s3://goliath/genomes/`.
 
 Programs (`*.program.json`) and profiles (`*.profile.json`) stay in the **git repo** under `workflow_engine/domain/`.
 
@@ -79,7 +79,7 @@ methyl-workflow-run \
 | Profile | Pipeline engineering (repo) | `workflow_engine/domain/profiles/` |
 | Program | Pipeline engineering (repo) | `workflow_engine/domain/**/*.program.json` |
 
-Set on workers (`/work/epimethyl/env/worker.env`):
+Set on workers (`/work/goliath/env/worker.env`):
 
 ```bash
 METHYL_SITE_CONFIG=/work/site/methyl_site.json

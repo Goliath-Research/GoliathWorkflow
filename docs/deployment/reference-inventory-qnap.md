@@ -8,13 +8,13 @@ Related: [production-platform.md](production-platform.md) Phase 0 · [config-reg
 
 | Role | `cfg.storage_endpoint` | Object prefix | Credential |
 |------|------------------------|---------------|------------|
-| Reference genomes | `epimethyl-genomes` | `s3://epimethyl/genomes/` | `epimethyl-archive-keys` |
-| Sample / H5 archive | `epimethyl-archive` | `s3://epimethyl/samples/` | same |
+| Reference genomes | `goliath-genomes` | `s3://goliath/genomes/` | `goliath-archive-keys` |
+| Sample / H5 archive | `goliath-archive` | `s3://goliath/samples/` | same |
 | Lab FASTQ ingress | lab-owned endpoint | (never inferred) | lab credentials |
 
 - **S3 endpoint URL:** `https://s3.us-east-1.myqnapcloud.io`
-- **Bucket:** `epimethyl`
-- Genomes use `prefixBase: genomes/` on `epimethyl-genomes`. Recipe keys and site pins are **relative to that prefix**.
+- **Bucket:** `goliath`
+- Genomes use `prefixBase: genomes/` on `goliath-genomes`. Recipe keys and site pins are **relative to that prefix**.
 
 Do **not** upload reference FASTA/GTF/pangenome under `samples/`.
 
@@ -24,15 +24,15 @@ Upload so object keys match `cfg.reference_asset` recipe `key` / `inventoryPrefi
 
 | Asset (`name@version`) | Local `/work` dest | QNAP object prefix | Required files |
 |------------------------|--------------------|--------------------|----------------|
-| `linear-grch38-ensembl-116@1` (**default site pin**) | `/work/genomes/linear/GRCh38/ensembl-116/` | `s3://epimethyl/genomes/linear/GRCh38/ensembl-116/` | `Homo_sapiens.GRCh38.dna.primary_assembly.fa` (+ `.fai`); Clara: `${FASTA}.bwameth.c2t` (+ `.amb/.ann/.bwt/.pac/.sa`); MojoFq2bamMeth: `${FASTA}.C2T.fa` + `${FASTA}.mojo_linear_k15/{meta.json,kmers.bin,offsets.bin,postings.bin,ref.fa}` dense-v1 (prebuild with `mojo-align/fq2bam-meth/scripts/ensure_mojo_linear_index.sh`; do **not** upload an incomplete pack). Provenance: Ensembl 116 primary_assembly. |
-| `gencode-v50@1` (**default site pin**) | `/work/genomes/annotation/gencode/v50/` | `s3://epimethyl/genomes/annotation/gencode/v50/` | `gencode.v50.annotation.gtf` (inventory name; content is GENCODE 50 PRI comprehensive `gencode.v50.primary_assembly.annotation.gtf`). GENCODE seqnames are `chr1` / `chrM`; Ensembl FASTA uses `1` / `MT`. Methylation mapper remaps 1↔chr1. STAR requires exact match — `download_rna_reference_grch38.sh` builds the index from a temporary chr-stripped GTF. |
-| `linear-grch38-ensembl-114@1` (historical) | `/work/genomes/linear/GRCh38/ensembl-114/` | `s3://epimethyl/genomes/linear/GRCh38/ensembl-114/` | Same layout as 116. Keep for 114-aligned BAMs; do **not** mix with a 116 FASTA. |
-| `gencode-v49@1` (historical) | `/work/genomes/annotation/gencode/v49/` | `s3://epimethyl/genomes/annotation/gencode/v49/` | `gencode.v49.annotation.gtf` |
-| `rna-grch38-star-ensembl-116@1` | `/work/genomes/rna/GRCh38/star/ensembl-116/` | `s3://epimethyl/genomes/rna/GRCh38/star/ensembl-116/` | STAR genome index (`SAindex`, …). No `cfg.site_reference_asset` role — provision with `methyl-cfg provision-assets --name rna-grch38-star-ensembl-116` or `sync_genomes_to_s3.sh --only rna`. |
-| `rna-grch38-kallisto-gencode-v50@1` | `/work/genomes/rna/GRCh38/kallisto/` | `s3://epimethyl/genomes/rna/GRCh38/kallisto/` | `gencode.v50.transcripts.fa`, `.idx`, `gencode.v50.tx2gene.tsv` |
-| `pangenome-grch38-d9-1.70@1` | `/work/genomes/pangenome/GRCh38/d9/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9/1.70/` | `hprc-v1.1-mc-grch38.d9.gbz`, `.autoindex.1.70.dist`, `.shortread.withzip.min`, `.shortread.zipcodes`, `.paths.sub` |
-| `pangenome-grch38-d9-bs-1.70@1` | `/work/genomes/pangenome/GRCh38/d9-bs/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/` | native-Mojo methylGrapher C2T+G2A bundle (`hprc-d9-bs.wl.gfa`, `hprc-d9-bs.wl.C2T.*`, `hprc-d9-bs.wl.G2A.*`, `.cpg.tsv`, `node.replacement.json`, report). **`wl.gfa` is required for MethylCall** (~43 GB). Pair with image `:1.70-mojo-cuda` or `:1.70-mojo-rocm`. |
-| SamplePrep canary WGBS (GSE261315 / SRR28293403) | `/work/genomes/pangenome/canary/gse261315/SRR28293403/` | `s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/` | `full/` + `subset/` FASTQ pairs, `checksums.json`, `provenance.json` (HPRC/methylGrapher public WGBS; provision via `scripts/provision_sample_prep_canary.sh`) |
+| `linear-grch38-ensembl-116@1` (**default site pin**) | `/work/genomes/linear/GRCh38/ensembl-116/` | `s3://goliath/genomes/linear/GRCh38/ensembl-116/` | `Homo_sapiens.GRCh38.dna.primary_assembly.fa` (+ `.fai`); Clara: `${FASTA}.bwameth.c2t` (+ `.amb/.ann/.bwt/.pac/.sa`); MojoFq2bamMeth: `${FASTA}.C2T.fa` + `${FASTA}.mojo_linear_k15/{meta.json,kmers.bin,offsets.bin,postings.bin,ref.fa}` dense-v1 (prebuild with `mojo-align/fq2bam-meth/scripts/ensure_mojo_linear_index.sh`; do **not** upload an incomplete pack). Provenance: Ensembl 116 primary_assembly. |
+| `gencode-v50@1` (**default site pin**) | `/work/genomes/annotation/gencode/v50/` | `s3://goliath/genomes/annotation/gencode/v50/` | `gencode.v50.annotation.gtf` (inventory name; content is GENCODE 50 PRI comprehensive `gencode.v50.primary_assembly.annotation.gtf`). GENCODE seqnames are `chr1` / `chrM`; Ensembl FASTA uses `1` / `MT`. Methylation mapper remaps 1↔chr1. STAR requires exact match — `download_rna_reference_grch38.sh` builds the index from a temporary chr-stripped GTF. |
+| `linear-grch38-ensembl-114@1` (historical) | `/work/genomes/linear/GRCh38/ensembl-114/` | `s3://goliath/genomes/linear/GRCh38/ensembl-114/` | Same layout as 116. Keep for 114-aligned BAMs; do **not** mix with a 116 FASTA. |
+| `gencode-v49@1` (historical) | `/work/genomes/annotation/gencode/v49/` | `s3://goliath/genomes/annotation/gencode/v49/` | `gencode.v49.annotation.gtf` |
+| `rna-grch38-star-ensembl-116@1` | `/work/genomes/rna/GRCh38/star/ensembl-116/` | `s3://goliath/genomes/rna/GRCh38/star/ensembl-116/` | STAR genome index (`SAindex`, …). No `cfg.site_reference_asset` role — provision with `methyl-cfg provision-assets --name rna-grch38-star-ensembl-116` or `sync_genomes_to_s3.sh --only rna`. |
+| `rna-grch38-kallisto-gencode-v50@1` | `/work/genomes/rna/GRCh38/kallisto/` | `s3://goliath/genomes/rna/GRCh38/kallisto/` | `gencode.v50.transcripts.fa`, `.idx`, `gencode.v50.tx2gene.tsv` |
+| `pangenome-grch38-d9-1.70@1` | `/work/genomes/pangenome/GRCh38/d9/1.70/` | `s3://goliath/genomes/pangenome/GRCh38/d9/1.70/` | `hprc-v1.1-mc-grch38.d9.gbz`, `.autoindex.1.70.dist`, `.shortread.withzip.min`, `.shortread.zipcodes`, `.paths.sub` |
+| `pangenome-grch38-d9-bs-1.70@1` | `/work/genomes/pangenome/GRCh38/d9-bs/1.70/` | `s3://goliath/genomes/pangenome/GRCh38/d9-bs/1.70/` | native-Mojo methylGrapher C2T+G2A bundle (`hprc-d9-bs.wl.gfa`, `hprc-d9-bs.wl.C2T.*`, `hprc-d9-bs.wl.G2A.*`, `.cpg.tsv`, `node.replacement.json`, report). **`wl.gfa` is required for MethylCall** (~43 GB). Pair with image `:1.70-mojo-cuda` or `:1.70-mojo-rocm`. |
+| SamplePrep canary WGBS (GSE261315 / SRR28293403) | `/work/genomes/pangenome/canary/gse261315/SRR28293403/` | `s3://goliath/genomes/pangenome/canary/gse261315/SRR28293403/` | `full/` + `subset/` FASTQ pairs, `checksums.json`, `provenance.json` (HPRC/methylGrapher public WGBS; provision via `scripts/provision_sample_prep_canary.sh`) |
 
 ### Upload (local → QNAP)
 
@@ -63,15 +63,15 @@ scripts/sync_genomes_to_s3.sh --only pangenome/canary
 ### Verify on QNAP
 
 ```bash
-aws s3 ls s3://epimethyl/genomes/ \
+aws s3 ls s3://goliath/genomes/ \
   --endpoint-url https://s3.us-east-1.myqnapcloud.io
-aws s3 ls s3://epimethyl/genomes/linear/GRCh38/ensembl-116/ \
+aws s3 ls s3://goliath/genomes/linear/GRCh38/ensembl-116/ \
   --endpoint-url https://s3.us-east-1.myqnapcloud.io
-aws s3 ls s3://epimethyl/genomes/annotation/gencode/v50/ \
+aws s3 ls s3://goliath/genomes/annotation/gencode/v50/ \
   --endpoint-url https://s3.us-east-1.myqnapcloud.io
-aws s3 ls s3://epimethyl/genomes/rna/GRCh38/ \
+aws s3 ls s3://goliath/genomes/rna/GRCh38/ \
   --endpoint-url https://s3.us-east-1.myqnapcloud.io
-aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/ \
+aws s3 ls s3://goliath/genomes/pangenome/GRCh38/d9-bs/1.70/ \
   --endpoint-url https://s3.us-east-1.myqnapcloud.io
 ```
 
@@ -88,7 +88,7 @@ aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/ \
 }
 ```
 
-Pin values are inventory prefixes under `/work/genomes/` (and under `s3://epimethyl/genomes/`). `methyl-cfg provision-assets --selected-only` resolves each pin to a published `cfg.reference_asset` whose `inventoryPrefix` matches the pin path.
+Pin values are inventory prefixes under `/work/genomes/` (and under `s3://goliath/genomes/`). `methyl-cfg provision-assets --selected-only` resolves each pin to a published `cfg.reference_asset` whose `inventoryPrefix` matches the pin path.
 
 For WGBS pangenome SamplePrep (`alignmentMode=pangenome_wgbs`), also pin `pangenome_wgbs` and bake C2T/G2A paths into site `actionConfig.methylgrapher_wgbs` (see [`site_grch38.example.json`](../../tools/methyl-config-editor/configs/site_grch38.example.json)). Stock `pangenome` Giraffe indexes are **not** a fallback when the BS bundle is missing.
 
@@ -101,7 +101,7 @@ methyl-cfg import-fs --repo-root . --work-root /work
 # Credential is not in import-fs fixtures — upsert before provision:
 # Copy example, replace REPLACE_WITH_*, then:
 methyl-cfg upsert credential \
-  --file /path/to/epimethyl-archive-keys.json \
+  --file /path/to/goliath-archive-keys.json \
   --publish --provider s3
 # Production: replace secrets via portal.sp_* instead.
 ```
@@ -123,7 +123,7 @@ Layout check (optional site + pinned files): `bash scripts/verify_work_layout.sh
 
 ## Out of band (not cfg genome inventory)
 
-These write under `/work` via public download scripts or packages; they are **not** seeded as `epimethyl-genomes` recipes:
+These write under `/work` via public download scripts or packages; they are **not** seeded as `goliath-genomes` recipes:
 
 | Content | How it lands | Notes |
 |---------|--------------|--------|
@@ -141,8 +141,8 @@ These write under `/work` via public download scripts or packages; they are **no
 | Reference asset recipes | `workflow_engine/sql_{mssql,pg}/cfg_reference_assets_seed.sql` |
 | Site role links (`default@1`) | `workflow_engine/sql_{mssql,pg}/cfg_site_reference_assets_seed.sql` (calls `cfg.cfg_repo_link_site_asset`) and `methyl-cfg link-site-assets --deploy-db`. Stock `pangenome_bundle` (d9-1.70) only; WGBS d9-bs-1.70 is an `@links` swap (`uq_cfg_sra_site_role` + no WGBS role in `ck_cfg_sra_role`). Asset seed alone leaves the grid empty. |
 | JSON fixtures | `workflow_engine/domain/fixtures/reference_assets/*.json` |
-| Endpoint fixture | `workflow_engine/domain/fixtures/storage_endpoints/epimethyl-genomes.json` |
-| Credential example (not auto-imported) | `workflow_engine/domain/fixtures/credentials/epimethyl-archive-keys.example.json` |
+| Endpoint fixture | `workflow_engine/domain/fixtures/storage_endpoints/goliath-genomes.json` |
+| Credential example (not auto-imported) | `workflow_engine/domain/fixtures/credentials/goliath-archive-keys.example.json` |
 
 PostgreSQL DDL lives under **`workflow_engine/sql_pg/`** (not `sql_pgsql`).
 

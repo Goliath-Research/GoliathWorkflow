@@ -236,9 +236,9 @@ def test_resolve_secret_payload_refreshes_cache(tmp_path: Path, monkeypatch) -> 
             "authMode": "explicit_keys",
             "accessKeyId": "AKIA",
             "secretAccessKey": "sec",
-            "credentialName": "epimethyl-archive-keys",
+            "credentialName": "goliath-archive-keys",
             "contentHash": "deadbeef",
         }
     )
     assert resolved["accessKeyId"] == "AKIA"
-    assert read_node_credential_cache("epimethyl-archive-keys", cache_dir=cache_dir)[0] == "deadbeef"
+    assert read_node_credential_cache("goliath-archive-keys", cache_dir=cache_dir)[0] == "deadbeef"

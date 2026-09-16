@@ -18,7 +18,7 @@ REPO_PROFILES = DOMAIN / "profiles"
 
 @pytest.fixture(autouse=True)
 def repo_pipeline_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Prefer repo profile JSON over deployed /work/epimethyl bundles in tests."""
+    """Prefer repo profile JSON over deployed /work/goliath bundles in tests."""
     monkeypatch.setenv("METHYL_PROFILE_DIR", str(REPO_PROFILES))
 
 

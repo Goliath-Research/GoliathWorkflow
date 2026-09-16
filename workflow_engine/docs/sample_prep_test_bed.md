@@ -121,7 +121,7 @@ stub smoke and **not** catalog/golden PR tests.
 | Config example | [`tests/real_data/sample_prep_canary/registry.example.json`](../../tests/real_data/sample_prep_canary/registry.example.json) |
 | Provision FASTQs | `bash scripts/provision_sample_prep_canary.sh` |
 | Run canary | `bash scripts/smoke_sample_prep_real.sh --tier subset` |
-| ADO pipeline | [`ci/azure-pipelines-sample-prep-canary.yml`](../../ci/azure-pipelines-sample-prep-canary.yml) |
+| GitHub Actions | [`.github/workflows/sample-prep-canary.yml`](../../.github/workflows/sample-prep-canary.yml) |
 | Checklist | [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md) |
 
 ```bash

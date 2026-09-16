@@ -9,9 +9,9 @@ For the full production platform (gateway + Arc enroll), see [production-platfor
 | Backend | Role | Data state |
 |---------|------|------------|
 | **Azure SQL** | Production / portal (until cutover) | Populated — actions, workflow defs, instances, workers, clinical portal |
-| **PostgreSQL (`epimethyl`)** | Schema twin / gateway dev / CI | Full `wf` + `cfg` + clinical `portal` / `RBAC` / `Meta` / `Contract` / `Onboarding` DDL + procs; **reference/runtime data often empty**. There is no `e_portal` schema. |
+| **PostgreSQL (`goliath`)** | Schema twin / gateway dev / CI | Full `wf` + `cfg` + clinical `portal` / `RBAC` / `Meta` / `Contract` / `Onboarding` DDL + procs; **reference/runtime data often empty**. There is no `e_portal` schema. |
 
-Canonical PostgreSQL database is **`epimethyl`**. The leftover Azure PG database named **`postgres`** is a stale older wf-only deploy — do not treat it as the twin.
+Canonical PostgreSQL database is **`goliath`**. The leftover Azure PG database named **`postgres`** is a stale older wf-only deploy — do not treat it as the twin.
 
 PostgreSQL is a **schema/procedure twin**, not a full data clone. For worker testing seed **reference metadata** only:
 
@@ -33,8 +33,8 @@ python scripts/db_schema_inventory.py
 ```bash
 source .venv/bin/activate
 
-export POSTGRES_HOST=epimethyl.postgres.database.azure.com
-export POSTGRES_DB=epimethyl
+export POSTGRES_HOST=goliath.postgres.database.azure.com
+export POSTGRES_DB=goliath
 export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 export PGSSLMODE=require
@@ -60,9 +60,9 @@ source .venv/bin/activate
 
 # PostgreSQL (Azure Database for PostgreSQL or local)
 export BACKEND_DB=postgres
-export POSTGRES_HOST=epimethyl.postgres.database.azure.com
+export POSTGRES_HOST=goliath.postgres.database.azure.com
 export POSTGRES_PORT=5432
-export POSTGRES_DB=epimethyl
+export POSTGRES_DB=goliath
 export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 # Or: export METHYLPIPELINE_DB='postgresql://...'
@@ -103,7 +103,7 @@ The bootstrap script (privileged host only — GPU workers must not run it):
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
 methyl-worker enroll \
   --api-base "$WORKER_API_BASE" \
-  --cluster epimethyl \
+  --cluster goliath \
   --key "$(hostname -s)"
 bash scripts/install_worker_systemd.sh
 ```

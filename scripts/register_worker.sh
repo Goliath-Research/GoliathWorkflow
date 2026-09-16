@@ -13,7 +13,7 @@ gateway POST /v1/workers/enroll. Prefer: methyl-worker enroll --api-base … --c
 
 Options:
   --key NAME           external_worker_key (default: hostname)
-  --cluster KEY        cluster_key (default: epimethyl)
+  --cluster KEY        cluster_key (default: goliath)
   --capability NAME    Repeatable capability (omit for auto-detect on this VM)
   --omnibus            Register wildcard '*' capability (legacy omnibus worker)
   --allowed-cidr CIDR  Repeatable cluster source CIDR (Tier C public workers; DB path only)

@@ -24,7 +24,7 @@ todos:
     status: completed
     work_item_id: 595
   - id: azure-pipeline
-    content: Extend ci/azure-pipelines-pr.yml with a full-suite regression + coverage step and PublishTestResults@2 / PublishCodeCoverageResults@2.
+    content: Extend .github/workflows/pr.yml with a full-suite regression + coverage step and PublishTestResults@2 / PublishCodeCoverageResults@2.
     status: completed
     work_item_id: 596
   - id: ci-readme
@@ -69,7 +69,7 @@ coverage measurement, wired into CI, and give it a regulatory-facing document so
 it stands beside Traceability / Validation / Deployment / Change Management.
 
 Decisions (confirmed): host on **Azure DevOps** (extend
-`ci/azure-pipelines-pr.yml`); coverage is **measure-and-report only** at first
+`.github/workflows/pr.yml`); coverage is **measure-and-report only** at first
 (record a baseline, no build-failing threshold yet).
 
 ## Functional changes
@@ -85,7 +85,7 @@ Decisions (confirmed): host on **Azure DevOps** (extend
 2. **CI test runner** ([`../../scripts/run_tests_ci.sh`](../../scripts/run_tests_ci.sh)):
    runs the full suite with `-m "not gpu"`, emitting `test-results/junit.xml`,
    `coverage/coverage.xml`, and `coverage/html/`; no `--cov-fail-under`.
-3. **Azure PR pipeline** ([`../../ci/azure-pipelines-pr.yml`](../../ci/azure-pipelines-pr.yml)):
+3. **Azure PR pipeline** ([`../../.github/workflows/pr.yml`](../../.github/workflows/pr.yml)):
    added a venv build (editable packages + deps), a full regression step, and
    `PublishTestResults@2` / `PublishCodeCoverageResults@2`.
 4. **CI README** ([`../../ci/README.md`](../../ci/README.md)): documents the
@@ -154,7 +154,7 @@ without hard-coding paths:
   sample is not mounted.
 - Tests: real loader, real derived measures (closes the missing H5 integration
   gap), real cohort group, plus registry unit tests.
-- CI: [`../../ci/azure-pipelines-real-data.yml`](../../ci/azure-pipelines-real-data.yml)
+- CI: [`../../.github/workflows/real-data.yml`](../../.github/workflows/real-data.yml)
   runs `-m real_data` on the self-hosted `production-work-agents` pool.
 - Docs: [`../reference/test-data-registry.md`](../reference/test-data-registry.md);
   provenance wired into the regulatory CI/traceability/evidence docs; reference

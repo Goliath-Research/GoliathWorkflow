@@ -53,8 +53,8 @@ def test_resolve_profile_path_explicit_file(tmp_path: Path) -> None:
     assert resolve_profile_path(profile) == profile.resolve()
 
 
-def test_profile_search_dirs_includes_epimethyl_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_profile_search_dirs_includes_goliath_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("METHYL_PROFILE_DIR", raising=False)
-    monkeypatch.setenv("EPIMETHYL_ROOT", "/work/epimethyl")
+    monkeypatch.setenv("GOLIATH_ROOT", "/work/goliath")
     dirs = profile_search_dirs()
     assert any(str(d).endswith("runtime-bundle/domain/profiles") for d in dirs)

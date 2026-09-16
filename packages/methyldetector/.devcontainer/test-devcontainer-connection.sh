@@ -6,22 +6,22 @@ set -e
 echo "Testing MethylDetector devcontainer connection methods..."
 echo "========================================================"
 
-# Check if epimethyl container is running
-echo "1. Checking if epimethyl container is running..."
-if docker ps | grep -q epimethyl; then
-    echo "   ✅ epimethyl container is running"
+# Check if goliath container is running
+echo "1. Checking if goliath container is running..."
+if docker ps | grep -q goliath; then
+    echo "   ✅ goliath container is running"
     CONTAINER_STATUS="running"
 else
-    echo "   ❌ epimethyl container is not running"
+    echo "   ❌ goliath container is not running"
     echo "   Starting container..."
     cd /home/ubuntu/Work/cuda
     docker-compose up -d
     sleep 5
-    if docker ps | grep -q epimethyl; then
-        echo "   ✅ epimethyl container started successfully"
+    if docker ps | grep -q goliath; then
+        echo "   ✅ goliath container started successfully"
         CONTAINER_STATUS="started"
     else
-        echo "   ❌ Failed to start epimethyl container"
+        echo "   ❌ Failed to start goliath container"
         exit 1
     fi
 fi
@@ -39,19 +39,19 @@ fi
 # Test container access
 echo ""
 echo "3. Testing container access..."
-if docker exec epimethyl echo "Container accessible" >/dev/null 2>&1; then
-    echo "   ✅ Can access epimethyl container"
+if docker exec goliath echo "Container accessible" >/dev/null 2>&1; then
+    echo "   ✅ Can access goliath container"
 else
-    echo "   ❌ Cannot access epimethyl container"
+    echo "   ❌ Cannot access goliath container"
     exit 1
 fi
 
 # Test Python environment in container
 echo ""
 echo "4. Testing Python environment in container..."
-if docker exec epimethyl python -c "import sys; print(f'Python: {sys.executable}')" >/dev/null 2>&1; then
+if docker exec goliath python -c "import sys; print(f'Python: {sys.executable}')" >/dev/null 2>&1; then
     echo "   ✅ Python environment is working"
-    PYTHON_PATH=$(docker exec epimethyl python -c "import sys; print(sys.executable)")
+    PYTHON_PATH=$(docker exec goliath python -c "import sys; print(sys.executable)")
     echo "   Python path: $PYTHON_PATH"
 else
     echo "   ❌ Python environment has issues"
@@ -60,11 +60,11 @@ fi
 # Test MethylUtils access
 echo ""
 echo "5. Testing MethylUtils access..."
-if docker exec epimethyl python -c "from methyl_utils.gpu_detection import print_gpu_status" >/dev/null 2>&1; then
+if docker exec goliath python -c "from methyl_utils.gpu_detection import print_gpu_status" >/dev/null 2>&1; then
     echo "   ✅ MethylUtils is accessible"
 else
     echo "   ⚠️  MethylUtils not accessible (may need setup)"
-    echo "   Run: docker exec epimethyl /home/ubuntu/Work/cuda/setup_methyl_packages.sh"
+    echo "   Run: docker exec goliath /home/ubuntu/Work/cuda/setup_methyl_packages.sh"
 fi
 
 echo ""

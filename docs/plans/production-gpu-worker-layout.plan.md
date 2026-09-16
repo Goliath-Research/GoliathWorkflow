@@ -9,7 +9,7 @@ azure_devops:
   epic_id: 413
 todos:
   - id: define-layout
-    content: Document /work/epimethyl/releases/<ver>/ layout + manifest.json schema in docs/deployment/production_release.md
+    content: Document /work/goliath/releases/<ver>/ layout + manifest.json schema in docs/deployment/production_release.md
     status: completed
     work_item_id: 415
   - id: extractor-ci
@@ -29,7 +29,7 @@ todos:
     status: completed
     work_item_id: 419
   - id: docker-shared
-    content: "Extend setup_gpu_node.sh: --docker-data-root /work/epimethyl/docker, single-node pull during release promote"
+    content: "Extend setup_gpu_node.sh: --docker-data-root /work/goliath/docker, single-node pull during release promote"
     status: completed
     work_item_id: 420
   - id: worker-provision
@@ -54,12 +54,12 @@ flowchart TB
   end
 
   subgraph shared [Shared_storage_work_fast]
-    Release["/work/epimethyl/releases/VERSION/"]
-    DockerRoot["/work/epimethyl/docker/"]
-    Venv["/work/epimethyl/venv-ARCH/"]
-    MEbinRoot["/work/epimethyl/methyl-extractor-ARCH/"]
-    Env["/work/epimethyl/env/"]
-    Data["/work/epimethyl/data/ runs/"]
+    Release["/work/goliath/releases/VERSION/"]
+    DockerRoot["/work/goliath/docker/"]
+    Venv["/work/goliath/venv-ARCH/"]
+    MEbinRoot["/work/goliath/methyl-extractor-ARCH/"]
+    Env["/work/goliath/env/"]
+    Data["/work/goliath/data/ runs/"]
   end
 
   subgraph artifacts [Release_artifacts_per_ARCH]
@@ -99,7 +99,7 @@ flowchart TB
 Use a **release pointer** so workers never depend on git paths:
 
 ```
-/work/epimethyl/
+/work/goliath/
   current -> releases/2026.6.1          # symlink; flip on promote
   releases/
     2026.6.1/
@@ -129,14 +129,14 @@ Use a **release pointer** so workers never depend on git paths:
 
 **Per GPU VM (local disk only — lightweight):**
 
-- `/etc/docker/daemon.json` — `"data-root": "/work/epimethyl/docker"` (points daemon at shared store)
+- `/etc/docker/daemon.json` — `"data-root": "/work/goliath/docker"` (points daemon at shared store)
 - NVIDIA driver + Container Toolkit (packages on local OS disk)
 
 **Shared on `/work` (same pattern as venv + MethylExtractor):**
 
-- `/work/epimethyl/docker/` — Parabricks and any other pinned container images
-- `/work/epimethyl/venv-<arch>/` — Python environment
-- `/work/epimethyl/methyl-extractor-<arch>/` — native binary
+- `/work/goliath/docker/` — Parabricks and any other pinned container images
+- `/work/goliath/venv-<arch>/` — Python environment
+- `/work/goliath/methyl-extractor-<arch>/` — native binary
 
 **Do not put on workers:** `repos/MethylExtractor/` sources, editable git checkouts, or dev clones like `/work/MethylPipeline` (keep dev trees separate from `releases/`).
 
@@ -163,7 +163,7 @@ All GPU VMs use the **same** container store so images are pulled **once per rel
 
 ```json
 {
-  "data-root": "/work/epimethyl/docker"
+  "data-root": "/work/goliath/docker"
 }
 ```
 
@@ -172,7 +172,7 @@ After changing `data-root`, restart Docker. New nodes joining the cluster inheri
 **Release promote (once, from one admin node or CI agent with NGC credentials):**
 
 ```bash
-export DOCKER_DATA_ROOT=/work/epimethyl/docker
+export DOCKER_DATA_ROOT=/work/goliath/docker
 # Ensure daemon on this node uses data-root (or use DOCKER_HOST / same config)
 docker pull nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1
 ```
@@ -195,9 +195,9 @@ Document in `manifest.json`: driver min version + Parabricks tag + digest (`dock
 nvidia-smi
 
 # 2. Install Docker + NVIDIA Container Toolkit; configure shared data-root
-bash /work/epimethyl/current/runtime-bundle/scripts/setup_gpu_node.sh \
-  --docker-data-root /work/epimethyl/docker \
-  --env-dir /work/epimethyl/env
+bash /work/goliath/current/runtime-bundle/scripts/setup_gpu_node.sh \
+  --docker-data-root /work/goliath/docker \
+  --env-dir /work/goliath/env
 # Skip --pull-parabricks on worker join if promote step already pulled to shared docker/
 ```
 
@@ -206,7 +206,7 @@ bash /work/epimethyl/current/runtime-bundle/scripts/setup_gpu_node.sh \
 - Run **`docker pull` / `docker load` serially** during release promote (one job), not from every VM simultaneously.
 - Pin image by digest in `manifest.json` so all nodes run the same layers.
 - Requires a filesystem Docker supports for `overlay2` (your fast cluster storage is the intended fit; validate once with `docker run --gpus all` from two VMs concurrently).
-- Container **runtime** temp dirs (`/tmp`, bind mounts under sample dirs) still use local paths or `/work/epimethyl/runs/` — only the **image layers** live in shared `docker/`.
+- Container **runtime** temp dirs (`/tmp`, bind mounts under sample dirs) still use local paths or `/work/goliath/runs/` — only the **image layers** live in shared `docker/`.
 
 ---
 
@@ -226,15 +226,15 @@ methyl-extractor/
   VERSION.txt
 ```
 
-3. **Phase 1:** copy to `/work/epimethyl/releases/<ver>/methyl-extractor-linux-<arch>.tar.gz`
+3. **Phase 1:** copy to `/work/goliath/releases/<ver>/methyl-extractor-linux-<arch>.tar.gz`
 4. **Phase 2:** upload same tarball to Azure Artifacts (Universal Package or Pipeline artifact)
 
 ### Install on shared storage (once per release + arch)
 
 ```bash
 ARCH=aarch64   # or amd64 -> x64 subdir mapping via detect_platform.sh
-RELEASE=/work/epimethyl/releases/2026.6.1
-DEST=/work/epimethyl/methyl-extractor-${ARCH}   # read-only after extract
+RELEASE=/work/goliath/releases/2026.6.1
+DEST=/work/goliath/methyl-extractor-${ARCH}   # read-only after extract
 
 mkdir -p "$DEST"
 tar -xzf "$RELEASE/methyl-extractor-linux-${ARCH}.tar.gz" -C "$DEST"
@@ -244,8 +244,8 @@ chmod -R a-w "$DEST"
 ### worker.env pointers (no sources)
 
 ```
-METHYL_EXTRACTOR_BIN=/work/epimethyl/methyl-extractor-aarch64/bin/MethylExtractor
-HDF5_PLUGIN_PATH=/work/epimethyl/methyl-extractor-aarch64/lib/hdf5_zstd_plugin
+METHYL_EXTRACTOR_BIN=/work/goliath/methyl-extractor-aarch64/bin/MethylExtractor
+HDF5_PLUGIN_PATH=/work/goliath/methyl-extractor-aarch64/lib/hdf5_zstd_plugin
 ```
 
 Smoke test: [`scripts/verify_methyl_extractor.sh`](../../scripts/verify_methyl_extractor.sh).
@@ -269,14 +269,14 @@ Third-party stack from [`requirements-pipeline.txt`](../../requirements-pipeline
 
 1. `python -m build` for each package in `packages.list` + `workers/`
 2. Write **`requirements-worker.lock`** via `pip compile` (add `pip-tools` to CI)
-3. Publish to `/work/epimethyl/releases/<ver>/wheels/`
+3. Publish to `/work/goliath/releases/<ver>/wheels/`
 
 **Install script (once per arch, on shared storage):**
 
 ```bash
 PY=python3.12
-VENV=/work/epimethyl/venv-aarch64
-RELEASE=/work/epimethyl/releases/2026.6.1
+VENV=/work/goliath/venv-aarch64
+RELEASE=/work/goliath/releases/2026.6.1
 
 $PY -m venv "$VENV"
 source "$VENV/bin/activate"
@@ -294,7 +294,7 @@ Host deps still need [`setup_host.sh --system-deps`](../../scripts/setup_host.sh
 Same lockfile; replace `--find-links` with:
 
 ```bash
-pip install --index-url https://pkgs.dev.azure.com/EpiMethyl/_packaging/<feed>/pypi/simple/ \
+pip install --index-url https://pypi.pkg.github.com/Goliath-Research/simple/ \
   -r requirements-worker.lock
 ```
 
@@ -325,7 +325,7 @@ Single source of truth per deploy:
   "python": "3.12",
   "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
   "parabricks_image_digest": "sha256:...",
-  "docker_data_root": "/work/epimethyl/docker",
+  "docker_data_root": "/work/goliath/docker",
   "min_driver_version": "550.xx",
   "artifacts": {
     "aarch64": {
@@ -341,7 +341,7 @@ Single source of truth per deploy:
 }
 ```
 
-Promote release: update `/work/epimethyl/current` symlink; reinstall venv only when lockfile changes.
+Promote release: update `/work/goliath/current` symlink; reinstall venv only when lockfile changes.
 
 ---
 
@@ -378,11 +378,11 @@ sequenceDiagram
 
 Keep using [`deploy/systemd/methyl-worker.service`](../../deploy/systemd/methyl-worker.service) with paths parameterized to your root:
 
-- `ExecStart=/work/epimethyl/venv-aarch64/bin/methyl-worker`
-- `EnvironmentFile=/work/epimethyl/env/worker.env`
+- `ExecStart=/work/goliath/venv-aarch64/bin/methyl-worker`
+- `EnvironmentFile=/work/goliath/env/worker.env`
 - Literal `PATH=` line (systemd does not expand `$PATH` — see [`worker_node.md`](../deployment/worker_node.md))
 
-Generate `worker.env` from manifest + arch (not from `bootstrap_epimethyl.sh` git clone flow). Extend bootstrap later with `--release /work/epimethyl/current` mode.
+Generate `worker.env` from manifest + arch (not from `bootstrap_goliath.sh` git clone flow). Extend bootstrap later with `--release /work/goliath/current` mode.
 
 ---
 
@@ -391,7 +391,7 @@ Generate `worker.env` from manifest + arch (not from `bootstrap_epimethyl.sh` gi
 1. **MethylExtractor pipeline** — build + tarball per arch; publish to `/work/.../releases/` then Azure Artifacts
 2. **MethylPipeline release pipeline** — build wheels, `pip compile` lockfile, runtime-bundle tarball
 3. **`scripts/install_release.sh`** — non-editable install from wheelhouse or Azure feed; replaces editable path in [`install_packages.sh`](../../scripts/install_packages.sh)
-4. **Refactor [`bootstrap_epimethyl.sh`](../../scripts/bootstrap_epimethyl.sh)** — add `--release-dir`, `--arch`, skip git clones; write `worker.env` from manifest
+4. **Refactor [`bootstrap_goliath.sh`](../../scripts/bootstrap_goliath.sh)** — add `--release-dir`, `--arch`, skip git clones; write `worker.env` from manifest
 5. **Extend [`setup_gpu_node.sh`](../../scripts/setup_gpu_node.sh)** — `--docker-data-root`, write `daemon.json` snippet; split **pull** (release job) from **install** (node join)
 6. **Docs** — new `docs/deployment/production_release.md` with driver/Parabricks matrix, shared Docker data-root setup, promote/rollback
 7. **Version alignment** — bump package versions in `pyproject.toml` files coherently on release tags
@@ -402,10 +402,10 @@ Generate `worker.env` from manifest + arch (not from `bootstrap_epimethyl.sh` gi
 
 If you need a working GPU worker before pipelines exist:
 
-1. Manually build MethylExtractor on each arch once → tarball to `/work/epimethyl/releases/manual/`
-2. Tag MethylPipeline → build wheels locally → `pip install` into `/work/epimethyl/venv-<arch>`
+1. Manually build MethylExtractor on each arch once → tarball to `/work/goliath/releases/manual/`
+2. Tag MethylPipeline → build wheels locally → `pip install` into `/work/goliath/venv-<arch>`
 3. `chmod -R a-w` on extractor + optional read-only runtime-bundle copy
-4. Per VM: driver, `setup_gpu_node.sh --docker-data-root /work/epimethyl/docker` (no pull if image already on shared store), `register_worker`, systemd
-5. One-time on shared storage: `docker pull` Parabricks into `/work/epimethyl/docker/`
+4. Per VM: driver, `setup_gpu_node.sh --docker-data-root /work/goliath/docker` (no pull if image already on shared store), `register_worker`, systemd
+5. One-time on shared storage: `docker pull` Parabricks into `/work/goliath/docker/`
 
 This matches your phased choice: **shared storage first** (venv, MethylExtractor, **and Docker images** on fast `/work`), Azure Artifacts as the target without blocking initial deployment.

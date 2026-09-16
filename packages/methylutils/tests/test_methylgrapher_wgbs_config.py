@@ -86,14 +86,14 @@ def test_site_slice_merges_action_config_image_with_genome_bundle() -> None:
         },
         "actionConfig": {
             "methylgrapher_wgbs": {
-                "image": "epimethyl/methylgrapher:1.70-mojo",
+                "image": "goliath/methylgrapher:1.70-mojo",
                 "engine": "mojo",
                 "align_engine": "gpu_giraffe",
             }
         },
     }
     out = site_slice_for_action(site, "methylgrapher_wgbs")
-    assert out["image"] == "epimethyl/methylgrapher:1.70-mojo"
+    assert out["image"] == "goliath/methylgrapher:1.70-mojo"
     assert out["engine"] == "mojo"
     assert out["align_engine"] == "gpu_giraffe"
     assert out["c2t"]["gbz"] == "/c2t.gbz"
@@ -133,7 +133,7 @@ def test_procedure_overlay_keeps_site_image_and_align_engine(tmp_path: Path) -> 
                 "ref_paths": str(tmp_path / "ref.paths"),
                 "cpg_tsv": str(tmp_path / "cpg.tsv"),
                 "linear_ref_fasta": str(tmp_path / "lin.fa"),
-                "image": "epimethyl/methylgrapher:1.70-mojo",
+                "image": "goliath/methylgrapher:1.70-mojo",
                 "engine": "mojo",
                 "align_engine": "gpu_giraffe",
                 "threads": 64,
@@ -149,11 +149,11 @@ def test_procedure_overlay_keeps_site_image_and_align_engine(tmp_path: Path) -> 
     merged = resolve_action_config(
         "methylgrapher_wgbs", site=site, profile_action_config=profile
     )
-    assert merged["image"] == "epimethyl/methylgrapher:1.70-mojo"
+    assert merged["image"] == "goliath/methylgrapher:1.70-mojo"
     assert merged["engine"] == "mojo"
     assert merged["align_engine"] == "gpu_giraffe"
     assert merged["alignment_mode"] == "pangenome_wgbs"
     genome = resolve_methylgrapher_wgbs_genome(resolved_config=merged)
-    assert genome["image"] == "epimethyl/methylgrapher:1.70-mojo"
+    assert genome["image"] == "goliath/methylgrapher:1.70-mojo"
     assert genome["align_engine"] == "gpu_giraffe"
     assert genome["alignment_mode"] == "pangenome_wgbs"

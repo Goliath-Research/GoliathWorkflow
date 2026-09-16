@@ -3,25 +3,25 @@
 #
 # Twin of workflow_engine/sql_mssql/deploy_azure.sh — every new table/proc/seed SQL
 # that exists in both trees must be listed in both SCRIPTS arrays (see
-# scripts/check_sql_deploy_twins.py). Canonical database name is epimethyl.
+# scripts/check_sql_deploy_twins.py). Canonical database name is goliath.
 #
 # Prerequisites:
 #   - psql (PostgreSQL client 15+)
 #   - Your client IP allowed in Azure PG firewall (or run from Azure VM / Cloud Shell)
-#   - Login granted CONNECT on database epimethyl (canonical parity target)
+#   - Login granted CONNECT on database goliath (canonical parity target)
 #
 # Native PostgreSQL auth (dba):
-#   export PGHOST=epimethyl.postgres.database.azure.com
+#   export PGHOST=goliath.postgres.database.azure.com
 #   export PGPORT=5432
-#   export PGDATABASE=epimethyl
+#   export PGDATABASE=goliath
 #   export PGUSER=dba
 #   export PGPASSWORD='...'
 #   ./deploy_azure.sh
 #
 # Microsoft Entra ID auth:
-#   export PGHOST=epimethyl.postgres.database.azure.com
+#   export PGHOST=goliath.postgres.database.azure.com
 #   export PGPORT=5432
-#   export PGDATABASE=epimethyl
+#   export PGDATABASE=goliath
 #   export PGUSER='you@goliathresearch.com'
 #   export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
 #   ./deploy_azure.sh
@@ -34,9 +34,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-export PGHOST="${PGHOST:-epimethyl.postgres.database.azure.com}"
+export PGHOST="${PGHOST:-goliath.postgres.database.azure.com}"
 export PGPORT="${PGPORT:-5432}"
-export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-epimethyl}}"
+export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-goliath}}"
 export PGSSLMODE="${PGSSLMODE:-require}"
 
 if [[ -z "${PGUSER:-}" ]]; then

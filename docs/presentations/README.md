@@ -13,7 +13,7 @@ This folder contains two Markdown slide decks for a mixed scientific and technic
 - `methylpipeline-workflows-model-prediction-executive.md`
   - Focus: executive summary of workflows + governance checkpoints (8-10 slides).
 - `regulatory-ready-platform-multiomics.md`
-  - Focus: **sales** briefing — colorful interactive Marp theme (`themes/epimethyl-sales.css`), DomainProgram / distributed-worker diagrams, packs roadmap, open-core GTM.
+  - Focus: **sales** briefing — colorful interactive Marp theme (`themes/goliath-sales.css`), DomainProgram / distributed-worker diagrams, packs roadmap, open-core GTM.
   - Source narrative: `docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md`.
   - Shareable outputs: self-contained `.html` (bespoke: keyboard, OSC, progress, `P` presenter) and `.pdf` (email attach).
 
@@ -58,7 +58,7 @@ fitted static snapshot.
 ```bash
 ./scripts/render_presentations.sh
 # or one sales deck:
-marp --template bespoke --theme-set docs/presentations/themes/epimethyl-sales.css \
+marp --template bespoke --theme-set docs/presentations/themes/goliath-sales.css \
   --bespoke.progress true --html \
   "docs/presentations/regulatory-ready-platform-multiomics.md" \
   -o "docs/presentations/regulatory-ready-platform-multiomics.html"

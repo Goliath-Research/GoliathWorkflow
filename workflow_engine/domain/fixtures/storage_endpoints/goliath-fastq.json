@@ -1,11 +1,11 @@
 {
-  "name": "epimethyl-fastq",
+  "name": "goliath-fastq",
   "version": "1",
   "type": "s3",
-  "bucket": "epimethyl",
+  "bucket": "goliath",
   "region": "us-east-1",
   "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
   "prefixBase": "samples/",
   "scope": "lab_ingress",
-  "credentialName": "epimethyl-archive-keys"
+  "credentialName": "goliath-archive-keys"
 }

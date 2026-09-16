@@ -1,10 +1,10 @@
 # MethylDetector Development Container
 
-This directory contains the configuration for using Cursor (or VS Code) with the MethylDetector project inside the epimethyl container.
+This directory contains the configuration for using Cursor (or VS Code) with the MethylDetector project inside the goliath container.
 
 ## Overview
 
-The devcontainer configuration connects Cursor to the existing `epimethyl` container, which provides:
+The devcontainer configuration connects Cursor to the existing `goliath` container, which provides:
 - NVIDIA CUDA 12.8 support with GPU acceleration
 - Pre-installed scientific computing libraries (NumPy, SciPy, Pandas, CuPy, etc.)
 - MethylUtils shared packages
@@ -14,12 +14,12 @@ The devcontainer configuration connects Cursor to the existing `epimethyl` conta
 
 1. **Docker and Docker Compose** must be installed
 2. **NVIDIA Container Toolkit** must be installed for GPU support
-3. **The epimethyl container** must be built and running
+3. **The goliath container** must be built and running
 4. **Docker permissions** must be configured for the ubuntu user (see troubleshooting below)
 
 ## Setup Instructions
 
-### 1. Build and Start the epimethyl Container
+### 1. Build and Start the goliath Container
 
 ```bash
 # Navigate to the cuda directory
@@ -32,14 +32,14 @@ docker-compose build
 docker-compose up -d
 
 # Verify the container is running
-docker ps | grep epimethyl
+docker ps | grep goliath
 ```
 
 ### 2. Install MethylUtils Packages (First Time Only)
 
 ```bash
 # Enter the container
-docker exec -it epimethyl bash
+docker exec -it goliath bash
 
 # Run the setup script
 /home/ubuntu/Work/cuda/setup_methyl_packages.sh
@@ -154,8 +154,8 @@ If Cursor fails to connect to the devcontainer:
 
 ### Container Not Starting
 ```bash
-# Check if the epimethyl container is running
-docker ps | grep epimethyl
+# Check if the goliath container is running
+docker ps | grep goliath
 
 # If not running, start it
 cd /home/ubuntu/Work/cuda
@@ -174,7 +174,7 @@ nvidia-smi
 ### Package Import Errors
 ```bash
 # Reinstall MethylUtils packages
-docker exec -it epimethyl /home/ubuntu/Work/cuda/setup_methyl_packages.sh
+docker exec -it goliath /home/ubuntu/Work/cuda/setup_methyl_packages.sh
 ```
 
 ### Permission Issues
@@ -208,4 +208,4 @@ sudo chown -R ubuntu:ubuntu /path/to/project
 └── README.modeler           # This documentation
 ```
 
-The devcontainer configuration references the existing Docker Compose setup in `/home/ubuntu/Work/cuda/docker-compose.yml` and uses the `epimethyl` container service.
+The devcontainer configuration references the existing Docker Compose setup in `/home/ubuntu/Work/cuda/docker-compose.yml` and uses the `goliath` container service.

@@ -52,7 +52,7 @@ Rollback via actionConfig: `mojo_giraffe_ready=false`, or `align_engine=cpu_vg`,
 "actionConfig": {
   "methylgrapher_wgbs": {
     "engine": "mojo",
-    "image": "epimethyl/methylgrapher:1.70-mojo",
+    "image": "goliath/methylgrapher:1.70-mojo",
     "align_engine": "gpu_giraffe",
     "threads": 64
   }

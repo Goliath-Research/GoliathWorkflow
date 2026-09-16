@@ -26,7 +26,7 @@ def _default_store_dir() -> Path:
     env = os.environ.get("METHYL_CFG_STORE")
     if env:
         return Path(env)
-    return Path(os.environ.get("METHYL_WORK_ROOT", "/work")) / "epimethyl" / "cfg-store"
+    return Path(os.environ.get("METHYL_WORK_ROOT", "/work")) / "goliath" / "cfg-store"
 
 
 def _open_store(store_dir: Optional[str] = None):
@@ -390,7 +390,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--store-dir",
         default=None,
-        help="File-backed cfg store (default: $METHYL_CFG_STORE or /work/epimethyl/cfg-store)",
+        help="File-backed cfg store (default: $METHYL_CFG_STORE or /work/goliath/cfg-store)",
     )
     sub = p.add_subparsers(dest="command", required=True)
 

@@ -10,7 +10,7 @@ alwaysApply: true
 - **`cfg` schema** (Azure SQL / PostgreSQL) owns sites, pipeline profiles, DomainProgram IR, studies, storage endpoints/credentials, reference assets, and action definitions.
 - Operators use **`methyl-cfg`** (`import-fs`, `upsert`, `materialize`, `publish-program`, `sync-actions`, `provision-assets`).
 - **`methyl-cfg materialize`** writes **non-secret** published objects onto `/work` (and runtime-bundle domain paths). **Credentials never materialize** to shared storage; they are expanded into task `input_json` at schedule time.
-- File-backed store for local/CI: `METHYL_CFG_STORE` (default `/work/epimethyl/cfg-store`). See `docs/architecture/config-registry.md`.
+- File-backed store for local/CI: `METHYL_CFG_STORE` (default `/work/goliath/cfg-store`). See `docs/architecture/config-registry.md`.
 
 ## Repository (versioned contracts + CI fixtures)
 
@@ -23,10 +23,10 @@ Developers may still point `methyl-workflow-run --program` at repo paths. In **p
 
 ## Production release bundle (workers + operators, no git)
 
-Each promoted release under `/work/epimethyl/current/` includes:
+Each promoted release under `/work/goliath/current/` includes:
 
 ```
-/work/epimethyl/current/runtime-bundle/
+/work/goliath/current/runtime-bundle/
   domain/profiles/*.profile.json     # also refreshed by methyl-cfg materialize
   domain/fixtures/*.program.json
   domain/checks/*/configs/*.program.json
@@ -39,7 +39,7 @@ Each promoted release under `/work/epimethyl/current/` includes:
 
 ```bash
 methyl-workflow-run \
-  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/samd_research.program.json \
+  --program /work/goliath/current/runtime-bundle/domain/fixtures/samd_research.program.json \
   --context '{"projectPath":"/work/projects/my-study/configs/project_Healthy_vs_Disease.json","pipelineProfile":"samd_research"}' \
   --parallel-workers 1 -v
 ```
@@ -51,7 +51,7 @@ Or set `METHYL_PROFILE=samd_research` (name resolves under `METHYL_PROFILE_DIR`)
 ## `/work` layout (operator / cluster storage, not git)
 
 ```
-/work/epimethyl/              # deployed runtime (releases, venv, env, docker, cfg-store) — worker-readable 0755
+/work/goliath/              # deployed runtime (releases, venv, env, docker, cfg-store) — worker-readable 0755
 /work/site/methyl_site.json   # materialized site (genomes, GTF, caches) — METHYL_SITE_CONFIG — 0755
 /work/site/storage_endpoints/ # non-secret endpoint metadata only
 /work/genomes/                # reference genomes by species (provision recipes) — worker-readable 0755
@@ -63,7 +63,7 @@ Or set `METHYL_PROFILE=samd_research` (name resolves under `METHYL_PROFILE_DIR`)
   <project_name>/              # outputs (monte_carlo_runs, …)
 ```
 
-Phase 0 creates these roots via `scripts/init_work_layout.sh` (also invoked from `bootstrap_epimethyl.sh` / `bootstrap_distributed_workers.sh`). `/work/samples` must stay other-writable so every worker — including Docker-as-root Parabricks — can create and overwrite sample dirs. Do not make `/work/genomes` or `/work/epimethyl` world-writable.
+Phase 0 creates these roots via `scripts/init_work_layout.sh` (also invoked from `bootstrap_goliath.sh` / `bootstrap_distributed_workers.sh`). `/work/samples` must stay other-writable so every worker — including Docker-as-root Parabricks — can create and overwrite sample dirs. Do not make `/work/genomes` or `/work/goliath` world-writable.
 
 Optional: a small instance context JSON on `/work` that only sets `projectPath` (and study-only overrides). **Do not** copy `*.program.json` to `/work/projects/.../configs/`.
 

@@ -29,7 +29,7 @@ def resolve_cfg_store_dir() -> Optional[Path]:
     if env:
         return Path(env)
     work = Path(os.environ.get("METHYL_WORK_ROOT", "/work"))
-    candidate = work / "epimethyl" / "cfg-store"
+    candidate = work / "goliath" / "cfg-store"
     if candidate.is_dir():
         return candidate
     return None

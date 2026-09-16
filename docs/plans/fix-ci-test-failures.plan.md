@@ -31,7 +31,7 @@ todos:
     status: completed
     work_item_id: null
   - id: ci-host-tools
-    content: Install samtools and bedtools in ci/azure-pipelines-pr.yml before the regression suite
+    content: Install samtools and bedtools in .github/workflows/pr.yml before the regression suite
     status: completed
     work_item_id: null
   - id: verify
@@ -55,4 +55,4 @@ Four clusters caused 19 CI failures on `main`:
 
 - Re-applied `wf_repo_create_workflow_instance` and `sp_worker_submit_result` with native `json` params on the dev Azure SQL DB.
 - Restored `_declare_json` / `CAST(? AS json)` bindings in [`workflow_engine/rest/db/mssql.py`](../../workflow_engine/rest/db/mssql.py).
-- Updated worker and methylvalidation tests; installed host CLIs in [`ci/azure-pipelines-pr.yml`](../../ci/azure-pipelines-pr.yml).
+- Updated worker and methylvalidation tests; installed host CLIs in [`.github/workflows/pr.yml`](../../.github/workflows/pr.yml).

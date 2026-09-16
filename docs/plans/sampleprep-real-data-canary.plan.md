@@ -2,7 +2,7 @@
 name: SamplePrep Real Data Canary
 overview: "Add a two-tier, on-demand real-WGBS SamplePrep canary using a pinned public `GSE261315` sample: a deterministic paired-read subset for routine runs and the complete sample for periodic qualification. The same reads will traverse linear Parabricks, stock Giraffe (engineering comparator), and bisulfite-aware methylGrapher branches through QC, extraction, archive, and structured cross-mode reporting."
 
-> **Status: IMPLEMENTED.** Pinned run `SRR28293403` (GSM8140413 / HG00621-Rep1). Provision with [`scripts/provision_sample_prep_canary.sh`](../../scripts/provision_sample_prep_canary.sh); execute with [`scripts/smoke_sample_prep_real.sh`](../../scripts/smoke_sample_prep_real.sh); ADO [`ci/azure-pipelines-sample-prep-canary.yml`](../../ci/azure-pipelines-sample-prep-canary.yml). Operator docs: [`workflow_engine/docs/sample_prep_test_bed.md`](../../workflow_engine/docs/sample_prep_test_bed.md).
+> **Status: IMPLEMENTED.** Pinned run `SRR28293403` (GSM8140413 / HG00621-Rep1). Provision with [`scripts/provision_sample_prep_canary.sh`](../../scripts/provision_sample_prep_canary.sh); execute with [`scripts/smoke_sample_prep_real.sh`](../../scripts/smoke_sample_prep_real.sh); GitHub Actions [`.github/workflows/sample-prep-canary.yml`](../../.github/workflows/sample-prep-canary.yml). Operator docs: [`workflow_engine/docs/sample_prep_test_bed.md`](../../workflow_engine/docs/sample_prep_test_bed.md).
 
 azure_devops:
   type: Feature
@@ -69,7 +69,7 @@ flowchart LR
 | [`scripts/smoke_sample_prep_real.sh`](../../scripts/smoke_sample_prep_real.sh) | Three-mode real orchestrator entry |
 | [`workflow_engine/ops/sample_prep_canary.py`](../../workflow_engine/ops/sample_prep_canary.py) | DB start / poll / report |
 | [`packages/methylutils/methyl_utils/testing/sample_prep_canary.py`](../../packages/methylutils/methyl_utils/testing/sample_prep_canary.py) | Artifact validation + JUnit/Markdown |
-| [`ci/azure-pipelines-sample-prep-canary.yml`](../../ci/azure-pipelines-sample-prep-canary.yml) | Manual + monthly subset schedule |
+| [`.github/workflows/sample-prep-canary.yml`](../../.github/workflows/sample-prep-canary.yml) | Manual + monthly subset schedule |
 
 ## Operator notes
 1. Provision FASTQs once; merge SHA-256 into site `testing.sample_prep_canary`.

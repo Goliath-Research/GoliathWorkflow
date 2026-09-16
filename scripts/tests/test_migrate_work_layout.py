@@ -26,7 +26,7 @@ def layout(tmp_path: Path) -> MigrationConfig:
     old = work / "prostate-cancer"
     new = work / "projects" / "prostate-cancer"
     old.mkdir(parents=True)
-    (work / "epimethyl").mkdir()
+    (work / "goliath").mkdir()
     (work / "samples").mkdir()
     (work / "genomes").mkdir()
     (work / "cache").mkdir()
@@ -68,7 +68,7 @@ def layout(tmp_path: Path) -> MigrationConfig:
 def test_preflight_lists_source(layout: MigrationConfig) -> None:
     report = run_preflight(layout)
     assert report.source_exists
-    assert report.platform_dirs["epimethyl"]
+    assert report.platform_dirs["goliath"]
     assert "configs" in report.source_children
 
 

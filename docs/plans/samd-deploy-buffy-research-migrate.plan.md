@@ -18,7 +18,7 @@ todos:
     status: completed
     work_item_id: 546
   - id: sync-runtime-bundle-samd
-    content: Rsync samd profiles/modes + generic fixtures + pipeline_profiles.py into /work/epimethyl/current/runtime-bundle/domain; verify files present
+    content: Rsync samd profiles/modes + generic fixtures + pipeline_profiles.py into /work/goliath/current/runtime-bundle/domain; verify files present
     status: completed
     work_item_id: 547
   - id: fix-mode-path-resolution
@@ -50,10 +50,10 @@ Canonical fixtures under [`workflow_engine/domain/fixtures/`](../../workflow_eng
 Study-prefixed check programs removed; see `checks/*/PROGRAMS_MOVED.md`.
 
 ### Shared storage
-Rsynced into `/work/epimethyl/current/runtime-bundle/domain/` (profiles + modes + fixtures + `pipeline_profiles.py`). Mode overlays resolve via `METHYL_PROFILE_DIR` / `profile_search_dirs()`.
+Rsynced into `/work/goliath/current/runtime-bundle/domain/` (profiles + modes + fixtures + `pipeline_profiles.py`). Mode overlays resolve via `METHYL_PROFILE_DIR` / `profile_search_dirs()`.
 
 ### DB publish
-Deploy scripts updated ([`scripts/deploy_mc_workflow_definitions.sh`](../../scripts/deploy_mc_workflow_definitions.sh), [`scripts/deploy_workflow_definitions.sh`](../../scripts/deploy_workflow_definitions.sh)). Compiled specs under `/work/epimethyl/env/compiled/mc/`; version map `/work/epimethyl/env/workflow_versions_mc.json`. **Host ODBC login to Azure SQL timed out** — re-run deploy when network allows. No new SQL NodeTypes.
+Deploy scripts updated ([`scripts/deploy_mc_workflow_definitions.sh`](../../scripts/deploy_mc_workflow_definitions.sh), [`scripts/deploy_workflow_definitions.sh`](../../scripts/deploy_workflow_definitions.sh)). Compiled specs under `/work/goliath/env/compiled/mc/`; version map `/work/goliath/env/workflow_versions_mc.json`. **Host ODBC login to Azure SQL timed out** — re-run deploy when network allows. No new SQL NodeTypes.
 
 ### Buffy migration
 - Manifest: `expanded_development` + partition stubs + `allow_clinical_performance_claims: false`
@@ -64,6 +64,6 @@ Deploy scripts updated ([`scripts/deploy_mc_workflow_definitions.sh`](../../scri
 
 ```bash
 methyl-workflow-run \
-  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
+  --program /work/goliath/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
   --context-file /work/projects/prostate-cancer/configs/context_samd_research_buffy.json
 ```

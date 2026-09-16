@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Running average of successful WGBS Align wall times + fleet sizing estimate.
 
-Reads Azure SQL via /work/epimethyl/env/gateway.env. Persists state so the
+Reads Azure SQL via /work/goliath/env/gateway.env. Persists state so the
 average converges as SUCCEEDED Aligns complete.
 """
 
@@ -25,7 +25,7 @@ except ImportError:
 STATE_PATH = Path(
     os.environ.get(
         "METHYL_ALIGN_MONITOR_STATE",
-        "/work/epimethyl/images/align_throughput_monitor.json",
+        "/work/goliath/images/align_throughput_monitor.json",
     )
 )
 ACTION = "sample.methylgrapher_wgbs_align"
@@ -69,7 +69,7 @@ def _aware(dt: datetime) -> datetime:
 
 
 def _load_env() -> None:
-    env_path = Path("/work/epimethyl/env/gateway.env")
+    env_path = Path("/work/goliath/env/gateway.env")
     if not env_path.is_file():
         return
     for line in env_path.read_text(encoding="utf-8").splitlines():

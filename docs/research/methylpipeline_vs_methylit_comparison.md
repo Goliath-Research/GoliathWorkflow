@@ -935,9 +935,9 @@ is count-based rather than weight-propagated.
 - **Compute.** Both parallelize per chromosome and use HDF5. MethylIT_py exposes explicit GPU parity
   checks in the divergence stage and a cuPyNumeric-friendly HDF5 export, reflecting a heavy
   vectorizable divergence computation. MethylPipeline emphasizes distributed workers and gateway/DB
-  orchestration (`methyl-gateway` / `methyl-worker`, runtime-bundle on `/work/epimethyl/current`).
+  orchestration (`methyl-gateway` / `methyl-worker`, runtime-bundle on `/work/goliath/current`).
 - **Verification and reproducibility posture.** MethylPipeline runs the full monorepo test suite
-  as a per-pull-request **regression gate** with coverage measurement (`ci/azure-pipelines-pr.yml`,
+  as a per-pull-request **regression gate** with coverage measurement (`.github/workflows/pr.yml`,
   `scripts/run_tests_ci.sh`), and formalizes testing as a regulatory control
   (`docs/regulatory/continuous-integration-and-regression-testing.md`). Critically for a fair
   head-to-head, it adds a typed **real reference-sample test registry**

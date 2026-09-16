@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Simple wrapper script to run classification inside the epimethyl container
+# Simple wrapper script to run classification inside the goliath container
 
-echo "Running MethylClassifier inside epimethyl container..."
+echo "Running MethylClassifier inside goliath container..."
 
-docker exec epimethyl bash -c "
+docker exec goliath bash -c "
 cd /home/ubuntu/MethylClassifier && \
 PYTHONPATH=/home/ubuntu/MethylClassifier:/home/ubuntu/MethylUtils:/home/ubuntu/MethylPipeline/packages/methyldetector python3 -c \"
 import sys

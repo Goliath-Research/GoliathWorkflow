@@ -7,7 +7,7 @@ usage() {
 Usage: scripts/install_worker_systemd.sh [options]
 
 Options:
-  --root PATH           GoliathOmics root (default: /work/epimethyl)
+  --root PATH           GoliathOmics root (default: /work/goliath)
   --arch KEY            aarch64 or amd64 (default: detect)
   --capability NAME     Install methyl-worker@NAME.service instead of omnibus
   --detect-capabilities Install one unit per auto-detected capability (or omnibus for '*')
@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=detect_platform.sh
 source "$SCRIPT_DIR/detect_platform.sh"
 
-ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+ROOT="${GOLIATH_ROOT:-/work/goliath}"
 ARCH=""
 CAPABILITY=""
 DETECT_CAPABILITIES=0
@@ -63,8 +63,8 @@ chmod 1777 "$SCRATCH" 2>/dev/null || true
 
 _render_unit() {
   local src="$1" dest="$2"
-  sed -e "s|__EPIMETHYL_ROOT__|$ROOT|g" \
-      -e "s|__EPIMETHYL_VENV__|$VENV|g" \
+  sed -e "s|__GOLIATH_ROOT__|$ROOT|g" \
+      -e "s|__GOLIATH_VENV__|$VENV|g" \
       "$src" >"$dest"
 }
 

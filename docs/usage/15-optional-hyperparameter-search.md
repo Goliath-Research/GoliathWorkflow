@@ -54,18 +54,18 @@ The search is deliberately separated across three environments. Keeping them dis
 | Environment | Where | Role for hyperparameter search |
 |-------------|-------|--------------------------------|
 | **Development** | Repo checkout + `.venv` | Author and unit-test the driver (`methyl-hyperparam-search`), objective, and mapper/gene-select fixes. Run `--dry-run` and small smoke grids only. This is the source of package fixes, not the place for long experiments. |
-| **Experimentation** | Promoted release worker venv (`/work/epimethyl/current`) + JSON under `/work` | Run the outer loop. All tunable knobs live as JSON (`base_mc_config.json`, `grid_*.json`, `weights_*.json`); the driver scores gene-FeatureCuts BA from stability-only runs. No `wf`/`cfg` schema changes. |
+| **Experimentation** | Promoted release worker venv (`/work/goliath/current`) + JSON under `/work` | Run the outer loop. All tunable knobs live as JSON (`base_mc_config.json`, `grid_*.json`, `weights_*.json`); the driver scores gene-FeatureCuts BA from stability-only runs. No `wf`/`cfg` schema changes. |
 | **Production** | DB-backed gateway workflows | Consumes the **winning** locked configuration via `resolvedConfig`; profiles/programs come from the runtime-bundle. The search driver itself is not part of the production task path — only its result is promoted. |
 
 Package fixes that the experimentation environment depends on (gene-FeatureCuts BA objective fallback, nullable gene-select caps, mapper discovery-CSV default) must be in the **promoted release** before you rely on them there; until then, run from a repo checkout that has them.
 
 ## Command example
 
-Use a dedicated MC config and a work directory on shared storage if many trials. Prefer the **release** worker venv (`/work/epimethyl/current/env/worker.env`), not a git checkout:
+Use a dedicated MC config and a work directory on shared storage if many trials. Prefer the **release** worker venv (`/work/goliath/current/env/worker.env`), not a git checkout:
 
 ```bash
-set -a && source /work/epimethyl/current/env/worker.env && set +a
-export PATH=/work/epimethyl/venv-aarch64/bin:$PATH
+set -a && source /work/goliath/current/env/worker.env && set +a
+export PATH=/work/goliath/venv-aarch64/bin:$PATH
 methyl-hyperparam-search \
   --config /work/experiments/my_mc_config.json \
   --work-dir /work/experiments/hp_run1 \

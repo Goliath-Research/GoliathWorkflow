@@ -14,7 +14,7 @@ from typing import Dict, Any
 logger = logging.getLogger(__name__)
 
 class GPUMemoryManager:
-    def __init__(self, container_name: str = "epimethyl"):
+    def __init__(self, container_name: str = "goliath"):
         self.container_name = container_name
         
     def get_gpu_memory_info(self) -> Dict[str, Any]:
@@ -151,7 +151,7 @@ def main():
     parser = argparse.ArgumentParser(description="GPU Memory Manager")
     parser.add_argument("--action", choices=["info", "cleanup", "monitor"], required=True)
     parser.add_argument("--command", nargs="+", help="Command to monitor (for monitor action)")
-    parser.add_argument("--container", default="epimethyl", help="Container name")
+    parser.add_argument("--container", default="goliath", help="Container name")
     parser.add_argument("--threshold", type=float, default=80.0, help="Memory pressure threshold")
     
     args = parser.parse_args()

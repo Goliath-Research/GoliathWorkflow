@@ -56,6 +56,6 @@ todos:
 
 ```bash
 methyl-cfg verify-workflow
-set -a; source /work/epimethyl/env/gateway.env; set +a
+set -a; source /work/goliath/env/gateway.env; set +a
 methyl-cfg verify-workflow --check-db
 ```

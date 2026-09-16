@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Install per-VM host packages on a GPU worker (once per machine).
 #
-# Shared /work (epimethyl, site, samples, genomes) is cluster-once NFS.
+# Shared /work (goliath, site, samples, genomes) is cluster-once NFS.
 # samtools / bedtools / fastp / ODBC / NVRTC live on the VM OS disk via apt.
 #
 # Usage (on each sister that skipped provision_worker_node.sh):
-#   sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_host_tools_gpu_vm.sh
+#   sudo bash /work/goliath/current/runtime-bundle/scripts/install_host_tools_gpu_vm.sh
 #   # or from a git checkout:
 #   sudo bash scripts/install_host_tools_gpu_vm.sh
 #
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+ROOT="${GOLIATH_ROOT:-/work/goliath}"
 
 if [[ -x "$SCRIPT_DIR/setup_host.sh" ]]; then
   SETUP="$SCRIPT_DIR/setup_host.sh"

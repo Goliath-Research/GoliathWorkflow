@@ -1,6 +1,6 @@
 # Production release layout (GPU workers)
 
-Production GPU workers consume **versioned releases** on fast shared storage (`/work/epimethyl`). No git checkouts on worker nodes at runtime.
+Production GPU workers consume **versioned releases** on fast shared storage (`/work/goliath`). No git checkouts on worker nodes at runtime.
 
 See also: [production-platform.md](production-platform.md) (full platform deploy), [worker_node.md](worker_node.md), [gpu_worker_runbook.md](gpu_worker_runbook.md), [worker_provision.md](worker_provision.md), [platform_matrix.md](platform_matrix.md), [ci/README.md](../../ci/README.md), [implementation plans](../plans/README.md).
 
@@ -10,22 +10,22 @@ MethylExtractor and MethylPipeline **version and publish independently** on git 
 
 ```mermaid
 flowchart LR
-  MEtag[MethylExtractor_v_tag] --> MEFeed[methyl-extractor_feed]
-  MPtag[MethylPipeline_v_tag] --> PyFeed[pypi-epimethyl]
+  MEtag[MethylExtractor_v_tag] --> MERel[MethylExtractor_GitHub_Release]
+  MPtag[MethylPipeline_v_tag] --> PyFeed[pypi-goliath]
   MPtag --> MPArt[methyl-pipeline-release_artifact]
-  MEFeed --> Assemble[GoliathOmics-Release-Assemble]
+  MERel --> Assemble[GoliathOmics-Release-Assemble]
   MPArt --> Assemble
   Assemble --> Bundle[goliathomics-release_bundle]
   Bundle --> Deploy[GoliathOmics-Release-Deploy]
-  Deploy --> Work["/work/epimethyl/current"]
+  Deploy --> Work["/work/goliath/current"]
 ```
 
-| Step | Pipeline | Trigger |
+| Step | Workflow | Trigger |
 |------|----------|---------|
-| Build MethylExtractor per arch | MethylExtractor-Release-ARM64, MethylExtractor-Release-x64 | Tag `v*` |
-| Build MP wheels + runtime-bundle | MethylPipeline-Release | Tag `v*` |
-| Compose manifest + sha256 | GoliathOmics-Release-Assemble | Manual |
-| Promote to `/work` | GoliathOmics-Release-Deploy | Manual + **production-work** approval |
+| Build MethylExtractor per arch | MethylExtractor `.github/workflows/release.yml` | Tag `v*` |
+| Build MP wheels + runtime-bundle | `.github/workflows/release.yml` | Tag `v*` |
+| Compose manifest + sha256 | `.github/workflows/release-assemble.yml` | Manual (`workflow_dispatch`) |
+| Promote to `/work` | `.github/workflows/release-deploy.yml` | Manual + **production-work** environment approval |
 
 **Typical release:**
 
@@ -41,7 +41,7 @@ Register pipelines per [`ci/README.md`](../../ci/README.md).
 | Script | Purpose |
 |--------|---------|
 | `scripts/assemble_release.sh` | Compose MP + MethylExtractor release bundle |
-| `scripts/promote_release.sh` | Promote bundle to `/work/epimethyl/current` |
+| `scripts/promote_release.sh` | Promote bundle to `/work/goliath/current` |
 | `scripts/bootstrap_distributed_workers.sh` | Privileged-host DDL + Python entity populate (`--verify` for catalog/twin check) |
 | `scripts/provision_gateway_node.sh` | Gateway VM local venv + systemd + nginx (no `/work`) |
 | `scripts/provision_worker_node.sh` | First GPU seeds `/work` then enrolls; joiners install host tools then enroll |
@@ -59,7 +59,7 @@ Full operator journey: [`operator-journey.md`](operator-journey.md).
 ## Directory layout
 
 ```
-/work/epimethyl/
+/work/goliath/
   current -> releases/2026.6.1
   releases/
     2026.6.1/
@@ -105,7 +105,7 @@ Scripts validate versions via `require_release_version` in [`detect_platform.sh`
 
 ## manifest.json
 
-Schema: [`schemas/deployment/epimethyl_release_manifest.schema.json`](../../schemas/deployment/epimethyl_release_manifest.schema.json).
+Schema: [`schemas/deployment/goliath_release_manifest.schema.json`](../../schemas/deployment/goliath_release_manifest.schema.json).
 
 Example (assembled release with independent component versions):
 
@@ -119,7 +119,7 @@ Example (assembled release with independent component versions):
   "python": "3.12",
   "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
   "parabricks_image_digest": "sha256:…",
-  "docker_data_root": "/work/epimethyl/docker",
+  "docker_data_root": "/work/goliath/docker",
   "min_driver_version": "550.xx",
   "requirements_lock": "requirements-worker.lock",
   "runtime_bundle": "runtime-bundle",
@@ -138,7 +138,7 @@ Example (assembled release with independent component versions):
 
 ## Assemble a release (CI or admin)
 
-[`scripts/assemble_release.sh`](../../scripts/assemble_release.sh) pulls MethylExtractor from Azure Artifacts and merges a MethylPipeline release artifact:
+[`scripts/assemble_release.sh`](../../scripts/assemble_release.sh) pulls MethylExtractor from GitHub Releases and merges a MethylPipeline release artifact:
 
 ```bash
 bash scripts/assemble_release.sh \
@@ -146,27 +146,27 @@ bash scripts/assemble_release.sh \
   --methyl-pipeline-version 2026.6.1 \
   --methyl-extractor-version 2026.5.2 \
   --methyl-pipeline-dir /path/to/methyl-pipeline-release-2026.6.1 \
-  --output /work/epimethyl/releases/2026.6.1
+  --output /work/goliath/releases/2026.6.1
 ```
 
-CI: [`ci/azure-pipelines-release-assemble.yml`](../../ci/azure-pipelines-release-assemble.yml).
+CI: [`.github/workflows/release-assemble.yml`](../../.github/workflows/release-assemble.yml).
 
 ## Promote a release
 
-**Automated (recommended):** [`ci/azure-pipelines-release-deploy.yml`](../../ci/azure-pipelines-release-deploy.yml) with `production-work` environment approval.
+**Automated (recommended):** [`.github/workflows/release-deploy.yml`](../../.github/workflows/release-deploy.yml) with GitHub Environment `production-work` approval.
 
 **Manual** on shared storage (serializes `docker pull`):
 
 ```bash
 bash scripts/promote_release.sh \
-  --root /work/epimethyl \
-  --release /work/epimethyl/releases/2026.6.1 \
+  --root /work/goliath \
+  --release /work/goliath/releases/2026.6.1 \
   --arch aarch64 \
   --pull-parabricks
 
 bash scripts/promote_release.sh \
-  --root /work/epimethyl \
-  --release /work/epimethyl/releases/2026.6.1 \
+  --root /work/goliath \
+  --release /work/goliath/releases/2026.6.1 \
   --arch amd64 \
   --skip-docker-pull
 ```
@@ -174,17 +174,17 @@ bash scripts/promote_release.sh \
 Promote will:
 
 1. Verify `manifest.json` and tarball checksums
-2. Extract MethylExtractor to `/work/epimethyl/methyl-extractor-<arch>/`
-3. Install or refresh `/work/epimethyl/venv-<arch>/` from release wheels
+2. Extract MethylExtractor to `/work/goliath/methyl-extractor-<arch>/`
+3. Install or refresh `/work/goliath/venv-<arch>/` from release wheels
 4. Optionally `docker pull` Parabricks into shared `docker/` (first arch only)
-5. Update `/work/epimethyl/current` symlink
+5. Update `/work/goliath/current` symlink
 6. Write `env/worker.env` and `env/parabricks.env` (includes `METHYL_PROFILE_DIR` → `current/runtime-bundle/domain/profiles`)
 
 ### Domain programs and profiles (no git on workers)
 
 The runtime-bundle ships `workflow_engine/domain/` (profiles, DomainPrograms, compiler inputs) at:
 
-`/work/epimethyl/current/runtime-bundle/domain/`
+`/work/goliath/current/runtime-bundle/domain/`
 
 - **Profiles / modes:** `domain/profiles/*.profile.json` and `domain/profiles/modes/*.mode.json` (SaMD ladder + researchMode overlays). Resolved via `METHYL_PROFILE_DIR` (set in `worker.env` by promote).
 - **Algorithm DomainPrograms:** `domain/fixtures/mc_stability*.program.json`, `samd_*.program.json`, SamplePrep, lifecycle — disease-agnostic names; study identity is only in instance `projectPath`.
@@ -198,8 +198,8 @@ Re-run **deploy** pipeline with a previous `releaseVersion` and approval, or man
 
 ```bash
 bash scripts/promote_release.sh \
-  --root /work/epimethyl \
-  --release /work/epimethyl/releases/<previous-ver> \
+  --root /work/goliath \
+  --release /work/goliath/releases/<previous-ver> \
   --arch aarch64 \
   --skip-docker-pull
 ```
@@ -214,27 +214,27 @@ Use only when DevOps is unavailable:
 source .venv/bin/activate
 bash scripts/build_release.sh \
   --version 2026.6.1 \
-  --output /work/epimethyl/releases/2026.6.1 \
+  --output /work/goliath/releases/2026.6.1 \
   --with-gpu-reqs
 
 bash scripts/download_methyl_extractor_artifacts.sh \
   --version 2026.5.2 \
-  --release-dir /work/epimethyl/releases/2026.6.1
+  --release-dir /work/goliath/releases/2026.6.1
 # Fill manifest sha256 or run assemble_release.sh
 ```
 
-## Azure Artifacts feeds
+## GitHub Packages (pypi-goliath)
 
-| Feed | Type | Contents |
+| Feed / index | Type | Contents |
 |------|------|----------|
-| `methyl-extractor` | Universal Package | Per-arch tarballs |
-| `pypi-epimethyl` | Python | `methyl-*` wheels |
+| GitHub Releases (`MethylExtractor`) | Release assets | Per-arch tarballs `methyl-extractor-linux-{aarch64,amd64}.tar.gz` |
+| `pypi-goliath` | GitHub Packages PyPI | `methyl-*` wheels (`https://pypi.pkg.github.com/Goliath-Research/simple/`) |
 
 Production venv install from feed ([`install_release.sh`](../../scripts/install_release.sh)):
 
 ```bash
 bash scripts/install_release.sh \
-  --release-dir /work/epimethyl/releases/2026.6.1 \
-  --venv /work/epimethyl/venv-aarch64 \
-  --index-url "https://pkgs.dev.azure.com/EpiMethyl/_packaging/pypi-epimethyl/pypi/simple/"
+  --release-dir /work/goliath/releases/2026.6.1 \
+  --venv /work/goliath/venv-aarch64 \
+  --index-url "https://pypi.pkg.github.com/Goliath-Research/simple/"
 ```

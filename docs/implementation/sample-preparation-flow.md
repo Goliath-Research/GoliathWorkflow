@@ -173,7 +173,7 @@ Samples without H5 evidence are excluded from cohort comparisons (`reason: exclu
 |-------|----------|---------------|
 | **Instance context** | `context_json` on sample-prep start | `fastqStorage`, `sampleStorage`, `samples[]` with `fastqSource`, `sampleDestination`, `sampleRoot`, `sampleDir` |
 | **Site manifest** | `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | Reference genome, GTF, caches, Parabricks — **not** cloud credentials |
-| **Portal** | `SampleStorageDefaults` | Operator archive profile defaults (e.g. `epimethyl-samples`) |
+| **Portal** | `SampleStorageDefaults` | Operator archive profile defaults (e.g. `goliath-samples`) |
 | **Study manifest** | `project.json` | `samples_base_path`, cohort CSVs — **not** FASTQ/archive credentials |
 
 Example instance context (S3 ingress + S3 archive, abbreviated):
@@ -268,7 +268,7 @@ Implementation: [`workers/methyl_worker/giraffe_runner.py`](../../workers/methyl
 
 When instance/profile/procedure sets `alignmentMode: "pangenome_wgbs"` (scope `useWgbsPangenome: true`), SamplePrep runs **`sample.methylgrapher_wgbs_align`** then later **`sample.methylgrapher_wgbs_extract`**. Procedure pack [`buffy_wgbs_pangenome_gene_fc`](../../workflow_engine/domain/profiles/procedures/buffy_wgbs_pangenome_gene_fc.procedure.json) selects this mode. Leadership brief: [`docs/architecture/mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md).
 
-**Canonical runtime:** **native-Mojo** — one portable Giraffe hot path (`giraffe_stream_map`) using `std.gpu.host.DeviceContext` on **NVIDIA** (`api="cuda"`, e.g. `sm_90` / GH200) **or AMD** (`api="hip"`, e.g. `gfx942` / MI300X). Choosing `pangenome_wgbs` implies a known NVIDIA or AMD GPU; site image tags (`epimethyl/methylgrapher:1.70-mojo-cuda` / `:1.70-mojo-rocm`) and host runtime select the API. Native-Mojo does **not** prefer NVIDIA over AMD.
+**Canonical runtime:** **native-Mojo** — one portable Giraffe hot path (`giraffe_stream_map`) using `std.gpu.host.DeviceContext` on **NVIDIA** (`api="cuda"`, e.g. `sm_90` / GH200) **or AMD** (`api="hip"`, e.g. `gfx942` / MI300X). Choosing `pangenome_wgbs` implies a known NVIDIA or AMD GPU; site image tags (`goliath/methylgrapher:1.70-mojo-cuda` / `:1.70-mojo-rocm`) and host runtime select the API. Native-Mojo does **not** prefer NVIDIA over AMD.
 
 **Not automatic failure paths:**
 

@@ -30,7 +30,7 @@ Deploy [`workflow_engine/sql_mssql/portal_resource_profile.sql`](../../workflow_
 
 ```json
 {
-  "sampleStorageEndpoint": "epimethyl-archive",
+  "sampleStorageEndpoint": "goliath-archive",
   "prefixBase": "samples/",
   "scope": "archive"
 }
@@ -38,9 +38,9 @@ Deploy [`workflow_engine/sql_mssql/portal_resource_profile.sql`](../../workflow_
 
 Bootstrap also seeds:
 
-- `cfg.credential` `epimethyl-archive-keys` with `REPLACE_WITH_*` placeholders — replace via portal before production use
-- `cfg.storage_endpoint` `epimethyl-archive` (`prefixBase: samples/`, scope archive)
-- `cfg.storage_endpoint` `epimethyl-genomes` (`prefixBase: genomes/`, scope shared; **same credential**) for reference inventory sync
+- `cfg.credential` `goliath-archive-keys` with `REPLACE_WITH_*` placeholders — replace via portal before production use
+- `cfg.storage_endpoint` `goliath-archive` (`prefixBase: samples/`, scope archive)
+- `cfg.storage_endpoint` `goliath-genomes` (`prefixBase: genomes/`, scope shared; **same credential**) for reference inventory sync
 
 Reference asset recipes (linear / GENCODE / pangenome) are seeded by [`cfg_reference_assets_seed.sql`](../../workflow_engine/sql_mssql/cfg_reference_assets_seed.sql) (PG twin under `sql_pg/`) and repo fixtures under `workflow_engine/domain/fixtures/reference_assets/`.
 
@@ -48,7 +48,7 @@ Legacy inline `credentials` inside `profile_json` still work for compatibility b
 
 | Column | Purpose |
 |--------|---------|
-| `profile_key` | Logical name (`epimethyl-samples` default) |
+| `profile_key` | Logical name (`goliath-samples` default) |
 | `profile_type` | e.g. `cfg_storage_endpoint_ref` |
 | `profile_json` | Endpoint ref or legacy full storage JSON |
 | `status` | `ACTIVE` / `DISABLED` |
@@ -57,7 +57,7 @@ Legacy inline `credentials` inside `profile_json` still work for compatibility b
 
 **Required:** laboratory `fastqStorage` on every start request (endpoint selected by operator among published redacted list; expansion injects secrets at schedule/study-start).
 
-**Optional default:** `sampleStorage` from portal profile → cfg endpoint when omitted (`archiveProfileKey` defaults to `epimethyl-samples`).
+**Optional default:** `sampleStorage` from portal profile → cfg endpoint when omitted (`archiveProfileKey` defaults to `goliath-samples`).
 
 ```json
 {

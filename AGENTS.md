@@ -4,14 +4,14 @@ Principles for AI agents and contributors working in this repository.
 
 ## Disease-agnostic, deployment-configurable
 
-MethylPipeline is **not** tied to one disease or study. Cohorts and paths live on `/work/projects/<study>/`; pipeline structure and profiles live in the **git repo** (or the promoted **runtime-bundle** on `/work/epimethyl/current/`). Do not hard-code study names, paths, or operational science parameters in Python.
+MethylPipeline is **not** tied to one disease or study. Cohorts and paths live on `/work/projects/<study>/`; pipeline structure and profiles live in the **git repo** (or the promoted **runtime-bundle** on `/work/goliath/current/`). Do not hard-code study names, paths, or operational science parameters in Python.
 
 ## Database backends (operator)
 
 | Backend | Typical use | Populate reference data |
 |---------|-------------|-------------------------|
 | Azure SQL | Production gateway, portal | Already populated; refresh catalog via `seed_action_catalog.py` or MCP; genomes via `cfg_reference_assets_seed.sql` + site roles via `cfg_site_reference_assets_seed.sql` (one `pangenome_bundle` per site; WGBS is an `@links` swap, not a second role) |
-| PostgreSQL | Schema twin / parity, dev gateway, CI (canonical DB **`epimethyl`**) | Schema via [`sql_pg/deploy_azure.sh`](workflow_engine/sql_pg/deploy_azure.sh) (dir is **`sql_pg`**, not `sql_pgsql`); action catalog via [`scripts/populate_postgres_reference_data.py`](scripts/populate_postgres_reference_data.py); live gap report via [`scripts/db_schema_inventory.py`](scripts/db_schema_inventory.py); genomes via same `cfg_reference_assets_seed.sql` + [reference-inventory-qnap.md](docs/deployment/reference-inventory-qnap.md) |
+| PostgreSQL | Schema twin / parity, dev gateway, CI (canonical DB **`goliath`**) | Schema via [`sql_pg/deploy_azure.sh`](workflow_engine/sql_pg/deploy_azure.sh) (dir is **`sql_pg`**, not `sql_pgsql`); action catalog via [`scripts/populate_postgres_reference_data.py`](scripts/populate_postgres_reference_data.py); live gap report via [`scripts/db_schema_inventory.py`](scripts/db_schema_inventory.py); genomes via same `cfg_reference_assets_seed.sql` + [reference-inventory-qnap.md](docs/deployment/reference-inventory-qnap.md) |
 
 When assisting with DB tasks:
 
@@ -51,8 +51,8 @@ Gateway instances store enriched `context_json` (`projectPath`, `pipelineProfile
 ## Runtime environment
 
 - Use the repo virtualenv: `source .venv/bin/activate` before `python`, `pytest`, or `methyl-*` CLIs.
-- Production workers use `/work/epimethyl/current/runtime-bundle/` for profiles and programs, not a git checkout.
-- Shared `/work` access: `scripts/init_work_layout.sh` makes `/work/samples` (and `projects` / `cache`) other-writable; `/work/genomes` and `/work/epimethyl` stay worker-readable (`0755`).
+- Production workers use `/work/goliath/current/runtime-bundle/` for profiles and programs, not a git checkout.
+- Shared `/work` access: `scripts/init_work_layout.sh` makes `/work/samples` (and `projects` / `cache`) other-writable; `/work/genomes` and `/work/goliath` stay worker-readable (`0755`).
 
 ## Example: gene FeatureCuts caps
 

@@ -58,7 +58,7 @@ That resolves to processing dirs:
 
 ```bash
 source .venv/bin/activate
-export METHYL_CFG_STORE=/work/epimethyl/cfg-store
+export METHYL_CFG_STORE=/work/goliath/cfg-store
 export PYTHONPATH=workflow_engine:$PYTHONPATH
 
 methyl-cfg set-study-group Buffy_healthy_vs_PCa \

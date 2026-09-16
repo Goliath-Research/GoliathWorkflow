@@ -55,9 +55,9 @@ todos:
 
 ## What was implemented
 
-1. **Runtime-bundle procedures** copied to `/work/epimethyl/current/runtime-bundle/domain/profiles/procedures/` (all five packs). `resolve_procedure_path` / `apply_pipeline_procedure` resolve `buffy_wgbs_pangenome_gene_fc` → `pangenome_wgbs` and `cfdna_wgbs_plasma` → `linear`.
+1. **Runtime-bundle procedures** copied to `/work/goliath/current/runtime-bundle/domain/profiles/procedures/` (all five packs). `resolve_procedure_path` / `apply_pipeline_procedure` resolve `buffy_wgbs_pangenome_gene_fc` → `pangenome_wgbs` and `cfdna_wgbs_plasma` → `linear`.
 2. **Site assets validated** (`pangenome_wgbs_genome` C2T/G2A indexes, `wl.gfa`, `cpg.tsv`, `node.replacement.json`, linear FASTA).
-3. **Catalog sync**: `methyl-cfg sync-actions --from-json` wrote `sample.methylgrapher_wgbs_align` / `_extract` into `/work/epimethyl/cfg-store/action_definition/`.
+3. **Catalog sync**: `methyl-cfg sync-actions --from-json` wrote `sample.methylgrapher_wgbs_align` / `_extract` into `/work/goliath/cfg-store/action_definition/`.
 4. **SamplePrep contexts** (study, not git):
    - `context_sampleprep_buffy.json` → 15v15 buffy
    - `context_sampleprep_buffy_pool.json` + `project_Buffy_sampleprep_pool.json` → full 238-sample buffy union

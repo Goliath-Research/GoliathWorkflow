@@ -14,9 +14,9 @@ mc_sweep_activate_venv() {
   if [[ -f "$repo_root/.venv/bin/activate" ]]; then
     # shellcheck disable=SC1091
     source "$repo_root/.venv/bin/activate"
-  elif [[ -f /work/epimethyl/current/.venv/bin/activate ]]; then
+  elif [[ -f /work/goliath/current/.venv/bin/activate ]]; then
     # shellcheck disable=SC1091
-    source /work/epimethyl/current/.venv/bin/activate
+    source /work/goliath/current/.venv/bin/activate
   else
     echo "WARN: no .venv found; using PATH python." >&2
   fi
@@ -28,8 +28,8 @@ mc_sweep_defaults() {
   : "${METHYL_PROFILE:=mc_dmp_gene_fc}"
   : "${METHYL_SITE_CONFIG:=/work/site/methyl_site.json}"
   if [[ -z "${METHYL_PROFILE_DIR:-}" ]]; then
-    if [[ -d /work/epimethyl/current/runtime-bundle/domain/profiles ]]; then
-      METHYL_PROFILE_DIR=/work/epimethyl/current/runtime-bundle/domain/profiles
+    if [[ -d /work/goliath/current/runtime-bundle/domain/profiles ]]; then
+      METHYL_PROFILE_DIR=/work/goliath/current/runtime-bundle/domain/profiles
     else
       METHYL_PROFILE_DIR="$repo_root/workflow_engine/domain/profiles"
     fi

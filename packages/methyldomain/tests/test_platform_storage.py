@@ -20,7 +20,7 @@ def test_normalize_s3_endpoint_url_adds_https() -> None:
 def test_profile_json_builds_myqnap_h5_defaults() -> None:
     profile_json = {
         "type": "s3",
-        "bucket": "epimethyl",
+        "bucket": "goliath",
         "region": "us-east-1",
         "endpointUrl": "s3.us-east-1.myqnapcloud.io",
         "prefixBase": "samples/",
@@ -31,19 +31,19 @@ def test_profile_json_builds_myqnap_h5_defaults() -> None:
         },
     }
     h5 = profile_json_to_h5_storage(profile_json)
-    assert h5.bucket == "epimethyl"
+    assert h5.bucket == "goliath"
     assert h5.endpointUrl == "https://s3.us-east-1.myqnapcloud.io"
     assert h5.prefixBase == "samples/"
     assert h5.credentials.accessKeyId == "AKIATEST"
     prefix = resolve_sample_storage_prefix(sample_id="S1", prefix_base=h5.prefixBase)
     assert prefix == "samples/S1/"
-    assert DEFAULT_ARCHIVE_PROFILE_KEY == "epimethyl-samples"
+    assert DEFAULT_ARCHIVE_PROFILE_KEY == "goliath-samples"
 
 
 def test_profile_json_to_h5_storage_dict_reveals_secrets() -> None:
     profile_json = {
         "type": "s3",
-        "bucket": "epimethyl",
+        "bucket": "goliath",
         "credentials": {
             "authMode": "explicit_keys",
             "accessKeyId": "AKIATEST",

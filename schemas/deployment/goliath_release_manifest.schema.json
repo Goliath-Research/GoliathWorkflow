@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://goliathresearch.local/schemas/deployment/epimethyl_release_manifest.schema.json",
+  "$id": "https://goliathresearch.local/schemas/deployment/goliath_release_manifest.schema.json",
   "title": "GoliathOmics release manifest",
   "description": "Single source of truth for a production GPU worker release on shared storage.",
   "type": "object",
@@ -34,7 +34,7 @@
     },
     "docker_data_root": {
       "type": "string",
-      "description": "Shared Docker data-root on fast storage (e.g. /work/epimethyl/docker)."
+      "description": "Shared Docker data-root on fast storage (e.g. /work/goliath/docker)."
     },
     "min_driver_version": {
       "type": "string",

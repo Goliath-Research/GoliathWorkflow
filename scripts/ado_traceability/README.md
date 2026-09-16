@@ -17,4 +17,4 @@
 #   .venv/bin/python scripts/ado_traceability/link_commits.py --apply
 #
 # Requires: az CLI + azure-devops extension; defaults org/project from
-# `az devops configure` (EpiMethyl / Development).
+# `gh` authenticated to Goliath-Research.

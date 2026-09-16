@@ -213,7 +213,7 @@ def run_canary(args: argparse.Namespace) -> int:
 
     versions_file = Path(
         args.versions_file
-        or os.environ.get("EPIMETHYL_ENV_DIR", "/work/epimethyl/env") + "/workflow_versions.json"
+        or os.environ.get("GOLIATH_ENV_DIR", "/work/goliath/env") + "/workflow_versions.json"
     )
     if not versions_file.is_file():
         versions_file = REPO_ROOT / ".smoke" / "workflow_versions.json"

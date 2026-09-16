@@ -51,7 +51,7 @@ P0/P2 from [cross-repo-tool-analysis.plan.md](cross-repo-tool-analysis.plan.md) 
 | **After (Mojo linear)** | `MojoFq2bamMeth` | MethylExtractor | Portable Clara substitute |
 | **After (Mojo WGBS)** | MojoGiraffe dual-graph | MethylCall / MergeCpG | Preferred pangenome_wgbs science |
 
-Clara stock `pangenome` giraffe (BAM) remains available for non-BS stock graphs; it is **not** a WGBS GAF substitute ([PHASE0](https://dev.azure.com/EpiMethyl/Development/_git/mojo-align?path=/giraffe/docs/PHASE0_GH200_ALIGN.md)).
+Clara stock `pangenome` giraffe (BAM) remains available for non-BS stock graphs; it is **not** a WGBS GAF substitute ([PHASE0](https://github.com/Goliath-Research/mojo-align/blob/main/giraffe/docs/PHASE0_GH200_ALIGN.md)).
 
 ```mermaid
 flowchart LR

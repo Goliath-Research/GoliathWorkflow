@@ -3,14 +3,14 @@
   "version": "1",
   "assetType": "gtf",
   "destRoot": "/work/genomes/annotation/gencode/v49",
-  "storageEndpoint": "epimethyl-genomes",
+  "storageEndpoint": "goliath-genomes",
   "inventoryPrefix": "annotation/gencode/v49",
   "recipe": {
     "steps": [
       { "op": "mkdir" },
       {
         "op": "s3_sync",
-        "storageEndpoint": "epimethyl-genomes",
+        "storageEndpoint": "goliath-genomes",
         "key": "annotation/gencode/v49/",
         "dest": "/work/genomes/annotation/gencode/v49"
       }

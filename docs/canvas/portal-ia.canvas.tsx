@@ -314,7 +314,7 @@ export default function PortalIaCanvas() {
       <H2>System administrator</H2>
       <Callout tone="neutral" title="Clusters, workers, and deployment">
         Platform → Clusters & workers. Fleet desired_state is not the /work map.
-        s3://epimethyl/samples/ (path-style /samples/epimethyl) is a published
+        s3://goliath/samples/ (path-style /samples/goliath) is a published
         archive endpoint on the Deployment screen — not a Studies nav leaf.
         Operators only select redacted endpoints.
       </Callout>
@@ -323,7 +323,7 @@ export default function PortalIaCanvas() {
         headers={["Role", "Path / URI", "Screen"]}
         rows={[
           ["Cluster share", "/work (worker_mount_path)", "Clusters"],
-          ["Release", "/work/epimethyl/current", "Deployment"],
+          ["Release", "/work/goliath/current", "Deployment"],
           ["Sample scratch", "/work/samples/{id}/", "Deployment"],
           ["Study outputs", "/work/projects/<study>/", "Deployment"],
           ["Lab ingress", "published fastqSource", "Storage authoring"],

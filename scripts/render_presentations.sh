@@ -25,8 +25,8 @@ for f in "$PRESENTATIONS_DIR"/*.md; do
     [ "$(basename "$f")" = "README.md" ] && continue
     base="${f%.md}"
     theme_args=()
-    if [[ -f "$THEME_DIR/epimethyl-sales.css" ]]; then
-        theme_args+=(--theme-set "$THEME_DIR/epimethyl-sales.css")
+    if [[ -f "$THEME_DIR/goliath-sales.css" ]]; then
+        theme_args+=(--theme-set "$THEME_DIR/goliath-sales.css")
     fi
 
     # Sales decks (marp: true + custom theme) use bespoke for keyboard/progress/OSC.

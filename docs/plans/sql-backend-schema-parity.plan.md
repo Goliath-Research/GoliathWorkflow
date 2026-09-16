@@ -7,10 +7,10 @@ azure_devops:
 overview: Bring Azure SQL and PostgreSQL to a full schema twin (wf, cfg, portal, RBAC, Meta, Contract, Onboarding, e_portal) so cutover is possible after MSSQL is working. Start by closing live PG deploy drift, then extract and port the Azure-only EpiPortal stack under the existing dual-dialect contract.
 todos:
   - id: canonical-pg-inventory
-    content: Pin PostgreSQL target to epimethyl; add live Azure SQL vs PG object/FK inventory; fix deploy_azure.sh default database
+    content: Pin PostgreSQL target to goliath; add live Azure SQL vs PG object/FK inventory; fix deploy_azure.sh default database
     status: completed
   - id: close-sql-pg-drift
-    content: Apply existing sql_pg scripts on epimethyl (data_type, analyte/assay, sample_field_contract) and seed catalog/types only
+    content: Apply existing sql_pg scripts on goliath (data_type, analyte/assay, sample_field_contract) and seed catalog/types only
     status: completed
   - id: extract-mssql-legacy-ddl
     content: Split MethylPipeline.sql clinical/RBAC/Meta/Contract/Onboarding/e_portal into incremental sql_mssql scripts and wire deploy_azure.sh
@@ -28,7 +28,7 @@ todos:
 
 # SQL backend schema parity
 
-> **Status: Planning** — Feature under Epic **AB#413**. Live inventories taken 2026-08-16 via Azure SQL MCP and PostgreSQL MCP (`epimethyl` + `postgres` databases).
+> **Status: Planning** — Feature under Epic **AB#413**. Live inventories taken 2026-08-16 via Azure SQL MCP and PostgreSQL MCP (`goliath` + `postgres` databases).
 
 Make both backends equivalent **as schemas we control**, including the real portal↔cfg↔wf links that already exist on Azure SQL. Do **not** migrate production data until MSSQL is the working system. PostgreSQL stays a schema/procedure twin (plus catalog seeds) until cutover.
 
@@ -45,7 +45,7 @@ flowchart LR
     cfgReg --> wfEng
     portalClinical --> legacy
   end
-  subgraph pgEpi [PostgreSQL epimethyl]
+  subgraph pgEpi [PostgreSQL goliath]
     pgPortal[portal.resource_profile only]
     pgCfg[cfg 16 tables]
     pgWf[wf 27 tables]
@@ -63,9 +63,9 @@ flowchart LR
 - `RBAC.Scopes` → `portal.Institutions` / `Labs`; `portal.Role2Node` → `RBAC`
 - `Contract.*` → `portal.Customers` and `wf.workflow_def`
 
-**PostgreSQL is not empty, but it is not equivalent.** Two databases exist on `epimethyl.postgres.database.azure.com`:
+**PostgreSQL is not empty, but it is not equivalent.** Two databases exist on `goliath.postgres.database.azure.com`:
 
-- [`epimethyl`](workflow_engine/sql_pg/README.md) (MCP default): `wf` + most of `cfg` + `portal.resource_profile`. Missing `wf.data_type*`, `cfg.analyte`, `cfg.assay_procedure`, `cfg.enrichment_library_preset`, `portal.sample_field_contract`. No clinical portal / RBAC / Meta.
+- [`goliath`](workflow_engine/sql_pg/README.md) (MCP default): `wf` + most of `cfg` + `portal.resource_profile`. Missing `wf.data_type*`, `cfg.analyte`, `cfg.assay_procedure`, `cfg.enrichment_library_preset`, `portal.sample_field_contract`. No clinical portal / RBAC / Meta.
 - `postgres` (default of [`deploy_azure.sh`](workflow_engine/sql_pg/deploy_azure.sh)): older **wf-only** deploy. Do not treat this as the parity target.
 
 Repo contract already covers the **engine slice**: parallel trees [`workflow_engine/sql_mssql/`](workflow_engine/sql_mssql/) and [`workflow_engine/sql_pg/`](workflow_engine/sql_pg/), [`db_objects.yaml`](workflow_engine/contract/db_objects.yaml) (~63 required `wf.*` / `portal.*` objects), [`validate_contract.py`](workflow_engine/contract/validate_contract.py), CI [`.github/workflows/db-parity.yml`](.github/workflows/db-parity.yml). That contract does **not** include `cfg.*` objects or the clinical/RBAC stack. PG `cfg.study_group_member` is documented as **soft refs** ([`cfg_registry_tables.sql`](workflow_engine/sql_pg/cfg_registry_tables.sql) line 178); enrollment procs such as `portal.sp_set_sample_analyte` already `RAISE` if `portal.samples` is absent.
@@ -81,13 +81,13 @@ Repo contract already covers the **engine slice**: parallel trees [`workflow_eng
 
 ## Phase 0 — One PostgreSQL database and a live inventory
 
-- Canonical PG database: **`epimethyl`**. Change [`sql_pg/deploy_azure.sh`](workflow_engine/sql_pg/deploy_azure.sh) default `PGDATABASE` from `postgres` to `epimethyl` (keep override). Document the leftover `postgres` DB as stale.
+- Canonical PG database: **`goliath`**. Change [`sql_pg/deploy_azure.sh`](workflow_engine/sql_pg/deploy_azure.sh) default `PGDATABASE` from `postgres` to `goliath` (keep override). Document the leftover `postgres` DB as stale.
 - Add a **live object inventory** script (read-only; MCP / `sqlcmd` / `psql`) that diffs tables, views, routines, and cross-schema FKs for `wf`, `cfg`, `portal`, `RBAC`, `Meta`, `Contract`, `Onboarding`, `e_portal`. Commit the first snapshot under `docs/plans/` or `workflow_engine/contract/`.
 - Expand [`db_objects.yaml`](workflow_engine/contract/db_objects.yaml) in later phases as objects land; Phase 0 only records the gap.
 
-## Phase 1 — Close existing `sql_pg` drift on `epimethyl`
+## Phase 1 — Close existing `sql_pg` drift on `goliath`
 
-These objects **already exist in git** and on Azure SQL; live `epimethyl` is just behind deploy:
+These objects **already exist in git** and on Azure SQL; live `goliath` is just behind deploy:
 
 - Apply remaining files from [`sql_pg/deploy_azure.sh`](workflow_engine/sql_pg/deploy_azure.sh): [`wf_data_type.sql`](workflow_engine/sql_pg/wf_data_type.sql), [`cfg_registry_tables.sql`](workflow_engine/sql_pg/cfg_registry_tables.sql) / [`cfg_analyte_catalog.sql`](workflow_engine/sql_pg/cfg_analyte_catalog.sql) / [`cfg_process_pack_catalog.sql`](workflow_engine/sql_pg/cfg_process_pack_catalog.sql), [`portal_sample_extras_schema.sql`](workflow_engine/sql_pg/portal_sample_extras_schema.sql).
 - Seed types/catalog with existing dual-backend tools (`seed_data_types.py`, `seed_action_catalog.py`, `sync_cfg_profiles_and_action_catalog.py`) — **reference metadata only**, not instances/leases.

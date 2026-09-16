@@ -9,7 +9,7 @@ For the operator engine matrix see [Alignment engines](../usage/alignment-engine
 | Component | Role |
 |-----------|------|
 | **MethylPipeline** | Orchestrator: DomainProgram branching, workers, `methylalignmentqc` / `methylextractionqc`, `/work` contracts |
-| **mojo-align** | Canonical Mojo monorepo (`gpu-common`, `fq2bam-meth`, `giraffe`, `methylgrapher`, `numeric`) baked into `epimethyl/methylgrapher:1.70-mojo-*` |
+| **mojo-align** | Canonical Mojo monorepo (`gpu-common`, `fq2bam-meth`, `giraffe`, `methylgrapher`, `numeric`) baked into `goliath/methylgrapher:1.70-mojo-*` |
 | **MethylExtractor** | MethylDackel fork: BAM → per-chrom HDF5 + extraction JSON (linear / stock pangenome) |
 | **Clara Parabricks** | Explicit linear / stock-pangenome engines; optional Picard `collectmultiplemetrics` |
 
@@ -124,10 +124,10 @@ Task inputs must carry `alignmentMode` so family detection is fail-closed when a
 
 | Artifact | Typical path / pin |
 |----------|-------------------|
-| mojo-align → image | `MOJO_ALIGN_ROOT` → `scripts/stage_flat_image_tree.sh` → `build_mojo_align_image.sh` → `epimethyl/methylgrapher:1.70-mojo-{cuda,rocm}` |
+| mojo-align → image | `MOJO_ALIGN_ROOT` → `scripts/stage_flat_image_tree.sh` → `build_mojo_align_image.sh` → `goliath/methylgrapher:1.70-mojo-{cuda,rocm}` |
 | In-container prefix | `/opt/mojo-align` |
-| Named-coords / overlays | `MOJO_ALIGN_OVERLAY`, `/work/epimethyl/images/*` — **not** hardcoded developer home paths |
-| MethylExtractor | `/work/epimethyl/methyl-extractor-{aarch64\|amd64}/bin/MethylExtractor` via `METHYL_EXTRACTOR_BIN` |
+| Named-coords / overlays | `MOJO_ALIGN_OVERLAY`, `/work/goliath/images/*` — **not** hardcoded developer home paths |
+| MethylExtractor | `/work/goliath/methyl-extractor-{aarch64\|amd64}/bin/MethylExtractor` via `METHYL_EXTRACTOR_BIN` |
 | Clara | `METHYL_PARABRICKS_IMAGE` (e.g. `nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1`) |
 
 ## Related docs

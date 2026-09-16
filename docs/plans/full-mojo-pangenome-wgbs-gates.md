@@ -28,7 +28,7 @@ Verify a READY Align `input_json.resolvedConfig` contains:
 | Extract | Mojo MethylCall/MergeCpG; `patternsSource=gaf` in extract output when GAF patterns succeed |
 | informME | Lifecycle `pipeline.info_measures` → `info_measures/readlevel_measures.csv` |
 | Parity | DS20M / subset `graph.methyl` vs `cpu_vg` |
-| Fleet | Sisters: `bash /work/epimethyl/images/load_methylgrapher_1.70_mojo.sh` then `restore_wgbs_capabilities.py` |
+| Fleet | Sisters: `bash /work/goliath/images/load_methylgrapher_1.70_mojo.sh` then `restore_wgbs_capabilities.py` |
 
 ## Rollback
 

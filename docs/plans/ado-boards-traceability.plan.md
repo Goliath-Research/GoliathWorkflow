@@ -1,6 +1,6 @@
 ---
 name: ADO Boards Traceability
-overview: Create Epic MethylPipeline platform (AB#413) under EpiMethyl/Development, seed Features from docs/plans rows and User Stories from plan todos, backfill AB# into plan frontmatter, leave legacy Epic #283 historical.
+overview: Create Epic MethylPipeline platform (AB#413) under Goliath-Research, seed Features from docs/plans rows and User Stories from plan todos, backfill AB# into plan frontmatter, leave legacy Epic #283 historical.
 > **Status: COMPLETED** — 2026-07-13. Epic AB#413; 33 Features; 243 User Stories; plan IDs backfilled.
 
 azure_devops:
@@ -32,10 +32,10 @@ todos:
 
 | Item | Value |
 |------|--------|
-| Epic | [AB#413 MethylPipeline platform](https://dev.azure.com/EpiMethyl/Development/_workitems/edit/413) |
+| Epic | [AB#413 MethylPipeline platform](https://github.com/Goliath-Research/GoliathWorkflow) |
 | Features | 33 (from `docs/plans`) |
 | User Stories | 243 (from plan `todos`) |
-| Historical | Epic [#283](https://dev.azure.com/EpiMethyl/Development/_workitems/edit/283) Related (unchanged) |
+| Historical | Epic [#283](https://github.com/Goliath-Research/GoliathWorkflow) Related (unchanged) |
 | Seed state | [`scripts/ado_traceability/seed_state.json`](../../scripts/ado_traceability/seed_state.json) |
 
 ## Tooling

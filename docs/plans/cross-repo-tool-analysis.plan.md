@@ -98,7 +98,7 @@ flowchart TB
 
 | Repo | Role | Consumed by MethylPipeline as |
 |------|------|-------------------------------|
-| mojo-align | Canonical Mojo monorepo: `gpu-common`, `fq2bam-meth`, `giraffe`, `methylgrapher` | Baked into `epimethyl/methylgrapher:1.70-mojo-{cuda,rocm}`; CLI `methylGrapher` |
+| mojo-align | Canonical Mojo monorepo: `gpu-common`, `fq2bam-meth`, `giraffe`, `methylgrapher` | Baked into `goliath/methylgrapher:1.70-mojo-{cuda,rocm}`; CLI `methylGrapher` |
 | MethylExtractor | Heavily modified MethylDackel → HDF5 + JSON | Host binary `METHYL_EXTRACTOR_BIN` via `sample.methyl_extract` |
 | MethylPipeline | Workflow, workers, QC packages, `/work` contracts | Owners of mode branching and QC Pass/Fail |
 

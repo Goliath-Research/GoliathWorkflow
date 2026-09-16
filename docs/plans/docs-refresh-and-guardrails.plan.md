@@ -59,7 +59,7 @@ todos:
     status: completed
     work_item_id: 513
   - id: ci-freshness
-    content: Add scripts/check_doc_freshness.sh + test for stale tokens; wire into ci/azure-pipelines-pr.yml
+    content: Add scripts/check_doc_freshness.sh + test for stale tokens; wire into .github/workflows/pr.yml
     status: completed
     work_item_id: 514
   - id: ci-quarto
@@ -106,7 +106,7 @@ Quarto stays (Theory needs LaTeX math, `references.bib`, `@eq-`/`@sec-` cross-re
 
 ## Phase 6 - CI guardrails
 - Add `scripts/check_doc_freshness.sh` (mirrors the `check_absent` pattern in [check_doc_links.sh](../../scripts/check_doc_links.sh)) to fail on stale tokens in active docs: `step_config`, "package defaults", `classifier-extended`, `dmps-*-classifier.csv`, `stability_gene_featurecuts_max_dmps.*500`, deprecated profile names. Scope to `docs/**` + `packages/**/docs/**` + `workflow_engine/docs/**`, excluding `_book/`, `.pdf`, `.html`, redirect stubs, and `docs/plans/**`.
-- Add a `quarto render docs/theory docs/usage --to html` step to [ci/azure-pipelines-pr.yml](../../ci/azure-pipelines-pr.yml) (guarded by `command -v quarto`, like the terraform step) so book breakage is caught.
+- Add a `quarto render docs/theory docs/usage --to html` step to [.github/workflows/pr.yml](../../.github/workflows/pr.yml) (guarded by `command -v quarto`, like the terraform step) so book breakage is caught.
 - Add `scripts/tests/test_check_doc_freshness.py` for the new guard.
 
 ## Phase 7 - Regenerate artifacts + verify

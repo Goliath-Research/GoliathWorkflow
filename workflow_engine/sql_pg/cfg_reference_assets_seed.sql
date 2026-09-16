@@ -14,11 +14,11 @@ DECLARE
 BEGIN
   SELECT id INTO ep_id
   FROM cfg.storage_endpoint
-  WHERE name = 'epimethyl-genomes' AND version = '1'
+  WHERE name = 'goliath-genomes' AND version = '1'
   LIMIT 1;
 
   IF ep_id IS NULL THEN
-    RAISE EXCEPTION 'cfg.storage_endpoint epimethyl-genomes@1 missing; deploy portal_resource_profile.sql first';
+    RAISE EXCEPTION 'cfg.storage_endpoint goliath-genomes@1 missing; deploy portal_resource_profile.sql first';
   END IF;
 
   INSERT INTO cfg.reference_asset (
@@ -29,7 +29,7 @@ BEGIN
     '1',
     'published',
     md5('linear-grch38-ensembl-114@1'),
-    '{"assetType":"linear_genome","destRoot":"/work/genomes/linear/GRCh38/ensembl-114","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"linear/GRCh38/ensembl-114","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"linear/GRCh38/ensembl-114/","dest":"/work/genomes/linear/GRCh38/ensembl-114"}]}}'::jsonb,
+    '{"assetType":"linear_genome","destRoot":"/work/genomes/linear/GRCh38/ensembl-114","storageEndpoint":"goliath-genomes","inventoryPrefix":"linear/GRCh38/ensembl-114","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"goliath-genomes","key":"linear/GRCh38/ensembl-114/","dest":"/work/genomes/linear/GRCh38/ensembl-114"}]}}'::jsonb,
     ep_id,
     'linear_genome'
   WHERE NOT EXISTS (
@@ -45,7 +45,7 @@ BEGIN
     '1',
     'published',
     md5('gencode-v49@1'),
-    '{"assetType":"gtf","destRoot":"/work/genomes/annotation/gencode/v49","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"annotation/gencode/v49","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"annotation/gencode/v49/","dest":"/work/genomes/annotation/gencode/v49"}]}}'::jsonb,
+    '{"assetType":"gtf","destRoot":"/work/genomes/annotation/gencode/v49","storageEndpoint":"goliath-genomes","inventoryPrefix":"annotation/gencode/v49","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"goliath-genomes","key":"annotation/gencode/v49/","dest":"/work/genomes/annotation/gencode/v49"}]}}'::jsonb,
     ep_id,
     'gtf'
   WHERE NOT EXISTS (
@@ -60,7 +60,7 @@ BEGIN
     '1',
     'published',
     md5('linear-grch38-ensembl-116@1'),
-    '{"assetType":"linear_genome","destRoot":"/work/genomes/linear/GRCh38/ensembl-116","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"linear/GRCh38/ensembl-116","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"linear/GRCh38/ensembl-116/","dest":"/work/genomes/linear/GRCh38/ensembl-116"}]}}'::jsonb,
+    '{"assetType":"linear_genome","destRoot":"/work/genomes/linear/GRCh38/ensembl-116","storageEndpoint":"goliath-genomes","inventoryPrefix":"linear/GRCh38/ensembl-116","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"goliath-genomes","key":"linear/GRCh38/ensembl-116/","dest":"/work/genomes/linear/GRCh38/ensembl-116"}]}}'::jsonb,
     ep_id,
     'linear_genome'
   WHERE NOT EXISTS (
@@ -76,7 +76,7 @@ BEGIN
     '1',
     'published',
     md5('gencode-v50@1'),
-    '{"assetType":"gtf","destRoot":"/work/genomes/annotation/gencode/v50","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"annotation/gencode/v50","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"annotation/gencode/v50/","dest":"/work/genomes/annotation/gencode/v50"}]}}'::jsonb,
+    '{"assetType":"gtf","destRoot":"/work/genomes/annotation/gencode/v50","storageEndpoint":"goliath-genomes","inventoryPrefix":"annotation/gencode/v50","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"goliath-genomes","key":"annotation/gencode/v50/","dest":"/work/genomes/annotation/gencode/v50"}]}}'::jsonb,
     ep_id,
     'gtf'
   WHERE NOT EXISTS (
@@ -91,7 +91,7 @@ BEGIN
     '1',
     'published',
     md5('rna-grch38-star-ensembl-116@1'),
-    '{"assetType":"rna_star_index","destRoot":"/work/genomes/rna/GRCh38/star/ensembl-116","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"rna/GRCh38/star/ensembl-116","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"rna/GRCh38/star/ensembl-116/","dest":"/work/genomes/rna/GRCh38/star/ensembl-116"}]}}'::jsonb,
+    '{"assetType":"rna_star_index","destRoot":"/work/genomes/rna/GRCh38/star/ensembl-116","storageEndpoint":"goliath-genomes","inventoryPrefix":"rna/GRCh38/star/ensembl-116","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"goliath-genomes","key":"rna/GRCh38/star/ensembl-116/","dest":"/work/genomes/rna/GRCh38/star/ensembl-116"}]}}'::jsonb,
     ep_id,
     'rna_star_index'
   WHERE NOT EXISTS (
@@ -107,7 +107,7 @@ BEGIN
     '1',
     'published',
     md5('rna-grch38-kallisto-gencode-v50@1'),
-    '{"assetType":"rna_kallisto_index","destRoot":"/work/genomes/rna/GRCh38/kallisto","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"rna/GRCh38/kallisto","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"rna/GRCh38/kallisto/","dest":"/work/genomes/rna/GRCh38/kallisto"}]}}'::jsonb,
+    '{"assetType":"rna_kallisto_index","destRoot":"/work/genomes/rna/GRCh38/kallisto","storageEndpoint":"goliath-genomes","inventoryPrefix":"rna/GRCh38/kallisto","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"goliath-genomes","key":"rna/GRCh38/kallisto/","dest":"/work/genomes/rna/GRCh38/kallisto"}]}}'::jsonb,
     ep_id,
     'rna_kallisto_index'
   WHERE NOT EXISTS (
@@ -123,7 +123,7 @@ BEGIN
     '1',
     'published',
     md5('pangenome-grch38-d9-1.70@1'),
-    '{"assetType":"pangenome_bundle","destRoot":"/work/genomes/pangenome/GRCh38/d9/1.70","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"pangenome/GRCh38/d9/1.70","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"pangenome/GRCh38/d9/1.70/","dest":"/work/genomes/pangenome/GRCh38/d9/1.70"}]}}'::jsonb,
+    '{"assetType":"pangenome_bundle","destRoot":"/work/genomes/pangenome/GRCh38/d9/1.70","storageEndpoint":"goliath-genomes","inventoryPrefix":"pangenome/GRCh38/d9/1.70","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"goliath-genomes","key":"pangenome/GRCh38/d9/1.70/","dest":"/work/genomes/pangenome/GRCh38/d9/1.70"}]}}'::jsonb,
     ep_id,
     'pangenome_bundle'
   WHERE NOT EXISTS (
@@ -139,7 +139,7 @@ BEGIN
     '1',
     'published',
     md5('pangenome-grch38-d9-bs-1.70@1'),
-    '{"assetType":"pangenome_wgbs_bundle","destRoot":"/work/genomes/pangenome/GRCh38/d9-bs/1.70","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"pangenome/GRCh38/d9-bs/1.70","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"pangenome/GRCh38/d9-bs/1.70/","dest":"/work/genomes/pangenome/GRCh38/d9-bs/1.70"}]}}'::jsonb,
+    '{"assetType":"pangenome_wgbs_bundle","destRoot":"/work/genomes/pangenome/GRCh38/d9-bs/1.70","storageEndpoint":"goliath-genomes","inventoryPrefix":"pangenome/GRCh38/d9-bs/1.70","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"goliath-genomes","key":"pangenome/GRCh38/d9-bs/1.70/","dest":"/work/genomes/pangenome/GRCh38/d9-bs/1.70"}]}}'::jsonb,
     ep_id,
     'pangenome_wgbs_bundle'
   WHERE NOT EXISTS (

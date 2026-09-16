@@ -24,7 +24,7 @@ _LAB_FASTQ = {
 
 _PROFILE_JSON = {
     "type": "s3",
-    "bucket": "epimethyl",
+    "bucket": "goliath",
     "region": "us-east-1",
     "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
     "prefixBase": "samples/",
@@ -45,7 +45,7 @@ def test_apply_archive_profile_fills_h5_only() -> None:
         loader,
     )
     assert out["fastqStorage"]["bucket"] == "lab-cohort"
-    assert out["h5Storage"]["bucket"] == "epimethyl"
+    assert out["h5Storage"]["bucket"] == "goliath"
 
 
 def test_apply_archive_profile_preserves_explicit_h5() -> None:
@@ -70,15 +70,15 @@ def test_resource_profile_reader_parses_json() -> None:
     db = MagicMock()
     db.backend = "postgres"
     db._fetch_one.return_value = {
-        "profile_key": "epimethyl-samples",
+        "profile_key": "goliath-samples",
         "profile_type": "s3_object_storage",
         "profile_json": _PROFILE_JSON,
         "status": "ACTIVE",
     }
     reader = ResourceProfileReader(db)
-    h5 = reader.h5_storage_defaults("epimethyl-samples")
+    h5 = reader.h5_storage_defaults("goliath-samples")
     assert h5 is not None
-    assert h5["bucket"] == "epimethyl"
+    assert h5["bucket"] == "goliath"
     assert h5["endpointUrl"] == "https://s3.us-east-1.myqnapcloud.io"
     assert h5["credentials"]["secretAccessKey"] == "secret"
 
@@ -90,10 +90,10 @@ def test_resource_profile_reader_expands_cfg_endpoint_ref() -> None:
     def fetch(sql: str, params: tuple = ()):
         if "portal.resource_profile" in sql:
             return {
-                "profile_key": "epimethyl-samples",
+                "profile_key": "goliath-samples",
                 "profile_type": "cfg_storage_endpoint_ref",
                 "profile_json": {
-                    "sampleStorageEndpoint": "epimethyl-archive",
+                    "sampleStorageEndpoint": "goliath-archive",
                     "prefixBase": "samples/",
                     "scope": "archive",
                 },
@@ -103,13 +103,13 @@ def test_resource_profile_reader_expands_cfg_endpoint_ref() -> None:
             return {
                 "location_json": {
                     "type": "s3",
-                    "bucket": "epimethyl",
+                    "bucket": "goliath",
                     "region": "us-east-1",
                     "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
                     "scope": "archive",
                 },
                 "provider": "s3",
-                "credential_name": "epimethyl-archive-keys",
+                "credential_name": "goliath-archive-keys",
                 "endpoint_version": "1",
                 "secret_json": {
                     "authMode": "explicit_keys",
@@ -124,12 +124,12 @@ def test_resource_profile_reader_expands_cfg_endpoint_ref() -> None:
 
     db._fetch_one.side_effect = fetch
     reader = ResourceProfileReader(db)
-    h5 = reader.h5_storage_defaults("epimethyl-samples")
+    h5 = reader.h5_storage_defaults("goliath-samples")
     assert h5 is not None
-    assert h5["bucket"] == "epimethyl"
+    assert h5["bucket"] == "goliath"
     assert h5["credentials"]["secretAccessKey"] == "secret"
     assert h5["contentHash"] == "abc123"
-    assert h5["credentialName"] == "epimethyl-archive-keys"
+    assert h5["credentialName"] == "goliath-archive-keys"
     assert h5["prefixBase"] == "samples/"
     assert "prefix" not in h5 or h5.get("prefix") in (None, "")
 
@@ -142,16 +142,16 @@ def test_resource_profile_reader_missing_credential_raises() -> None:
     def fetch(sql: str, params: tuple = ()):
         if "portal.resource_profile" in sql:
             return {
-                "profile_key": "epimethyl-samples",
+                "profile_key": "goliath-samples",
                 "profile_type": "cfg_storage_endpoint_ref",
-                "profile_json": {"sampleStorageEndpoint": "epimethyl-archive"},
+                "profile_json": {"sampleStorageEndpoint": "goliath-archive"},
                 "status": "ACTIVE",
             }
         if "cfg.storage_endpoint" in sql:
             return {
                 "location_json": {
                     "type": "s3",
-                    "bucket": "epimethyl",
+                    "bucket": "goliath",
                     "region": "us-east-1",
                 },
                 "provider": "s3",
@@ -167,7 +167,7 @@ def test_resource_profile_reader_missing_credential_raises() -> None:
     db._fetch_one.side_effect = fetch
     reader = ResourceProfileReader(db)
     with pytest.raises(KeyError, match="credential not found: missing-keys"):
-        reader.h5_storage_defaults("epimethyl-samples")
+        reader.h5_storage_defaults("goliath-samples")
 
 
 def test_expanded_archive_defaults_validate_as_sample_storage() -> None:
@@ -181,10 +181,10 @@ def test_expanded_archive_defaults_validate_as_sample_storage() -> None:
     def fetch(sql: str, params: tuple = ()):
         if "portal.resource_profile" in sql:
             return {
-                "profile_key": "epimethyl-samples",
+                "profile_key": "goliath-samples",
                 "profile_type": "cfg_storage_endpoint_ref",
                 "profile_json": {
-                    "sampleStorageEndpoint": "epimethyl-archive",
+                    "sampleStorageEndpoint": "goliath-archive",
                     "prefixBase": "samples/",
                     "scope": "archive",
                 },
@@ -194,14 +194,14 @@ def test_expanded_archive_defaults_validate_as_sample_storage() -> None:
             return {
                 "location_json": {
                     "type": "s3",
-                    "bucket": "epimethyl",
+                    "bucket": "goliath",
                     "region": "us-east-1",
                     "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
                     "scope": "archive",
                     "prefixBase": "samples/",
                 },
                 "provider": "s3",
-                "credential_name": "epimethyl-archive-keys",
+                "credential_name": "goliath-archive-keys",
                 "endpoint_version": "1",
                 "secret_json": {
                     "authMode": "explicit_keys",
@@ -216,11 +216,11 @@ def test_expanded_archive_defaults_validate_as_sample_storage() -> None:
 
     db._fetch_one.side_effect = fetch
     reader = ResourceProfileReader(db)
-    h5 = reader.h5_storage_defaults("epimethyl-samples")
+    h5 = reader.h5_storage_defaults("goliath-samples")
     assert h5 is not None
     model = TypeAdapter(SampleStorageDefaults).validate_python(h5)
     assert model.contentHash == "abc123"
-    assert model.credentialName == "epimethyl-archive-keys"
+    assert model.credentialName == "goliath-archive-keys"
     assert model.scope == "archive"
     assert model.prefixBase == "samples/"
 
@@ -254,7 +254,7 @@ def test_download_and_archive_task_inputs_accept_expanded_locations() -> None:
 
     dest = {
         "type": "s3",
-        "bucket": "epimethyl",
+        "bucket": "goliath",
         "prefix": "samples/S1/",
         "scope": "archive",
         "credentialName": "archive-keys",
@@ -280,27 +280,27 @@ def test_named_qnap_locations_replace_file_and_aws_placeholders() -> None:
 
     qnap_fastq = {
         "type": "s3",
-        "bucket": "epimethyl",
+        "bucket": "goliath",
         "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
         "prefixBase": "samples/",
         "scope": "lab_ingress",
     }
     qnap_archive = {
         "type": "s3",
-        "bucket": "epimethyl",
+        "bucket": "goliath",
         "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
         "prefixBase": "samples/",
         "scope": "archive",
     }
 
     def expand(name: str):
-        return {"epimethyl-fastq": qnap_fastq, "epimethyl-archive": qnap_archive}.get(name)
+        return {"goliath-fastq": qnap_fastq, "goliath-archive": qnap_archive}.get(name)
 
     def load_profile(name: str):
-        assert name == "epimethyl-samples"
+        assert name == "goliath-samples"
         return {
-            "fastqStorageEndpoint": "epimethyl-fastq",
-            "sampleStorageEndpoint": "epimethyl-archive",
+            "fastqStorageEndpoint": "goliath-fastq",
+            "sampleStorageEndpoint": "goliath-archive",
         }
 
     out = apply_named_storage_locations(
@@ -310,12 +310,12 @@ def test_named_qnap_locations_replace_file_and_aws_placeholders() -> None:
         },
         expand_endpoint=expand,
         load_profile=load_profile,
-        study_defaults={"storageProfile": "epimethyl-samples"},
+        study_defaults={"storageProfile": "goliath-samples"},
     )
     assert out["fastqStorage"]["endpointUrl"] == "https://s3.us-east-1.myqnapcloud.io"
     assert out["fastqStorage"]["scope"] == "lab_ingress"
     assert out["sampleStorage"]["scope"] == "archive"
-    assert out["fastqStorageEndpoint"] == "epimethyl-fastq"
+    assert out["fastqStorageEndpoint"] == "goliath-fastq"
 
     copied_aws = apply_named_storage_locations(
         {
@@ -325,11 +325,11 @@ def test_named_qnap_locations_replace_file_and_aws_placeholders() -> None:
                 "region": "us-east-1",
                 "credentials": {"authMode": "instance_profile"},
             },
-            "fastqStorageEndpoint": "epimethyl-fastq",
+            "fastqStorageEndpoint": "goliath-fastq",
         },
         expand_endpoint=expand,
     )
-    assert copied_aws["fastqStorage"]["bucket"] == "epimethyl"
+    assert copied_aws["fastqStorage"]["bucket"] == "goliath"
     assert "myqnapcloud.io" in copied_aws["fastqStorage"]["endpointUrl"]
 
 
@@ -338,12 +338,12 @@ def test_named_locations_keep_explicit_qnap() -> None:
 
     existing = {
         "type": "s3",
-        "bucket": "epimethyl",
+        "bucket": "goliath",
         "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
         "prefixBase": "samples",
     }
     out = apply_named_storage_locations(
-        {"fastqStorage": existing, "fastqStorageEndpoint": "epimethyl-fastq"},
+        {"fastqStorage": existing, "fastqStorageEndpoint": "goliath-fastq"},
         expand_endpoint=lambda _n: {"bucket": "other"},
     )
-    assert out["fastqStorage"]["bucket"] == "epimethyl"
+    assert out["fastqStorage"]["bucket"] == "goliath"

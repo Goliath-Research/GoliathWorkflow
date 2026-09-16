@@ -4,7 +4,7 @@
 # Requires the same DB env as the REST gateway (see docs/deployment/production_runbook.md).
 #
 # Usage:
-#   source /work/epimethyl/env/gateway.env   # or export AZURE_SQL_* manually
+#   source /work/goliath/env/gateway.env   # or export AZURE_SQL_* manually
 #   bash scripts/refresh_sample_prep_test_bed.sh
 #
 # Options:

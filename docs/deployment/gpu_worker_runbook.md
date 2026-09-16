@@ -8,7 +8,7 @@ Related: [production_release.md](production_release.md), [worker_provision.md](w
 
 | Check | Command |
 |-------|---------|
-| Shared `/work` mounted | `ls /work/epimethyl/current/manifest.json` |
+| Shared `/work` mounted | `ls /work/goliath/current/manifest.json` |
 | NVIDIA driver | `nvidia-smi` |
 | Architecture | `uname -m` → `aarch64` or `x86_64` |
 | Host tools (per VM) | `bash …/verify_host_tools.sh` — **samtools**, **bedtools**, **fastp** via `install_host_tools_gpu_vm.sh` / `setup_host.sh --system-deps` (not on `/work` NFS) |
@@ -30,7 +30,7 @@ Record tested combinations in release `manifest.json`:
 
 ### native-Mojo methylGrapher (`pangenome_wgbs`)
 
-Buffy default WGBS pangenome Align runs **native-Mojo** on the same NVIDIA workers via `epimethyl/methylgrapher:1.70-mojo-cuda` (`actionConfig.methylgrapher_wgbs.engine=mojo`, `align_engine=gpu_giraffe|mojo_giraffe`, `giraffe_device=auto|nvidia`). Pass `--gpus all` (or site GPU flags) into the methylGrapher container — fail-closed on DeviceContext errors; do **not** switch to Clara on Mojo failure. AMD ROCm twin: [`worker-rocm.md`](worker-rocm.md). Canonical contract: [`mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md), [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md).
+Buffy default WGBS pangenome Align runs **native-Mojo** on the same NVIDIA workers via `goliath/methylgrapher:1.70-mojo-cuda` (`actionConfig.methylgrapher_wgbs.engine=mojo`, `align_engine=gpu_giraffe|mojo_giraffe`, `giraffe_device=auto|nvidia`). Pass `--gpus all` (or site GPU flags) into the methylGrapher container — fail-closed on DeviceContext errors; do **not** switch to Clara on Mojo failure. AMD ROCm twin: [`worker-rocm.md`](worker-rocm.md). Canonical contract: [`mojo-multi-gpu-dual-align.md`](../architecture/mojo-multi-gpu-dual-align.md), [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md).
 
 **HBM admission / release (GH200).** One Align or MojoGiraffe QC ≈ a full card. Pin in `worker.env` (not Python defaults):
 
@@ -72,17 +72,17 @@ All GPU VMs use one image store on fast shared storage:
 
 ```json
 {
-  "data-root": "/work/epimethyl/docker"
+  "data-root": "/work/goliath/docker"
 }
 ```
 
 Install/configure via:
 
 ```bash
-RUNTIME="$(readlink -f /work/epimethyl/current/runtime-bundle)"
+RUNTIME="$(readlink -f /work/goliath/current/runtime-bundle)"
 bash "$RUNTIME/scripts/setup_gpu_node.sh" \
-  --docker-data-root /work/epimethyl/docker \
-  --env-dir /work/epimethyl/env
+  --docker-data-root /work/goliath/docker \
+  --env-dir /work/goliath/env
 ```
 
 Do **not** pass `--pull-parabricks` on node join if release promote already pulled the image.
@@ -92,9 +92,9 @@ Do **not** pass `--pull-parabricks` on node join if release promote already pull
 From one admin node with NGC login:
 
 ```bash
-bash /work/epimethyl/current/runtime-bundle/scripts/promote_release.sh \
-  --root /work/epimethyl \
-  --release /work/epimethyl/releases/2026.6.1 \
+bash /work/goliath/current/runtime-bundle/scripts/promote_release.sh \
+  --root /work/goliath \
+  --release /work/goliath/releases/2026.6.1 \
   --arch "$(platform_arch_key "$(uname -m)" 2>/dev/null || echo aarch64)" \
   --pull-parabricks
 ```
@@ -112,9 +112,9 @@ Run pulls **serially** — never from all VMs at once.
 ## Verification
 
 ```bash
-source /work/epimethyl/env/worker.env
-source /work/epimethyl/env/parabricks.env
-bash /work/epimethyl/current/runtime-bundle/scripts/verify_e2e_node.sh
+source /work/goliath/env/worker.env
+source /work/goliath/env/parabricks.env
+bash /work/goliath/current/runtime-bundle/scripts/verify_e2e_node.sh
 ```
 
 ## Troubleshooting

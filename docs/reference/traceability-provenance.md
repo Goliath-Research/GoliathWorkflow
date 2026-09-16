@@ -22,7 +22,7 @@ flowchart TD
 
 | Layer | Artifact | Location |
 |-------|----------|----------|
-| **Release** | `manifest.json`, wheels, `runtime-bundle/` | `/work/epimethyl/releases/<ver>/`, `current` symlink |
+| **Release** | `manifest.json`, wheels, `runtime-bundle/` | `/work/goliath/releases/<ver>/`, `current` symlink |
 | **Workflow definition** | Compiled `WorkflowDefinitionSpec` | `wf.workflow_version.spec_json` |
 | **Instance** | `context_json` (projectPath, profile, merged `actionConfig`) | `wf.workflow_instance` |
 | **Node execution** | Status, lease, `input_json`, `output_json`, `result_code` | `wf.node_execution` |

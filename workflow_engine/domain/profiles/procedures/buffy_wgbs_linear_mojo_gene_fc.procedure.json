@@ -28,7 +28,7 @@
       "alignment_mode": "linear",
       "engine": "mojo",
       "align_device": "auto",
-      "image": "epimethyl/methylgrapher:1.70-mojo"
+      "image": "goliath/methylgrapher:1.70-mojo"
     },
     "methyl_extract": {
       "read_level": {

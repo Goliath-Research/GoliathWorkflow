@@ -288,7 +288,7 @@ def build_manifest(*, prior_manifest: Path | None = None) -> dict[str, Any]:
         features.append(feat)
 
     return {
-        "organization": "https://dev.azure.com/EpiMethyl",
+        "organization": "https://github.com/Goliath-Research",
         "project": "Development",
         "epic": {
             "title": "MethylPipeline platform",

@@ -21,7 +21,7 @@ Operators set `alignmentMode` (and procedure pack). They do **not** pick NVIDIA 
 | `engine` (pangenome) | `methylgrapher_wgbs.engine` | `mojo` (canonical) \| `python` (dev/parity rollback) |
 | `align_engine` | `methylgrapher_wgbs.align_engine` | `gpu_giraffe` \| `mojo_giraffe` (canonical); `cpu_vg` only unknown-GPU / parity |
 | `engine` (linear) | `parabricks.engine` | `parabricks` (Clara, **explicit**) \| `mojo` (MojoFq2bamMeth) |
-| `image` | same sections | e.g. `epimethyl/methylgrapher:1.70-mojo-cuda` or `:1.70-mojo-rocm` |
+| `image` | same sections | e.g. `goliath/methylgrapher:1.70-mojo-cuda` or `:1.70-mojo-rocm` |
 
 `auto` probes `nvidia-smi` then `rocm-smi`. On known NVIDIA/AMD fleets, DeviceContext failure is **fail-closed** — not a switch to Clara. Workers consume baked `resolvedConfig` only (config-not-env).
 

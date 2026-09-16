@@ -1,6 +1,6 @@
 # GPU worker node deployment
 
-Host-native workers on shared storage under `/work/epimethyl`. Docker is used **only** for Parabricks alignment. The gateway does **not** mount `/work`.
+Host-native workers on shared storage under `/work/goliath`. Docker is used **only** for Parabricks alignment. The gateway does **not** mount `/work`.
 
 **Production:** privileged host applies SQL twins + Python populate; gateway installs on local disk (`provision_gateway_node.sh`); GPU VMs use [`provision_worker_node.sh`](../../scripts/provision_worker_node.sh) (`--join-mode auto`). See [`production-platform.md`](production-platform.md), [`production_release.md`](production_release.md), [`gpu_worker_runbook.md`](gpu_worker_runbook.md), and [`worker_provision.md`](worker_provision.md).
 
@@ -11,7 +11,7 @@ Git clones below are **lab-only**. Production workers have no git checkout.
 Development bootstrap (git clones):
 
 ```
-/work/epimethyl/
+/work/goliath/
   repos/MethylPipeline/
   repos/MethylExtractor/
   venv/
@@ -26,7 +26,7 @@ Development bootstrap (git clones):
 Production release layout (no git on workers):
 
 ```
-/work/epimethyl/
+/work/goliath/
   current -> releases/<ver>/
   releases/<ver>/manifest.json, wheels/, runtime-bundle/
   venv-aarch64/  venv-amd64/
@@ -45,22 +45,22 @@ export METHYL_PIPELINE_URL=<git-url>   # optional if seeding from local checkout
 export METHYL_EXTRACTOR_URL=<git-url>
 export WORKER_API_BASE=https://gateway.example.com/v1
 
-sudo bash /work/epimethyl/repos/MethylPipeline/scripts/bootstrap_epimethyl.sh \
-  --root /work/epimethyl \
+sudo bash /work/goliath/repos/MethylPipeline/scripts/bootstrap_goliath.sh \
+  --root /work/goliath \
   --system-deps \
   --gpu
 ```
 
 ## Bootstrap from a production release
 
-After CI publishes to `/work/epimethyl/releases/<ver>/`:
+After CI publishes to `/work/goliath/releases/<ver>/`:
 
 ```bash
 export WORKER_API_BASE=https://gateway.example.com/v1
 
-bash scripts/bootstrap_epimethyl.sh \
-  --root /work/epimethyl \
-  --release-dir /work/epimethyl/releases/2026.6.1 \
+bash scripts/bootstrap_goliath.sh \
+  --root /work/goliath \
+  --release-dir /work/goliath/releases/2026.6.1 \
   --arch aarch64 \
   --promote-release \
   --system-deps \
@@ -73,7 +73,7 @@ Or from a fresh machine before clones exist:
 
 ```bash
 git clone <MethylPipeline-url> /tmp/MethylPipeline
-sudo /tmp/MethylPipeline/scripts/bootstrap_epimethyl.sh \
+sudo /tmp/MethylPipeline/scripts/bootstrap_goliath.sh \
   --pipeline-url <url> \
   --extractor-url <url> \
   --system-deps --gpu
@@ -81,18 +81,18 @@ sudo /tmp/MethylPipeline/scripts/bootstrap_epimethyl.sh \
 
 ## GPU / Docker / Parabricks only
 
-Shared Docker data-root (production — all GPU VMs point at `/work/epimethyl/docker`):
+Shared Docker data-root (production — all GPU VMs point at `/work/goliath/docker`):
 
 ```bash
 bash scripts/setup_gpu_node.sh \
-  --docker-data-root /work/epimethyl/docker \
-  --env-dir /work/epimethyl/env
+  --docker-data-root /work/goliath/docker \
+  --env-dir /work/goliath/env
 ```
 
 Pull Parabricks once during release promote, or on a single admin node:
 
 ```bash
-bash scripts/setup_gpu_node.sh --pull-parabricks --env-dir /work/epimethyl/env
+bash scripts/setup_gpu_node.sh --pull-parabricks --env-dir /work/goliath/env
 ```
 
 ## Python packages (development / editable)
@@ -100,7 +100,7 @@ bash scripts/setup_gpu_node.sh --pull-parabricks --env-dir /work/epimethyl/env
 All worker-capable packages install from [`scripts/packages.list`](../../scripts/packages.list) via [`scripts/install_packages.sh`](../../scripts/install_packages.sh) (includes `workers/`).
 
 ```bash
-source /work/epimethyl/venv/bin/activate
+source /work/goliath/venv/bin/activate
 ./scripts/install_all.sh --pipeline-reqs --gpu-reqs --skip-marp
 ```
 
@@ -123,8 +123,8 @@ Source env before running workers (interactive shells expand `$PATH`; systemd do
 
 ```bash
 set -a
-source /work/epimethyl/env/worker.env
-source /work/epimethyl/env/parabricks.env
+source /work/goliath/env/worker.env
+source /work/goliath/env/parabricks.env
 set +a
 ```
 
@@ -175,13 +175,13 @@ sudo systemctl enable --now methyl-worker.service          # omnibus
 sudo systemctl enable --now methyl-worker@methyl-qc.service  # per capability
 ```
 
-Adjust paths in unit files if `EPIMETHYL_ROOT` differs from `/work/epimethyl`.
+Adjust paths in unit files if `GOLIATH_ROOT` differs from `/work/goliath`.
 
 Production workers use **arch-specific venvs** (`venv-aarch64` or `venv-amd64`). Update `Environment=PATH=` and `ExecStart=` in the unit file to match the node architecture, for example:
 
 ```
-Environment=PATH=/work/epimethyl/venv-aarch64/bin:...
-ExecStart=/work/epimethyl/venv-aarch64/bin/methyl-worker --api-base ${WORKER_API_BASE}
+Environment=PATH=/work/goliath/venv-aarch64/bin:...
+ExecStart=/work/goliath/venv-aarch64/bin/methyl-worker --api-base ${WORKER_API_BASE}
 ```
 
 ## Verification

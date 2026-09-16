@@ -27,8 +27,8 @@ Until that promote lands, prefer **explicit large** `stability_gene_featurecuts_
 
 ## Prerequisites
 
-- Release at `/work/epimethyl/current` with `runtime-bundle` and worker PATH from
-  `/work/epimethyl/current/env/worker.env` (typically `/work/epimethyl/venv-aarch64`).
+- Release at `/work/goliath/current` with `runtime-bundle` and worker PATH from
+  `/work/goliath/current/env/worker.env` (typically `/work/goliath/venv-aarch64`).
 - `/work/samples`, `/work/genomes`, `/work/site`, and the prostate-cancer project are mounted.
 - These study files are present under `/work/projects/prostate-cancer/configs/`:
   - `project_Buffy_ecdf_gene_covariates.json`
@@ -41,17 +41,17 @@ Activate the release environment (preferred):
 
 ```bash
 set -a
-source /work/epimethyl/current/env/worker.env
+source /work/goliath/current/env/worker.env
 set +a
 # Ensure methyl-* resolve from the release venv first
-export PATH=/work/epimethyl/venv-aarch64/bin:$PATH
+export PATH=/work/goliath/venv-aarch64/bin:$PATH
 ```
 
 Dry-run before consuming compute (programs from **runtime-bundle**, not a git checkout):
 
 ```bash
 methyl-workflow-run \
-  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
+  --program /work/goliath/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
   --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
   --parallel-workers 1 --dry-run -v
 ```
@@ -70,10 +70,10 @@ Start stability in a detached terminal. The log is outside the not-yet-created s
 
 ```bash
 tmux new-session -d -s buffy-gene-mc 'bash -lc "
-  set -a && source /work/epimethyl/current/env/worker.env && set +a &&
-  export PATH=/work/epimethyl/venv-aarch64/bin:\$PATH &&
+  set -a && source /work/goliath/current/env/worker.env && set +a &&
+  export PATH=/work/goliath/venv-aarch64/bin:\$PATH &&
   methyl-workflow-run \
-    --program /work/epimethyl/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
+    --program /work/goliath/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
     --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
     --parallel-workers 1 -v \
     > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.mc_stability.log 2>&1
@@ -85,10 +85,10 @@ Continue only after `stability/stability_summary.json` exists and `freeze_readin
 
 ```bash
 tmux new-session -d -s buffy-gene-freeze 'bash -lc "
-  set -a && source /work/epimethyl/current/env/worker.env && set +a &&
-  export PATH=/work/epimethyl/venv-aarch64/bin:\$PATH &&
+  set -a && source /work/goliath/current/env/worker.env && set +a &&
+  export PATH=/work/goliath/venv-aarch64/bin:\$PATH &&
   methyl-workflow-run \
-    --program /work/epimethyl/current/runtime-bundle/domain/fixtures/validation_freeze.program.json \
+    --program /work/goliath/current/runtime-bundle/domain/fixtures/validation_freeze.program.json \
     --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
     --parallel-workers 1 -v \
     > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.freeze.log 2>&1
@@ -99,20 +99,20 @@ After freeze succeeds, run strict model-MC and then final post-model validation:
 
 ```bash
 tmux new-session -d -s buffy-gene-model-mc 'bash -lc "
-  set -a && source /work/epimethyl/current/env/worker.env && set +a &&
-  export PATH=/work/epimethyl/venv-aarch64/bin:\$PATH &&
+  set -a && source /work/goliath/current/env/worker.env && set +a &&
+  export PATH=/work/goliath/venv-aarch64/bin:\$PATH &&
   methyl-workflow-run \
-    --program /work/epimethyl/current/runtime-bundle/domain/fixtures/validation_model_mc.program.json \
+    --program /work/goliath/current/runtime-bundle/domain/fixtures/validation_model_mc.program.json \
     --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
     --parallel-workers 1 -v \
     > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.model_mc.log 2>&1
 "'
 
 tmux new-session -d -s buffy-gene-model 'bash -lc "
-  set -a && source /work/epimethyl/current/env/worker.env && set +a &&
-  export PATH=/work/epimethyl/venv-aarch64/bin:\$PATH &&
+  set -a && source /work/goliath/current/env/worker.env && set +a &&
+  export PATH=/work/goliath/venv-aarch64/bin:\$PATH &&
   methyl-workflow-run \
-    --program /work/epimethyl/current/runtime-bundle/domain/fixtures/validation_model.program.json \
+    --program /work/goliath/current/runtime-bundle/domain/fixtures/validation_model.program.json \
     --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
     --parallel-workers 1 -v \
     > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.model.log 2>&1
@@ -130,10 +130,10 @@ Record baseline duration, then rerun the identical stability command without `--
 ```bash
 /usr/bin/time -o /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.replay.time \
   -f 'elapsed=%e' \
-  bash -lc 'set -a && source /work/epimethyl/current/env/worker.env && set +a &&
-    export PATH=/work/epimethyl/venv-aarch64/bin:$PATH &&
+  bash -lc 'set -a && source /work/goliath/current/env/worker.env && set +a &&
+    export PATH=/work/goliath/venv-aarch64/bin:$PATH &&
     methyl-workflow-run \
-      --program /work/epimethyl/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
+      --program /work/goliath/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
       --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
       --parallel-workers 1 -v' \
   > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.replay.log 2>&1

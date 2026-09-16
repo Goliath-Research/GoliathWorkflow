@@ -9,7 +9,7 @@ Related: [production_release.md](production_release.md), [gpu_worker_runbook.md]
 
 ## Assumptions
 
-- Release already promoted: `/work/epimethyl/current` → valid `manifest.json`
+- Release already promoted: `/work/goliath/current` → valid `manifest.json`
 - Shared artifacts present: `venv-<arch>/`, `methyl-extractor-<arch>/`, `docker/` (if Parabricks pre-pulled)
 - Gateway HTTPS up (`WORKER_API_BASE`); portal has preregistered this VM’s **public IP**
 - Operator has sudo + Azure permissions for Arc onboarding (company tenant/subscription)
@@ -21,23 +21,23 @@ Default is **`--join-mode auto`**: missing `current/manifest.json` seeds shared 
 ```bash
 export WORKER_API_BASE=https://gateway.example.com/v1
 
-bash /work/epimethyl/current/runtime-bundle/scripts/preflight_worker_join.sh \
+bash /work/goliath/current/runtime-bundle/scripts/preflight_worker_join.sh \
   --gpu --require-api --require-current
 
 # 1) Local install (no Arc)
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
+sudo bash /work/goliath/current/runtime-bundle/scripts/provision_worker_node.sh \
   --gpu --join-mode join --prepare-only --cluster gpu-west
 
 # 2) Arc onboard + approve Connected (human-gated)
 export AZ_SUBSCRIPTION_ID=... AZ_RESOURCE_GROUP=... AZURE_TENANT_ID=...
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_arc_agent.sh \
+sudo bash /work/goliath/current/runtime-bundle/scripts/install_arc_agent.sh \
   --subscription-id "$AZ_SUBSCRIPTION_ID" \
   --resource-group "$AZ_RESOURCE_GROUP" \
   --tenant-id "$AZURE_TENANT_ID"
-bash /work/epimethyl/current/runtime-bundle/scripts/verify_arc_prereqs.sh
+bash /work/goliath/current/runtime-bundle/scripts/verify_arc_prereqs.sh
 
 # 3) Enroll + systemd
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
+sudo bash /work/goliath/current/runtime-bundle/scripts/provision_worker_node.sh \
   --gpu --join-mode join --finish-enroll --cluster gpu-west
 ```
 
@@ -68,7 +68,7 @@ See [arc_worker_runbook.md](arc_worker_runbook.md) for Private Link Scope and Gu
 ### 1. Mount shared storage
 
 ```bash
-ls /work/epimethyl/current/manifest.json
+ls /work/goliath/current/manifest.json
 ```
 
 ### 2. NVIDIA driver
@@ -81,20 +81,20 @@ Install or upgrade driver per [gpu_worker_runbook.md](gpu_worker_runbook.md) bef
 
 ### 3. Host system dependencies (once per VM)
 
-**`/work` is cluster-once NFS** (epimethyl releases, site, samples, genomes, docker layers).
+**`/work` is cluster-once NFS** (goliath releases, site, samples, genomes, docker layers).
 It does **not** install OS packages onto each VM. Sisters that only reload a Mojo image
 still need this step or Align fails after dual-map with `FileNotFoundError: samtools`.
 
 ```bash
 # Preferred short path when /work is already promoted:
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_host_tools_gpu_vm.sh
-# (also mirrored at /work/epimethyl/images/install_host_tools_gpu_vm.sh)
+sudo bash /work/goliath/current/runtime-bundle/scripts/install_host_tools_gpu_vm.sh
+# (also mirrored at /work/goliath/images/install_host_tools_gpu_vm.sh)
 
 # Equivalent long form:
-RUNTIME="$(readlink -f /work/epimethyl/current/runtime-bundle)"
+RUNTIME="$(readlink -f /work/goliath/current/runtime-bundle)"
 bash "$RUNTIME/scripts/setup_host.sh" \
   --system-deps --gpu \
-  --venv /work/epimethyl/venv-$(source "$RUNTIME/scripts/detect_platform.sh" && platform_arch_key) \
+  --venv /work/goliath/venv-$(source "$RUNTIME/scripts/detect_platform.sh" && platform_arch_key) \
   --no-venv
 bash "$RUNTIME/scripts/verify_host_tools.sh"
 ```
@@ -111,10 +111,10 @@ path in `worker.env` (or the systemd unit) so spill files stay off `/work`.
 ### 4. Docker + shared data-root (once per VM)
 
 ```bash
-RUNTIME="$(readlink -f /work/epimethyl/current/runtime-bundle)"
+RUNTIME="$(readlink -f /work/goliath/current/runtime-bundle)"
 bash "$RUNTIME/scripts/setup_gpu_node.sh" \
-  --docker-data-root /work/epimethyl/docker \
-  --env-dir /work/epimethyl/env
+  --docker-data-root /work/goliath/docker \
+  --env-dir /work/goliath/env
 ```
 
 Add user to docker group if prompted: `sudo usermod -aG docker "$USER"`.
@@ -122,21 +122,21 @@ Add user to docker group if prompted: `sudo usermod -aG docker "$USER"`.
 ### 5. Bootstrap release bundle
 
 ```bash
-bash /work/epimethyl/current/runtime-bundle/scripts/bootstrap_epimethyl.sh \
-  --root /work/epimethyl \
+bash /work/goliath/current/runtime-bundle/scripts/bootstrap_goliath.sh \
+  --root /work/goliath \
   --require-arc
 ```
 
-`bootstrap_epimethyl.sh` defaults `WORKER_API_BASE` to HTTPS. Use `--skip-arc-check` only in dev/lab.
+`bootstrap_goliath.sh` defaults `WORKER_API_BASE` to HTTPS. Use `--skip-arc-check` only in dev/lab.
 
 ### 6. Environment
 
 If promote already wrote `worker.env`, confirm `WORKER_API_BASE=https://<gateway-fqdn>/v1`. Otherwise:
 
 ```bash
-bash /work/epimethyl/current/runtime-bundle/scripts/write_worker_env.sh \
-  --root /work/epimethyl \
-  --manifest /work/epimethyl/current/manifest.json \
+bash /work/goliath/current/runtime-bundle/scripts/write_worker_env.sh \
+  --root /work/goliath \
+  --manifest /work/goliath/current/manifest.json \
   --arch aarch64
 ```
 
@@ -146,9 +146,9 @@ bash /work/epimethyl/current/runtime-bundle/scripts/write_worker_env.sh \
 
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
-bash /work/epimethyl/current/runtime-bundle/scripts/verify_arc_prereqs.sh
+bash /work/goliath/current/runtime-bundle/scripts/verify_arc_prereqs.sh
 # Source worker.env first so NVIDIA image pins are visible to capability probes.
-set -a; source /work/epimethyl/env/worker.env; source /work/epimethyl/env/parabricks.env; set +a
+set -a; source /work/goliath/env/worker.env; source /work/goliath/env/parabricks.env; set +a
 methyl-worker enroll \
   --api-base "$WORKER_API_BASE" \
   --cluster gpu-west \
@@ -165,35 +165,35 @@ methyl-worker enroll \
 ```bash
 export BACKEND_DB=mssql   # or postgres + POSTGRES_*
 # AZURE_SQL_* …
-bash /work/epimethyl/current/runtime-bundle/scripts/register_worker.sh \
+bash /work/goliath/current/runtime-bundle/scripts/register_worker.sh \
   --cluster gpu-west \
   --key "$(hostname -s)" \
   --require-arc \
-  --env-file /work/epimethyl/env/worker.env
+  --env-file /work/goliath/env/worker.env
 ```
 
 ### 8. Verify
 
 ```bash
 set -a
-source /work/epimethyl/env/worker.env
-source /work/epimethyl/env/parabricks.env
+source /work/goliath/env/worker.env
+source /work/goliath/env/parabricks.env
 set +a
-bash /work/epimethyl/current/runtime-bundle/scripts/verify_e2e_node.sh
+bash /work/goliath/current/runtime-bundle/scripts/verify_e2e_node.sh
 ```
 
 ### 9. systemd
 
 ```bash
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_worker_systemd.sh \
-  --root /work/epimethyl
+sudo bash /work/goliath/current/runtime-bundle/scripts/install_worker_systemd.sh \
+  --root /work/goliath
 ```
 
 Or manually copy units and set arch-specific venv:
 
 ```bash
-ARCH=$(source /work/epimethyl/current/runtime-bundle/scripts/detect_platform.sh && platform_arch_key "$(uname -m)")
-sudo cp /work/epimethyl/current/runtime-bundle/deploy/systemd/methyl-worker.service /etc/systemd/system/
+ARCH=$(source /work/goliath/current/runtime-bundle/scripts/detect_platform.sh && platform_arch_key "$(uname -m)")
+sudo cp /work/goliath/current/runtime-bundle/deploy/systemd/methyl-worker.service /etc/systemd/system/
 sudo sed -i "s|venv-aarch64|venv-${ARCH}|g" /etc/systemd/system/methyl-worker.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now methyl-worker.service

@@ -1,6 +1,6 @@
 # Alignment engines
 
-MethylPipeline SamplePrep supports three `alignmentMode` values. This page is the operator matrix for choosing an engine; science contracts for the Mojo cutover live in the sibling [mojo-align](https://dev.azure.com/EpiMethyl/Development/_git/mojo-align) repository (`fq2bam-meth/`, `giraffe/`, `methylgrapher/`).
+MethylPipeline SamplePrep supports three `alignmentMode` values. This page is the operator matrix for choosing an engine; science contracts for the Mojo cutover live in the sibling [mojo-align](https://github.com/Goliath-Research/mojo-align) repository (`fq2bam-meth/`, `giraffe/`, `methylgrapher/`).
 
 ## Mode matrix
 

@@ -110,6 +110,6 @@ python scripts/sync_cfg_profiles_and_action_catalog.py --backend postgres
 | Target | Profiles | Catalog | Verification |
 |--------|----------|---------|--------------|
 | Azure SQL (`em-maindb`) | Upserted `staged_ovr_mc`, `staged_full_lifecycle` from repo (`stability_min_selected_dmps` → `stability_min_core_dmps`) | Seeded 46 actions / 92 schemas | No removed key; biomarker output has `empty_reason` |
-| PostgreSQL (`epimethyl`) | Renamed legacy key on the same two profiles | Seeded 46 actions / 92 schemas | Same checks |
+| PostgreSQL (`goliath`) | Renamed legacy key on the same two profiles | Seeded 46 actions / 92 schemas | Same checks |
 
 Old Monte Carlo `mc_config.json` snapshots remain bound to the release that wrote them; this sync only refreshes registry/catalog rows.

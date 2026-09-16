@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help=(
             "Optional *per-VM* env file to append WORKER_ID=/WORKER_TOKEN=. "
-            "Do not use shared /work/epimethyl/env/worker.env — that overrides "
+            "Do not use shared /work/goliath/env/worker.env — that overrides "
             "other nodes' credentials when systemd loads it after the token file."
         ),
     )

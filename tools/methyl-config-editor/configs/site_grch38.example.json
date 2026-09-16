@@ -35,7 +35,7 @@
       "node_replacement_json": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.node.replacement.json",
       "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-116/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
       "engine": "mojo",
-      "image": "epimethyl/methylgrapher:1.70-mojo",
+      "image": "goliath/methylgrapher:1.70-mojo",
       "align_engine": "gpu_giraffe",
       "gpu_giraffe_fallback": "mojo",
       "giraffe_device": "auto",

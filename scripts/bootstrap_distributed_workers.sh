@@ -6,9 +6,9 @@
 # analytes, the action catalog, enrichment presets, and DomainProgram graphs.
 #
 # Usage:
-#   # PostgreSQL (canonical DB name: epimethyl)
+#   # PostgreSQL (canonical DB name: goliath)
 #   export BACKEND_DB=postgres
-#   export PGHOST=... PGDATABASE=epimethyl PGUSER=dba PGPASSWORD='...' PGSSLMODE=require
+#   export PGHOST=... PGDATABASE=goliath PGUSER=dba PGPASSWORD='...' PGSSLMODE=require
 #   bash scripts/bootstrap_distributed_workers.sh
 #
 #   # Azure SQL
@@ -97,7 +97,7 @@ source "$REPO_ROOT/.venv/bin/activate"
 BACKEND="${BACKEND_DB:-postgres}"
 if [[ "$BACKEND" == "sql" ]]; then BACKEND=mssql; fi
 if [[ "$BACKEND" == "postgres" ]]; then
-  export POSTGRES_DB="${POSTGRES_DB:-${PGDATABASE:-epimethyl}}"
+  export POSTGRES_DB="${POSTGRES_DB:-${PGDATABASE:-goliath}}"
   export PGDATABASE="${PGDATABASE:-$POSTGRES_DB}"
 fi
 

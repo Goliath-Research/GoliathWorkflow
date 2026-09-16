@@ -17,7 +17,7 @@ bash scripts/bootstrap_distributed_workers.sh
 ## Day-2 operations
 
 ```bash
-export METHYL_CFG_STORE=/work/epimethyl/cfg-store
+export METHYL_CFG_STORE=/work/goliath/cfg-store
 export PYTHONPATH=workflow_engine:$PYTHONPATH
 
 # After editing a profile in the store

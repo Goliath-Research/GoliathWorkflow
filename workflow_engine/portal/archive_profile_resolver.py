@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional
 
-DEFAULT_ARCHIVE_PROFILE_KEY = "epimethyl-samples"
+DEFAULT_ARCHIVE_PROFILE_KEY = "goliath-samples"
 _STORAGE_NAME_KEYS = (
     "storageProfile",
     "fastqStorageEndpoint",

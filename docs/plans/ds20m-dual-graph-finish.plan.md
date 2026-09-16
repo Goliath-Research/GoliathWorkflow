@@ -29,4 +29,4 @@ todos:
 
 # Finish dual-graph MethylCall on DS20M
 
-See implementation notes in chat / runner changes. Key correction vs initial draft: **do not rebuild `wl.gfa` from stock d9.gbz** — use the PrepareGenome artifact seeded on QNAP (`s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.gfa`).
+See implementation notes in chat / runner changes. Key correction vs initial draft: **do not rebuild `wl.gfa` from stock d9.gbz** — use the PrepareGenome artifact seeded on QNAP (`s3://goliath/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.gfa`).

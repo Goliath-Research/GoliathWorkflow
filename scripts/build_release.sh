@@ -9,7 +9,7 @@ Usage: scripts/build_release.sh [options]
 
 Options:
   --version VER        Release version string (required; SemVer e.g. 2026.6.1)
-  --output DIR         Output directory (default: /work/epimethyl/releases/<version>)
+  --output DIR         Output directory (default: /work/goliath/releases/<version>)
   --python BIN         Python for build/venv (default: python3.12)
   --skip-wheels        Only build runtime-bundle and manifest stub
   --with-gpu-reqs      Include GPU requirements in lockfile compile
@@ -46,7 +46,7 @@ die() { echo "[ERROR] $*" >&2; exit 1; }
 [[ -n "$VERSION" ]] || die "--version is required"
 VERSION="$(normalize_release_version "$VERSION")"
 require_release_version "$VERSION" "--version" || exit 1
-OUTPUT="${OUTPUT:-/work/epimethyl/releases/$VERSION}"
+OUTPUT="${OUTPUT:-/work/goliath/releases/$VERSION}"
 WHEELS_DIR="$OUTPUT/wheels"
 RUNTIME_DIR="$OUTPUT/runtime-bundle"
 mkdir -p "$OUTPUT" "$WHEELS_DIR" "$RUNTIME_DIR"
@@ -113,7 +113,7 @@ warn_fallback_lock() {
   {
     cat "$req_in"
     echo ""
-    echo "# Local epimethyl wheels (install with --find-links wheels/)"
+    echo "# Local goliath wheels (install with --find-links wheels/)"
     for whl in "$WHEELS_DIR"/*.whl; do
       [[ -f "$whl" ]] || continue
       base="$(basename "$whl" | sed 's/-[0-9].*//')"
@@ -148,7 +148,7 @@ build_runtime_bundle() {
            verify_e2e_node.sh verify_setup.sh verify_host_tools.sh verify_parabricks.sh verify_methyl_extractor.sh \
            install_host_tools_gpu_vm.sh \
            register_worker.sh build_release.sh package_methyl_extractor.sh \
-           download_methyl_extractor_artifacts.sh assemble_release.sh bootstrap_epimethyl.sh \
+           download_methyl_extractor_artifacts.sh assemble_release.sh bootstrap_goliath.sh \
            install_gateway_systemd.sh install_worker_systemd.sh \
            install_reclaim_leases_timer.sh provision_gateway_node.sh \
            provision_worker_node.sh preflight_worker_join.sh init_work_layout.sh; do
@@ -166,7 +166,7 @@ write_manifest_stub() {
   "python": "$py_minor",
   "parabricks_image": "${PARABRICKS_IMAGE:-}",
   "parabricks_image_digest": "",
-  "docker_data_root": "/work/epimethyl/docker",
+  "docker_data_root": "/work/goliath/docker",
   "min_driver_version": "",
   "requirements_lock": "requirements-worker.lock",
   "runtime_bundle": "runtime-bundle",

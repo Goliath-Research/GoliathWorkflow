@@ -8,8 +8,8 @@ from typing import Iterable, List, Optional, Union
 
 PROFILE_ENV = "METHYL_PROFILE"
 PROFILE_DIR_ENV = "METHYL_PROFILE_DIR"
-EPIMETHYL_ROOT_ENV = "EPIMETHYL_ROOT"
-DEFAULT_EPIMETHYL_ROOT = "/work/epimethyl"
+GOLIATH_ROOT_ENV = "GOLIATH_ROOT"
+DEFAULT_GOLIATH_ROOT = "/work/goliath"
 
 
 def profile_search_dirs(*, extra: Optional[Iterable[Union[str, Path]]] = None) -> List[Path]:
@@ -21,8 +21,8 @@ def profile_search_dirs(*, extra: Optional[Iterable[Union[str, Path]]] = None) -
     raw_dir = os.environ.get(PROFILE_DIR_ENV)
     if raw_dir:
         dirs.append(Path(raw_dir).expanduser())
-    epimethyl_root = Path(os.environ.get(EPIMETHYL_ROOT_ENV, DEFAULT_EPIMETHYL_ROOT)).expanduser()
-    dirs.append(epimethyl_root / "current" / "runtime-bundle" / "domain" / "profiles")
+    goliath_root = Path(os.environ.get(GOLIATH_ROOT_ENV, DEFAULT_GOLIATH_ROOT)).expanduser()
+    dirs.append(goliath_root / "current" / "runtime-bundle" / "domain" / "profiles")
     # Editable / dev checkout adjacent to packages/
     repo_profiles = Path(__file__).resolve().parents[3] / "workflow_engine" / "domain" / "profiles"
     dirs.append(repo_profiles)

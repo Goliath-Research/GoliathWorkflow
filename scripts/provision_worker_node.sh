@@ -8,7 +8,7 @@ usage() {
 Usage: scripts/provision_worker_node.sh [options]
 
 Join modes:
-  --join-mode auto      Default. Missing /work/epimethyl/current/manifest.json → first;
+  --join-mode auto      Default. Missing /work/goliath/current/manifest.json → first;
                         present → join.
   --join-mode join      VM-local host/Docker (skip Parabricks pull), then enroll.
   --join-mode first     Seed shared /work (layout, release, extractor, one Parabricks pull),
@@ -19,10 +19,10 @@ Staged Arc:
   --finish-enroll       Enroll + systemd (requires live WORKER_API_BASE)
 
 Options:
-  --root PATH              GoliathOmics root on /work (default: /work/epimethyl)
+  --root PATH              GoliathOmics root on /work (default: /work/goliath)
   --release-dir PATH       Release dir for first-worker promote (default: <root>/current)
   --arch KEY               aarch64 or amd64
-  --cluster KEY            wf.cluster cluster_key (default: epimethyl)
+  --cluster KEY            wf.cluster cluster_key (default: goliath)
   --gpu                    Pass --gpu to bootstrap/setup_host; require nvidia-smi
   --join-mode MODE         auto (default) | join | first
   --skip-promote           Alias for --join-mode join
@@ -48,10 +48,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=detect_platform.sh
 source "$SCRIPT_DIR/detect_platform.sh"
 
-ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+ROOT="${GOLIATH_ROOT:-/work/goliath}"
 RELEASE_DIR=""
 ARCH=""
-CLUSTER="${CLUSTER_KEY:-epimethyl}"
+CLUSTER="${CLUSTER_KEY:-goliath}"
 GPU=0
 JOIN_MODE="auto"
 ARC_ONBOARD=0
@@ -210,7 +210,7 @@ do_host_and_docker() {
     boot_args+=(--promote-release)
   fi
   [[ -n "${WORKER_API_BASE:-}" ]] && export WORKER_API_BASE
-  run bash "$SCRIPTS/bootstrap_epimethyl.sh" "${boot_args[@]}"
+  run bash "$SCRIPTS/bootstrap_goliath.sh" "${boot_args[@]}"
 }
 
 ensure_work_layout() {

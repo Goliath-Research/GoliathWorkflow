@@ -43,7 +43,7 @@ from migrate_project_config import migrate_file as migrate_project_file, suggest
 
 TEXT_SUFFIXES = {".json", ".jsonl", ".csv"}
 SKIP_SUFFIXES = {".h5", ".bam", ".fastq", ".fastq.gz", ".tar", ".gz", ".bak", ".legacy.bak"}
-PLATFORM_DIRS = ("epimethyl", "samples", "genomes", "cache", "site", "projects")
+PLATFORM_DIRS = ("goliath", "samples", "genomes", "cache", "site", "projects")
 NON_CANONICAL_CONFIG_GLOBS = ("*.program.json", "*.profile.json")
 DEFAULT_GTF = "/work/genomes/annotation/gencode/v50/gencode.v50.annotation.gtf"
 SITE_EXAMPLE = REPO_ROOT / "tools/methyl-config-editor/configs/site_grch38.example.json"
@@ -58,7 +58,7 @@ class MigrationConfig:
     path_remap_old: str = "/work/prostate-cancer"
     path_remap_new: str = "/work/projects/prostate-cancer"
     methyl_site_config: str = "/work/site/methyl_site.json"
-    worker_env: Path = Path("/work/epimethyl/env/worker.env")
+    worker_env: Path = Path("/work/goliath/env/worker.env")
     disease_slug: str = "prostate-cancer"
 
     def apply_disease_slug(self, slug: str) -> None:
@@ -202,7 +202,7 @@ def run_preflight(cfg: MigrationConfig) -> PreflightReport:
         p = cfg.work_root / name
         report.platform_dirs[name] = p.exists()
 
-    for name in ("epimethyl", "samples", "genomes", "cache"):
+    for name in ("goliath", "samples", "genomes", "cache"):
         if not report.platform_dirs.get(name):
             report.errors.append(f"missing platform dir: {cfg.work_root / name}")
 

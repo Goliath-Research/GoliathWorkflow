@@ -565,13 +565,13 @@ worker-facing. Admin compile/start uses DB clients (`methyl-study-start`).
 | Day 0 | Install release bundle; configure site; provision GPU/CPU workers |
 | Day 1 | Enroll samples; set `fastqStorage`; start SamplePrepPipeline |
 | Day N | Start validation lifecycle with SaMD profile; monitor instances |
-| Release | Assemble → approve → promote `/work/epimethyl/current`; verify hashes |
+| Release | Assemble → approve → promote `/work/goliath/current`; verify hashes |
 
 Full path: [operator journey](../deployment/operator-journey.md).
 
 ### Production release model
 
-Workers run from `/work/epimethyl/current/runtime-bundle/` (profiles, fixtures,
+Workers run from `/work/goliath/current/runtime-bundle/` (profiles, fixtures,
 schemas)—**not** a git checkout. Releases carry `manifest.json` hashes; promote
 and rollback are operator-gated (see [production release](../deployment/production_release.md)).
 
@@ -583,7 +583,7 @@ and rollback are operator-gated (see [production release](../deployment/producti
 | References | `/work/genomes`, `/work/cache` |
 | Secrets | `cfg.credential` via portal admin upsert — **not** under `/work/projects` or shared `/work` |
 | Sample ingress | Laboratory `fastqStorage` (S3 / Azure / file), selected from published endpoints |
-| Retention archive | `portal.resource_profile` → named `cfg.storage_endpoint` (e.g. `epimethyl-archive`) |
+| Retention archive | `portal.resource_profile` → named `cfg.storage_endpoint` (e.g. `goliath-archive`) |
 | Bulk genomes mirror | Operator `aws s3 sync` via `scripts/sync_genomes_to_s3.sh` |
 | Per-sample transfers | Hardened worker transfer layer (multipart, skip, node-local cache via `contentHash`) |
 
@@ -739,7 +739,7 @@ Selected rows distilled from [traceability-matrix](../regulatory/traceability-ma
 | No tool params in study manifests | Boundary CI guards; task input contract |
 | Typed action outputs | `methyl-export-task-schemas --check`; `output_json` |
 | Auditable actions | `.action_results`, `action_run_log.jsonl` |
-| Versioned production workers | Release manifest SHA; `/work/epimethyl/current` |
+| Versioned production workers | Release manifest SHA; `/work/goliath/current` |
 | Holdout exclusion | Partition validation; holdout metrics |
 | Regression gate | CI JUnit / coverage artifacts |
 
@@ -905,7 +905,7 @@ evidence packages are completed and bound to a released software version.
 | CAAS | Content-addressed action store for cross-instance reuse |
 | WF3 | True holdout evaluation on declared partitions |
 | SaMD ladder | `samd_research` → `samd_holdout_enrichment` → `samd_pivotal` |
-| Runtime-bundle | Versioned non-git worker payload under `/work/epimethyl/current` |
+| Runtime-bundle | Versioned non-git worker payload under `/work/goliath/current` |
 | Action revision | Catalog/schema identity that invalidates idempotent skip |
 
 ### Companion interactive view

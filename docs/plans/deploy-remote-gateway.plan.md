@@ -36,7 +36,7 @@ azure_devops:
 
 ## Done (2026-07-29)
 
-- Synced latest MethylPipeline tree to gateway VM (`/work/epimethyl/repos/MethylPipeline`); editable `methyl-gateway` reinstalled; systemd binds `127.0.0.1:8080`.
+- Synced latest MethylPipeline tree to gateway VM (`/work/goliath/repos/MethylPipeline`); editable `methyl-gateway` reinstalled; systemd binds `127.0.0.1:8080`.
 - Let’s Encrypt cert + nginx TLS for `gateway.goliathresearch.com`; NSG allows :80/:443.
 - `WORKER_API_BASE=https://gateway.goliathresearch.com/v1`; omnibus `methyl-worker.service` polling; existing worker token reused (no re-enroll).
 - nginx `worker_poll` rate raised 30→300 r/m after per-capability units stampeded the limiter.

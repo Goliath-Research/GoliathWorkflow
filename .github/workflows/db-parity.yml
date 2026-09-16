@@ -103,7 +103,7 @@ jobs:
         run: |
           python -m pip install -U pip pytest
           # pip does not honor workers/[tool.uv.sources]; install local
-          # packages from scripts/packages.list first (same as Azure PR CI).
+          # packages from scripts/packages.list first (same as hosted PR CI).
           PYTHON_BIN=python bash scripts/install_packages.sh --with-deps
       - name: Worker unit tests and schema drift check
         run: |

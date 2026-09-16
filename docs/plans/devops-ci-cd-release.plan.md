@@ -1,6 +1,6 @@
 ---
 name: DevOps CI/CD Release
-overview: Move artifact builds fully into Azure DevOps with independent repo versioning (MethylExtractor and MethylPipeline each publish on their own tags), then add a gated release-assembly + promote pipeline that composes a worker release bundle and deploys to `/work/epimethyl` after manual approval.
+overview: Move artifact builds fully into Azure DevOps with independent repo versioning (MethylExtractor and MethylPipeline each publish on their own tags), then add a gated release-assembly + promote pipeline that composes a worker release bundle and deploys to `/work/goliath` after manual approval.
 status: IMPLEMENTED
 azure_devops:
   type: Feature
@@ -21,11 +21,11 @@ todos:
     status: completed
     work_item_id: 425
   - id: assemble-pipeline
-    content: "Add ci/azure-pipelines-release-assemble.yml (manual params: releaseVersion, methylPipelineVersion, methylExtractorVersion)"
+    content: "Add .github/workflows/release-assemble.yml (manual params: releaseVersion, methylPipelineVersion, methylExtractorVersion)"
     status: completed
     work_item_id: 426
   - id: deploy-pipeline
-    content: Add ci/azure-pipelines-release-deploy.yml with production-work environment approval + self-hosted agent promote_release.sh
+    content: Add .github/workflows/release-deploy.yml with production-work environment approval + self-hosted agent promote_release.sh
     status: completed
     work_item_id: 427
   - id: docs-ci-cd
@@ -45,7 +45,7 @@ isProject: false
 |-------|---------------------|---------|--------|
 | **CI (per repo)** | Build + test + publish | Git tag `v*` (SemVer, e.g. `v2026.6.1`) | Artifacts feed |
 | **Release assembly** | Download + manifest + bundle | Manual pipeline with version params | Combined release artifact |
-| **CD (gated)** | `promote_release.sh` on cluster | Manual approval in ADO Environment | `/work/epimethyl/releases/<ver>` + `current` |
+| **CD (gated)** | `promote_release.sh` on cluster | Manual approval in ADO Environment | `/work/goliath/releases/<ver>` + `current` |
 
 MethylExtractor updates trigger **only** the MethylExtractor pipeline. MethylPipeline updates trigger **only** the MethylPipeline pipeline. You ship together by running the **assembly** pipeline with compatible version pins—not by coupling build triggers.
 
@@ -53,18 +53,18 @@ MethylExtractor updates trigger **only** the MethylExtractor pipeline. MethylPip
 flowchart LR
   subgraph ci [CI_per_repo]
     ME[MethylExtractor_tag] --> MEFeed[methyl-extractor_Universal]
-    MP[MethylPipeline_tag] --> PyFeed[pypi-epimethyl]
+    MP[MethylPipeline_tag] --> PyFeed[pypi-goliath]
     MP --> PArt[methyl-pipeline-release_artifact]
   end
   subgraph assemble [Release_assembly_manual]
-    MEFeed --> Bundle[epimethyl_release_bundle]
+    MEFeed --> Bundle[goliath_release_bundle]
     PyFeed --> Bundle
     PArt --> Bundle
     Bundle --> Manifest[manifest.json_with_sha256]
   end
   subgraph cd [CD_gated]
     Manifest --> Approve[ADO_Environment_approval]
-    Approve --> Work["/work/epimethyl promote"]
+    Approve --> Work["/work/goliath promote"]
   end
 ```
 
@@ -76,7 +76,7 @@ This matches your existing scripts ([`build_release.sh`](../../scripts/build_rel
 
 ### 1A. MethylExtractor repo (`Development/MethylExtractor`)
 
-- Add per-arch release pipelines in the **MethylExtractor** repo: `ci/azure-pipelines-release-arm64.yml`, `ci/azure-pipelines-release-x64.yml`, and `ci/azure-pipelines-pr.yml`.
+- Add a single GitHub Actions release workflow in the **MethylExtractor** repo: `.github/workflows/release.yml` (amd64 + aarch64) and `.github/workflows/build.yml` for PR smoke.
 - **Pools:** native `GPU-ARM64` and `GPU-x86_64` (already assumed in template).
 - **Tag trigger:** `v*` only for publish; add a separate **PR pipeline** (`make` + smoke test, no publish).
 - **Enable publish** (currently commented):
@@ -86,10 +86,10 @@ This matches your existing scripts ([`build_release.sh`](../../scripts/build_rel
 
 ### 1B. MethylPipeline repo (`Development/MethylPipeline`)
 
-- Register [`ci/azure-pipelines-release.yml`](../../ci/azure-pipelines-release.yml) and [`ci/azure-pipelines-pr.yml`](../../ci/azure-pipelines-pr.yml) as release and PR pipelines.
+- Register [`.github/workflows/release.yml`](../../.github/workflows/release.yml) and [`.github/workflows/pr.yml`](../../.github/workflows/pr.yml) as release and PR pipelines.
 - **Tag trigger:** `v*` → run `build_release.sh --with-gpu-reqs`.
 - **Enable publish:**
-  - `TwineAuthenticate` + `twine upload` to PyPI feed (e.g. `pypi-epimethyl`).
+  - `Twine` upload to GitHub Packages (`pypi-goliath`).
   - Keep `PublishPipelineArtifact` for `runtime-bundle/`, lockfile, manifest stub.
 - **PR pipeline:** `pytest` (existing suites) + `build_release.sh --skip-wheels` on PR (validates packaging without publishing).
 - **Version alignment:** ensure each package `pyproject.toml` version bumps on release tags so lockfile pins are meaningful.
@@ -98,7 +98,7 @@ This matches your existing scripts ([`build_release.sh`](../../scripts/build_rel
 
 ## Phase 2 — Release assembly (new orchestrator)
 
-Today the gap is: **two independent artifact versions must become one `/work/epimethyl/releases/<bundle>` folder with a complete `manifest.json`**. Add:
+Today the gap is: **two independent artifact versions must become one `/work/goliath/releases/<bundle>` folder with a complete `manifest.json`**. Add:
 
 ### New script: `scripts/assemble_release.sh`
 
@@ -107,14 +107,14 @@ Parameters (conceptual):
 - `--release-version` — bundle id on `/work` (SemVer, e.g. `2026.6.1`)
 - `--methyl-pipeline-version` — MP tag/artifact version to pull wheels + runtime-bundle from
 - `--methyl-extractor-version` — ME Universal Package version for both arches
-- `--output` — staging directory (default `/work/epimethyl/releases/<release-version>`)
+- `--output` — staging directory (default `/work/goliath/releases/<release-version>`)
 
 Steps:
 
 1. Create output dir.
 2. Pull MP release: download pipeline artifact **or** copy wheels from PyPI feed + fetch runtime-bundle from artifact.
 3. Call existing [`download_methyl_extractor_artifacts.sh`](../../scripts/download_methyl_extractor_artifacts.sh) (or inline `az artifacts universal download`) for both arches.
-4. Compute sha256 for tarballs; write final [`manifest.json`](../../schemas/deployment/epimethyl_release_manifest.schema.json) with **component pins**:
+4. Compute sha256 for tarballs; write final [`manifest.json`](../../schemas/deployment/goliath_release_manifest.schema.json) with **component pins**:
 
 ```json
 {
@@ -131,9 +131,9 @@ Steps:
 
 ### Schema update
 
-Extend [`schemas/deployment/epimethyl_release_manifest.schema.json`](../../schemas/deployment/epimethyl_release_manifest.schema.json) with optional `components` object (backward compatible). `version` remains the **deploy bundle id** used by `promote_release.sh` and `current` symlink.
+Extend [`schemas/deployment/goliath_release_manifest.schema.json`](../../schemas/deployment/goliath_release_manifest.schema.json) with optional `components` object (backward compatible). `version` remains the **deploy bundle id** used by `promote_release.sh` and `current` symlink.
 
-### New pipeline: `ci/azure-pipelines-release-assemble.yml`
+### New pipeline: `.github/workflows/release-assemble.yml`
 
 - **Trigger:** manual only (`trigger: none`, `parameters` for three version strings).
 - **No `/work` required** on Microsoft-hosted agents—only Artifacts + pipeline artifact download.
@@ -147,16 +147,16 @@ Extend [`schemas/deployment/epimethyl_release_manifest.schema.json`](../../schem
 
 - Create environment **`production-work`** with **approvals** (you + one backup approver).
 - Register a **self-hosted agent** on a node with:
-  - `/work/epimethyl` mounted read/write
+  - `/work/goliath` mounted read/write
   - Docker + NGC creds (for optional `--pull-parabricks` during promote)
   - `az` CLI + `azure-devops` extension (if promote downloads from Artifacts instead of using downloaded artifact)
 
-### New pipeline stage: `ci/azure-pipelines-release-deploy.yml`
+### New pipeline stage: `.github/workflows/release-deploy.yml`
 
 - **Trigger:** pipeline resource completion of `release-assemble` **or** manual run with release version parameter.
 - **Stage 1:** download `goliathomics-release-<version>` artifact to agent.
 - **Stage 2 (Environment `production-work`, approval required):**
-  - Rsync artifact → `/work/epimethyl/releases/<version>/`
+  - Rsync artifact → `/work/goliath/releases/<version>/`
   - Run [`promote_release.sh`](../../scripts/promote_release.sh) per arch (`aarch64`, `amd64`) with `--pull-parabricks` only when Parabricks tag changed in manifest.
   - Optional: smoke `verify_e2e_node.sh` on agent before flipping `current` (or after, with rollback doc).
 
@@ -182,7 +182,7 @@ Keep [`docs/deployment/production_release.md`](../deployment/production_release.
 1. Tag MethylExtractor `v2026.5.2` when native code changes → CI publishes Universal Packages.
 2. Tag MethylPipeline `v2026.6.1` when Python/worker changes → CI publishes wheels + runtime-bundle.
 3. Run **assemble** pipeline: `releaseVersion=2026.6.1`, `methylPipelineVersion=2026.6.1`, `methylExtractorVersion=2026.5.2`.
-4. Approve **deploy** pipeline → `/work/epimethyl/current` updated.
+4. Approve **deploy** pipeline → `/work/goliath/current` updated.
 5. Restart workers or rely on next task pickup (document restart policy).
 
 Use the **same** `releaseVersion` for the bundle even when component versions differ—bundle id is the deploy unit; `components` records what was pinned.
@@ -193,13 +193,13 @@ Use the **same** `releaseVersion` for the bundle even when component versions di
 
 | File | Change |
 |------|--------|
-| [`ci/azure-pipelines-release.yml`](../../ci/azure-pipelines-release.yml) | Enable Twine publish; tag-triggered wheel + runtime-bundle |
-| [`ci/azure-pipelines-pr.yml`](../../ci/azure-pipelines-pr.yml) | Test + packaging smoke on PR |
-| MethylExtractor `ci/azure-pipelines-release-*.yml` | Per-arch Universal Package publish; multi-repo checkout |
-| `ci/azure-pipelines-release-assemble.yml` | New: compose release bundle |
-| `ci/azure-pipelines-release-deploy.yml` | New: gated promote to `/work` |
+| [`.github/workflows/release.yml`](../../.github/workflows/release.yml) | Enable Twine publish; tag-triggered wheel + runtime-bundle |
+| [`.github/workflows/pr.yml`](../../.github/workflows/pr.yml) | Test + packaging smoke on PR |
+| MethylExtractor `.github/workflows/release.yml` | Per-arch GitHub Release tarballs |
+| `.github/workflows/release-assemble.yml` | New: compose release bundle |
+| `.github/workflows/release-deploy.yml` | New: gated promote to `/work` |
 | [`scripts/assemble_release.sh`](../../scripts/assemble_release.sh) | New: version-pinned assembly |
-| [`schemas/deployment/epimethyl_release_manifest.schema.json`](../../schemas/deployment/epimethyl_release_manifest.schema.json) | Optional `components` block |
+| [`schemas/deployment/goliath_release_manifest.schema.json`](../../schemas/deployment/goliath_release_manifest.schema.json) | Optional `components` block |
 | [`docs/deployment/production_release.md`](../deployment/production_release.md) | Document CI/CD flow; deprecate client-side build as primary path |
 
 ---
@@ -216,7 +216,7 @@ If you later want **coordinated releases**, trigger the **assemble** pipeline fr
 
 ## Prerequisites in Azure DevOps (one-time)
 
-- Feeds: `methyl-extractor` (Universal), `pypi-epimethyl` (Python)—already started.
+- Feeds: `methyl-extractor` (Universal), `pypi-goliath` (Python)—already started.
 - Build service **Contributor** on both feeds.
 - Self-hosted agent pool for `/work` deploy stage.
 - Environment **`production-work`** with approvers.

@@ -24,29 +24,29 @@ if [ ! -d "/home/ubuntu/Work/cuda" ]; then
     exit 1
 fi
 
-echo "1. Building epimethyl container..."
+echo "1. Building goliath container..."
 cd /home/ubuntu/Work/cuda
 docker-compose build
 
-echo "2. Starting epimethyl container..."
+echo "2. Starting goliath container..."
 docker-compose up -d
 
 echo "3. Waiting for container to be ready..."
 sleep 5
 
 echo "4. Checking container status..."
-if docker ps | grep -q epimethyl; then
-    echo "✅ epimethyl container is running"
+if docker ps | grep -q goliath; then
+    echo "✅ goliath container is running"
 else
-    echo "❌ epimethyl container failed to start"
+    echo "❌ goliath container failed to start"
     exit 1
 fi
 
 echo "5. Setting up MethylUtils packages..."
-docker exec epimethyl /home/ubuntu/Work/cuda/setup_methyl_packages.sh
+docker exec goliath /home/ubuntu/Work/cuda/setup_methyl_packages.sh
 
 echo "6. Verifying setup..."
-docker exec epimethyl python -c "
+docker exec goliath python -c "
 import sys
 print(f'Python path: {sys.executable}')
 try:
@@ -57,7 +57,7 @@ except ImportError as e:
 "
 
 echo "7. Testing MethylDetector imports..."
-docker exec epimethyl bash -c "cd /workspace && python -c 'import methyl_detector; print(\"MethylDetector imported successfully\")'"
+docker exec goliath bash -c "cd /workspace && python -c 'import methyl_detector; print(\"MethylDetector imported successfully\")'"
 
 echo ""
 echo "🎉 Development container setup complete!"
@@ -74,7 +74,7 @@ echo "- Install development dependencies"
 echo "- Configure GPU support"
 echo ""
 echo "To manually enter the container:"
-echo "  docker exec -it epimethyl bash"
+echo "  docker exec -it goliath bash"
 echo ""
 echo "To stop the container:"
 echo "  cd /home/ubuntu/Work/cuda && docker-compose down"

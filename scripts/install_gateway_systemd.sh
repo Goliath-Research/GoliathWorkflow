@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=detect_platform.sh
 source "$SCRIPT_DIR/detect_platform.sh"
 
-ROOT="${EPIMETHYL_ROOT:-/opt/methyl-gateway}"
+ROOT="${GOLIATH_ROOT:-/opt/methyl-gateway}"
 ARCH=""
 RUNTIME=""
 NO_START=0
@@ -69,8 +69,8 @@ DEPLOY="$RUNTIME/deploy/systemd"
 SRC="$DEPLOY/methyl-gateway.service"
 [[ -f "$SRC" ]] || { echo "Missing $SRC" >&2; exit 1; }
 
-sed -e "s|__EPIMETHYL_ROOT__|$ROOT|g" \
-    -e "s|__EPIMETHYL_VENV__|$VENV|g" \
+sed -e "s|__GOLIATH_ROOT__|$ROOT|g" \
+    -e "s|__GOLIATH_VENV__|$VENV|g" \
     "$SRC" >"/etc/systemd/system/methyl-gateway.service"
 
 systemctl daemon-reload

@@ -8,27 +8,27 @@ Platform phases: [production-platform.md](production-platform.md).
 
 | Store / service | Holds | Who writes | Workers use it for |
 |-----------------|-------|------------|--------------------|
-| **Azure DevOps / Artifacts** | MethylPipeline wheels + runtime-bundle, MethylExtractor arch tarballs, assemble/deploy pipelines | CI on tag + manual assemble/deploy | Source of the **release** that gets promoted to QNAP |
-| **myQNAPStorage → `/work`** | `epimethyl/` (current release, venvs, extractor, shared Docker data-root), `genomes/`, `samples/`, `site/`, projects | Deploy pipeline / ops / provision-assets | Day-2 runtime (no git on workers) |
-| **NGC (not Azure)** | Clara Parabricks container layers | One promote host with NGC login → `/work/epimethyl/docker` | GPU SamplePrep linear/Giraffe paths |
+| **GitHub Packages / Releases** | MethylPipeline wheels (`pypi-goliath`) + runtime-bundle, MethylExtractor arch tarballs, assemble/deploy workflows | CI on tag + manual assemble/deploy | Source of the **release** that gets promoted to QNAP |
+| **myQNAPStorage → `/work`** | `goliath/` (current release, venvs, extractor, shared Docker data-root), `genomes/`, `samples/`, `site/`, projects | Deploy pipeline / ops / provision-assets | Day-2 runtime (no git on workers) |
+| **NGC (not Azure)** | Clara Parabricks container layers | One promote host with NGC login → `/work/goliath/docker` | GPU SamplePrep linear/Giraffe paths |
 | **Azure Arc** | Connected Machine inventory, policy, `X-Arc-Resource-Id` | You (human approval) or approved SP | Gateway attest — **not** release bits or enroll API |
 | **Portal + gateway** | Preregistered public IP → one-time `worker_token` | Portal UI + `methyl-worker enroll` | Trust join for claim/submit |
 
-**Containers are not in Azure.** Parabricks comes from NGC into shared `/work/epimethyl/docker`. mojo-align (and similar GPU side-cars) are separate images — not part of GoliathOmics-Release-Deploy. MethylPipeline and MethylExtractor stay as **wheels + native per-arch binaries** on the share (not omnibus containers).
+**Containers are not in Azure.** Parabricks comes from NGC into shared `/work/goliath/docker`. mojo-align (and similar GPU side-cars) are separate images — not part of GoliathOmics-Release-Deploy. MethylPipeline and MethylExtractor stay as **wheels + native per-arch binaries** on the share (not omnibus containers).
 
 ```mermaid
 flowchart LR
   subgraph azure [Azure]
-    CI[ADO CI assemble deploy]
+    CI[GitHub Actions assemble deploy]
     Arc[Arc Connected approval]
     Portal[Portal prereg IP]
     Gw[Gateway TLS]
   end
   subgraph qnap [myQNAPStorage via /work]
-    Rel["/work/epimethyl/current"]
+    Rel["/work/goliath/current"]
     Gen["/work/genomes"]
     Sam["/work/samples"]
-    Dock["/work/epimethyl/docker"]
+    Dock["/work/goliath/docker"]
   end
   subgraph ngc [NVIDIA NGC]
     Pb[Parabricks image]
@@ -53,9 +53,9 @@ flowchart LR
 
 ## A. Cluster bootstrap (once per release / share) — not on every VM
 
-1. Ops mounts QNAP so admin and workers see `/work/epimethyl`, `/work/genomes`, `/work/samples`, `/work/site`. Then `bash scripts/init_work_layout.sh --work /work` so `/work/samples` is other-writable and `/work/genomes` / `/work/epimethyl` stay worker-readable (`0755`).
-2. Run **GoliathOmics-Release-Assemble** + approved **GoliathOmics-Release-Deploy** until `/work/epimethyl/current/manifest.json` exists (MethylPipeline + MethylExtractor only).
-3. On a host that already sees that share and has NGC login: one Parabricks pull into `/work/epimethyl/docker` (first arch); later arches use `--skip-docker-pull` / `--skip-parabricks-pull`.
+1. Ops mounts QNAP so admin and workers see `/work/goliath`, `/work/genomes`, `/work/samples`, `/work/site`. Then `bash scripts/init_work_layout.sh --work /work` so `/work/samples` is other-writable and `/work/genomes` / `/work/goliath` stay worker-readable (`0755`).
+2. Run **GoliathOmics-Release-Assemble** + approved **GoliathOmics-Release-Deploy** until `/work/goliath/current/manifest.json` exists (MethylPipeline + MethylExtractor only).
+3. On a host that already sees that share and has NGC login: one Parabricks pull into `/work/goliath/docker` (first arch); later arches use `--skip-docker-pull` / `--skip-parabricks-pull`.
 4. Genomes/site stay Phase 0 ([production-platform.md](production-platform.md#phase-0-shared-storage-and-site)) — separate from worker enroll.
 
 ## B. Per worker (including the “first” Lambda box)
@@ -72,7 +72,7 @@ Ops mounts `/work`. Then:
 
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
-bash /work/epimethyl/current/runtime-bundle/scripts/preflight_worker_join.sh \
+bash /work/goliath/current/runtime-bundle/scripts/preflight_worker_join.sh \
   --gpu --require-api --require-current
 ```
 
@@ -81,18 +81,18 @@ If `current/manifest.json` is missing, **stop** and run GoliathOmics-Release-Dep
 ### 3. Prepare (local install, no Arc)
 
 ```bash
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
+sudo bash /work/goliath/current/runtime-bundle/scripts/provision_worker_node.sh \
   --gpu --join-mode join --prepare-only --cluster gpu-west
 ```
 
-This installs host tools, Docker Engine + NVIDIA Container Toolkit, points Docker `data-root` at `/work/epimethyl/docker`, and refreshes local env — **without** Arc, enroll, or Parabricks re-pull.
+This installs host tools, Docker Engine + NVIDIA Container Toolkit, points Docker `data-root` at `/work/goliath/docker`, and refreshes local env — **without** Arc, enroll, or Parabricks re-pull.
 
 ### 4. Arc (human-gated, short step)
 
 ```bash
 export AZ_SUBSCRIPTION_ID=… AZ_RESOURCE_GROUP=… AZURE_TENANT_ID=…
 
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_arc_agent.sh \
+sudo bash /work/goliath/current/runtime-bundle/scripts/install_arc_agent.sh \
   --subscription-id "$AZ_SUBSCRIPTION_ID" \
   --resource-group "$AZ_RESOURCE_GROUP" \
   --tenant-id "$AZURE_TENANT_ID" \
@@ -100,14 +100,14 @@ sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_arc_agent.sh \
   --with-ama
 
 # Approve Connected in Azure Portal (or approved SP path), then:
-bash /work/epimethyl/current/runtime-bundle/scripts/verify_arc_prereqs.sh
+bash /work/goliath/current/runtime-bundle/scripts/verify_arc_prereqs.sh
 ```
 
 ### 5. Finish enroll + systemd
 
 ```bash
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
-sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
+sudo bash /work/goliath/current/runtime-bundle/scripts/provision_worker_node.sh \
   --gpu --join-mode join --finish-enroll --require-arc \
   --enroll-worker --enable-systemd --detect-capabilities \
   --cluster gpu-west

@@ -1,6 +1,6 @@
 variable "release_bundle_url" {
   type        = string
-  description = "HTTPS URL to a scripts/runtime seed tarball (extracted to /opt/methyl). Runtime remains /work/epimethyl/current on QNAP."
+  description = "HTTPS URL to a scripts/runtime seed tarball (extracted to /opt/methyl). Runtime remains /work/goliath/current on QNAP."
 }
 
 variable "release_bundle_sha256" {
@@ -15,13 +15,13 @@ variable "gateway_api_base" {
 
 variable "cluster_key" {
   type        = string
-  default     = "epimethyl"
+  default     = "goliath"
   description = "wf.cluster cluster_key for registration."
 }
 
-variable "epimethyl_root" {
+variable "goliath_root" {
   type        = string
-  default     = "/work/epimethyl"
+  default     = "/work/goliath"
   description = "Shared GoliathOmics root on QNAP-mounted /work."
 }
 
@@ -58,7 +58,7 @@ locals {
           WORKER_API_BASE=${var.gateway_api_base}
           METHYL_API_BASE=${var.gateway_api_base}
           CLUSTER_KEY=${var.cluster_key}
-          EPIMETHYL_ROOT=${var.epimethyl_root}
+          GOLIATH_ROOT=${var.goliath_root}
       - path: /usr/local/sbin/methyl-worker-cloud-init.sh
         permissions: '0755'
         content: |
@@ -66,28 +66,28 @@ locals {
           set -euo pipefail
           # shellcheck disable=SC1091
           source /etc/methyl/bootstrap.env
-          export WORKER_API_BASE METHYL_API_BASE CLUSTER_KEY EPIMETHYL_ROOT
+          export WORKER_API_BASE METHYL_API_BASE CLUSTER_KEY GOLIATH_ROOT
           mkdir -p /opt/methyl /var/log/methyl
-          curl -fsSL -o /tmp/epimethyl-seed.tgz "$RELEASE_BUNDLE_URL"
-          echo "$RELEASE_BUNDLE_SHA256  /tmp/epimethyl-seed.tgz" | sha256sum -c -
-          tar -xzf /tmp/epimethyl-seed.tgz -C /opt/methyl
+          curl -fsSL -o /tmp/goliath-seed.tgz "$RELEASE_BUNDLE_URL"
+          echo "$RELEASE_BUNDLE_SHA256  /tmp/goliath-seed.tgz" | sha256sum -c -
+          tar -xzf /tmp/goliath-seed.tgz -C /opt/methyl
           SCRIPTS=""
-          for cand in /opt/methyl/scripts /opt/methyl/runtime-bundle/scripts "$EPIMETHYL_ROOT/current/runtime-bundle/scripts"; do
+          for cand in /opt/methyl/scripts /opt/methyl/runtime-bundle/scripts "$GOLIATH_ROOT/current/runtime-bundle/scripts"; do
             if [[ -x "$cand/provision_worker_node.sh" ]]; then
               SCRIPTS="$cand"
               break
             fi
           done
           if [[ -z "$SCRIPTS" ]]; then
-            echo "provision_worker_node.sh not found under /opt/methyl or $EPIMETHYL_ROOT/current" >&2
+            echo "provision_worker_node.sh not found under /opt/methyl or $GOLIATH_ROOT/current" >&2
             exit 1
           fi
-          bash "$SCRIPTS/preflight_worker_join.sh" --root "$EPIMETHYL_ROOT" --gpu --require-current --require-api
+          bash "$SCRIPTS/preflight_worker_join.sh" --root "$GOLIATH_ROOT" --gpu --require-current --require-api
           # Default: join-only prepare (Docker/CTK/host). Arc approval + finish-enroll are manual.
           # See docs/deployment/lambda_worker_join.md
           bash "$SCRIPTS/provision_worker_node.sh" \
             --gpu --join-mode auto --cluster "$CLUSTER_KEY" \
-            --root "$EPIMETHYL_ROOT" \
+            --root "$GOLIATH_ROOT" \
             ${provision_flags}
     runcmd:
       - [ -x /usr/local/sbin/methyl-worker-cloud-init.sh ]

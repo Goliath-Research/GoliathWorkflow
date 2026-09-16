@@ -8,8 +8,8 @@ from pathlib import Path
 
 INSTALL_PREFIX = "/opt/mojo-align"
 _LEGACY_PREFIX = "/opt/methylgrapher-mojo"
-_OVERLAY_DEFAULT = Path("/work/epimethyl/images/mojo-align-overlay")
-_OVERLAY_LEGACY = Path("/work/epimethyl/images/methylgrapher-mojo-overlay")
+_OVERLAY_DEFAULT = Path("/work/goliath/images/mojo-align-overlay")
+_OVERLAY_LEGACY = Path("/work/goliath/images/methylgrapher-mojo-overlay")
 _warned: set[str] = set()
 
 

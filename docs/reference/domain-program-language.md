@@ -77,8 +77,8 @@ Writes `workflow_versions.json` with IDs for portal SQL / `methyl-study-start`.
 ### End-to-end: deploy and start (production)
 
 ```bash
-set -a && source /work/epimethyl/env/gateway.env && set +a
-source /work/epimethyl/venv-aarch64/bin/activate
+set -a && source /work/goliath/env/gateway.env && set +a
+source /work/goliath/venv-aarch64/bin/activate
 
 # 1) Compile + deploy standard programs
 bash scripts/deploy_workflow_definitions.sh
