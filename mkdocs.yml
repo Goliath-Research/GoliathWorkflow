@@ -177,11 +177,13 @@ nav:
           - Proteomics process pack: usage/22-proteomics-process-pack.md
           - Plant abiotic stress pack: usage/23-plant-abiotic-stress-pack.md
           - Application packs pattern: usage/24-methylation-application-packs.md
+          - Prostate cancer pack: usage/25-prostate-cancer-pack.md
   - Architecture:
       - architecture/index.md
       - Layer model: architecture/layer-model.md
       - Pipeline stages: architecture/pipeline-stages.md
       - SamplePrep tooling: architecture/sample-prep-tooling.md
+      - Portable GPU numeric: architecture/portable-gpu-numeric.md
       - End-to-end workflow: architecture/end-to-end-workflow.md
       - RNA-seq workflow: architecture/end-to-end-workflow-rnaseq.md
       - Proteomics workflow: architecture/end-to-end-workflow-proteomics.md
@@ -237,6 +239,7 @@ nav:
       - Logging: reference/logging-observability.md
       - Mojo fq2bam parity: reference/mojo-fq2bam-meth-parity.md
       - Read-level pattern contract: reference/read_level_pattern_contract.md
+      - MHAP store contract: reference/mhap_store_contract.md
       - Test data registry: reference/test-data-registry.md
       - CI sync matrix: reference/ci-sync-matrix.md
   - Regulatory:
