@@ -1,4 +1,4 @@
-I’ll map existing Florida university programs, open-source scientific-software funding models, and how a genomics + software curriculum could sit beside the partnership brief.The university-program idea is useful, but it will not by itself pay for salaries, GPUs, or samples. Treat education as a **distribution and talent channel** sitting next to the partnership model already in your brief—not as a replacement for it. A new master’s takes 18–36 months in the Florida SUS (curriculum committees, SACSCOC, Board of Governors). You need cash and users in the next two grant cycles.
+The university-program idea is useful, but it will not by itself pay for salaries, GPUs, or samples. Treat education as a **distribution and talent channel** sitting next to the partnership model already in your brief—not as a replacement for it. A new master’s takes 18–36 months in the Florida SUS (curriculum committees, SACSCOC, Board of Governors). You need cash and users in the next two grant cycles.
 
 Below is a strategy that keeps GoliathOmics free for non-profits, funds continued development, and uses universities without competing with Moffitt’s enterprise stack.
 

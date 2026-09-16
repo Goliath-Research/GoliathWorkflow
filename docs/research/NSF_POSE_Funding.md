@@ -1,4 +1,4 @@
-I’ll pull the current NSF POSE/PESOSE solicitations, eligibility rules, and how an open genomics toolchain plus university partners would map onto them.**POSE still exists as a strategy, but the live solicitation is no longer named POSE.** NSF 24-606 is archived. The current program is **PESOSE — Pathways to Enable Secure Open-Source Ecosystems (NSF 26-506)**. It keeps the old two-phase structure, adds a security track, and is run by NSF TIP.
+**POSE still exists as a strategy, but the live solicitation is no longer named POSE.** NSF 24-606 is archived. The current program is **PESOSE — Pathways to Enable Secure Open-Source Ecosystems (NSF 26-506)**. It keeps the old two-phase structure, adds a security track, and is run by NSF TIP.
 
 That matters for Goliath: this is money for a **managing organization and community around an already-public product**, not money to finish `mojo-align`, buy samples, or run a cancer study.
 

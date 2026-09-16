@@ -1,4 +1,4 @@
-I’ll pull the current NSF SBIR Phase I rules, deadlines, and how they fit an open-core genomics company versus PESOSE and the Florida grants.NSF SBIR Phase I is the right federal instrument **if Goliath is selling a product or service**, not if the only story is “the code is free for Florida universities.” It sits next to PESOSE and FCIF; it does not replace them.
+NSF SBIR Phase I is the right federal instrument **if Goliath is selling a product or service**, not if the only story is “the code is free for Florida universities.” It sits next to PESOSE and FCIF; it does not replace them.
 
 Current vehicle: **NSF 26-510** (America’s Seed Fund), plus a narrower instrumentation pilot **NSF 26-511**. NSF takes no equity. The company keeps IP.
 
@@ -108,7 +108,7 @@ Four fields:
 
 To hit **4 Nov 2026**, the pitch needs to go in **this month**. A mid-October invitation is already tight. Safer planning target if the pitch slips: **4 Mar 2027** (same week as PESOSE Track 1). That is workable: pitch in November–December, write the full proposal in January–February.
 
-Do not burn both annual pitches on two flavors of the same platform. One NSF spine (A or B). Save the second pitch only if the first is declined on topic fit.
+Do not burn both annual pitches on two flavors of the same platform. One NSF spine (A, B, or C). Save the second pitch only if the first is declined on topic fit.
 
 ---
 
@@ -133,7 +133,7 @@ Same dollar of engineer time cannot be charged to two awards. Split by **work pa
 1. Confirm Goliath Research Inc. is a for-profit SBC, ≤500 staff, majority U.S.-owned, not majority VC-controlled.  
 2. Start SAM.gov + SBA registry + Research.gov this week.  
 3. Choose SBIR vs STTR (STTR only with a named UF/Florida Poly SOW and IP term sheet).  
-4. Pick **one** Phase I hypothesis (A or B above).  
+4. Pick **one** Phase I hypothesis (A, B, or C above).  
 5. Submit the Project Pitch in the current window.  
 6. If invited, aim for 4 Nov 2026 only if the invitation arrives with ≥3 weeks of writing time; otherwise 4 Mar 2027.  
 7. Budget: PI + 1–2 engineers + cloud/HPC for the benchmark (not AdventHealth sequencing) + TABA + I-Corps. Keep university subaward modest on SBIR; use STTR if the university must do ≥30%.  
