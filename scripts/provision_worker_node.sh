@@ -19,7 +19,7 @@ Staged Arc:
   --finish-enroll       Enroll + systemd (requires live WORKER_API_BASE)
 
 Options:
-  --root PATH              Epimethyl root on /work (default: /work/epimethyl)
+  --root PATH              GoliathOmics root on /work (default: /work/epimethyl)
   --release-dir PATH       Release dir for first-worker promote (default: <root>/current)
   --arch KEY               aarch64 or amd64
   --cluster KEY            wf.cluster cluster_key (default: epimethyl)

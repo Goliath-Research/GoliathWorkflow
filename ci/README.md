@@ -8,8 +8,8 @@ Each YAML lives in **this repository** so Azure DevOps can point pipelines at lo
 |------|-------------------------|---------|
 | [`azure-pipelines-pr.yml`](azure-pipelines-pr.yml) | MethylPipeline-PR | Pull requests |
 | [`azure-pipelines-release.yml`](azure-pipelines-release.yml) | MethylPipeline-Release | Tags `v*` |
-| [`azure-pipelines-release-assemble.yml`](azure-pipelines-release-assemble.yml) | Epimethyl-Release-Assemble | Manual |
-| [`azure-pipelines-release-deploy.yml`](azure-pipelines-release-deploy.yml) | Epimethyl-Release-Deploy | Manual (+ approval) |
+| [`azure-pipelines-release-assemble.yml`](azure-pipelines-release-assemble.yml) | GoliathOmics-Release-Assemble | Manual |
+| [`azure-pipelines-release-deploy.yml`](azure-pipelines-release-deploy.yml) | GoliathOmics-Release-Deploy | Manual (+ approval) |
 | [`azure-pipelines-real-data.yml`](azure-pipelines-real-data.yml) | MethylPipeline-RealData | Manual / scheduled (self-hosted) |
 | [`azure-pipelines-smoke.yml`](azure-pipelines-smoke.yml) | MethylPipeline-Distributed-Smoke | Nightly + manual (`production-work-agents`) |
 | [`azure-pipelines-sample-prep-canary.yml`](azure-pipelines-sample-prep-canary.yml) | MethylPipeline-SamplePrep-Canary | Manual + monthly subset (`production-work-agents`, real GPU) |
@@ -123,8 +123,8 @@ Pipeline **definition names** must match assemble/deploy parameters (`methylPipe
 
 1. Tag MethylExtractor `v2026.5.2` → **MethylExtractor-Release-ARM64** and **MethylExtractor-Release-x64** (ME repo).
 2. Tag MethylPipeline `v2026.6.1` → **MethylPipeline-Release** (this repo).
-3. Run **Epimethyl-Release-Assemble** (this repo) with version pins.
-4. Approve **Epimethyl-Release-Deploy** (this repo).
+3. Run **GoliathOmics-Release-Assemble** (this repo) with version pins.
+4. Approve **GoliathOmics-Release-Deploy** (this repo).
 
 See [`docs/deployment/production_release.md`](../docs/deployment/production_release.md).
 

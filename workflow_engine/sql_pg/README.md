@@ -90,7 +90,7 @@ Server FQDN from Azure Portal is `<server-name>.postgres.database.azure.com` (he
 export PGHOST=epimethyl.postgres.database.azure.com
 export PGPORT=5432
 export PGDATABASE=epimethyl
-export PGUSER='you@epimethyl.com'
+export PGUSER='you@goliathresearch.com'
 export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
 export PGSSLMODE=require
 

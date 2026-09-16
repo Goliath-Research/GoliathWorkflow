@@ -3,7 +3,7 @@
 Operator-facing UI for the full pipeline (cohort → sample prep → study lifecycle →
 prediction), plus **Platform** (system administrator: clusters, workers,
 deployment) and **Admin** (RBAC) / **Contracts** (process-pack entitlements).
-EpiPortal (`portal.epimethyl.com`) is the day-2 control plane; this repo owns
+EpiPortal (`portal.goliathresearch.com`) is the day-2 control plane; this repo owns
 **SQL contracts** (`portal.sp_`*) and domain identity — not the Delphi/uniGUI app.
 
 **Companion:** [Portal remote control](portal-remote-control.md) (UI→DB vs

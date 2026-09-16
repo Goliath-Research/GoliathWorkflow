@@ -9,7 +9,7 @@ in **`cfg`**; and only **workers** talk to the gateway.
 
 | Client | Path | Knows about |
 |--------|------|-------------|
-| **EpiPortal UI** (`portal.epimethyl.com`) | Direct DB → `portal.sp_*` / `cfg` (Azure SQL) | Studies, hyperparameter grids, search runs, trial → instance map |
+| **EpiPortal UI** (`portal.goliathresearch.com`) | Direct DB → `portal.sp_*` / `cfg` (Azure SQL) | Studies, hyperparameter grids, search runs, trial → instance map |
 | **Portal middle-tier / ops** | Same SQL + in-process plan/finalize (or `methyl-study-start` for CI) | Expands the grid, starts the N instances |
 | **Workers** | Python `methyl-gateway` daemon only (`/v1/workers/*`, [`contracts/openapi.yaml`](../../contracts/openapi.yaml)) | Claim/submit tasks with baked `resolvedConfig` |
 

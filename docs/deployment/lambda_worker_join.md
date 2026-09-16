@@ -1,6 +1,6 @@
 # Lambda GPU worker join (easy / safe / fast)
 
-Canonical runbook for joining a **Lambda** (or similar) GPU VM to an existing Epimethyl cluster.
+Canonical runbook for joining a **Lambda** (or similar) GPU VM to an existing GoliathOmics cluster.
 Deep dive for Arc policy: [arc_worker_runbook.md](arc_worker_runbook.md).
 Platform phases: [production-platform.md](production-platform.md).
 
@@ -14,7 +14,7 @@ Platform phases: [production-platform.md](production-platform.md).
 | **Azure Arc** | Connected Machine inventory, policy, `X-Arc-Resource-Id` | You (human approval) or approved SP | Gateway attest — **not** release bits or enroll API |
 | **Portal + gateway** | Preregistered public IP → one-time `worker_token` | Portal UI + `methyl-worker enroll` | Trust join for claim/submit |
 
-**Containers are not in Azure.** Parabricks comes from NGC into shared `/work/epimethyl/docker`. mojo-align (and similar GPU side-cars) are separate images — not part of Epimethyl-Release-Deploy. MethylPipeline and MethylExtractor stay as **wheels + native per-arch binaries** on the share (not omnibus containers).
+**Containers are not in Azure.** Parabricks comes from NGC into shared `/work/epimethyl/docker`. mojo-align (and similar GPU side-cars) are separate images — not part of GoliathOmics-Release-Deploy. MethylPipeline and MethylExtractor stay as **wheels + native per-arch binaries** on the share (not omnibus containers).
 
 ```mermaid
 flowchart LR
@@ -54,7 +54,7 @@ flowchart LR
 ## A. Cluster bootstrap (once per release / share) — not on every VM
 
 1. Ops mounts QNAP so admin and workers see `/work/epimethyl`, `/work/genomes`, `/work/samples`, `/work/site`. Then `bash scripts/init_work_layout.sh --work /work` so `/work/samples` is other-writable and `/work/genomes` / `/work/epimethyl` stay worker-readable (`0755`).
-2. Run **Epimethyl-Release-Assemble** + approved **Epimethyl-Release-Deploy** until `/work/epimethyl/current/manifest.json` exists (MethylPipeline + MethylExtractor only).
+2. Run **GoliathOmics-Release-Assemble** + approved **GoliathOmics-Release-Deploy** until `/work/epimethyl/current/manifest.json` exists (MethylPipeline + MethylExtractor only).
 3. On a host that already sees that share and has NGC login: one Parabricks pull into `/work/epimethyl/docker` (first arch); later arches use `--skip-docker-pull` / `--skip-parabricks-pull`.
 4. Genomes/site stay Phase 0 ([production-platform.md](production-platform.md#phase-0-shared-storage-and-site)) — separate from worker enroll.
 
@@ -76,7 +76,7 @@ bash /work/epimethyl/current/runtime-bundle/scripts/preflight_worker_join.sh \
   --gpu --require-api --require-current
 ```
 
-If `current/manifest.json` is missing, **stop** and run Epimethyl-Release-Deploy on the share first. Do **not** promote from the worker by default.
+If `current/manifest.json` is missing, **stop** and run GoliathOmics-Release-Deploy on the share first. Do **not** promote from the worker by default.
 
 ### 3. Prepare (local install, no Arc)
 

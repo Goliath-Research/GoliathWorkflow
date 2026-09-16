@@ -14,7 +14,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="MethylPipeline Team",
-    url="https://github.com/epimethyl/MethylPipeline",
+    url="https://github.com/Goliath-Research/GoliathWorkflow",
     packages=find_packages(),
     python_requires=">=3.10",
     install_requires=[

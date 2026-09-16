@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://epimethyl.local/schemas/deployment/epimethyl_release_manifest.schema.json",
-  "title": "Epimethyl release manifest",
+  "$id": "https://goliathresearch.local/schemas/deployment/epimethyl_release_manifest.schema.json",
+  "title": "GoliathOmics release manifest",
   "description": "Single source of truth for a production GPU worker release on shared storage.",
   "type": "object",
   "required": [

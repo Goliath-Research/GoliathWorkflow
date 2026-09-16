@@ -8,7 +8,7 @@ usage() {
 Usage: scripts/write_worker_env.sh [options]
 
 Options:
-  --root PATH          Epimethyl root (default: /work/epimethyl)
+  --root PATH          GoliathOmics root (default: /work/epimethyl)
   --manifest PATH      manifest.json (default: <root>/current/manifest.json)
   --arch KEY           aarch64 or amd64 (default: detect from uname)
   --worker-api-base URL  WORKER_API_BASE (env, then existing worker.env; never invent a URL)

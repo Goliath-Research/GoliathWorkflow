@@ -79,7 +79,7 @@ elif [[ -d "$WORK_ROOT/cache" ]]; then
 fi
 check_other_writable "Genomes root" "$WORK_ROOT/genomes" 0
 check_other_writable "Site root" "$WORK_ROOT/site" 0
-check_other_writable "Epimethyl root" "$WORK_ROOT/epimethyl" 0
+check_other_writable "GoliathOmics root" "$WORK_ROOT/epimethyl" 0
 
 # When site exists with reference_selection pins, require pinned genome files
 if [[ -f "$SITE" ]]; then

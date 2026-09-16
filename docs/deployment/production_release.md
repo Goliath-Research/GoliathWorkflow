@@ -13,10 +13,10 @@ flowchart LR
   MEtag[MethylExtractor_v_tag] --> MEFeed[methyl-extractor_feed]
   MPtag[MethylPipeline_v_tag] --> PyFeed[pypi-epimethyl]
   MPtag --> MPArt[methyl-pipeline-release_artifact]
-  MEFeed --> Assemble[Epimethyl-Release-Assemble]
+  MEFeed --> Assemble[GoliathOmics-Release-Assemble]
   MPArt --> Assemble
-  Assemble --> Bundle[epimethyl-release_bundle]
-  Bundle --> Deploy[Epimethyl-Release-Deploy]
+  Assemble --> Bundle[goliathomics-release_bundle]
+  Bundle --> Deploy[GoliathOmics-Release-Deploy]
   Deploy --> Work["/work/epimethyl/current"]
 ```
 
@@ -24,8 +24,8 @@ flowchart LR
 |------|----------|---------|
 | Build MethylExtractor per arch | MethylExtractor-Release-ARM64, MethylExtractor-Release-x64 | Tag `v*` |
 | Build MP wheels + runtime-bundle | MethylPipeline-Release | Tag `v*` |
-| Compose manifest + sha256 | Epimethyl-Release-Assemble | Manual |
-| Promote to `/work` | Epimethyl-Release-Deploy | Manual + **production-work** approval |
+| Compose manifest + sha256 | GoliathOmics-Release-Assemble | Manual |
+| Promote to `/work` | GoliathOmics-Release-Deploy | Manual + **production-work** approval |
 
 **Typical release:**
 

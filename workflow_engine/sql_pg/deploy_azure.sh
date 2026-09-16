@@ -22,7 +22,7 @@
 #   export PGHOST=epimethyl.postgres.database.azure.com
 #   export PGPORT=5432
 #   export PGDATABASE=epimethyl
-#   export PGUSER='you@epimethyl.com'
+#   export PGUSER='you@goliathresearch.com'
 #   export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
 #   ./deploy_azure.sh
 #

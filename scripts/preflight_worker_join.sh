@@ -10,7 +10,7 @@ Usage: scripts/preflight_worker_join.sh [options]
 Checks that shared /work is usable for a join-only worker provision.
 
 Options:
-  --root PATH           Epimethyl root (default: /work/epimethyl)
+  --root PATH           GoliathOmics root (default: /work/epimethyl)
   --work PATH           Parent /work mount (default: dirname of --root, usually /work)
   --require-current     Require <root>/current/manifest.json (default: on)
   --allow-missing-current  Do not require current/manifest.json
@@ -58,7 +58,7 @@ echo "  work: $WORK"
 echo "  root: $ROOT"
 
 [[ -d "$WORK" ]] || die "Shared work mount missing: $WORK (ops must mount QNAP → /work before join)"
-[[ -d "$ROOT" ]] || die "Epimethyl root missing: $ROOT (expected under the QNAP share)"
+[[ -d "$ROOT" ]] || die "GoliathOmics root missing: $ROOT (expected under the QNAP share)"
 
 SAMPLES="${METHYL_SAMPLES_DIR:-$WORK/samples}"
 if [[ ! -d "$SAMPLES" ]]; then
@@ -85,7 +85,7 @@ if [[ "$REQUIRE_CURRENT" -eq 1 ]]; then
 [ERROR] Release not promoted on the share: missing $MANIFEST
 
 Next step (cluster bootstrap — not on this worker):
-  1. Run Epimethyl-Release-Assemble + approved Epimethyl-Release-Deploy
+  1. Run GoliathOmics-Release-Assemble + approved GoliathOmics-Release-Deploy
   2. Confirm /work/epimethyl/current/manifest.json exists on QNAP
   3. Pull Parabricks once into /work/epimethyl/docker on a promote host (NGC)
   4. Re-run this preflight, then provision_worker_node.sh --join-mode join

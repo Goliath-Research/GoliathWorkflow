@@ -274,7 +274,7 @@ def _register_postgres(
                 """,
                 (
                     cluster_key,
-                    "Epimethyl cluster",
+                    "GoliathOmics cluster",
                     allowed_cidrs_json,
                     entra_client_id,
                     arc_resource_id,
@@ -349,7 +349,7 @@ USING (SELECT N'{_sql_escape(cluster_key)}' AS cluster_key) AS source
 ON target.cluster_key = source.cluster_key
 WHEN MATCHED THEN
   UPDATE SET
-    name = N'Epimethyl cluster',
+    name = N'GoliathOmics cluster',
     shared_storage_uri = N'/work/epimethyl',
     worker_mount_path = N'/work/epimethyl',
     allowed_source_cidrs = COALESCE({cidrs_val}, target.allowed_source_cidrs),
@@ -358,7 +358,7 @@ WHEN MATCHED THEN
 WHEN NOT MATCHED THEN
   INSERT (cluster_key, name, shared_storage_uri, worker_mount_path, status, allowed_source_cidrs, entra_client_id, arc_resource_id)
   VALUES (
-    source.cluster_key, N'Epimethyl cluster', N'/work/epimethyl', N'/work/epimethyl', N'ACTIVE',
+    source.cluster_key, N'GoliathOmics cluster', N'/work/epimethyl', N'/work/epimethyl', N'ACTIVE',
     {cidrs_val}, {entra_val}, {arc_val}
   );
 

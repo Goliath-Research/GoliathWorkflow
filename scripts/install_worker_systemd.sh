@@ -7,7 +7,7 @@ usage() {
 Usage: scripts/install_worker_systemd.sh [options]
 
 Options:
-  --root PATH           Epimethyl root (default: /work/epimethyl)
+  --root PATH           GoliathOmics root (default: /work/epimethyl)
   --arch KEY            aarch64 or amd64 (default: detect)
   --capability NAME     Install methyl-worker@NAME.service instead of omnibus
   --detect-capabilities Install one unit per auto-detected capability (or omnibus for '*')

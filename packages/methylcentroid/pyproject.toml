@@ -2,7 +2,7 @@
 name = "methylcentroid"
 version = "1.0.0"
 description = "Methylation Centroid Calculation"
-authors = ["David Izada Rodriguez <dizada@epimethyl.com>"]
+authors = ["David Izada Rodriguez <davidizadar@goliathresearch.com>"]
 readme = "README.md"
 packages = [{include = "methyl_centroid"}]
 

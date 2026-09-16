@@ -1,5 +1,5 @@
-# Assemble epimethyl worker release bundle from independent MethylPipeline + MethylExtractor versions.
-# Manual trigger only. Publishes epimethyl-release-<releaseVersion> pipeline artifact for deploy.
+# Assemble GoliathOmics worker release bundle from independent MethylPipeline + MethylExtractor versions.
+# Manual trigger only. Publishes goliathomics-release-<releaseVersion> pipeline artifact for deploy.
 
 trigger: none
 
@@ -49,13 +49,13 @@ steps:
         --methyl-pipeline-version "${{ parameters.methylPipelineVersion }}" \
         --methyl-extractor-version "${{ parameters.methylExtractorVersion }}" \
         --methyl-pipeline-dir "$(Pipeline.Workspace)/mp-release" \
-        --output "$(Build.ArtifactStagingDirectory)/epimethyl-release"
+        --output "$(Build.ArtifactStagingDirectory)/goliathomics-release"
     displayName: Assemble release bundle
     env:
       SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
   - task: PublishPipelineArtifact@1
     inputs:
-      targetPath: $(Build.ArtifactStagingDirectory)/epimethyl-release
-      artifactName: epimethyl-release-${{ parameters.releaseVersion }}
-    displayName: Publish epimethyl release bundle
+      targetPath: $(Build.ArtifactStagingDirectory)/goliathomics-release
+      artifactName: goliathomics-release-${{ parameters.releaseVersion }}
+    displayName: Publish GoliathOmics release bundle

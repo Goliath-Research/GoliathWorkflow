@@ -104,4 +104,4 @@ def test_init_and_verify_work_layout_pass(tmp_path: Path) -> None:
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "Samples root other-writable" in proc.stdout
     assert "Genomes root worker-readable" in proc.stdout
-    assert "Epimethyl root worker-readable" in proc.stdout
+    assert "GoliathOmics root worker-readable" in proc.stdout

@@ -11,7 +11,7 @@ Options:
   --tarball PATH        Path to methyl-extractor-linux-<arch>.tar.gz (required)
   --dest DIR            Install root (default: /work/epimethyl/methyl-extractor-<arch>)
   --arch KEY            aarch64 or amd64 (default: detect from tarball name or machine)
-  --epimethyl-root PATH Epimethyl root for env file (default: /work/epimethyl)
+  --epimethyl-root PATH GoliathOmics root for env file (default: /work/epimethyl)
   --user-env            Append source line to ~/.bashrc (default: yes)
   --no-user-env         Skip ~/.bashrc update
   -h, --help            Show this help
@@ -63,7 +63,7 @@ fi
 
 DEST="${DEST:-$EPIMETHYL_ROOT/methyl-extractor-${ARCH}}"
 ENV_FILE="$EPIMETHYL_ROOT/env/methyl-extractor-${ARCH}.env"
-MARKER="# Epimethyl MethylExtractor environment ($ARCH)"
+MARKER="# GoliathOmics MethylExtractor environment ($ARCH)"
 
 info "Installing to $DEST"
 if [[ -e "$DEST" && ! -w "$DEST" ]]; then

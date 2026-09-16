@@ -63,7 +63,7 @@ fi
 
 # Configure git user (same as MethylUtils)
 git config user.name "David Izada Rodriguez"
-git config user.email "dizada@epimethyl.com"
+git config user.email "davidizadar@goliathresearch.com"
 echo "✅ Git user configured"
 
 # Add all files

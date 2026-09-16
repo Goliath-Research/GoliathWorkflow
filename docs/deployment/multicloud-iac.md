@@ -75,7 +75,7 @@ and runs **join-only prepare** by default (`--prepare-only`). Portal prereg + Ar
 1. **Control plane** — `cd deploy/terraform/envs/<env> && terraform init && terraform apply`
    (requires Azure credentials).
 2. **Populate Key Vault** — Nebius SA key, Lambda API key (cloud provider creds — not worker tokens).
-3. **Cluster once** — promote Epimethyl release + Parabricks to QNAP `/work` ([lambda_worker_join.md](lambda_worker_join.md) §A).
+3. **Cluster once** — promote GoliathOmics release + Parabricks to QNAP `/work` ([lambda_worker_join.md](lambda_worker_join.md) §A).
 4. **Worker fleet** — apply `worker-nebius` or `worker-lambda` with `worker-common`
    `cloud_init` output (default prepare-only).
 5. **Per VM** — portal-preregister public IP → approve Arc Connected →

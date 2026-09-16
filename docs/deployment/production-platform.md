@@ -143,8 +143,8 @@ GPU workers consume a **promoted release** on `/work`, not a git checkout. The g
 | Step | Command / pipeline |
 |------|---------------------|
 | Tag + build components | MethylExtractor + MethylPipeline ADO release pipelines (`v*` tags) |
-| Assemble | `Epimethyl-Release-Assemble` or `bash scripts/assemble_release.sh …` |
-| Promote | `Epimethyl-Release-Deploy` or `bash scripts/promote_release.sh --root /work/epimethyl --release … --arch <arch> --pull-parabricks` |
+| Assemble | `GoliathOmics-Release-Assemble` or `bash scripts/assemble_release.sh …` |
+| Promote | `GoliathOmics-Release-Deploy` or `bash scripts/promote_release.sh --root /work/epimethyl --release … --arch <arch> --pull-parabricks` |
 
 Promote (first arch) pulls **NVIDIA Clara Parabricks** into `/work/epimethyl/docker` (NGC login required on the promote host). Subsequent arches use `--skip-docker-pull`.
 

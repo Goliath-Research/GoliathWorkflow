@@ -30,7 +30,7 @@ terraform validate
 
 1. Deploy `envs/prod` control plane (`control-plane-azure` module).
 2. Store Nebius/Lambda API keys and per-cluster CIDRs in Key Vault (provider creds only).
-3. Promote Epimethyl release + Parabricks to QNAP `/work` (cluster once).
+3. Promote GoliathOmics release + Parabricks to QNAP `/work` (cluster once).
 4. Deploy `worker-nebius` or `worker-lambda` with `worker-common` cloud-init
    (default `--prepare-only`; seed tarball → `/opt/methyl`).
 5. Portal-preregister IP → approve Arc → `provision_worker_node.sh --finish-enroll`

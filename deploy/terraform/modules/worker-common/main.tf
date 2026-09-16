@@ -22,7 +22,7 @@ variable "cluster_key" {
 variable "epimethyl_root" {
   type        = string
   default     = "/work/epimethyl"
-  description = "Shared Epimethyl root on QNAP-mounted /work."
+  description = "Shared GoliathOmics root on QNAP-mounted /work."
 }
 
 variable "prepare_only" {

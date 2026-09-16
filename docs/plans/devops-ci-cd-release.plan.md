@@ -127,7 +127,7 @@ Steps:
 }
 ```
 
-5. Publish assembled folder as pipeline artifact `epimethyl-release-<version>` (optional Universal Package for offline restore).
+5. Publish assembled folder as pipeline artifact `goliathomics-release-<version>` (optional Universal Package for offline restore).
 
 ### Schema update
 
@@ -154,7 +154,7 @@ Extend [`schemas/deployment/epimethyl_release_manifest.schema.json`](../../schem
 ### New pipeline stage: `ci/azure-pipelines-release-deploy.yml`
 
 - **Trigger:** pipeline resource completion of `release-assemble` **or** manual run with release version parameter.
-- **Stage 1:** download `epimethyl-release-<version>` artifact to agent.
+- **Stage 1:** download `goliathomics-release-<version>` artifact to agent.
 - **Stage 2 (Environment `production-work`, approval required):**
   - Rsync artifact → `/work/epimethyl/releases/<version>/`
   - Run [`promote_release.sh`](../../scripts/promote_release.sh) per arch (`aarch64`, `amd64`) with `--pull-parabricks` only when Parabricks tag changed in manifest.

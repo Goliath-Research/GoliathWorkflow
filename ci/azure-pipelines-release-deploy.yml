@@ -14,7 +14,7 @@ parameters:
   - name: assemblePipelineName
     displayName: ADO pipeline name for release assemble
     type: string
-    default: Epimethyl-Release-Assemble
+    default: GoliathOmics-Release-Assemble
   - name: epimethylRoot
     displayName: Shared storage root on agent
     type: string
@@ -28,7 +28,7 @@ parameters:
 resources:
   pipelines:
     - pipeline: release_assemble
-      source: Epimethyl-Release-Assemble
+      source: GoliathOmics-Release-Assemble
       trigger:
         branches:
           include:
@@ -56,7 +56,7 @@ stages:
                     project: $(System.TeamProject)
                     definition: ${{ parameters.assemblePipelineName }}
                     buildVersionToDownload: latest
-                    artifactName: epimethyl-release-${{ parameters.releaseVersion }}
+                    artifactName: goliathomics-release-${{ parameters.releaseVersion }}
                     targetPath: $(Pipeline.Workspace)/bundle
 
                 - bash: |

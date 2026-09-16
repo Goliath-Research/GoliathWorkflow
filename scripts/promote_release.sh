@@ -8,7 +8,7 @@ usage() {
 Usage: scripts/promote_release.sh [options]
 
 Options:
-  --root PATH           Epimethyl root (default: /work/epimethyl)
+  --root PATH           GoliathOmics root (default: /work/epimethyl)
   --release DIR         Release directory (default: <root>/releases/<version> or --version)
   --version VER         Release version (alternative to --release)
   --arch KEY            aarch64 or amd64 (default: detect)

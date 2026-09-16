@@ -298,7 +298,7 @@ pip install --index-url https://pkgs.dev.azure.com/EpiMethyl/_packaging/<feed>/p
   -r requirements-worker.lock
 ```
 
-Pin Epimethyl package versions in the lockfile (`methyl-validation==0.1.0`, …).
+Pin GoliathOmics package versions in the lockfile (`methyl-validation==0.1.0`, …).
 
 ### Runtime bundle (still needed without full source)
 

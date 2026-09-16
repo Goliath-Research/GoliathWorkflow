@@ -91,7 +91,7 @@ flowchart LR
 ### A. Cluster bootstrap (once) — not on every VM
 
 1. Mount QNAP paths: `/work/epimethyl`, `/work/genomes`, `/work/samples`, `/work/site`.
-2. Epimethyl-Release-Assemble + Deploy → `/work/epimethyl/current/manifest.json`.
+2. GoliathOmics-Release-Assemble + Deploy → `/work/epimethyl/current/manifest.json`.
 3. One Parabricks pull into `/work/epimethyl/docker` (NGC; first arch).
 4. Genomes/site: Phase 0.
 
