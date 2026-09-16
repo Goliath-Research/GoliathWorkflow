@@ -10,8 +10,8 @@
  * Markdown is converted with the `marked` CLI via npx (no repo dependency).
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { accessSync, constants, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { basename, delimiter, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const MERMAID_ESM =
@@ -45,19 +45,46 @@ function parseArgs(argv) {
   return { input, output, title };
 }
 
+function resolveFromPath(command) {
+  const dirs = (process.env.PATH || "").split(delimiter);
+  const names =
+    process.platform === "win32"
+      ? [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]
+      : [command];
+  for (const dir of dirs) {
+    if (!dir) continue;
+    for (const name of names) {
+      const file = join(dir, name);
+      try {
+        accessSync(file, constants.F_OK);
+        if (process.platform !== "win32") {
+          accessSync(file, constants.X_OK);
+        }
+        return file;
+      } catch {
+        /* try next PATH entry */
+      }
+    }
+  }
+  throw new Error(
+    `${command} not found on PATH. Install Node.js (includes npx) and retry.`,
+  );
+}
+
 function markdownToHtml(input) {
   const tmp = mkdtempSync(resolve(tmpdir(), "md2html-"));
   const bodyPath = resolve(tmp, "body.html");
   try {
-    // Resolve `npx` from PATH. Windows Node cannot spawn `.cmd` shims without a
-    // shell (EINVAL); argv is still passed as an array, not a concatenated string.
+    const npx = resolveFromPath("npx");
+    // Absolute PATH lookup so Unix execFile does not depend on implicit PATH
+    // search. Windows still needs a shell to spawn .cmd/.bat shims (EINVAL).
     execFileSync(
-      "npx",
+      npx,
       ["--yes", "marked", "--gfm", "-i", input, "-o", bodyPath],
       {
         stdio: ["ignore", "ignore", "inherit"],
         windowsHide: true,
-        shell: process.platform === "win32",
+        shell: process.platform === "win32" && /\.(cmd|bat)$/i.test(npx),
       },
     );
     return readFileSync(bodyPath, "utf8");
